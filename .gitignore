@@ -1,0 +1,21 @@
+# Binaries
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# OS-specific
+.DS_Store
