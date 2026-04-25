@@ -1,0 +1,233 @@
+package sqlite
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/rkurbatov/scrinium/core"
+)
+
+// DefaultBusyTimeout is the default value applied via
+// PRAGMA busy_timeout when no WithBusyTimeout option is supplied.
+// Five seconds covers practically every legitimate writer
+// contention without hiding real deadlocks for too long.
+const DefaultBusyTimeout = 5 * time.Second
+
+// Index is the SQLite-backed implementation of core.StoreIndex.
+// Construct via Open; Close when done.
+type Index struct {
+	db   *sql.DB
+	opts options
+
+	// publisher is invoked from instrumented call sites to emit
+	// index.* metric events. Optional; nil disables emission. We
+	// also keep a small mutex around publication because some
+	// emitters (asynchronous buses) might race with Close.
+	pubMu sync.RWMutex
+}
+
+// Compile-time interface conformance. The full surface lives across
+// later packs (manifest.go, resolve.go, iterate.go, maintenance.go);
+// we wire the assertion now and let the missing methods fail to
+// compile until the rest of the pack lands.
+//
+// var _ core.StoreIndex = (*Index)(nil)
+//
+// Commented out until the methods exist; uncommenting in pack 5.
+
+// options is the resolved configuration. Defaults applied by Open.
+type options struct {
+	busyTimeout time.Duration
+	publisher   core.Publisher
+	journalMode journalMode
+	syncMode    syncMode
+}
+
+// journalMode mirrors PRAGMA journal_mode values we care about. WAL
+// is the right default for everything except :memory:, where SQLite
+// silently downgrades to MEMORY anyway.
+type journalMode string
+
+const (
+	journalWAL    journalMode = "WAL"
+	journalMemory journalMode = "MEMORY"
+)
+
+// syncMode mirrors PRAGMA synchronous values. NORMAL is the
+// recommended setting under WAL: durability across crashes plus
+// excellent throughput. FULL is paranoid and slow; OFF risks data
+// loss across power failures and is for tests only.
+type syncMode string
+
+const (
+	syncNormal syncMode = "NORMAL"
+	syncFull   syncMode = "FULL"
+	syncOff    syncMode = "OFF"
+)
+
+func defaultOptions() options {
+	return options{
+		busyTimeout: DefaultBusyTimeout,
+		journalMode: journalWAL,
+		syncMode:    syncNormal,
+	}
+}
+
+// Option configures Open.
+type Option func(*options)
+
+// WithBusyTimeout sets PRAGMA busy_timeout. SQLite will block a
+// writer for up to this duration when another writer holds the
+// lock; an exceeded timeout returns SQLITE_BUSY which the package
+// maps to core.ErrLeaseHeld and emits as
+// index.contention_error.
+//
+// Pass 0 to disable the timeout (fail-fast). Negative values are
+// clamped to 0.
+func WithBusyTimeout(d time.Duration) Option {
+	return func(o *options) {
+		if d < 0 {
+			d = 0
+		}
+		o.busyTimeout = d
+	}
+}
+
+// WithPublisher provides the event bus for emitting index.* metric
+// events. Without one, metric events are silently dropped — the
+// index's behaviour is otherwise unchanged.
+func WithPublisher(p core.Publisher) Option {
+	return func(o *options) { o.publisher = p }
+}
+
+// WithSyncOff disables PRAGMA synchronous. Tests only — an unclean
+// shutdown can lose committed data. Documented as a sharp tool, not
+// hidden behind an internal helper, because chaos-test packages
+// outside this module legitimately need it.
+func WithSyncOff() Option {
+	return func(o *options) { o.syncMode = syncOff }
+}
+
+// Open opens (or creates) a SQLite-backed StoreIndex at the given
+// path. Use ":memory:" for a private in-memory instance.
+//
+// On a fresh database the schema is created at CurrentSchemaVersion.
+// On an existing database the schema version is checked; missing
+// migrations are applied forward-only. A version newer than
+// CurrentSchemaVersion returns core.ErrIndexSchemaMismatch.
+func Open(ctx context.Context, path string, opts ...Option) (*Index, error) {
+	if path == "" {
+		return nil, fmt.Errorf("sqlite: empty path")
+	}
+
+	o := defaultOptions()
+	for _, fn := range opts {
+		fn(&o)
+	}
+
+	dsn := buildDSN(path, o)
+	db, err := openSQL(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: open: %w", err)
+	}
+
+	// SQLite handles concurrency at the file level; multiple Go
+	// goroutines sharing one *sql.DB go through database/sql's
+	// connection pool. Capping at one writer connection plus a
+	// few readers is the safe default.
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(2)
+
+	// Apply pragmas. database/sql does not let us run pragmas as
+	// part of the DSN portably across drivers, so we do it after
+	// Open via a dedicated connection that the pool will reuse.
+	if err := applyPragmas(ctx, db, path, o); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("sqlite: apply pragmas: %w", err)
+	}
+
+	if err := applyMigrations(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return &Index{db: db, opts: o}, nil
+}
+
+// buildDSN assembles a DSN. Both supported drivers (modernc and
+// mattn) accept "file:<path>?<query>" as well as ":memory:". We use
+// the file: form so query parameters work uniformly.
+func buildDSN(path string, o options) string {
+	if path == ":memory:" {
+		return ":memory:"
+	}
+	abs := path
+	if !filepath.IsAbs(path) {
+		// Relative paths are kept as-is; the caller is responsible
+		// for the working directory. We do NOT reach for
+		// filepath.Abs here because it depends on os.Getwd() and
+		// would surprise tests that chdir.
+		abs = path
+	}
+	// _foreign_keys=1 enforces FK constraints (we will rely on this
+	// once we add manifest_blobs cleanup triggers in a later pack).
+	q := []string{"_foreign_keys=1"}
+	return "file:" + abs + "?" + strings.Join(q, "&")
+}
+
+// applyPragmas configures session-wide pragmas. busy_timeout is the
+// most important — without it, contention is an instant error
+// instead of a brief wait.
+func applyPragmas(ctx context.Context, db *sql.DB, path string, o options) error {
+	// :memory: silently ignores journal_mode=WAL (it stays MEMORY),
+	// so we adapt expectations rather than fight SQLite.
+	jm := o.journalMode
+	if path == ":memory:" {
+		jm = journalMemory
+	}
+
+	stmts := []string{
+		fmt.Sprintf("PRAGMA busy_timeout = %d", o.busyTimeout.Milliseconds()),
+		fmt.Sprintf("PRAGMA journal_mode = %s", jm),
+		fmt.Sprintf("PRAGMA synchronous = %s", o.syncMode),
+		"PRAGMA foreign_keys = ON",
+	}
+	for _, s := range stmts {
+		if _, err := db.ExecContext(ctx, s); err != nil {
+			return fmt.Errorf("%s: %w", s, err)
+		}
+	}
+	return nil
+}
+
+// Close releases the underlying database/sql handle. Safe to call
+// once; calling it twice returns the underlying sql.DB.Close error.
+func (i *Index) Close() error {
+	return i.db.Close()
+}
+
+// SchemaVersion returns the version currently recorded on disk.
+// Useful for diagnostics and tests.
+func (i *Index) SchemaVersion(ctx context.Context) (int, error) {
+	return readSchemaVersion(ctx, i.db)
+}
+
+// publish forwards an event to the configured Publisher, taking the
+// read lock on pubMu so concurrent Close cannot race a publish in
+// flight. Cheap when Publisher is nil — the common case for tests.
+func (i *Index) publish(typ string, payload any) {
+	i.pubMu.RLock()
+	pub := i.opts.publisher
+	i.pubMu.RUnlock()
+	if pub == nil {
+		return
+	}
+	// event.Event is the concrete shape. We import it lazily via
+	// core.Publisher so the import lives at the use site only.
+	pub.Publish(eventOf(typ, payload))
+}
