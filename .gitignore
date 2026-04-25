@@ -1,21 +1,25 @@
-# Binaries
-/bin/
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binaries
+# Build artifacts
 *.test
-
-# Output of the go coverage tool
 *.out
+*.exe
 
-# IDEs
+# Go workspace
+go.work
+go.work.sum
+
+# IDE
 .idea/
 .vscode/
 *.swp
 
-# OS-specific
+# OS
 .DS_Store
+Thumbs.db
+
+# Coverage
+coverage.txt
+coverage.html
+
+# Local test artifacts
+/tmp/
+/.scrinium-test/
