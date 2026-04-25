@@ -70,6 +70,7 @@ type Layer int
 const (
 	LayerEvent Layer = iota
 	LayerDriver
+	LayerDriverSub // localfs, faulty, s3, ...
 	LayerCore
 	LayerPlugin
 	LayerIndex
@@ -90,6 +91,8 @@ func (l Layer) String() string {
 		return "event"
 	case LayerDriver:
 		return "driver"
+	case LayerDriverSub:
+		return "driver/sub"
 	case LayerCore:
 		return "core"
 	case LayerPlugin:
@@ -127,7 +130,10 @@ func LayerOf(pkg string) Layer {
 	case "event":
 		return LayerEvent
 	case "driver":
-		return LayerDriver
+		if len(parts) == 1 {
+			return LayerDriver
+		}
+		return LayerDriverSub
 	case "core":
 		return LayerCore
 	case "plugin":
@@ -164,6 +170,14 @@ func AllowedTargets(from Layer) map[Layer]bool {
 
 	case LayerDriver:
 		return map[Layer]bool{LayerEvent: true}
+
+	case LayerDriverSub:
+		// Subpackages (localfs, faulty, s3) may import the driver
+		// contract and event. They must NOT import each other —
+		// this guards against, e.g., faulty depending on localfs in
+		// production code (test imports are excluded from this
+		// check; tests of faulty wrap localfs freely).
+		return map[Layer]bool{LayerEvent: true, LayerDriver: true}
 
 	case LayerCore:
 		return map[Layer]bool{LayerEvent: true, LayerDriver: true}
@@ -212,9 +226,10 @@ func AllowedTargets(from Layer) map[Layer]bool {
 		}
 
 	case LayerCmd:
-		// Entry points may import anything from the upper layers.
+		// Entry points may import anything from the upper layers,
+		// including concrete driver implementations.
 		return map[Layer]bool{
-			LayerEvent: true, LayerDriver: true, LayerCore: true,
+			LayerEvent: true, LayerDriver: true, LayerDriverSub: true, LayerCore: true,
 			LayerPlugin: true, LayerIndex: true,
 			LayerCurator: true, LayerCuratorSub: true,
 			LayerAgent: true, LayerMaintenance: true, LayerProjection: true,
@@ -223,7 +238,7 @@ func AllowedTargets(from Layer) map[Layer]bool {
 	case LayerInternal:
 		// Test infrastructure: everything is allowed.
 		return map[Layer]bool{
-			LayerEvent: true, LayerDriver: true, LayerCore: true,
+			LayerEvent: true, LayerDriver: true, LayerDriverSub: true, LayerCore: true,
 			LayerPlugin: true, LayerIndex: true,
 			LayerCurator: true, LayerCuratorSub: true,
 			LayerAgent: true, LayerMaintenance: true, LayerProjection: true,

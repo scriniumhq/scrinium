@@ -42,7 +42,8 @@ func TestLayerOf(t *testing.T) {
 	}{
 		{"github.com/rkurbatov/scrinium/event", LayerEvent},
 		{"github.com/rkurbatov/scrinium/driver", LayerDriver},
-		{"github.com/rkurbatov/scrinium/driver/localfs", LayerDriver},
+		{"github.com/rkurbatov/scrinium/driver/localfs", LayerDriverSub},
+		{"github.com/rkurbatov/scrinium/driver/faulty", LayerDriverSub},
 		{"github.com/rkurbatov/scrinium/core", LayerCore},
 		{"github.com/rkurbatov/scrinium/plugin", LayerPlugin},
 		{"github.com/rkurbatov/scrinium/plugin/compress/zstd", LayerPlugin},
@@ -157,6 +158,47 @@ func TestCheckDAG_AgentMustNotImportCurator(t *testing.T) {
 	violations := CheckDAG(imports)
 	if len(violations) != 1 {
 		t.Fatalf("expected 1 violation, got %d", len(violations))
+	}
+}
+
+// TestCheckDAG_DriverSubsMustNotImportEachOther — driver
+// implementations live at the same level and must stay
+// independent. faulty depending on localfs in production code
+// would couple chaos tests to a specific backend.
+func TestCheckDAG_DriverSubsMustNotImportEachOther(t *testing.T) {
+	imports := map[string][]string{
+		"github.com/rkurbatov/scrinium/driver/faulty": {
+			"github.com/rkurbatov/scrinium/driver",         // OK: contract
+			"github.com/rkurbatov/scrinium/driver/localfs", // VIOLATION: sibling
+		},
+	}
+	violations := CheckDAG(imports)
+	if len(violations) != 1 {
+		t.Fatalf("expected 1 violation, got %d:\n%s",
+			len(violations), formatViolations(violations))
+	}
+	if violations[0].FromLayer != LayerDriverSub || violations[0].ToLayer != LayerDriverSub {
+		t.Errorf("wrong violation: %s", violations[0])
+	}
+}
+
+// TestCheckDAG_DriverSubMayImportContract — verifies the positive
+// case: localfs and faulty must be allowed to import the driver
+// contract.
+func TestCheckDAG_DriverSubMayImportContract(t *testing.T) {
+	imports := map[string][]string{
+		"github.com/rkurbatov/scrinium/driver/localfs": {
+			"github.com/rkurbatov/scrinium/driver", // OK: parent contract
+			"github.com/rkurbatov/scrinium/event",  // OK
+		},
+		"github.com/rkurbatov/scrinium/driver/faulty": {
+			"github.com/rkurbatov/scrinium/driver", // OK: parent contract
+		},
+	}
+	violations := CheckDAG(imports)
+	if len(violations) != 0 {
+		t.Errorf("expected no violations, got %d:\n%s",
+			len(violations), formatViolations(violations))
 	}
 }
 
