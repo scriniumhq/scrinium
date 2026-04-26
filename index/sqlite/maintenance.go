@@ -25,7 +25,7 @@ func (i *Index) MarkVerified(blobRef string, timestamp time.Time) error {
 	defer func() { i.emitLatency(op, time.Since(start)) }()
 
 	const stmt = `UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`
-	_, err := i.db.ExecContext(context.Background(), stmt, timestamp.UnixNano(), blobRef)
+	_, err := i.db.ExecContext(context.Background(), stmt, fmtRFC3339(timestamp), blobRef)
 	if err != nil {
 		if isBusyError(err) {
 			i.emitContention(op, time.Since(start))

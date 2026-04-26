@@ -11,18 +11,28 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 )
 
-// helper: insert a manifest row directly. Lets the iterator tests
-// stay focused on listing semantics without going through
-// IndexManifest's blob-side bookkeeping.
+// insertManifest inserts a manifest row directly via SQL, bypassing
+// IndexManifest. Lets list-side tests stay focused on listing
+// semantics without going through IndexManifest's blob-side
+// bookkeeping.
 func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	t.Helper()
 	createdAt := m.CreatedAt
 	if createdAt.IsZero() {
 		createdAt = time.Now()
 	}
-	var retention int64
+	// blob_ref is NULL for Inline manifests (§9.1.2). The list
+	// helpers in tests rarely set LayoutHeader, so the common
+	// path is non-NULL — but we honour the invariant either way.
+	var blobRefArg any
+	if m.LayoutHeader.BlobStorage == "Inline" {
+		blobRefArg = nil
+	} else {
+		blobRefArg = string(m.BlobRef)
+	}
+	var retentionArg any
 	if !m.RetentionUntil.IsZero() {
-		retention = m.RetentionUntil.UnixNano()
+		retentionArg = fmtRFC3339(m.RetentionUntil)
 	}
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO manifests (
@@ -30,8 +40,8 @@ func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 			blob_ref, created_at, retention_until
 		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		string(m.ArtifactID), string(m.Type),
-		m.Namespace, m.SessionID, string(m.BlobRef),
-		createdAt.UnixNano(), retention,
+		m.Namespace, m.SessionID, blobRefArg,
+		fmtRFC3339(createdAt), retentionArg,
 	)
 	if err != nil {
 		t.Fatalf("insertManifest: %v", err)
@@ -201,8 +211,8 @@ func TestListByNamespace_EmptyResult(t *testing.T) {
 // callers reconstruct them from the manifest file on disk.
 func TestListByNamespace_FieldsRoundTrip(t *testing.T) {
 	idx := newMemoryIndex(t)
-	now := time.Now().Truncate(time.Microsecond) // SQLite-precision-safe
-	retention := now.Add(time.Hour).Truncate(time.Microsecond)
+	now := time.Now().Truncate(time.Second) // RFC 3339 second precision
+	retention := now.Add(time.Hour).Truncate(time.Second)
 	src := domain.Manifest{
 		ArtifactID:     "art-1",
 		Type:           domain.ManifestTypeBlob,
@@ -340,17 +350,17 @@ func TestListUnverified(t *testing.T) {
 	idx := newMemoryIndex(t)
 	now := time.Now()
 
-	// last_verified_at is set via direct UPDATE — the schema
-	// initialises it to 0, which means "never verified". That is
-	// always older than any non-zero `before` cutoff, so a never-
-	// verified blob always shows up.
+	// "never" — last_verified_at IS NULL after insertBlob. The agent
+	// path treats NULL as the highest priority; in the SQL we wrote
+	// in iterate.go, NULL rows are matched by `last_verified_at IS NULL`
+	// regardless of cutoff.
 	insertBlob(t, idx, "never", "sha256-"+strings.Repeat("a", 64), 1024,
 		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p1"}, 1)
 
 	// Verified ten minutes ago: stale per a five-minute cutoff.
 	insertBlob(t, idx, "stale", "sha256-"+strings.Repeat("b", 64), 1024,
 		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p2"}, 1)
-	tenMinAgo := now.Add(-10 * time.Minute).UnixNano()
+	tenMinAgo := fmtRFC3339(now.Add(-10 * time.Minute))
 	if _, err := idx.db.ExecContext(context.Background(),
 		`UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`,
 		tenMinAgo, "stale",
@@ -361,7 +371,7 @@ func TestListUnverified(t *testing.T) {
 	// Verified one minute ago: fresh per the same cutoff.
 	insertBlob(t, idx, "fresh", "sha256-"+strings.Repeat("c", 64), 1024,
 		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p3"}, 1)
-	oneMinAgo := now.Add(-time.Minute).UnixNano()
+	oneMinAgo := fmtRFC3339(now.Add(-time.Minute))
 	if _, err := idx.db.ExecContext(context.Background(),
 		`UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`,
 		oneMinAgo, "fresh",
@@ -413,7 +423,7 @@ func TestListUnverified_OldestFirst(t *testing.T) {
 		"middle": -2 * time.Hour,
 		"newer":  -1 * time.Hour,
 	} {
-		ts := now.Add(ago).UnixNano()
+		ts := fmtRFC3339(now.Add(ago))
 		if _, err := idx.db.ExecContext(context.Background(),
 			`UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`, ts, ref); err != nil {
 			t.Fatal(err)

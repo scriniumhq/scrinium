@@ -20,19 +20,24 @@ func TestMarkVerified_Updates(t *testing.T) {
 	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
 		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
 
-	now := time.Now().Truncate(time.Microsecond)
+	// Truncate to the storage precision (RFC 3339 seconds, UTC) so
+	// the round-trip Equal check below survives.
+	now := time.Now().UTC().Truncate(time.Second)
 	if err := idx.MarkVerified("blob-1", now); err != nil {
 		t.Fatalf("MarkVerified: %v", err)
 	}
 
-	var ts int64
+	var ts string
 	err := idx.db.QueryRowContext(context.Background(),
 		`SELECT last_verified_at FROM blobs WHERE blob_ref = ?`, "blob-1",
 	).Scan(&ts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := time.Unix(0, ts)
+	got, err := parseRFC3339(ts)
+	if err != nil {
+		t.Fatalf("parse stored timestamp: %v", err)
+	}
 	if !got.Equal(now) {
 		t.Errorf("last_verified_at: got %v, want %v", got, now)
 	}

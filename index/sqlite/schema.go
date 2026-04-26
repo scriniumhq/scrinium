@@ -58,9 +58,12 @@ type migration struct {
 //   - All hashes and refs are TEXT (the project format is
 //     "<algo>-<hex>", typically <100 chars).
 //   - Sizes and offsets are INTEGER (SQLite INTEGER is 64-bit).
-//   - Timestamps are INTEGER UNIX nanoseconds; we deliberately do
-//     not use SQLite's TEXT-based date format because it ignores
-//     time zones and rounds to seconds.
+//   - Timestamps are TEXT in RFC 3339 second precision (UTC). The
+//     same format the manifest writes on disk per
+//     internal/manifestcodec §7.5 — RebuildIndexAgent can copy
+//     strings without reformatting. NULL means "absent" (e.g.
+//     last_verified_at NULL = never scrubbed; retention_until
+//     NULL = no retention).
 //   - PRIMARY KEY columns are NOT NULL by SQLite definition; the
 //     constraint is repeated for clarity in non-PK NOT NULL columns.
 const schemaV1 = `
@@ -74,8 +77,8 @@ CREATE TABLE blobs (
     pack_offset       INTEGER NOT NULL DEFAULT 0,
     pack_size         INTEGER NOT NULL DEFAULT 0,
     ref_count         INTEGER NOT NULL DEFAULT 0,
-    last_verified_at  INTEGER NOT NULL DEFAULT 0,
-    created_at        INTEGER NOT NULL
+    last_verified_at  TEXT,
+    created_at        TEXT    NOT NULL
 ) WITHOUT ROWID;
 
 CREATE UNIQUE INDEX blobs_content ON blobs(content_hash, original_size);
@@ -87,9 +90,9 @@ CREATE TABLE manifests (
     type             TEXT    NOT NULL,
     namespace        TEXT    NOT NULL DEFAULT '',
     session_id       TEXT    NOT NULL DEFAULT '',
-    blob_ref         TEXT    NOT NULL DEFAULT '',
-    created_at       INTEGER NOT NULL,
-    retention_until  INTEGER NOT NULL DEFAULT 0
+    blob_ref         TEXT,
+    created_at       TEXT    NOT NULL,
+    retention_until  TEXT
 ) WITHOUT ROWID;
 
 CREATE INDEX manifests_namespace ON manifests(namespace);
@@ -127,6 +130,6 @@ CREATE TABLE store_meta (
 
 CREATE TABLE schema_version (
     version    INTEGER PRIMARY KEY,
-    applied_at INTEGER NOT NULL
+    applied_at TEXT    NOT NULL
 );
 `

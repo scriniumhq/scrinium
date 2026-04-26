@@ -94,7 +94,7 @@ func applyMigration(ctx context.Context, db *sql.DB, m migration) error {
 
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO schema_version(version, applied_at) VALUES (?, ?)`,
-		m.Version, time.Now().UnixNano(),
+		m.Version, fmtRFC3339(time.Now()),
 	); err != nil {
 		return fmt.Errorf("record version: %w", err)
 	}

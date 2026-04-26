@@ -21,11 +21,11 @@ func insertBlob(t *testing.T, idx *Index, ref, contentHash string, size int64, a
 			physical_workspace, physical_path,
 			pack_ref, pack_offset, pack_size,
 			ref_count, last_verified_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
 		ref, contentHash, size,
 		int(addr.Workspace), addr.Path,
 		addr.PackRef, addr.Offset, addr.Size,
-		refCount, time.Now().UnixNano(),
+		refCount, fmtRFC3339(time.Now()),
 	)
 	if err != nil {
 		t.Fatalf("insertBlob: %v", err)

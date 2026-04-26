@@ -164,10 +164,11 @@ func (i *Index) LookupPacked(artifactID domain.ArtifactID) (core.PackedBlobInfo,
 // future ExternalRef manifests have no blobs row.
 func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	var (
-		artifactID, mtype, namespace, sessionID, blobRef string
-		createdAt, retentionUntil                        int64
-		contentHash                                      sql.NullString
-		originalSize                                     sql.NullInt64
+		artifactID, mtype, namespace, sessionID string
+		createdAt                               string
+		blobRef, retentionUntil                 sql.NullString
+		contentHash                             sql.NullString
+		originalSize                            sql.NullInt64
 	)
 	if err := rows.Scan(
 		&artifactID, &mtype, &namespace, &sessionID,
@@ -181,7 +182,14 @@ func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 		Type:       domain.ManifestType(mtype),
 		Namespace:  namespace,
 		SessionID:  sessionID,
-		BlobRef:    domain.BlobRef(blobRef),
+	}
+	if blobRef.Valid {
+		// NULL when LayoutHeader.BlobStorage == "Inline" (§9.1.2);
+		// stays as the zero BlobRef. The router-layer doc-comment
+		// on this function lists LayoutHeader as "absent — read
+		// the manifest file" — same applies here: callers that
+		// need to know whether this is Inline must read the file.
+		m.BlobRef = domain.BlobRef(blobRef.String)
 	}
 	if contentHash.Valid {
 		m.ContentHash = domain.ContentHash(contentHash.String)
@@ -189,21 +197,44 @@ func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	if originalSize.Valid {
 		m.OriginalSize = originalSize.Int64
 	}
-	m.CreatedAt = nsToTime(createdAt)
-	if retentionUntil != 0 {
-		m.RetentionUntil = nsToTime(retentionUntil)
+	t, err := parseRFC3339(createdAt)
+	if err != nil {
+		return domain.Manifest{}, fmt.Errorf("scan created_at: %w", err)
+	}
+	m.CreatedAt = t
+	if retentionUntil.Valid {
+		t, err := parseRFC3339(retentionUntil.String)
+		if err != nil {
+			return domain.Manifest{}, fmt.Errorf("scan retention_until: %w", err)
+		}
+		m.RetentionUntil = t
 	}
 	return m, nil
 }
 
-// nsToTime converts a UnixNano-encoded timestamp to time.Time. A
-// zero value remains zero — manifests with no retention store 0
-// for retention_until rather than a sentinel "long-ago" timestamp.
-func nsToTime(ns int64) (t time.Time) {
-	if ns == 0 {
-		return t
+// fmtRFC3339 returns the timestamp in RFC 3339 / second precision
+// (UTC). Matches internal/manifestcodec §7.5: the same format the
+// manifest writes on disk, so RebuildIndex (M3) can copy strings
+// without reformatting. Empty string for zero time — paired with a
+// sql.NullString in callers, this becomes SQL NULL.
+func fmtRFC3339(t time.Time) string {
+	if t.IsZero() {
+		return ""
 	}
-	return time.Unix(0, ns)
+	return t.UTC().Format(time.RFC3339)
+}
+
+// parseRFC3339 reads a timestamp written by fmtRFC3339. Empty string
+// returns zero Time. Accepts the Nano variant too for forward
+// compatibility (in case a future migration writes nanoseconds).
+func parseRFC3339(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, nil
+	}
+	return time.Parse(time.RFC3339Nano, s)
 }
 
 // Compile guard: assert at least one expected non-trivial path of

@@ -13,6 +13,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/internal/manifestcodec"
 )
 
 // helper: build a Store backed by a localfs driver and an
@@ -413,6 +414,258 @@ func TestPut_EmptyPayload(t *testing.T) {
 	})
 	if got.OriginalSize != 0 {
 		t.Errorf("OriginalSize: got %d, want 0", got.OriginalSize)
+	}
+}
+
+// --- Inline blobs (M1.4 pack 3) ---
+//
+// Inline mode kicks in when StoreConfig.BlobStorage is
+// InlineFallback AND the payload size is at most InlineBlobLimit.
+// The payload bytes are stored inside the manifest; no separate
+// blob file appears under blobs/. Deduplication is disabled for
+// inline manifests (their bytes have no row in the blobs table).
+
+// helper: build a Store configured for InlineFallback. The limit
+// is small enough that tests can exercise both sides of it
+// cheaply.
+func newInlineStore(t *testing.T, limit int64) (core.Store, string) {
+	t.Helper()
+	drv := newDriver(t)
+	root := drv.Root()
+	cfg := domain.StoreConfig{
+		BlobStorage:     domain.BlobStorageInlineFallback,
+		InlineBlobLimit: limit,
+	}
+	s, _, err := core.InitStore(context.Background(), drv,
+		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
+		core.WithConfig(cfg),
+	)
+	if err != nil {
+		t.Fatalf("InitStore: %v", err)
+	}
+	return s, root
+}
+
+// countBlobFiles walks <root>/blobs and returns how many regular
+// files live there. Used to assert that inline puts produce zero
+// blob files.
+func countBlobFiles(t *testing.T, root string) int {
+	t.Helper()
+	var n int
+	_ = filepath.Walk(filepath.Join(root, "blobs"),
+		func(path string, info os.FileInfo, err error) error {
+			if err == nil && !info.IsDir() {
+				n++
+			}
+			return nil
+		})
+	return n
+}
+
+// readManifestFromDisk loads the manifest file written by Put and
+// decodes it. Used to inspect fields that Walk cannot return —
+// LayoutHeader, InlineBlob, Pipeline, Metadata — because the index
+// is a routing layer, not a source of truth for manifest content
+// (docs/2. Internals/09 §9.1.2).
+func readManifestFromDisk(t *testing.T, root string, id domain.ArtifactID) domain.Manifest {
+	t.Helper()
+	idStr := string(id)
+	hex := strings.TrimPrefix(idStr, "sha256-")
+	path := filepath.Join(root, "manifests", hex[:2], hex[2:4], idStr)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read manifest %s: %v", path, err)
+	}
+	m, err := manifestcodec.DecodeFile(raw)
+	if err != nil {
+		t.Fatalf("decode manifest %s: %v", path, err)
+	}
+	return m
+}
+
+func TestPut_Inline_BelowLimit_NoBlobFile(t *testing.T) {
+	s, root := newInlineStore(t, 100)
+
+	id, err := s.Put(context.Background(),
+		payload("small"),
+		core.PutOptions{Namespace: "tiny"})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if id == "" {
+		t.Fatal("empty ArtifactID")
+	}
+
+	// No blob file produced — bytes live inside the manifest.
+	if got := countBlobFiles(t, root); got != 0 {
+		t.Errorf("blob files: got %d, want 0 (inline)", got)
+	}
+
+	// Walk finds the manifest in the index.
+	var walked domain.Manifest
+	if err := s.Walk(context.Background(), "tiny", func(m domain.Manifest) error {
+		walked = m
+		return nil
+	}); err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	if walked.ArtifactID != id {
+		t.Errorf("walked ID: got %q, want %q", walked.ArtifactID, id)
+	}
+
+	// LayoutHeader, OriginalSize, InlineBlob live in the manifest
+	// file, not in the index (§9.1.2 — Inline manifests have
+	// blob_ref=NULL, so the JOIN that recovers OriginalSize for
+	// Target manifests yields nothing here). Read the file directly.
+	disk := readManifestFromDisk(t, root, id)
+	if disk.LayoutHeader.BlobStorage != "Inline" {
+		t.Errorf("LayoutHeader: got %q, want Inline", disk.LayoutHeader.BlobStorage)
+	}
+	if disk.OriginalSize != int64(len("small")) {
+		t.Errorf("OriginalSize: got %d, want %d", disk.OriginalSize, len("small"))
+	}
+	if string(disk.InlineBlob) != "small" {
+		t.Errorf("InlineBlob: got %q, want %q", disk.InlineBlob, "small")
+	}
+}
+
+func TestPut_Inline_ExactlyAtLimit_StaysInline(t *testing.T) {
+	const limit int64 = 16
+	s, root := newInlineStore(t, limit)
+
+	exact := strings.Repeat("a", int(limit))
+	id, err := s.Put(context.Background(),
+		payload(exact),
+		core.PutOptions{Namespace: "edge"})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if id == "" {
+		t.Fatal("empty id")
+	}
+	if got := countBlobFiles(t, root); got != 0 {
+		t.Errorf("blob files: got %d, want 0 (inline at limit)", got)
+	}
+
+	disk := readManifestFromDisk(t, root, id)
+	if disk.LayoutHeader.BlobStorage != "Inline" {
+		t.Errorf("LayoutHeader: got %q, want Inline", disk.LayoutHeader.BlobStorage)
+	}
+	if disk.OriginalSize != limit {
+		t.Errorf("OriginalSize: got %d, want %d", disk.OriginalSize, limit)
+	}
+}
+
+func TestPut_Inline_OverLimit_FallsBackToTarget(t *testing.T) {
+	const limit int64 = 16
+	s, root := newInlineStore(t, limit)
+
+	over := strings.Repeat("b", int(limit)+1)
+	id, err := s.Put(context.Background(),
+		payload(over),
+		core.PutOptions{Namespace: "spill"})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if id == "" {
+		t.Fatal("empty id")
+	}
+	if got := countBlobFiles(t, root); got != 1 {
+		t.Errorf("blob files: got %d, want 1 (target fallback)", got)
+	}
+
+	disk := readManifestFromDisk(t, root, id)
+	if disk.LayoutHeader.BlobStorage != "Target" {
+		t.Errorf("LayoutHeader: got %q, want Target", disk.LayoutHeader.BlobStorage)
+	}
+	if disk.OriginalSize != limit+1 {
+		t.Errorf("OriginalSize: got %d, want %d", disk.OriginalSize, limit+1)
+	}
+}
+
+func TestPut_Inline_NoDedupForInline(t *testing.T) {
+	s, root := newInlineStore(t, 100)
+
+	// Same content, two different SessionIDs → two distinct
+	// manifests. With Target storage we would expect one shared
+	// blob file (dedup hit). With Inline each manifest carries
+	// its own bytes — we expect zero blob files regardless.
+	const content = "shared inline"
+	for _, sid := range []string{"a", "b"} {
+		_, err := s.Put(context.Background(),
+			payload(content),
+			core.PutOptions{Namespace: "ns", SessionID: sid})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got := countBlobFiles(t, root); got != 0 {
+		t.Errorf("blob files after 2 inline Puts: got %d, want 0", got)
+	}
+
+	// countBlobFiles==0 is the operative inline signal; per-manifest
+	// LayoutHeader inspection would just repeat that on-disk evidence.
+	// Here we assert the index sees both manifests as separate entries.
+	var manifests int
+	if err := s.Walk(context.Background(), "ns", func(m domain.Manifest) error {
+		manifests++
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if manifests != 2 {
+		t.Errorf("manifests: got %d, want 2", manifests)
+	}
+}
+
+func TestPut_Inline_EmptyPayload(t *testing.T) {
+	s, root := newInlineStore(t, 100)
+
+	id, err := s.Put(context.Background(),
+		domain.Artifact{Payload: bytes.NewReader(nil)},
+		core.PutOptions{Namespace: "empty"})
+	if err != nil {
+		t.Fatalf("Put empty: %v", err)
+	}
+	if id == "" {
+		t.Fatal("empty id")
+	}
+	// Empty payload fits inline trivially.
+	if got := countBlobFiles(t, root); got != 0 {
+		t.Errorf("blob files: got %d, want 0", got)
+	}
+
+	disk := readManifestFromDisk(t, root, id)
+	if disk.OriginalSize != 0 {
+		t.Errorf("OriginalSize: got %d, want 0", disk.OriginalSize)
+	}
+	if disk.LayoutHeader.BlobStorage != "Inline" {
+		t.Errorf("expected Inline for empty payload, got %q", disk.LayoutHeader.BlobStorage)
+	}
+}
+
+func TestPut_Inline_DisabledByZeroLimit(t *testing.T) {
+	// InlineFallback with InlineBlobLimit=0 means "never inline" —
+	// the engine treats it as Target. Useful for callers who want
+	// to keep the fallback strategy configured but temporarily
+	// route everything to disk.
+	s, root := newInlineStore(t, 0)
+
+	id, err := s.Put(context.Background(),
+		payload("anything"),
+		core.PutOptions{Namespace: "disabled"})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if got := countBlobFiles(t, root); got != 1 {
+		t.Errorf("blob files: got %d, want 1 (limit=0 disables inline)", got)
+	}
+
+	disk := readManifestFromDisk(t, root, id)
+	if disk.LayoutHeader.BlobStorage != "Target" {
+		t.Errorf("LayoutHeader: got %q, want Target", disk.LayoutHeader.BlobStorage)
 	}
 }
 

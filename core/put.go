@@ -25,23 +25,27 @@ import (
 // is rewritten or removed within a single Put call.
 const stagingPrefix = "system.state/staging"
 
-// Put records an artifact in the Store. M1.4 implements the
-// Target-with-managed-blob path:
+// Put records an artifact in the Store. M1.4 implements two
+// blob-placement paths:
 //
-//   - the payload is hashed while streaming to a staging file,
-//   - dedup is checked by ContentHash + size,
-//   - on a fresh blob the staging file is renamed to its final
-//     hash-derived path,
-//   - on a hit the staging file is removed; the existing BlobRef
-//     is reused.
+//	Target: payload streams to a staging file, content is hashed
+//	on the fly, dedup is checked, the staging file is renamed to
+//	its final hash-derived path.
+//
+//	Inline (chosen when StoreConfig.BlobStorage is InlineFallback
+//	AND len(payload) <= InlineBlobLimit): payload is buffered in
+//	memory and stored inside the manifest. No blob file is
+//	produced; dedup is disabled because inline bytes have no
+//	separate identity in the blobs table (docs §… "Deduplication
+//	is forcibly disabled" for inline blobs).
 //
 // Then the manifest is built, hashed (becomes ArtifactID), and
 // written to its own hash-sharded path under manifests/. Finally
 // the index is updated.
 //
-// Inline-blob, ExternalRef, Pipeline, Encryption, HostStorage
-// transit, and Pack volumes are deferred to later milestones.
-// Reaching a code path that needs them returns an explicit error.
+// ExternalRef, Pipeline, Encryption, HostStorage transit, and
+// Pack volumes are deferred to later milestones. Reaching a code
+// path that needs them returns an explicit error.
 func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (domain.ArtifactID, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -62,15 +66,32 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 	if cfg.BlobStorage == domain.BlobStorageExternalRef {
 		return "", errors.New("core.Put: BlobStorage: ExternalRef deferred to a later milestone")
 	}
-	if cfg.BlobStorage == domain.BlobStorageInlineFallback {
-		return "", errors.New("core.Put: BlobStorage: Inline deferred to M1.4 pack 3")
-	}
 	if cfg.ManifestStorage != domain.ManifestStorageRemote && cfg.ManifestStorage != "" {
 		return "", fmt.Errorf("core.Put: ManifestStorage %q deferred to M2.2",
 			cfg.ManifestStorage)
 	}
 
-	// --- Phase 1: stream payload to staging, hash it ---
+	// TODO(M5.x): Two-Pass dedup path. Per docs/2. Internals/02 §2.1.1,
+	// when a.Payload implements io.ReadSeeker AND the driver does not
+	// declare CapSlowRead, we should hash on a first pass, probe the
+	// dedup index, and skip the staging write on a hit. M1.4 ships
+	// with One-Pass only — correct, but writes-then-dedups even on
+	// hits. Acceptable for the M1 perimeter; revisit when S3 driver
+	// arrives in M5 (CapSlowRead becomes a real signal there).
+
+	// --- Phase 1: hash payload, decide inline vs target ---
+	//
+	// We always need the content hash up front: it is the dedup
+	// key, the BlobRef of fresh blobs, and a deterministic input
+	// to the manifest. The placement decision (inline body vs.
+	// separate blob file) depends on size, which is also produced
+	// here.
+	//
+	// For InlineFallback we speculatively read up to
+	// InlineBlobLimit + 1 bytes. If the read returns at most
+	// InlineBlobLimit bytes, the payload fits inline; otherwise
+	// we have already consumed the head and must drain the rest
+	// to staging via MultiReader.
 
 	hashAlgo := string(cfg.ContentHasher)
 	hasher, err := s.hashes.NewHasher(hashAlgo)
@@ -78,67 +99,90 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 		return "", fmt.Errorf("core.Put: hasher: %w", err)
 	}
 
-	stagingPath, err := s.makeStagingPath()
-	if err != nil {
-		return "", err
-	}
-	tee := io.TeeReader(a.Payload, hasher)
-	counter := &countingReader{r: tee}
-
-	if err := s.drv.Put(ctx, stagingPath, counter); err != nil {
-		// Driver.Put atomically rejects the staging write; nothing
-		// to clean up.
-		return "", fmt.Errorf("core.Put: stage payload: %w", err)
-	}
-
-	contentHash := domain.ContentHash(s.hashes.Format(hashAlgo, hasher.Sum(nil)))
-	originalSize := counter.n
-
-	// --- Phase 2: dedup check ---
-
-	existingRef, found, err := s.index.ExistsByContent(contentHash, originalSize)
-	if err != nil {
-		_ = s.drv.Remove(ctx, stagingPath)
-		return "", fmt.Errorf("core.Put: dedup probe: %w", err)
-	}
+	useInlineFallback := cfg.BlobStorage == domain.BlobStorageInlineFallback &&
+		cfg.InlineBlobLimit > 0
+	inlineLimit := cfg.InlineBlobLimit
 
 	var (
-		blobRef  domain.BlobRef
-		blobAddr PhysicalAddress
+		contentHash  domain.ContentHash
+		originalSize int64
+		inlineBytes  []byte // non-nil iff this Put goes inline
+		blobRef      domain.BlobRef
+		blobAddr     PhysicalAddress
 	)
-	if found {
-		// Dedup hit: reuse the existing blob, drop the staging file.
-		if err := s.drv.Remove(ctx, stagingPath); err != nil {
-			return "", fmt.Errorf("core.Put: drop staging: %w", err)
-		}
-		blobRef = domain.BlobRef(existingRef)
-		blobAddr, err = s.index.Resolve(existingRef)
+
+	if useInlineFallback {
+		head, err := io.ReadAll(io.LimitReader(a.Payload, inlineLimit+1))
 		if err != nil {
-			return "", fmt.Errorf("core.Put: resolve existing blob: %w", err)
+			return "", fmt.Errorf("core.Put: read payload head: %w", err)
+		}
+		if int64(len(head)) <= inlineLimit {
+			// Fits inline. Hash the head, no staging file, no
+			// dedup probe — inline blobs do not participate in
+			// dedup (their bytes live inside the manifest).
+			if _, err := hasher.Write(head); err != nil {
+				return "", fmt.Errorf("core.Put: hash inline: %w", err)
+			}
+			contentHash = domain.ContentHash(s.hashes.Format(hashAlgo, hasher.Sum(nil)))
+			originalSize = int64(len(head))
+			inlineBytes = head
+			blobRef = domain.BlobRef(contentHash)
+			// blobAddr stays zero: no driver entry for inline.
+		} else {
+			// Overflowed inline. Stream head + remainder to a
+			// staging file, hashing the full thing.
+			stagingPath, err := s.makeStagingPath()
+			if err != nil {
+				return "", err
+			}
+			combined := io.MultiReader(bytesReader(head), a.Payload)
+			tee := io.TeeReader(combined, hasher)
+			counter := &countingReader{r: tee}
+			if err := s.drv.Put(ctx, stagingPath, counter); err != nil {
+				return "", fmt.Errorf("core.Put: stage payload: %w", err)
+			}
+			contentHash = domain.ContentHash(s.hashes.Format(hashAlgo, hasher.Sum(nil)))
+			originalSize = counter.n
+			blobRef, blobAddr, err = s.commitBlob(ctx, cfg, stagingPath, contentHash, originalSize)
+			if err != nil {
+				return "", err
+			}
 		}
 	} else {
-		// Fresh blob: BlobRef equals ContentHash in M1.4 because
-		// Pipeline is empty (no transformations between content
-		// and on-disk bytes). When the Pipeline lands in M2,
-		// BlobRef becomes the hash of the post-pipeline stream.
-		blobRef = domain.BlobRef(contentHash)
-		finalPath, err := blobpath.Resolve(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
+		// Plain Target path: stream straight to staging.
+		stagingPath, err := s.makeStagingPath()
 		if err != nil {
-			_ = s.drv.Remove(ctx, stagingPath)
-			return "", fmt.Errorf("core.Put: resolve blob path: %w", err)
+			return "", err
 		}
-		if err := s.drv.Rename(ctx, stagingPath, finalPath); err != nil {
-			_ = s.drv.Remove(ctx, stagingPath)
-			return "", fmt.Errorf("core.Put: commit blob: %w", err)
+		tee := io.TeeReader(a.Payload, hasher)
+		counter := &countingReader{r: tee}
+		if err := s.drv.Put(ctx, stagingPath, counter); err != nil {
+			return "", fmt.Errorf("core.Put: stage payload: %w", err)
 		}
-		blobAddr = PhysicalAddress{
-			Workspace: WorkspaceLocation,
-			Path:      finalPath,
+		contentHash = domain.ContentHash(s.hashes.Format(hashAlgo, hasher.Sum(nil)))
+		originalSize = counter.n
+		blobRef, blobAddr, err = s.commitBlob(ctx, cfg, stagingPath, contentHash, originalSize)
+		if err != nil {
+			return "", err
 		}
 	}
 
-	// --- Phase 3: build manifest and compute its ArtifactID ---
+	// --- Phase 2: build manifest and compute its ArtifactID ---
+	//
+	// LayoutHeader.BlobStorage records HOW this particular blob
+	// is laid out, regardless of the StoreConfig that was in
+	// effect at write time. The read path inspects the header,
+	// not the current config — that is what makes manifests
+	// stable across config changes.
+	//
+	// Per docs §7.2: BlobRef is set on every manifest, including
+	// inline ones (where it equals the ContentHash of the
+	// embedded bytes).
 
+	layout := "Target"
+	if inlineBytes != nil {
+		layout = "Inline"
+	}
 	createdAt := time.Now().UTC()
 	manifest := domain.Manifest{
 		Type:           domain.ManifestTypeBlob,
@@ -148,8 +192,9 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 		ContentHash:    contentHash,
 		OriginalSize:   originalSize,
 		BlobRef:        blobRef,
-		LayoutHeader:   domain.LayoutHeader{BlobStorage: string(domain.BlobStorageTarget)},
+		LayoutHeader:   domain.LayoutHeader{BlobStorage: layout},
 		Pipeline:       []domain.PipelineStage{},
+		InlineBlob:     inlineBytes,
 		RetentionUntil: opts.RetentionUntil,
 		Metadata:       a.Metadata,
 	}
@@ -158,15 +203,15 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 		cfg.ManifestEncoding, cfg.ManifestCrypto,
 	)
 	if err != nil {
-		// On an encoding/crypto deferral the blob is already
+		// On encoding/crypto deferral the blob (if any) is already
 		// committed. We do NOT roll it back: the orphan blob is
 		// harmless (ref_count stays 0, GC reaps it). Rolling back
-		// would require an inverse of Driver.Rename, which can race
-		// against a parallel Put deduping on the same content.
+		// would require an inverse of Driver.Rename, which can
+		// race against a parallel Put deduping on the same content.
 		return "", fmt.Errorf("core.Put: compute artifact id: %w", err)
 	}
 
-	// --- Phase 4: write the manifest file ---
+	// --- Phase 3: write the manifest file ---
 
 	manifestPath, err := blobpath.ManifestPath(artifactID)
 	if err != nil {
@@ -176,7 +221,12 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 		return "", fmt.Errorf("core.Put: write manifest: %w", err)
 	}
 
-	// --- Phase 5: index ---
+	// --- Phase 4: index ---
+	//
+	// For inline manifests blobAddr is the zero PhysicalAddress.
+	// IndexManifest dispatches on manifest.LayoutHeader.BlobStorage
+	// to skip the blobs-table insertion for inline; the manifest
+	// itself is still indexed so Walk and GetBySession find it.
 
 	if err := s.index.IndexManifest(manifest, blobAddr, nil, nil); err != nil {
 		// Manifest file is on disk but unindexed. RebuildIndexAgent
@@ -186,7 +236,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 		return "", fmt.Errorf("core.Put: index manifest: %w", err)
 	}
 
-	// --- Phase 6: emit ---
+	// --- Phase 5: emit ---
 
 	s.publish(EventManifestSaved, ManifestSavedPayload{
 		Manifest:  manifest,
@@ -194,6 +244,50 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 	})
 
 	return artifactID, nil
+}
+
+// commitBlob is the tail of the Target write path: dedup probe,
+// then either drop the staging file (hit) or rename it to its
+// final hash-derived path (miss). Returns the BlobRef and the
+// PhysicalAddress of where the blob actually lives now.
+func (s *store) commitBlob(
+	ctx context.Context,
+	cfg domain.StoreConfig,
+	stagingPath string,
+	contentHash domain.ContentHash,
+	originalSize int64,
+) (domain.BlobRef, PhysicalAddress, error) {
+	existingRef, found, err := s.index.ExistsByContent(contentHash, originalSize)
+	if err != nil {
+		_ = s.drv.Remove(ctx, stagingPath)
+		return "", PhysicalAddress{}, fmt.Errorf("core.Put: dedup probe: %w", err)
+	}
+	if found {
+		if err := s.drv.Remove(ctx, stagingPath); err != nil {
+			return "", PhysicalAddress{}, fmt.Errorf("core.Put: drop staging: %w", err)
+		}
+		addr, err := s.index.Resolve(existingRef)
+		if err != nil {
+			return "", PhysicalAddress{}, fmt.Errorf("core.Put: resolve existing blob: %w", err)
+		}
+		return domain.BlobRef(existingRef), addr, nil
+	}
+	// Fresh blob. BlobRef equals ContentHash in M1.4 (no Pipeline
+	// transforms the bytes between content and on-disk form).
+	blobRef := domain.BlobRef(contentHash)
+	finalPath, err := blobpath.Resolve(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
+	if err != nil {
+		_ = s.drv.Remove(ctx, stagingPath)
+		return "", PhysicalAddress{}, fmt.Errorf("core.Put: resolve blob path: %w", err)
+	}
+	if err := s.drv.Rename(ctx, stagingPath, finalPath); err != nil {
+		_ = s.drv.Remove(ctx, stagingPath)
+		return "", PhysicalAddress{}, fmt.Errorf("core.Put: commit blob: %w", err)
+	}
+	return blobRef, PhysicalAddress{
+		Workspace: WorkspaceLocation,
+		Path:      finalPath,
+	}, nil
 }
 
 // snapshotConfig returns a copy of the current active StoreConfig.

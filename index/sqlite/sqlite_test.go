@@ -98,7 +98,7 @@ func TestNewStore_FutureSchemaRejected(t *testing.T) {
 	idx, path := newDiskIndex(t)
 	if _, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO schema_version(version, applied_at) VALUES (?, ?)`,
-		CurrentSchemaVersion+1, time.Now().UnixNano(),
+		CurrentSchemaVersion+1, fmtRFC3339(time.Now()),
 	); err != nil {
 		t.Fatalf("seed future version: %v", err)
 	}

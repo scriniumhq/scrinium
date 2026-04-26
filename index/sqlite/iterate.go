@@ -151,26 +151,24 @@ func (i *Index) ListOrphanBlobs(
 }
 
 // ListUnverified iterates over blobs whose last_verified_at is
-// strictly older than `before`. Used by the Scrub Agent; the
-// `before` cutoff is computed by the agent as
+// strictly older than `before`, plus blobs that have never been
+// scrubbed (last_verified_at IS NULL). Used by the Scrub Agent;
+// the `before` cutoff is computed by the agent as
 // now() - StoreConfig.MaxAge, possibly shifted upward for blobs
 // on a CapNativeChecksum medium.
 //
-// last_verified_at == 0 means "never verified"; those rows are
-// always included as long as `before` is non-zero (which it is in
-// practice — agents always pass a now-minus-something cutoff).
+// NULL last_verified_at means "never verified" — those rows take
+// priority and always come first under the ORDER BY (SQLite sorts
+// NULLs first ASC by default).
 //
-// Order is by last_verified_at ascending: the oldest verifications
-// come first, which is what the scrub schedule wants.
-func (i *Index) ListUnverified(
-	ctx context.Context,
-	before time.Time,
-	cb func(blobRef string) error,
-) error {
-	cutoff := before.UnixNano()
+// Order is by last_verified_at ascending: oldest first, which is
+// what the scrub schedule wants. RFC 3339 second-precision strings
+// (UTC) sort lexicographically the same as chronologically.
+func (i *Index) ListUnverified(ctx context.Context, before time.Time, cb func(blobRef string) error) error {
+	cutoff := fmtRFC3339(before)
 	const stmt = `
 		SELECT blob_ref FROM blobs
-		WHERE last_verified_at < ?
+		WHERE last_verified_at IS NULL OR last_verified_at < ?
 		ORDER BY last_verified_at`
 	rows, err := i.db.QueryContext(ctx, stmt, cutoff)
 	if err != nil {

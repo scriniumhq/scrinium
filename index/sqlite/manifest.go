@@ -104,13 +104,15 @@ func upsertBlob(
 	originalSize int64,
 	addr core.PhysicalAddress,
 ) error {
+	// last_verified_at is NULL on insert — the blob has never been
+	// scrubbed yet. Scrub Agent (M3) updates it via MarkVerified.
 	const stmt = `
 		INSERT INTO blobs (
 			blob_ref, content_hash, original_size,
 			physical_workspace, physical_path,
 			pack_ref, pack_offset, pack_size,
 			ref_count, last_verified_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
 		ON CONFLICT(blob_ref) DO NOTHING`
 	_, err := tx.ExecContext(ctx, stmt,
 		blobRef,
@@ -121,7 +123,7 @@ func upsertBlob(
 		addr.PackRef,
 		addr.Offset,
 		addr.Size,
-		time.Now().UnixNano(),
+		fmtRFC3339(time.Now()),
 	)
 	return err
 }
@@ -160,22 +162,43 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 			blob_ref, created_at, retention_until
 		) VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(artifact_id) DO NOTHING`
-	var retention int64
-	if !m.RetentionUntil.IsZero() {
-		retention = m.RetentionUntil.UnixNano()
+
+	// blob_ref is NULL for Inline manifests per §9.1.2 — Inline
+	// blobs do not have a row in `blobs`, and the routing layer
+	// uses the absence of a JOIN partner as the "this is inline,
+	// read the file for content" signal.
+	var blobRefArg any
+	if m.LayoutHeader.BlobStorage == "Inline" {
+		blobRefArg = nil
+	} else {
+		blobRefArg = string(m.BlobRef)
 	}
+
+	// retention_until is NULL when no retention was set. Stored
+	// alongside the manifest row (rather than read from the
+	// manifest file at Delete-time) so that RollbackSession can
+	// do its atomic retention check in one indexed query instead
+	// of N file reads.
+	var retentionArg any
+	if m.RetentionUntil.IsZero() {
+		retentionArg = nil
+	} else {
+		retentionArg = fmtRFC3339(m.RetentionUntil)
+	}
+
 	createdAt := m.CreatedAt
 	if createdAt.IsZero() {
 		createdAt = time.Now()
 	}
+
 	_, err := tx.ExecContext(ctx, stmt,
 		string(m.ArtifactID),
 		string(m.Type),
 		m.Namespace,
 		m.SessionID,
-		string(m.BlobRef),
-		createdAt.UnixNano(),
-		retention,
+		blobRefArg,
+		fmtRFC3339(createdAt),
+		retentionArg,
 	)
 	return err
 }
@@ -209,11 +232,21 @@ func indexBlobManifest(
 	m domain.Manifest,
 	addr core.PhysicalAddress,
 ) error {
-	if m.BlobRef == "" {
-		// Inline manifests carry their bytes in the manifest itself
-		// and do not have a separate blob record. We still record
-		// the manifest so Walk and GetBySession can find it.
+	// Inline manifests carry their bytes inside the manifest
+	// itself and do not have a separate blob record. The manifest
+	// is still indexed so Walk and GetBySession find it; the
+	// blobs table is left alone (deduplication is disabled for
+	// inline blobs by design — docs §… ).
+	//
+	// We dispatch on LayoutHeader.BlobStorage rather than on
+	// emptiness of BlobRef because §7.2 mandates that BlobRef be
+	// populated even on inline manifests (it carries the hash of
+	// the embedded bytes).
+	if m.LayoutHeader.BlobStorage == "Inline" {
 		return insertManifestRow(ctx, tx, m)
+	}
+	if m.BlobRef == "" {
+		return fmt.Errorf("sqlite: blob manifest %q has empty BlobRef", m.ArtifactID)
 	}
 	if err := upsertBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, addr); err != nil {
 		return err

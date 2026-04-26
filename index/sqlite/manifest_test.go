@@ -139,11 +139,11 @@ func TestIndexManifest_TOC_RegistersChunks(t *testing.T) {
 	for _, c := range chunks {
 		_, err := idx.db.ExecContext(context.Background(),
 			`INSERT INTO blobs (
-				blob_ref, content_hash, original_size,
-				physical_workspace, physical_path,
-				ref_count, last_verified_at, created_at
-			) VALUES (?, ?, ?, 0, ?, 0, 0, ?)`,
-			c.ref, c.contentHash, 1024, "chunks/"+c.ref, time.Now().UnixNano(),
+			blob_ref, content_hash, original_size,
+			physical_workspace, physical_path,
+			ref_count, last_verified_at, created_at
+		) VALUES (?, ?, ?, 0, ?, 0, NULL, ?)`,
+			c.ref, c.contentHash, 1024, "chunks/"+c.ref, fmtRFC3339(time.Now()),
 		)
 		if err != nil {
 			t.Fatal(err)
