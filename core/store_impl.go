@@ -298,14 +298,6 @@ func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType BlobType) (do
 	return "", errors.New("core.Store.PutBlob: not implemented")
 }
 
-func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts GetOptions) (ReadHandle, error) {
-	return nil, errors.New("core.Store.Get: not implemented")
-}
-
-func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
-	return errors.New("core.Store.Delete: not implemented")
-}
-
 func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 	return errors.New("core.Store.Verify: not implemented")
 }

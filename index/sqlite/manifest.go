@@ -371,7 +371,11 @@ func indexPackManifest(
 // is the recovery tool.
 //
 // Idempotency: deleting an already-deleted artifact is a no-op
-// (returns nil). This matches the GC retry semantics.
+// (returns nil) — DELETE FROM manifests with rows-affected=0 is
+// not an error. Source-of-truth for "already deleted" is the
+// manifests table, not manifest_blobs: Inline manifests have no
+// edges in manifest_blobs by design (§9.2.1), so checking that
+// table for "exists" gives the wrong answer for them.
 func (i *Index) DeleteManifest(artifactID domain.ArtifactID, blobRefs []string) error {
 	const op = "DeleteManifest"
 	start := time.Now()
@@ -428,12 +432,11 @@ func (i *Index) deleteManifestTx(
 	}
 	rows.Close()
 
-	if len(actual) == 0 {
-		// Nothing in the index for this artifact. Either it was
-		// never registered or it has already been deleted. Either
-		// way: idempotent no-op, success.
-		return tx.Commit() // commit empty tx so latency timer is fair
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
 	}
+	rows.Close()
 
 	if !sameSet(actual, blobRefs) {
 		return fmt.Errorf("sqlite: DeleteManifest: blobRefs mismatch for %q "+
