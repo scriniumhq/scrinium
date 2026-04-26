@@ -45,10 +45,11 @@ func TestLayerOf(t *testing.T) {
 		{"github.com/rkurbatov/scrinium/driver/localfs", LayerDriverSub},
 		{"github.com/rkurbatov/scrinium/driver/faulty", LayerDriverSub},
 		{"github.com/rkurbatov/scrinium/core", LayerCore},
+		{"github.com/rkurbatov/scrinium/core/internal/descriptor", LayerCoreSub},
 		{"github.com/rkurbatov/scrinium/plugin", LayerPlugin},
 		{"github.com/rkurbatov/scrinium/plugin/compress/zstd", LayerPlugin},
 		{"github.com/rkurbatov/scrinium/index", LayerIndex},
-		{"github.com/rkurbatov/scrinium/index/sqlite", LayerIndex},
+		{"github.com/rkurbatov/scrinium/index/sqlite", LayerIndexSub},
 		{"github.com/rkurbatov/scrinium/curator", LayerCurator},
 		{"github.com/rkurbatov/scrinium/curator/bundler", LayerCuratorSub},
 		{"github.com/rkurbatov/scrinium/curator/chunker", LayerCuratorSub},
@@ -199,6 +200,68 @@ func TestCheckDAG_DriverSubMayImportContract(t *testing.T) {
 	if len(violations) != 0 {
 		t.Errorf("expected no violations, got %d:\n%s",
 			len(violations), formatViolations(violations))
+	}
+}
+
+// TestCheckDAG_CoreSubMayImportFromCore — verifies that core may
+// import its own internal helpers (descriptor and future
+// internal/* packages). The reverse direction is the legitimate
+// implementation pattern: core wires the helper, helper does the
+// work.
+func TestCheckDAG_CoreSubMayImportFromCore(t *testing.T) {
+	imports := map[string][]string{
+		"github.com/rkurbatov/scrinium/core": {
+			"github.com/rkurbatov/scrinium/core/internal/descriptor", // OK: own subpackage
+			"github.com/rkurbatov/scrinium/driver",                   // OK
+			"github.com/rkurbatov/scrinium/event",                    // OK
+		},
+		"github.com/rkurbatov/scrinium/core/internal/descriptor": {
+			"github.com/rkurbatov/scrinium/driver", // OK: contract
+			"github.com/rkurbatov/scrinium/event",  // OK
+		},
+	}
+	violations := CheckDAG(imports)
+	if len(violations) != 0 {
+		t.Errorf("expected no violations, got %d:\n%s",
+			len(violations), formatViolations(violations))
+	}
+}
+
+// TestCheckDAG_IndexSubMayImportContract — verifies that index/sqlite
+// (and future siblings) may import the index umbrella package and
+// core. The umbrella may also accept imports from its subpackages.
+func TestCheckDAG_IndexSubMayImportContract(t *testing.T) {
+	imports := map[string][]string{
+		"github.com/rkurbatov/scrinium/index/sqlite": {
+			"github.com/rkurbatov/scrinium/core",  // OK: StoreIndex contract
+			"github.com/rkurbatov/scrinium/index", // OK: IndexOption surface
+			"github.com/rkurbatov/scrinium/event", // OK
+		},
+	}
+	violations := CheckDAG(imports)
+	if len(violations) != 0 {
+		t.Errorf("expected no violations, got %d:\n%s",
+			len(violations), formatViolations(violations))
+	}
+}
+
+// TestCheckDAG_IndexSubsMustNotImportEachOther — sqlite and postgres
+// (when it lands) must stay independent. A future Postgres
+// implementation cannot inherit from sqlite by accident.
+func TestCheckDAG_IndexSubsMustNotImportEachOther(t *testing.T) {
+	imports := map[string][]string{
+		"github.com/rkurbatov/scrinium/index/postgres": {
+			"github.com/rkurbatov/scrinium/index",        // OK: umbrella
+			"github.com/rkurbatov/scrinium/index/sqlite", // VIOLATION: sibling
+		},
+	}
+	violations := CheckDAG(imports)
+	if len(violations) != 1 {
+		t.Fatalf("expected 1 violation, got %d:\n%s",
+			len(violations), formatViolations(violations))
+	}
+	if violations[0].FromLayer != LayerIndexSub || violations[0].ToLayer != LayerIndexSub {
+		t.Errorf("wrong violation: %s", violations[0])
 	}
 }
 

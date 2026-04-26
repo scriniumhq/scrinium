@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/index"
 )
 
 // DefaultBusyTimeout is the default value applied via
@@ -19,7 +20,7 @@ import (
 const DefaultBusyTimeout = 5 * time.Second
 
 // Index is the SQLite-backed implementation of core.StoreIndex.
-// Construct via Open; Close when done.
+// Construct via NewStore; Close when done.
 type Index struct {
 	db   *sql.DB
 	opts options
@@ -78,57 +79,43 @@ func defaultOptions() options {
 	}
 }
 
-// Option configures Open.
-type Option func(*options)
-
-// WithBusyTimeout sets PRAGMA busy_timeout. SQLite will block a
-// writer for up to this duration when another writer holds the
-// lock; an exceeded timeout returns SQLITE_BUSY which the package
-// maps to core.ErrLeaseHeld and emits as
-// index.contention_error.
+// NewStore opens (or creates) a SQLite-backed StoreIndex at the
+// given path. Use ":memory:" for a private in-memory instance.
 //
-// Pass 0 to disable the timeout (fail-fast). Negative values are
-// clamped to 0.
-func WithBusyTimeout(d time.Duration) Option {
-	return func(o *options) {
-		if d < 0 {
-			d = 0
-		}
-		o.busyTimeout = d
-	}
-}
-
-// WithPublisher provides the event bus for emitting index.* metric
-// events. Without one, metric events are silently dropped — the
-// index's behaviour is otherwise unchanged.
-func WithPublisher(p core.Publisher) Option {
-	return func(o *options) { o.publisher = p }
-}
-
-// WithSyncOff disables PRAGMA synchronous. Tests only — an unclean
-// shutdown can lose committed data. Documented as a sharp tool, not
-// hidden behind an internal helper, because chaos-test packages
-// outside this module legitimately need it.
-func WithSyncOff() Option {
-	return func(o *options) { o.syncMode = syncOff }
-}
-
-// Open opens (or creates) a SQLite-backed StoreIndex at the given
-// path. Use ":memory:" for a private in-memory instance.
+// Accepts the umbrella index.IndexOption type — the package
+// itself does not expose backend-specific options on its public
+// API. Tunables like busy_timeout and journal/sync modes use
+// safe defaults; tests inside this package may override them
+// through internal helpers.
 //
 // On a fresh database the schema is created at CurrentSchemaVersion.
 // On an existing database the schema version is checked; missing
 // migrations are applied forward-only. A version newer than
 // CurrentSchemaVersion returns core.ErrIndexSchemaMismatch.
-func Open(ctx context.Context, path string, opts ...Option) (*Index, error) {
+//
+// The signature carries ctx and error even though the docs at
+// 3. Contracts/02 §2.4.1 show a simplified form without them.
+// Opening SQLite is real I/O: it can fail on bad paths,
+// permission errors, mid-flight migrations, or mmap limits, and
+// migrations are long-running and deserve cancellation. Doc
+// amendment tracked separately.
+func NewStore(ctx context.Context, path string, opts ...index.IndexOption) (core.StoreIndex, error) {
 	if path == "" {
 		return nil, fmt.Errorf("sqlite: empty path")
 	}
 
-	o := defaultOptions()
+	// Resolve umbrella IndexOptions, then map them onto our local
+	// options struct. The reverse direction (sqlite-private knobs
+	// reachable through index.IndexOption) is intentionally not
+	// supported — backend-specific tuning lives behind
+	// implementation-internal helpers.
+	idxOpts := index.IndexOptions{}
 	for _, fn := range opts {
-		fn(&o)
+		fn(&idxOpts)
 	}
+
+	o := defaultOptions()
+	o.publisher = idxOpts.Publisher
 
 	dsn := buildDSN(path, o)
 	db, err := openSQL(dsn)
@@ -156,6 +143,39 @@ func Open(ctx context.Context, path string, opts ...Option) (*Index, error) {
 		return nil, err
 	}
 
+	return &Index{db: db, opts: o}, nil
+}
+
+// newStoreForTests is the in-package constructor used by sqlite_test.go
+// to exercise paths that need non-default tunables (sync_off,
+// custom busy_timeout). Not exported because chaos-test packages
+// outside sqlite have no legitimate need for them — they should
+// inject faults at the driver layer instead.
+func newStoreForTests(ctx context.Context, path string, mut func(*options)) (*Index, error) {
+	if path == "" {
+		return nil, fmt.Errorf("sqlite: empty path")
+	}
+	o := defaultOptions()
+	if mut != nil {
+		mut(&o)
+	}
+
+	dsn := buildDSN(path, o)
+	db, err := openSQL(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: open: %w", err)
+	}
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(2)
+
+	if err := applyPragmas(ctx, db, path, o); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("sqlite: apply pragmas: %w", err)
+	}
+	if err := applyMigrations(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return &Index{db: db, opts: o}, nil
 }
 

@@ -72,8 +72,10 @@ const (
 	LayerDriver
 	LayerDriverSub // localfs, faulty, s3, ...
 	LayerCore
+	LayerCoreSub // internal/descriptor, future internal/* helpers
 	LayerPlugin
 	LayerIndex
+	LayerIndexSub // sqlite, postgres, memory, multistore
 	LayerCurator
 	LayerCuratorSub // bundler, chunker, host
 	LayerAgent
@@ -95,10 +97,14 @@ func (l Layer) String() string {
 		return "driver/sub"
 	case LayerCore:
 		return "core"
+	case LayerCoreSub:
+		return "core/sub"
 	case LayerPlugin:
 		return "plugin"
 	case LayerIndex:
 		return "index"
+	case LayerIndexSub:
+		return "index/sub"
 	case LayerCurator:
 		return "curator"
 	case LayerCuratorSub:
@@ -135,11 +141,17 @@ func LayerOf(pkg string) Layer {
 		}
 		return LayerDriverSub
 	case "core":
-		return LayerCore
+		if len(parts) == 1 {
+			return LayerCore
+		}
+		return LayerCoreSub
 	case "plugin":
 		return LayerPlugin
 	case "index":
-		return LayerIndex
+		if len(parts) == 1 {
+			return LayerIndex
+		}
+		return LayerIndexSub
 	case "curator":
 		if len(parts) == 1 {
 			return LayerCurator
@@ -180,13 +192,33 @@ func AllowedTargets(from Layer) map[Layer]bool {
 		return map[Layer]bool{LayerEvent: true, LayerDriver: true}
 
 	case LayerCore:
+		// core may import its own internal/* helpers (descriptor,
+		// future internal subpackages). LayerCoreSub captures
+		// those; same-direction reasoning as the driver/* case.
+		return map[Layer]bool{LayerEvent: true, LayerDriver: true, LayerCoreSub: true}
+
+	case LayerCoreSub:
+		// Internal helpers of core may import the same upstream as
+		// core itself (event, driver). They must NOT import other
+		// core/internal/* siblings — keep helpers independent.
 		return map[Layer]bool{LayerEvent: true, LayerDriver: true}
 
 	case LayerPlugin:
 		return map[Layer]bool{LayerEvent: true, LayerDriver: true, LayerCore: true}
 
 	case LayerIndex:
-		return map[Layer]bool{LayerEvent: true, LayerDriver: true, LayerCore: true}
+		// index/ (the umbrella package with shared types and the
+		// IndexOption surface) may be imported by index/* subpackages
+		// (sqlite, postgres). Itself it imports core (the StoreIndex
+		// contract).
+		return map[Layer]bool{LayerEvent: true, LayerDriver: true, LayerCore: true, LayerIndexSub: true}
+
+	case LayerIndexSub:
+		// Concrete StoreIndex implementations (sqlite, postgres,
+		// memory) import core (the contract) and index (the
+		// umbrella with IndexOptions). Siblings must stay
+		// independent — sqlite must not depend on postgres.
+		return map[Layer]bool{LayerEvent: true, LayerDriver: true, LayerCore: true, LayerIndex: true}
 
 	case LayerCurator:
 		return map[Layer]bool{
@@ -227,10 +259,12 @@ func AllowedTargets(from Layer) map[Layer]bool {
 
 	case LayerCmd:
 		// Entry points may import anything from the upper layers,
-		// including concrete driver implementations.
+		// including concrete driver and index implementations.
 		return map[Layer]bool{
-			LayerEvent: true, LayerDriver: true, LayerDriverSub: true, LayerCore: true,
-			LayerPlugin: true, LayerIndex: true,
+			LayerEvent: true, LayerDriver: true, LayerDriverSub: true,
+			LayerCore: true, LayerCoreSub: true,
+			LayerPlugin: true,
+			LayerIndex: true, LayerIndexSub: true,
 			LayerCurator: true, LayerCuratorSub: true,
 			LayerAgent: true, LayerMaintenance: true, LayerProjection: true,
 		}
@@ -238,8 +272,10 @@ func AllowedTargets(from Layer) map[Layer]bool {
 	case LayerInternal:
 		// Test infrastructure: everything is allowed.
 		return map[Layer]bool{
-			LayerEvent: true, LayerDriver: true, LayerDriverSub: true, LayerCore: true,
-			LayerPlugin: true, LayerIndex: true,
+			LayerEvent: true, LayerDriver: true, LayerDriverSub: true,
+			LayerCore: true, LayerCoreSub: true,
+			LayerPlugin: true,
+			LayerIndex: true, LayerIndexSub: true,
 			LayerCurator: true, LayerCuratorSub: true,
 			LayerAgent: true, LayerMaintenance: true, LayerProjection: true,
 		}

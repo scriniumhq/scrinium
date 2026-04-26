@@ -135,11 +135,11 @@ func TestVacuumInto_CreatesSnapshot(t *testing.T) {
 
 	// Snapshot is a self-contained, openable database with the
 	// same data.
-	snap, err := Open(context.Background(), dest)
+	snapIface, err := NewStore(context.Background(), dest)
 	if err != nil {
-		t.Fatalf("Open snapshot: %v", err)
+		t.Fatalf("NewStore snapshot: %v", err)
 	}
-	defer snap.Close()
+	snap := snapIface.(*Index)
 
 	if got := countRows(t, snap, "blobs"); got != 1 {
 		t.Errorf("snapshot blobs: got %d, want 1", got)

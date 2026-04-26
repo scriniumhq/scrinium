@@ -1,0 +1,303 @@
+package core_test
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/rkurbatov/scrinium/core"
+)
+
+// helper: build a Store backed by an in-memory index in a fresh
+// temp dir. Wraps the InitStore boilerplate; reuses newDriver and
+// newIndex from init_test.go (same _test package).
+func newStore(t *testing.T, opts ...core.StoreOption) core.Store {
+	t.Helper()
+	drv := newDriver(t)
+	all := append([]core.StoreOption{core.WithStoreIndex(newIndex(t))}, opts...)
+	s, _, err := core.InitStore(context.Background(), drv, all...)
+	if err != nil {
+		t.Fatalf("InitStore: %v", err)
+	}
+	return s
+}
+
+// --- State / Capabilities ---
+
+func TestStore_State_StartsUnlocked(t *testing.T) {
+	s := newStore(t)
+	if s.State() != core.StateUnlocked {
+		t.Errorf("state: got %v, want %v", s.State(), core.StateUnlocked)
+	}
+}
+
+func TestStore_Capabilities_DriverPassthrough(t *testing.T) {
+	s := newStore(t)
+	caps := s.Capabilities()
+	if caps == 0 {
+		t.Error("expected non-zero capabilities from localfs driver")
+	}
+}
+
+// --- SetMaintenanceMode ---
+
+func TestStore_SetMaintenanceMode_AllValidValues(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	for _, mode := range []core.MaintenanceMode{
+		core.MaintenanceModeNone,
+		core.MaintenanceModeReadOnly,
+		core.MaintenanceModeOffline,
+		core.MaintenanceModeNone, // back to normal
+	} {
+		if err := s.SetMaintenanceMode(ctx, mode); err != nil {
+			t.Errorf("SetMaintenanceMode(%d): %v", mode, err)
+		}
+	}
+}
+
+func TestStore_SetMaintenanceMode_RejectsInvalid(t *testing.T) {
+	s := newStore(t)
+	err := s.SetMaintenanceMode(context.Background(), core.MaintenanceMode(99))
+	if err == nil {
+		t.Fatal("expected error on invalid mode")
+	}
+	if !strings.Contains(err.Error(), "invalid mode") {
+		t.Errorf("error message: %v", err)
+	}
+}
+
+// TestStore_SetMaintenanceMode_OfflineBlocksReads verifies that the
+// priority-of-checks flow surfaces ErrStoreOffline through the
+// public methods that consult it (Capacity is the M1.3 example;
+// Put/Get/Delete arrive in M1.4).
+func TestStore_SetMaintenanceMode_OfflineBlocksCapacity(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	if err := s.SetMaintenanceMode(ctx, core.MaintenanceModeOffline); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.Capacity(ctx)
+	if !errors.Is(err, core.ErrStoreOffline) {
+		t.Fatalf("expected ErrStoreOffline, got %v", err)
+	}
+
+	// Returning to None must restore Capacity.
+	if err := s.SetMaintenanceMode(ctx, core.MaintenanceModeNone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Capacity(ctx); err != nil {
+		t.Errorf("Capacity should work after None: %v", err)
+	}
+}
+
+// --- Capacity ---
+
+func TestStore_Capacity_FreshStoreIsEmpty(t *testing.T) {
+	s := newStore(t)
+	info, err := s.Capacity(context.Background())
+	if err != nil {
+		t.Fatalf("Capacity: %v", err)
+	}
+	if info.ArtifactCount != 0 {
+		t.Errorf("ArtifactCount: got %d, want 0", info.ArtifactCount)
+	}
+	if info.BlobCount != 0 {
+		t.Errorf("BlobCount: got %d, want 0", info.BlobCount)
+	}
+	// Byte sentinels: -1 means "unavailable" — see StorageInfo doc.
+	if info.TotalBytes != -1 || info.AvailableBytes != -1 || info.UsedBytes != -1 {
+		t.Errorf("expected -1 sentinels for byte fields, got %+v", info)
+	}
+}
+
+func TestStore_Capacity_ReflectsDriverFiles(t *testing.T) {
+	drv := newDriver(t)
+	idx := newIndex(t)
+
+	s, _, err := core.InitStore(context.Background(), drv,
+		core.WithStoreIndex(idx),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Drop a couple of fake blob and manifest files directly via
+	// the driver. We are not exercising the full Put pipeline (it
+	// is a stub) — Capacity should reflect what is on disk.
+	for _, p := range []string{"blobs/aa/blob-1", "blobs/aa/blob-2", "blobs/bb/blob-3"} {
+		if err := drv.Put(context.Background(), p, strings.NewReader("x")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []string{"manifests/m-1", "manifests/m-2"} {
+		if err := drv.Put(context.Background(), p, strings.NewReader("y")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	info, err := s.Capacity(context.Background())
+	if err != nil {
+		t.Fatalf("Capacity: %v", err)
+	}
+	if info.BlobCount != 3 {
+		t.Errorf("BlobCount: got %d, want 3", info.BlobCount)
+	}
+	if info.ArtifactCount != 2 {
+		t.Errorf("ArtifactCount: got %d, want 2", info.ArtifactCount)
+	}
+}
+
+func TestStore_Capacity_CtxCancelled(t *testing.T) {
+	s := newStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := s.Capacity(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
+
+// --- Walk ---
+
+func TestStore_Walk_EmptyStore(t *testing.T) {
+	s := newStore(t)
+	var seen int
+	err := s.Walk(context.Background(), "*", func(m core.Manifest) error {
+		seen++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	if seen != 0 {
+		t.Errorf("walked %d manifests on empty Store", seen)
+	}
+}
+
+func TestStore_Walk_RejectsSystemPrefix(t *testing.T) {
+	s := newStore(t)
+	err := s.Walk(context.Background(), "system.config", func(m core.Manifest) error {
+		t.Fatal("callback must not run for reserved namespace")
+		return nil
+	})
+	if !errors.Is(err, core.ErrReservedNamespace) {
+		t.Fatalf("expected ErrReservedNamespace, got %v", err)
+	}
+}
+
+func TestStore_Walk_RejectsTooLongNamespace(t *testing.T) {
+	s := newStore(t)
+	long := strings.Repeat("a", 256)
+	err := s.Walk(context.Background(), long, func(m core.Manifest) error {
+		return nil
+	})
+	if !errors.Is(err, core.ErrNamespaceTooLong) {
+		t.Fatalf("expected ErrNamespaceTooLong, got %v", err)
+	}
+}
+
+func TestStore_Walk_AcceptsEmptyAndWildcard(t *testing.T) {
+	s := newStore(t)
+	for _, ns := range []string{"", "*"} {
+		err := s.Walk(context.Background(), ns, func(m core.Manifest) error {
+			return nil
+		})
+		if err != nil {
+			t.Errorf("Walk(%q): %v", ns, err)
+		}
+	}
+}
+
+func TestStore_Walk_CtxCancelled(t *testing.T) {
+	s := newStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := s.Walk(ctx, "*", func(m core.Manifest) error { return nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
+
+// --- WalkSystem ---
+
+func TestStore_WalkSystem_AcceptsAllFourReserved(t *testing.T) {
+	s := newStore(t)
+	for _, ns := range []string{
+		"system.transit",
+		"system.manifests",
+		"system.state",
+		"system.config",
+	} {
+		err := s.WalkSystem(context.Background(), ns, func(m core.Manifest) error {
+			return nil
+		})
+		if err != nil {
+			t.Errorf("WalkSystem(%q): %v", ns, err)
+		}
+	}
+}
+
+func TestStore_WalkSystem_RejectsNonReserved(t *testing.T) {
+	s := newStore(t)
+	for _, ns := range []string{
+		"",                    // empty
+		"*",                   // wildcard
+		"users",               // user namespace
+		"system.unknown",      // unknown system namespace
+		"system.transit.foo",  // sub-prefix, not exact
+	} {
+		err := s.WalkSystem(context.Background(), ns, func(m core.Manifest) error {
+			t.Fatalf("callback must not run for %q", ns)
+			return nil
+		})
+		if !errors.Is(err, core.ErrReservedNamespace) {
+			t.Errorf("WalkSystem(%q): expected ErrReservedNamespace, got %v", ns, err)
+		}
+	}
+}
+
+// --- Stub methods stay stubs ---
+
+func TestStore_StubsM14_StillUnimplemented(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	// Methods that arrive with the data path in M1.4.
+	if _, err := s.Put(ctx, core.Artifact{}, core.PutOptions{}); err == nil {
+		t.Error("Put should be a stub")
+	}
+	if _, err := s.Get(ctx, "x", core.GetOptions{}); err == nil {
+		t.Error("Get should be a stub")
+	}
+	if err := s.Delete(ctx, "x"); err == nil {
+		t.Error("Delete should be a stub")
+	}
+	if err := s.Verify(ctx, "x"); err == nil {
+		t.Error("Verify should be a stub")
+	}
+	if err := s.RollbackSession(ctx, "sess"); err == nil {
+		t.Error("RollbackSession should be a stub")
+	}
+
+	// AdminStore stubs (Unlock arrives with the crypto pipeline,
+	// UpdateConfig with the config-pointer artifact wiring).
+	if err := s.Unlock(ctx); err == nil {
+		t.Error("Unlock should be a stub")
+	}
+	if err := s.RotateKEK(ctx); err == nil {
+		t.Error("RotateKEK should be a stub")
+	}
+	if _, err := s.ExportRecoveryKit(ctx); err == nil {
+		t.Error("ExportRecoveryKit should be a stub")
+	}
+	if err := s.UpdateConfig(ctx, core.StoreConfig{}); err == nil {
+		t.Error("UpdateConfig should be a stub")
+	}
+	if _, err := s.ConfigHistory(ctx); err == nil {
+		t.Error("ConfigHistory should be a stub")
+	}
+}

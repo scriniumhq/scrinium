@@ -15,9 +15,9 @@ import (
 // (Vacuum, persistence across reopens) should use this helper.
 func newMemoryIndex(t *testing.T) *Index {
 	t.Helper()
-	idx, err := Open(context.Background(), ":memory:")
+	idx, err := newStoreForTests(context.Background(), ":memory:", nil)
 	if err != nil {
-		t.Fatalf("Open: %v", err)
+		t.Fatalf("NewStore: %v", err)
 	}
 	t.Cleanup(func() { _ = idx.Close() })
 	return idx
@@ -28,9 +28,9 @@ func newMemoryIndex(t *testing.T) *Index {
 func newDiskIndex(t *testing.T) (*Index, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "index.db")
-	idx, err := Open(context.Background(), path)
+	idx, err := newStoreForTests(context.Background(), path, nil)
 	if err != nil {
-		t.Fatalf("Open: %v", err)
+		t.Fatalf("NewStore: %v", err)
 	}
 	t.Cleanup(func() { _ = idx.Close() })
 	return idx, path
@@ -38,7 +38,7 @@ func newDiskIndex(t *testing.T) (*Index, string) {
 
 // --- Construction and lifecycle ---
 
-func TestOpen_Memory(t *testing.T) {
+func TestNewStore_Memory(t *testing.T) {
 	idx := newMemoryIndex(t)
 	v, err := idx.SchemaVersion(context.Background())
 	if err != nil {
@@ -49,7 +49,7 @@ func TestOpen_Memory(t *testing.T) {
 	}
 }
 
-func TestOpen_File(t *testing.T) {
+func TestNewStore_File(t *testing.T) {
 	idx, _ := newDiskIndex(t)
 	v, err := idx.SchemaVersion(context.Background())
 	if err != nil {
@@ -60,28 +60,29 @@ func TestOpen_File(t *testing.T) {
 	}
 }
 
-func TestOpen_EmptyPath(t *testing.T) {
-	_, err := Open(context.Background(), "")
+func TestNewStore_EmptyPath(t *testing.T) {
+	_, err := NewStore(context.Background(), "")
 	if err == nil {
 		t.Fatal("expected error on empty path")
 	}
 }
 
-// TestOpen_Reopen verifies that reopening an existing on-disk
+// TestNewStore_Reopen verifies that reopening an existing on-disk
 // database does not re-run migrations and preserves data. This is
 // the durability smoke test; the real per-method persistence tests
 // live with each method.
-func TestOpen_Reopen(t *testing.T) {
+func TestNewStore_Reopen(t *testing.T) {
 	idx, path := newDiskIndex(t)
 	v1, _ := idx.SchemaVersion(context.Background())
 	if err := idx.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	idx2, err := Open(context.Background(), path)
+	idx2Iface, err := NewStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
+	idx2 := idx2Iface.(*Index) // SchemaVersion is a sqlite-package detail
 	defer idx2.Close()
 	v2, _ := idx2.SchemaVersion(context.Background())
 	if v1 != v2 {
@@ -93,7 +94,7 @@ func TestOpen_Reopen(t *testing.T) {
 // verifies Open returns ErrIndexSchemaMismatch. We achieve this by
 // manually inserting a row claiming a higher version, closing, and
 // reopening.
-func TestOpen_FutureSchemaRejected(t *testing.T) {
+func TestNewStore_FutureSchemaRejected(t *testing.T) {
 	idx, path := newDiskIndex(t)
 	if _, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO schema_version(version, applied_at) VALUES (?, ?)`,
@@ -105,7 +106,7 @@ func TestOpen_FutureSchemaRejected(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	_, err := Open(context.Background(), path)
+	_, err := NewStore(context.Background(), path)
 	if !errors.Is(err, core.ErrIndexSchemaMismatch) {
 		t.Fatalf("expected ErrIndexSchemaMismatch, got %v", err)
 	}

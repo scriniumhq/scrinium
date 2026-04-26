@@ -181,21 +181,9 @@ func TestStaticKeyResolver_InputCopy(t *testing.T) {
 	}
 }
 
-// --- Smoke test for InitStore/OpenStore stubs ---
-
-func TestLifecycleStubsReturnNotImplemented(t *testing.T) {
-	// In M0 InitStore and OpenStore return "not implemented". We
-	// verify they at least call cleanly (signatures compile, no
-	// panic).
-	_, _, err := InitStore(nil, nil)
-	if err == nil {
-		t.Error("InitStore: expected error stub, got nil")
-	}
-	_, err = OpenStore(nil, nil)
-	if err == nil {
-		t.Error("OpenStore: expected error stub, got nil")
-	}
-}
+// Smoke test for the lifecycle stubs got removed in M1.3 pack 3:
+// both InitStore and OpenStore are real now. Behaviour is covered
+// by core_test integration tests in init_test.go.
 
 // Compile-time sanity: io is imported and used.
 var _ io.Reader = (*nopReader)(nil)
@@ -203,3 +191,4 @@ var _ io.Reader = (*nopReader)(nil)
 type nopReader struct{}
 
 func (nopReader) Read(p []byte) (int, error) { return 0, io.EOF }
+
