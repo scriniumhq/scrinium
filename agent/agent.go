@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 )
 
 // AgentState is the state of a background agent reported by Status.
@@ -51,22 +50,3 @@ type BackgroundAgent interface {
 	// safe for concurrent calls with Run.
 	Status() (AgentState, error)
 }
-
-// --- Package sentinel errors ---
-
-// ErrAgentNotRunning — command-style methods (ForceCommit, Eject,
-// Trigger, TakeSnapshot, ...) called on an agent whose Run is
-// not active.
-var ErrAgentNotRunning = errors.New("agent: not running")
-
-// ErrAgentAlreadyRunning — Run was called again on an already
-// running agent.
-var ErrAgentAlreadyRunning = errors.New("agent: already running")
-
-// ErrEjectorQueueFull — Eject called while the task queue is
-// already full.
-var ErrEjectorQueueFull = errors.New("ejector: task queue full")
-
-// ErrIngesterNoState — NewIngester invoked with Mode: Watch but
-// no StateFile.
-var ErrIngesterNoState = errors.New("ingester: watch mode requires StateFile")

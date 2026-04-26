@@ -10,6 +10,7 @@ import (
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // PassphraseHint is the call context for a PassphraseProvider.
@@ -67,7 +68,7 @@ func WithPurgeOnReinit() StoreOption {
 // WithConfig provides the Store configuration. At InitStore it
 // fixes the immutable parameters. At OpenStore it is checked
 // against the configuration loaded from system.config/current —
-// a divergence in immutable fields produces ErrConfigMismatch.
+// a divergence in immutable fields produces errs.ErrConfigMismatch.
 func WithConfig(cfg domain.StoreConfig) StoreOption {
 	return func(o *storeOptions) { o.cfg = &cfg }
 }
@@ -128,7 +129,7 @@ func WithCapabilityToken(token []byte) StoreOption {
 // Behaviour:
 //  1. Probe the Driver for an existing descriptor. If one is
 //     present and WithForceReinit is NOT set, return
-//     ErrStoreAlreadyExists.
+//     errs.ErrStoreAlreadyExists.
 //  2. With WithForceReinit, wipe the structural state — the
 //     descriptor, and (in M1.3) the manifests/ directory.
 //     Existing blobs/ are NOT removed unless WithPurgeOnReinit
@@ -178,7 +179,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		// Descriptor present.
 		if !o.forceReinit {
 			return nil, nil, fmt.Errorf("%w: storeId=%s",
-				ErrStoreAlreadyExists, existing.StoreID)
+				errs.ErrStoreAlreadyExists, existing.StoreID)
 		}
 		// Force reinit: clean up structural state. We stay
 		// conservative — only the well-known files are touched.
@@ -196,7 +197,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		// whether they really want to clobber what is there.
 		if !o.forceReinit {
 			return nil, nil, fmt.Errorf("%w: descriptor present but unreadable: %v",
-				ErrStoreCorrupted, probeErr)
+				errs.ErrStoreCorrupted, probeErr)
 		}
 		_ = drv.Remove(ctx, descriptor.Path)
 	}
@@ -216,7 +217,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Generate identity, write descriptor ---
 
-	storeID, err := generateStoreID()
+	storeID, err := generateUUID()
 	if err != nil {
 		// idx came from the caller via WithStoreIndex — we do not
 		// own its lifecycle and must not close it on our error path.
@@ -278,11 +279,11 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 // OpenStore opens an existing Store at the Location served by drv.
 //
 // Behaviour (M1.3 subset):
-//  1. Read store.json. Missing → ErrStoreNotFound. Unreadable →
-//     ErrStoreCorrupted.
+//  1. Read store.json. Missing → errs.ErrStoreNotFound. Unreadable →
+//     errs.ErrStoreCorrupted.
 //  2. Validate the descriptor against any caller-supplied
 //     WithConfig: immutable parameters must match. Mismatch →
-//     ErrConfigMismatch. When WithConfig is omitted, immutable
+//     errs.ErrConfigMismatch. When WithConfig is omitted, immutable
 //     fields are accepted as-is — a legitimate scenario for
 //     diagnostic tools and projection-only consumers.
 //  3. Validate that a StoreIndex was provided via WithStoreIndex.
@@ -320,14 +321,14 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	desc, err := descriptor.Read(ctx, drv)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		return nil, ErrStoreNotFound
+		return nil, errs.ErrStoreNotFound
 	case err != nil:
 		// Any non-ENOENT error from the descriptor pipeline (parse
 		// failure, validation, schema mismatch) means the file is
 		// present but unreadable — Store is corrupted from the
 		// caller's perspective. The original error is wrapped so
 		// debugging can still see the cause.
-		return nil, fmt.Errorf("%w: %v", ErrStoreCorrupted, err)
+		return nil, fmt.Errorf("%w: %v", errs.ErrStoreCorrupted, err)
 	}
 
 	// --- Reconstruct the active StoreConfig ---
@@ -442,7 +443,7 @@ func buildActiveConfig(desc *descriptor.Descriptor, overlay *domain.StoreConfig)
 
 	if err := validateImmutableConfig(cfg); err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("%w: descriptor produced invalid config: %v",
-			ErrStoreCorrupted, err)
+			errs.ErrStoreCorrupted, err)
 	}
 	return cfg, nil
 }
@@ -457,7 +458,7 @@ func buildActiveConfig(desc *descriptor.Descriptor, overlay *domain.StoreConfig)
 // (non-zero values in the requested config). A caller who passes
 // WithConfig{} or partial WithConfig with only mutable fields
 // passes through cleanly. A caller who passes an immutable that
-// does NOT match the descriptor gets ErrConfigMismatch.
+// does NOT match the descriptor gets errs.ErrConfigMismatch.
 //
 // Rationale for the "non-zero comparison": go zero values are
 // indistinguishable from "field omitted". The caller can always
@@ -506,5 +507,5 @@ func validateAgainstDescriptor(req domain.StoreConfig, desc *descriptor.Descript
 	if len(mismatches) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%w: %s", ErrConfigMismatch, strings.Join(mismatches, "; "))
+	return fmt.Errorf("%w: %s", errs.ErrConfigMismatch, strings.Join(mismatches, "; "))
 }

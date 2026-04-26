@@ -9,6 +9,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // insertManifest inserts a manifest row directly via SQL, bypassing
@@ -155,12 +156,12 @@ func TestListByNamespace_StopWalk(t *testing.T) {
 	err := idx.ListByNamespace(context.Background(), "ns", func(m domain.Manifest) error {
 		seen++
 		if seen == 2 {
-			return core.ErrStopWalk
+			return errs.ErrStopWalk
 		}
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ErrStopWalk should be swallowed, got %v", err)
+		t.Fatalf("errs.ErrStopWalk should be swallowed, got %v", err)
 	}
 	if seen != 2 {
 		t.Fatalf("expected to stop at 2, saw %d", seen)
@@ -332,12 +333,12 @@ func TestListOrphanBlobs_StopWalk(t *testing.T) {
 	err := idx.ListOrphanBlobs(context.Background(), func(ref string) error {
 		seen++
 		if seen == 2 {
-			return core.ErrStopWalk
+			return errs.ErrStopWalk
 		}
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ErrStopWalk should be swallowed, got %v", err)
+		t.Fatalf("errs.ErrStopWalk should be swallowed, got %v", err)
 	}
 	if seen != 2 {
 		t.Fatalf("expected stop at 2, saw %d", seen)

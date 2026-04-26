@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // --- HashRegistry tests ---
@@ -32,8 +33,8 @@ func TestHashRegistry_RegisterAndUse(t *testing.T) {
 func TestHashRegistry_UnsupportedAlgorithm(t *testing.T) {
 	r := NewHashRegistry()
 	_, err := r.NewHasher("md5")
-	if !errors.Is(err, ErrUnsupportedAlgorithm) {
-		t.Fatalf("expected ErrUnsupportedAlgorithm, got %v", err)
+	if !errors.Is(err, errs.ErrUnsupportedAlgorithm) {
+		t.Fatalf("expected errs.ErrUnsupportedAlgorithm, got %v", err)
 	}
 }
 
@@ -112,8 +113,8 @@ func TestTransformerRegistry_RegisterAndGet(t *testing.T) {
 func TestTransformerRegistry_UnsupportedAlgorithm(t *testing.T) {
 	r := NewTransformerRegistry()
 	_, err := r.Get("nonexistent")
-	if !errors.Is(err, ErrUnsupportedAlgorithm) {
-		t.Fatalf("expected ErrUnsupportedAlgorithm, got %v", err)
+	if !errors.Is(err, errs.ErrUnsupportedAlgorithm) {
+		t.Fatalf("expected errs.ErrUnsupportedAlgorithm, got %v", err)
 	}
 }
 

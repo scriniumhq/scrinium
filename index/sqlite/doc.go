@@ -20,13 +20,13 @@
 //     internally; the caller never drives transactions explicitly.
 //   - Concurrent writers are coordinated by SQLite via busy_timeout
 //     (default 5s); a contention that exceeds the timeout is
-//     reported as core.ErrLeaseHeld with a wrapped sqlite busy
+//     reported as errs.ErrLeaseHeld with a wrapped sqlite busy
 //     error and emitted as the index.contention_error event.
 //
 // Schema migrations are applied automatically on Open. Forward-only:
 // downgrades are not supported. Schema versions live in the
 // schema_version table; a mismatch between the embedded current
-// version and the on-disk version returns core.ErrIndexSchemaMismatch.
+// version and the on-disk version returns errs.ErrIndexSchemaMismatch.
 //
 // DAG: this package imports core (the StoreIndex contract), driver
 // (capabilities — read-only), and event (metric events). It does

@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"errors"
 	"hash"
 	"io"
 	"time"
@@ -148,9 +147,3 @@ func NewStaticKeyResolver(dek []byte) KeyResolver {
 	copy(cp, dek)
 	return &staticKeyResolver{dek: cp}
 }
-
-// --- Registry sentinel errors ---
-
-// ErrUnsupportedAlgorithm — the algorithm has not been registered.
-// Returned by TransformerRegistry.Get and HashRegistry.NewHasher.
-var ErrUnsupportedAlgorithm = errors.New("core: unsupported algorithm")

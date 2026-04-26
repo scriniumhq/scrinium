@@ -9,6 +9,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // Resolve returns the physical address of a blob. It is the
@@ -16,7 +17,7 @@ import (
 // matters more — a stale address means reading a different file
 // or a deleted one.
 //
-// A missing blob_ref returns core.ErrArtifactNotFound. The choice
+// A missing blob_ref returns errs.ErrArtifactNotFound. The choice
 // of sentinel deserves a note: ErrArtifactNotFound is the
 // engine-level "this thing is not here" error; from the StoreIndex
 // perspective there is no separate "blob not found" — the index
@@ -32,7 +33,7 @@ func (i *Index) Resolve(blobRef string) (core.PhysicalAddress, error) {
 		Scan(&ws, &addr.Path, &addr.PackRef, &addr.Offset, &addr.Size)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return core.PhysicalAddress{}, core.ErrArtifactNotFound
+		return core.PhysicalAddress{}, errs.ErrArtifactNotFound
 	case err != nil:
 		return core.PhysicalAddress{}, classifyError(err)
 	}
@@ -96,7 +97,7 @@ func (i *Index) ExistsByHash(hash domain.ContentHash) (core.BlobExistStatus, err
 }
 
 // GetRefCount returns the current reference count of a blob. A
-// missing blob returns core.ErrArtifactNotFound — same rationale
+// missing blob returns errs.ErrArtifactNotFound — same rationale
 // as Resolve: the index either has the blob or it does not.
 //
 // Returning 0 on a missing blob (instead of an error) was tempting
@@ -109,7 +110,7 @@ func (i *Index) GetRefCount(blobRef string) (int, error) {
 	err := i.db.QueryRowContext(context.Background(), stmt, blobRef).Scan(&n)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return 0, core.ErrArtifactNotFound
+		return 0, errs.ErrArtifactNotFound
 	case err != nil:
 		return 0, classifyError(err)
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/driver"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
 )
 
@@ -65,7 +66,7 @@ type Ingester interface {
 // NewIngester creates an Ingester instance. User-managed: started
 // by the host application explicitly. Implementation lands in M6.3.
 //
-// Returns ErrIngesterNoState when cfg.Mode is Watch and no
+// Returns errs.ErrIngesterNoState when cfg.Mode is Watch and no
 // StateFile is set.
 func NewIngester(
 	source driver.Driver,
@@ -74,7 +75,7 @@ func NewIngester(
 	cfg IngesterConfig,
 ) (Ingester, error) {
 	if cfg.Mode == IngestModeWatch && cfg.StateFile == "" {
-		return nil, ErrIngesterNoState
+		return nil, errs.ErrIngesterNoState
 	}
 	return nil, errors.New("agent.NewIngester: not implemented")
 }

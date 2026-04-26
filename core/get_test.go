@@ -12,6 +12,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // --- Round-trip: Put → Get → ReadAll ---
@@ -191,27 +192,27 @@ func TestGet_ReadAt_InlineMidStream(t *testing.T) {
 	}
 }
 
-// --- ErrArtifactNotFound ---
+// --- errs.ErrArtifactNotFound ---
 
 func TestGet_NotFound(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	_, err := s.Get(context.Background(),
 		domain.ArtifactID("sha256-"+strings.Repeat("0", 64)),
 		core.GetOptions{})
-	if !errors.Is(err, core.ErrArtifactNotFound) {
-		t.Fatalf("expected ErrArtifactNotFound, got %v", err)
+	if !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 	}
 }
 
 func TestGet_EmptyID(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	_, err := s.Get(context.Background(), "", core.GetOptions{})
-	if !errors.Is(err, core.ErrArtifactNotFound) {
-		t.Fatalf("expected ErrArtifactNotFound, got %v", err)
+	if !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 	}
 }
 
-// --- ErrCorruptedManifest via on-disk tampering ---
+// --- errs.ErrCorruptedManifest via on-disk tampering ---
 
 func TestGet_CorruptedManifest(t *testing.T) {
 	s, root := newStoreWithRoot(t)
@@ -238,12 +239,12 @@ func TestGet_CorruptedManifest(t *testing.T) {
 	}
 
 	_, err = s.Get(context.Background(), id, core.GetOptions{})
-	if !errors.Is(err, domain.ErrCorruptedManifest) {
-		t.Fatalf("expected ErrCorruptedManifest, got %v", err)
+	if !errors.Is(err, errs.ErrCorruptedManifest) {
+		t.Fatalf("expected errs.ErrCorruptedManifest, got %v", err)
 	}
 }
 
-// --- ErrCorruptedBlob: manifest exists but blob file is gone ---
+// --- errs.ErrCorruptedBlob: manifest exists but blob file is gone ---
 
 func TestGet_CorruptedBlob(t *testing.T) {
 	s, root := newStoreWithRoot(t)
@@ -269,8 +270,8 @@ func TestGet_CorruptedBlob(t *testing.T) {
 	defer rh.Close()
 
 	_, err = io.ReadAll(rh)
-	if !errors.Is(err, domain.ErrCorruptedBlob) {
-		t.Fatalf("Read with missing blob: expected ErrCorruptedBlob, got %v", err)
+	if !errors.Is(err, errs.ErrCorruptedBlob) {
+		t.Fatalf("Read with missing blob: expected errs.ErrCorruptedBlob, got %v", err)
 	}
 }
 
@@ -306,8 +307,8 @@ func TestGet_BlockedInOffline(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = s.Get(context.Background(), id, core.GetOptions{})
-	if !errors.Is(err, core.ErrStoreOffline) {
-		t.Fatalf("expected ErrStoreOffline, got %v", err)
+	if !errors.Is(err, errs.ErrStoreOffline) {
+		t.Fatalf("expected errs.ErrStoreOffline, got %v", err)
 	}
 }
 

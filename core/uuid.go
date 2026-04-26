@@ -5,16 +5,16 @@ import (
 	"fmt"
 )
 
-// generateStoreID produces a fresh UUID v4 string. We avoid the
-// google/uuid dependency for one call site: a couple of dozen
-// lines of stdlib do the same thing, and the engine has zero
-// other places that need UUIDs.
+// generateUUID produces a fresh UUID v4 string. We avoid the
+// google/uuid dependency for two call sites (StoreID at InitStore,
+// staging file names in Put) — a couple of dozen lines of stdlib
+// do the same thing without adding a module dependency.
 //
 // The format follows RFC 4122 §4.4 (random version 4, variant 1).
-func generateStoreID() (string, error) {
+func generateUUID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return "", fmt.Errorf("core: generate StoreID: %w", err)
+		return "", fmt.Errorf("core: generate UUID: %w", err)
 	}
 	// Version 4: top nibble of byte 6 is 0100.
 	b[6] = (b[6] & 0x0f) | 0x40

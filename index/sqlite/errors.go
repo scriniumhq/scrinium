@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/index"
 )
 
@@ -26,7 +26,7 @@ func classifyError(err error) error {
 		return nil
 	}
 	if isBusyError(err) {
-		// Contention beyond busy_timeout. Surface as ErrLeaseHeld
+		// Contention beyond busy_timeout. Surface as errs.ErrLeaseHeld
 		// — the caller's natural reaction is "back off and retry"
 		// or "give up", which matches the lease-loss semantics.
 		return &busyError{cause: err}
@@ -52,16 +52,16 @@ func isBusyError(err error) bool {
 }
 
 // busyError wraps a driver-level busy/locked error so callers see
-// core.ErrLeaseHeld via errors.Is while still being able to inspect
+// errs.ErrLeaseHeld via errors.Is while still being able to inspect
 // the original cause via errors.Unwrap.
 type busyError struct {
 	cause error
 }
 
-func (e *busyError) Error() string { return core.ErrLeaseHeld.Error() + ": " + e.cause.Error() }
+func (e *busyError) Error() string { return errs.ErrLeaseHeld.Error() + ": " + e.cause.Error() }
 func (e *busyError) Unwrap() error { return e.cause }
 func (e *busyError) Is(target error) bool {
-	return errors.Is(target, core.ErrLeaseHeld)
+	return errors.Is(target, errs.ErrLeaseHeld)
 }
 
 // emitContention publishes index.contention_error if a contention

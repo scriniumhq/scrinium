@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/rkurbatov/scrinium/driver"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // Put writes a file atomically. The pattern is:
@@ -163,7 +163,7 @@ func (lf *limitedFile) Close() error               { return lf.c.Close() }
 
 // Open implements ExternalRef reads. The localfs driver supports
 // only the "file://" scheme. Other schemes return
-// driver.ErrUnsupportedURIScheme so higher layers can fall through
+// errs.ErrUnsupportedURIScheme so higher layers can fall through
 // to a different driver or fail with a clear cause.
 //
 // The "file://" path is opened directly by absolute filesystem
@@ -178,7 +178,7 @@ func (d *Driver) Open(ctx context.Context, uri string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("localfs: parse URI: %w", err)
 	}
 	if u.Scheme != "file" {
-		return nil, driver.ErrUnsupportedURIScheme
+		return nil, errs.ErrUnsupportedURIScheme
 	}
 	if u.Path == "" {
 		return nil, fmt.Errorf("localfs: empty path in file URI")
@@ -268,8 +268,7 @@ func fsyncDir(dir string) error {
 // as non-fatal. Some filesystems (tmpfs in particular) do not
 // support fsync on directories; the rename itself remains correct.
 func isFsyncDirSoftError(err error) bool {
-	var pathErr *os.PathError
-	if errors.As(err, &pathErr) {
+	if pathErr, ok := errors.AsType[*os.PathError](err); ok {
 		// errno text varies across platforms; match by string for
 		// portability instead of importing syscall.
 		msg := pathErr.Err.Error()

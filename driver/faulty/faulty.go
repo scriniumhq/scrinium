@@ -2,13 +2,13 @@ package faulty
 
 import (
 	"context"
-	"errors"
 	"io"
 	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/rkurbatov/scrinium/driver"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // Method names used by the configuration. They match the Driver
@@ -32,10 +32,9 @@ const (
 	MethodIsTombstone            = "IsTombstone"
 )
 
-// ErrInjected is the sentinel returned for an injected fault. Tests
-// match it via errors.Is to distinguish injected failures from
-// real backend errors.
-var ErrInjected = errors.New("faulty: injected fault")
+// The sentinel returned by injected faults (errs.ErrInjected) lives
+// in the errs package; tests match it via errors.Is to distinguish
+// injected failures from real backend errors.
 
 // Driver wraps another driver.Driver and injects configurable
 // faults. The zero value is unusable; construct via New.
@@ -64,7 +63,7 @@ func WithSeed(seed int64) Option {
 }
 
 // WithFailureRate sets the probability that the named method
-// returns ErrInjected on each invocation. Rate must be in [0, 1];
+// returns errs.ErrInjected on each invocation. Rate must be in [0, 1];
 // 0 disables, 1 always fails. Calling WithFailureRate again for
 // the same method overwrites the previous value.
 func WithFailureRate(method string, rate float64) Option {
@@ -153,7 +152,7 @@ func (d *Driver) gate(ctx context.Context, method string) error {
 	}
 
 	if rate > 0 && roll < rate {
-		return ErrInjected
+		return errs.ErrInjected
 	}
 	return nil
 }

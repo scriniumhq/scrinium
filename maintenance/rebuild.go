@@ -1,7 +1,6 @@
 package maintenance
 
 import (
-	"context"
 	"errors"
 	"time"
 
@@ -127,26 +126,3 @@ func NewRebuildIndexAgent(
 ) (RebuildIndexAgent, error) {
 	return nil, errors.New("maintenance.NewRebuildIndexAgent: not implemented")
 }
-
-// --- Sentinel errors of the maintenance agents ---
-
-// ErrNoSnapshot — Validate with Source: Snapshot when no valid
-// snapshots are available.
-var ErrNoSnapshot = errors.New("maintenance: no valid snapshot for Source=Snapshot")
-
-// ErrHostStorageRequired — Validate with ManifestStorage: Local
-// without a HostStorage being passed in.
-var ErrHostStorageRequired = errors.New("maintenance: HostStorage required for ManifestStorage=Local")
-
-// ErrManifestsLost — at Run time with ManifestStorage: Local the
-// local disk turned out to be physically empty. Blobs in the
-// Location remain intact but become unresolvable orphans.
-var ErrManifestsLost = errors.New("maintenance: manifests unavailable")
-
-// ErrRecoveryKitRequired — Validate with the Store in Corrupted
-// after every descriptor replica has been lost and RecoveryKit is
-// nil in the configuration.
-var ErrRecoveryKitRequired = errors.New("maintenance: RecoveryKit required (descriptor lost, encrypted store)")
-
-// Compile-time sanity: context is imported and used.
-var _ context.Context = context.Background()

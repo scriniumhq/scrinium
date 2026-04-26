@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // newMemoryIndex spins up an in-memory Index for fast unit tests.
@@ -91,7 +91,7 @@ func TestNewStore_Reopen(t *testing.T) {
 }
 
 // TestOpen_FutureSchemaRejected fakes a higher on-disk version and
-// verifies Open returns ErrIndexSchemaMismatch. We achieve this by
+// verifies Open returns errs.ErrIndexSchemaMismatch. We achieve this by
 // manually inserting a row claiming a higher version, closing, and
 // reopening.
 func TestNewStore_FutureSchemaRejected(t *testing.T) {
@@ -107,7 +107,7 @@ func TestNewStore_FutureSchemaRejected(t *testing.T) {
 	}
 
 	_, err := NewStore(context.Background(), path)
-	if !errors.Is(err, core.ErrIndexSchemaMismatch) {
-		t.Fatalf("expected ErrIndexSchemaMismatch, got %v", err)
+	if !errors.Is(err, errs.ErrIndexSchemaMismatch) {
+		t.Fatalf("expected errs.ErrIndexSchemaMismatch, got %v", err)
 	}
 }

@@ -94,7 +94,7 @@ type AdminStore interface {
 	SetMaintenanceMode(ctx context.Context, mode MaintenanceMode) error
 
 	// UpdateConfig updates the mutable parameters of StoreConfig.
-	// Immutable parameters cannot be changed — ErrConfigMismatch.
+	// Immutable parameters cannot be changed — errs.ErrConfigMismatch.
 	UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error
 
 	// ConfigHistory returns the full history of configuration

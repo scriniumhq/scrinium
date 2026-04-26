@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/blobpath"
 )
 
@@ -22,7 +23,7 @@ import (
 //     alone — there is no blobs row to decrement (§9.2.1).
 //   - Target blobs decrement the single ref_count.
 //   - Pack manifests are invisible to clients (§3.1) and surface
-//     as ErrArtifactNotFound; they would be touched by GC, not by
+//     as errs.ErrArtifactNotFound; they would be touched by GC, not by
 //     client Delete.
 //
 // Order of operations matches §2.2.Алгоритм:
@@ -47,7 +48,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 
 	manifest, err := s.loadManifest(ctx, id)
 	if err != nil {
-		return err // ErrArtifactNotFound or ErrCorruptedManifest
+		return err // errs.ErrArtifactNotFound or errs.ErrCorruptedManifest
 	}
 
 	// Type dispatch.
@@ -59,7 +60,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	case domain.ManifestTypePack:
 		// Pack manifests are engine-internal; clients cannot see
 		// them, so deletion is reported as "no such artifact".
-		return ErrArtifactNotFound
+		return errs.ErrArtifactNotFound
 	default:
 		return fmt.Errorf("core.Delete: unknown manifest type %q", manifest.Type)
 	}
@@ -70,12 +71,12 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	// non-retention artifact, but a retention-protected artifact
 	// is refused before the policy is even consulted.
 	if !manifest.RetentionUntil.IsZero() && manifest.RetentionUntil.After(time.Now()) {
-		return ErrRetentionNotExpired
+		return errs.ErrRetentionNotExpired
 	}
 
 	cfg := s.snapshotConfig()
 	if cfg.DeletionPolicy == domain.DeletionPolicyNoDelete {
-		return ErrDeletionForbidden
+		return errs.ErrDeletionForbidden
 	}
 
 	// Collect blobRefs to decrement. Inline = empty list (no row
@@ -101,7 +102,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	// Index transaction. Idempotent at this layer: a re-issued
 	// Delete after a crash between index COMMIT and Driver.Remove
 	// would not reach here because loadManifest above would
-	// already have returned ErrArtifactNotFound (the manifest
+	// already have returned errs.ErrArtifactNotFound (the manifest
 	// file is gone). The "manifest file present, index row
 	// absent" window is RebuildIndexAgent territory.
 	if err := s.index.DeleteManifest(id, blobRefs); err != nil {

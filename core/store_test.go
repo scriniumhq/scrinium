@@ -8,6 +8,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // helper: build a Store backed by an in-memory index in a fresh
@@ -74,7 +75,7 @@ func TestStore_SetMaintenanceMode_RejectsInvalid(t *testing.T) {
 }
 
 // TestStore_SetMaintenanceMode_OfflineBlocksReads verifies that the
-// priority-of-checks flow surfaces ErrStoreOffline through the
+// priority-of-checks flow surfaces errs.ErrStoreOffline through the
 // public methods that consult it (Capacity is the M1.3 example;
 // Put/Get/Delete arrive in M1.4).
 func TestStore_SetMaintenanceMode_OfflineBlocksCapacity(t *testing.T) {
@@ -85,8 +86,8 @@ func TestStore_SetMaintenanceMode_OfflineBlocksCapacity(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := s.Capacity(ctx)
-	if !errors.Is(err, core.ErrStoreOffline) {
-		t.Fatalf("expected ErrStoreOffline, got %v", err)
+	if !errors.Is(err, errs.ErrStoreOffline) {
+		t.Fatalf("expected errs.ErrStoreOffline, got %v", err)
 	}
 
 	// Returning to None must restore Capacity.
@@ -188,8 +189,8 @@ func TestStore_Walk_RejectsSystemPrefix(t *testing.T) {
 		t.Fatal("callback must not run for reserved namespace")
 		return nil
 	})
-	if !errors.Is(err, core.ErrReservedNamespace) {
-		t.Fatalf("expected ErrReservedNamespace, got %v", err)
+	if !errors.Is(err, errs.ErrReservedNamespace) {
+		t.Fatalf("expected errs.ErrReservedNamespace, got %v", err)
 	}
 }
 
@@ -199,8 +200,8 @@ func TestStore_Walk_RejectsTooLongNamespace(t *testing.T) {
 	err := s.Walk(context.Background(), long, func(m domain.Manifest) error {
 		return nil
 	})
-	if !errors.Is(err, domain.ErrNamespaceTooLong) {
-		t.Fatalf("expected ErrNamespaceTooLong, got %v", err)
+	if !errors.Is(err, errs.ErrNamespaceTooLong) {
+		t.Fatalf("expected errs.ErrNamespaceTooLong, got %v", err)
 	}
 }
 
@@ -258,8 +259,8 @@ func TestStore_WalkSystem_RejectsNonReserved(t *testing.T) {
 			t.Fatalf("callback must not run for %q", ns)
 			return nil
 		})
-		if !errors.Is(err, core.ErrReservedNamespace) {
-			t.Errorf("WalkSystem(%q): expected ErrReservedNamespace, got %v", ns, err)
+		if !errors.Is(err, errs.ErrReservedNamespace) {
+			t.Errorf("WalkSystem(%q): expected errs.ErrReservedNamespace, got %v", ns, err)
 		}
 	}
 }

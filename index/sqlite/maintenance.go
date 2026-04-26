@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // MarkVerified updates the last_verified_at timestamp of a blob.
@@ -138,7 +139,7 @@ func escapeSQLString(s string) string {
 }
 
 // GetMeta reads a value from store_meta. A missing key returns
-// core.ErrMetaKeyNotFound.
+// errs.ErrMetaKeyNotFound.
 //
 // Engine consumers (descriptor cache, last_orphan_scan_at, schema
 // notes) treat store_meta as a typed singleton namespace; this
@@ -152,7 +153,7 @@ func (i *Index) GetMeta(key string) (string, error) {
 	err := i.db.QueryRowContext(context.Background(), stmt, key).Scan(&val)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return "", core.ErrMetaKeyNotFound
+		return "", errs.ErrMetaKeyNotFound
 	case err != nil:
 		return "", classifyError(err)
 	}

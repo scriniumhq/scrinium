@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // readSchemaVersion returns the highest version recorded in
@@ -38,12 +38,12 @@ func readSchemaVersion(ctx context.Context, db *sql.DB) (int, error) {
 // applyMigrations runs every migration whose Version is greater
 // than the on-disk version, in ascending order. Each migration runs
 // in its own transaction. A failure rolls the migration back and
-// returns the underlying error wrapped into core.ErrIndexCorrupted —
+// returns the underlying error wrapped into errs.ErrIndexCorrupted —
 // a partially migrated database is treated as corrupted from the
 // caller's point of view (recovery is RebuildIndexAgent territory).
 //
 // Forward-only: an on-disk version greater than CurrentSchemaVersion
-// returns core.ErrIndexSchemaMismatch (the caller built the binary
+// returns errs.ErrIndexSchemaMismatch (the caller built the binary
 // against an older schema than the database).
 func applyMigrations(ctx context.Context, db *sql.DB) error {
 	current, err := readSchemaVersion(ctx, db)
@@ -53,7 +53,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 
 	if current > CurrentSchemaVersion {
 		return fmt.Errorf("%w: db at v%d, binary at v%d",
-			core.ErrIndexSchemaMismatch, current, CurrentSchemaVersion)
+			errs.ErrIndexSchemaMismatch, current, CurrentSchemaVersion)
 	}
 
 	for _, m := range migrations {
@@ -62,7 +62,7 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 		}
 		if err := applyMigration(ctx, db, m); err != nil {
 			return fmt.Errorf("%w: migration v%d (%s): %v",
-				core.ErrIndexCorrupted, m.Version, m.Description, err)
+				errs.ErrIndexCorrupted, m.Version, m.Description, err)
 		}
 	}
 	return nil

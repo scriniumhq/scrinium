@@ -11,21 +11,22 @@ import (
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/blobpath"
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
 )
 
 // loadManifest reads, verifies, and decodes the manifest file for
 // the given ArtifactID. Used by Get and Delete. Returns
-// ErrArtifactNotFound if the manifest file is absent on disk and
-// domain.ErrCorruptedManifest if the file's hash does not match id.
+// errs.ErrArtifactNotFound if the manifest file is absent on disk and
+// errs.ErrCorruptedManifest if the file's hash does not match id.
 //
 // Caller is responsible for any state checks (checkOperational /
 // checkWritable) — this helper is purely about disk → in-memory
 // manifest conversion.
 func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
 	if id == "" {
-		return domain.Manifest{}, ErrArtifactNotFound
+		return domain.Manifest{}, errs.ErrArtifactNotFound
 	}
 	manifestPath, err := blobpath.ManifestPath(id)
 	if err != nil {
@@ -34,7 +35,7 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 	rc, err := s.drv.Get(ctx, manifestPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return domain.Manifest{}, ErrArtifactNotFound
+			return domain.Manifest{}, errs.ErrArtifactNotFound
 		}
 		return domain.Manifest{}, fmt.Errorf("loadManifest: read: %w", err)
 	}
@@ -72,7 +73,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts GetOptions) 
 		return nil, err
 	}
 	if id == "" {
-		return nil, ErrArtifactNotFound
+		return nil, errs.ErrArtifactNotFound
 	}
 
 	cfg := s.snapshotConfig()
@@ -92,7 +93,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts GetOptions) 
 		// §3.1: pack manifests are engine-internal, invisible to
 		// clients. We collapse them into "not found" so client
 		// code does not have to special-case them.
-		return nil, ErrArtifactNotFound
+		return nil, errs.ErrArtifactNotFound
 	default:
 		return nil, fmt.Errorf("core.Get: unknown manifest type %q", manifest.Type)
 	}
@@ -207,10 +208,10 @@ func (h *targetReadHandle) Read(p []byte) (int, error) {
 			if errors.Is(err, os.ErrNotExist) {
 				// Manifest references a blob that is not on disk.
 				// The classical Scrub-failure case from §3.1.Эффекты;
-				// surfacing as ErrCorruptedBlob lets callers
-				// distinguish "wrong id" (ErrArtifactNotFound at Get)
+				// surfacing as errs.ErrCorruptedBlob lets callers
+				// distinguish "wrong id" (errs.ErrArtifactNotFound at Get)
 				// from "blob missing" (here, during Read).
-				return 0, domain.ErrCorruptedBlob
+				return 0, errs.ErrCorruptedBlob
 			}
 			return 0, err
 		}
@@ -243,7 +244,7 @@ func (h *targetReadHandle) readAt(ctx context.Context, p []byte, off int64) (int
 	rc, err := h.drv.ReadAt(ctx, h.blobPath, off, int64(len(p)))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return 0, domain.ErrCorruptedBlob
+			return 0, errs.ErrCorruptedBlob
 		}
 		return 0, err
 	}

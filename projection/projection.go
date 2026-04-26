@@ -240,29 +240,3 @@ type ViewRebuiltPayload struct {
 	NodeCount int64
 	Duration  time.Duration
 }
-
-// --- Sentinel errors ---
-
-// ErrViewClosed — operation on a closed View.
-var ErrViewClosed = errors.New("projection: view closed")
-
-// ErrPathNotFound — Get/Open at a non-existent virtual path.
-var ErrPathNotFound = errors.New("projection: path not found")
-
-// ErrNotADirectory — List on a path that points to a file.
-var ErrNotADirectory = errors.New("projection: not a directory")
-
-// ErrIsADirectory — Open on a path that points to a directory.
-var ErrIsADirectory = errors.New("projection: is a directory")
-
-// ErrInvalidPath — the path is malformed (forbidden characters,
-// absolute where a relative path was expected).
-var ErrInvalidPath = errors.New("projection: invalid path")
-
-// ErrFUSENotSupported — MountFUSE called without the `fuse` build
-// tag.
-var ErrFUSENotSupported = errors.New("projection: FUSE not supported in this build")
-
-// ErrWebDAVNotSupported — MountWebDAV called without the `webdav`
-// build tag.
-var ErrWebDAVNotSupported = errors.New("projection: WebDAV not supported in this build")

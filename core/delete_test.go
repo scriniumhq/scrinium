@@ -12,6 +12,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // --- Happy paths ---
@@ -45,9 +46,9 @@ func TestDelete_TargetRemovesManifestAndDecrementsRefCount(t *testing.T) {
 		t.Errorf("Walk after delete: got %d, want 0", seen)
 	}
 
-	// Get returns ErrArtifactNotFound.
-	if _, err := s.Get(context.Background(), id, core.GetOptions{}); !errors.Is(err, core.ErrArtifactNotFound) {
-		t.Errorf("Get after delete: expected ErrArtifactNotFound, got %v", err)
+	// Get returns errs.ErrArtifactNotFound.
+	if _, err := s.Get(context.Background(), id, core.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Errorf("Get after delete: expected errs.ErrArtifactNotFound, got %v", err)
 	}
 
 	// Blob file is still on disk — physical removal is GC territory (M3).
@@ -120,8 +121,8 @@ func TestDelete_SharedBlobKeepsRefCount(t *testing.T) {
 	}
 
 	// A is gone; B still readable.
-	if _, err := s.Get(context.Background(), idA, core.GetOptions{}); !errors.Is(err, core.ErrArtifactNotFound) {
-		t.Errorf("Get(A) after delete: expected ErrArtifactNotFound, got %v", err)
+	if _, err := s.Get(context.Background(), idA, core.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Errorf("Get(A) after delete: expected errs.ErrArtifactNotFound, got %v", err)
 	}
 	rh, err := s.Get(context.Background(), idB, core.GetOptions{})
 	if err != nil {
@@ -157,8 +158,8 @@ func TestDelete_BlockedByActiveRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = s.Delete(context.Background(), id)
-	if !errors.Is(err, core.ErrRetentionNotExpired) {
-		t.Fatalf("expected ErrRetentionNotExpired, got %v", err)
+	if !errors.Is(err, errs.ErrRetentionNotExpired) {
+		t.Fatalf("expected errs.ErrRetentionNotExpired, got %v", err)
 	}
 }
 
@@ -182,21 +183,21 @@ func TestDelete_NotFound(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	err := s.Delete(context.Background(),
 		domain.ArtifactID("sha256-"+strings.Repeat("0", 64)))
-	if !errors.Is(err, core.ErrArtifactNotFound) {
-		t.Fatalf("expected ErrArtifactNotFound, got %v", err)
+	if !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 	}
 }
 
 func TestDelete_EmptyID(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	err := s.Delete(context.Background(), "")
-	if !errors.Is(err, core.ErrArtifactNotFound) {
-		t.Fatalf("expected ErrArtifactNotFound, got %v", err)
+	if !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 	}
 }
 
 func TestDelete_DoubleDeleteIsNotFound(t *testing.T) {
-	// Second Delete on the same id returns ErrArtifactNotFound
+	// Second Delete on the same id returns errs.ErrArtifactNotFound
 	// (manifest file is gone after the first). Documented as
 	// the natural CAS semantics in the §2.2 plan.
 	s, _ := newStoreWithRoot(t)
@@ -208,8 +209,8 @@ func TestDelete_DoubleDeleteIsNotFound(t *testing.T) {
 		t.Fatalf("first Delete: %v", err)
 	}
 	err = s.Delete(context.Background(), id)
-	if !errors.Is(err, core.ErrArtifactNotFound) {
-		t.Errorf("second Delete: expected ErrArtifactNotFound, got %v", err)
+	if !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Errorf("second Delete: expected errs.ErrArtifactNotFound, got %v", err)
 	}
 }
 
@@ -225,8 +226,8 @@ func TestDelete_BlockedInReadOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = s.Delete(context.Background(), id)
-	if !errors.Is(err, core.ErrStoreReadOnly) {
-		t.Fatalf("expected ErrStoreReadOnly, got %v", err)
+	if !errors.Is(err, errs.ErrStoreReadOnly) {
+		t.Fatalf("expected errs.ErrStoreReadOnly, got %v", err)
 	}
 }
 
@@ -240,8 +241,8 @@ func TestDelete_BlockedInOffline(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = s.Delete(context.Background(), id)
-	if !errors.Is(err, core.ErrStoreOffline) {
-		t.Fatalf("expected ErrStoreOffline, got %v", err)
+	if !errors.Is(err, errs.ErrStoreOffline) {
+		t.Fatalf("expected errs.ErrStoreOffline, got %v", err)
 	}
 }
 
@@ -263,14 +264,14 @@ func TestDelete_BlockedByDeletionPolicyNoDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = s.Delete(context.Background(), id)
-	if !errors.Is(err, core.ErrDeletionForbidden) {
-		t.Fatalf("expected ErrDeletionForbidden, got %v", err)
+	if !errors.Is(err, errs.ErrDeletionForbidden) {
+		t.Fatalf("expected errs.ErrDeletionForbidden, got %v", err)
 	}
 }
 
 func TestDelete_RetentionBeatsPolicy(t *testing.T) {
 	// §2.2: retention is checked BEFORE policy. A NoDelete store
-	// must still report ErrRetentionNotExpired (not Forbidden)
+	// must still report errs.ErrRetentionNotExpired (not Forbidden)
 	// when both apply.
 	drv := newDriver(t)
 	cfg := domain.StoreConfig{DeletionPolicy: domain.DeletionPolicyNoDelete}
@@ -289,7 +290,7 @@ func TestDelete_RetentionBeatsPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = s.Delete(context.Background(), id)
-	if !errors.Is(err, core.ErrRetentionNotExpired) {
+	if !errors.Is(err, errs.ErrRetentionNotExpired) {
 		t.Fatalf("retention must beat policy; got %v", err)
 	}
 }

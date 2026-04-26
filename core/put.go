@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
 	"github.com/rkurbatov/scrinium/internal/blobpath"
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
@@ -135,7 +137,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 			if err != nil {
 				return "", err
 			}
-			combined := io.MultiReader(bytesReader(head), a.Payload)
+			combined := io.MultiReader(bytes.NewReader(head), a.Payload)
 			tee := io.TeeReader(combined, hasher)
 			counter := &countingReader{r: tee}
 			if err := s.drv.Put(ctx, stagingPath, counter); err != nil {
@@ -217,7 +219,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 	if err != nil {
 		return "", fmt.Errorf("core.Put: manifest path: %w", err)
 	}
-	if err := s.drv.Put(ctx, manifestPath, bytesReader(manifestBytes)); err != nil {
+	if err := s.drv.Put(ctx, manifestPath, bytes.NewReader(manifestBytes)); err != nil {
 		return "", fmt.Errorf("core.Put: write manifest: %w", err)
 	}
 
@@ -307,7 +309,7 @@ func (s *store) checkWritable() error {
 		return err
 	}
 	if s.maintenanceMode() == MaintenanceModeReadOnly {
-		return ErrStoreReadOnly
+		return errs.ErrStoreReadOnly
 	}
 	return nil
 }
@@ -320,16 +322,16 @@ func validatePutInputs(a domain.Artifact, opts PutOptions) error {
 		return errors.New("core.Put: nil Payload and no ExternalURI")
 	}
 	if len(opts.Namespace) > 255 {
-		return domain.ErrNamespaceTooLong
+		return errs.ErrNamespaceTooLong
 	}
 	if strings.HasPrefix(opts.Namespace, "system.") || opts.Namespace == "*" {
-		return ErrReservedNamespace
+		return errs.ErrReservedNamespace
 	}
 	if len(opts.SessionID) > 255 {
-		return domain.ErrSessionIDTooLong
+		return errs.ErrSessionIDTooLong
 	}
 	if len(a.Metadata) > 64*1024 {
-		return domain.ErrMetadataTooLarge
+		return errs.ErrMetadataTooLarge
 	}
 	return nil
 }
@@ -348,7 +350,7 @@ func (s *store) publish(typ string, payload any) {
 // helper (the same generator we use for StoreID). A future
 // improvement (multi-host) is to mix in a host_id; M3.1 territory.
 func (s *store) makeStagingPath() (string, error) {
-	id, err := generateStoreID()
+	id, err := generateUUID()
 	if err != nil {
 		return "", fmt.Errorf("core.Put: staging id: %w", err)
 	}
@@ -368,25 +370,4 @@ func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	c.n += int64(n)
 	return n, err
-}
-
-// bytesReader wraps a byte slice into an io.Reader. Reused from
-// the descriptor package's pattern: avoids importing bytes only
-// for the one-shot reader.
-func bytesReader(b []byte) io.Reader {
-	return &sliceReader{b: b}
-}
-
-type sliceReader struct {
-	b   []byte
-	off int
-}
-
-func (r *sliceReader) Read(p []byte) (int, error) {
-	if r.off >= len(r.b) {
-		return 0, io.EOF
-	}
-	n := copy(p, r.b[r.off:])
-	r.off += n
-	return n, nil
 }

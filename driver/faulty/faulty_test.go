@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/driver/localfs"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 func newWrapped(t *testing.T, opts ...Option) *Driver {
@@ -41,14 +42,14 @@ func TestPassthrough_NoFaults(t *testing.T) {
 }
 
 // TestFailureRate_AlwaysFails verifies rate=1 deterministically
-// fails. errors.Is(err, ErrInjected) is the documented contract.
+// fails. errors.Is(err, errs.ErrInjected) is the documented contract.
 func TestFailureRate_AlwaysFails(t *testing.T) {
 	d := newWrapped(t,
 		WithFailureRate(MethodPut, 1.0),
 	)
 	err := d.Put(context.Background(), "f", strings.NewReader("x"))
-	if !errors.Is(err, ErrInjected) {
-		t.Fatalf("expected ErrInjected, got %v", err)
+	if !errors.Is(err, errs.ErrInjected) {
+		t.Fatalf("expected errs.ErrInjected, got %v", err)
 	}
 	// The call counter is still bumped on injected failure.
 	if d.CallCount(MethodPut) != 1 {
@@ -85,7 +86,7 @@ func TestFailureRate_Deterministic(t *testing.T) {
 		seq := make([]bool, N)
 		for i := 0; i < N; i++ {
 			_, err := d.Get(context.Background(), "f")
-			seq[i] = errors.Is(err, ErrInjected)
+			seq[i] = errors.Is(err, errs.ErrInjected)
 		}
 		return seq
 	}
@@ -110,15 +111,15 @@ func TestFailureRate_Distribution(t *testing.T) {
 	)
 	failed := 0
 	for i := 0; i < N; i++ {
-		if err := d.Put(context.Background(), "f", strings.NewReader("x")); errors.Is(err, ErrInjected) {
+		if err := d.Put(context.Background(), "f", strings.NewReader("x")); errors.Is(err, errs.ErrInjected) {
 			failed++
 		}
 	}
 	// With seed=1 and N=2000 the fraction is well within ±5%.
-	min := int(0.45 * N)
-	max := int(0.55 * N)
-	if failed < min || failed > max {
-		t.Errorf("expected ~%d–%d failures out of %d, got %d", min, max, N, failed)
+	minValue := int(0.45 * N)
+	maxValue := int(0.55 * N)
+	if failed < minValue || failed > maxValue {
+		t.Errorf("expected ~%d–%d failures out of %d, got %d", minValue, maxValue, N, failed)
 	}
 }
 
@@ -135,8 +136,8 @@ func TestPerMethodIsolation(t *testing.T) {
 		t.Fatalf("Put unexpectedly failed: %v", err)
 	}
 	// Get has rate=1, must fail.
-	if _, err := d.Get(ctx, "f"); !errors.Is(err, ErrInjected) {
-		t.Fatalf("Get: expected ErrInjected, got %v", err)
+	if _, err := d.Get(ctx, "f"); !errors.Is(err, errs.ErrInjected) {
+		t.Fatalf("Get: expected errs.ErrInjected, got %v", err)
 	}
 }
 

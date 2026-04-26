@@ -91,7 +91,7 @@ func defaultOptions() options {
 // On a fresh database the schema is created at CurrentSchemaVersion.
 // On an existing database the schema version is checked; missing
 // migrations are applied forward-only. A version newer than
-// CurrentSchemaVersion returns core.ErrIndexSchemaMismatch.
+// CurrentSchemaVersion returns errs.ErrIndexSchemaMismatch.
 //
 // The signature carries ctx and error even though the docs at
 // 3. Contracts/02 §2.4.1 show a simplified form without them.

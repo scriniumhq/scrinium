@@ -2,7 +2,6 @@ package curator
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
@@ -41,23 +40,6 @@ type HostStorageStats struct {
 	QuarantineFiles int   // number of files in quarantine
 	MaxTransitBytes int64 // hard limit from configuration
 }
-
-// --- Sentinel errors ---
-
-// ErrCuratorClosed — operation on a closed Curator.
-var ErrCuratorClosed = errors.New("curator: closed")
-
-// ErrStoreNotRegistered — Store(id) with an unknown id.
-var ErrStoreNotRegistered = errors.New("curator: store not registered")
-
-// ErrHostStorageFull — HostStorage hit its hard limit while
-// OnHostStorageFull: Reject was in effect.
-var ErrHostStorageFull = errors.New("curator: host storage full: soft eviction insufficient")
-
-// ErrDrainNoTarget — at Drain time the Router returned an empty
-// target list. The follow-up behaviour is determined by
-// OnDrainNoTarget.
-var ErrDrainNoTarget = errors.New("curator: drain: router returned no targets")
 
 // --- Event constants ---
 

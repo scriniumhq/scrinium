@@ -11,6 +11,7 @@ import (
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver/localfs"
+	"github.com/rkurbatov/scrinium/errs"
 	sqliteindex "github.com/rkurbatov/scrinium/index/sqlite"
 )
 
@@ -30,7 +31,7 @@ import (
 //     fresh sqlite.NewStore over the SAME on-disk file. It also
 //     observes StateUnlocked and the same StoreID — the
 //     descriptor and the index both survived the round-trip.
-//  5. ErrConfigMismatch is raised when the second open passes a
+//  5. errs.ErrConfigMismatch is raised when the second open passes a
 //     WithConfig that disagrees with the descriptor on an
 //     immutable parameter.
 //
@@ -229,11 +230,11 @@ func TestM13_FullLifecycle_DiskBacked(t *testing.T) {
 		t.Fatalf("close index (phase 4): %v", err)
 	}
 
-	// --- Phase 5: ErrConfigMismatch on conflicting reopen ---
+	// --- Phase 5: errs.ErrConfigMismatch on conflicting reopen ---
 	//
 	// Open the same Location yet again, but this time pass a
 	// WithConfig that disagrees with the descriptor on an
-	// immutable. Must fail with ErrConfigMismatch — the validator
+	// immutable. Must fail with errs.ErrConfigMismatch — the validator
 	// is what protects callers from accidentally opening someone
 	// else's Store as if it were theirs.
 
@@ -254,8 +255,8 @@ func TestM13_FullLifecycle_DiskBacked(t *testing.T) {
 		core.WithConfig(conflict),
 		core.WithStoreIndex(idx3),
 	)
-	if !errors.Is(err, core.ErrConfigMismatch) {
-		t.Fatalf("expected ErrConfigMismatch on conflicting reopen, got %v", err)
+	if !errors.Is(err, errs.ErrConfigMismatch) {
+		t.Fatalf("expected errs.ErrConfigMismatch on conflicting reopen, got %v", err)
 	}
 }
 

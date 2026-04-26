@@ -12,6 +12,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
 )
 
@@ -201,16 +202,16 @@ func TestEncodeDecodeFile_PipelineRoundTrip(t *testing.T) {
 func TestEncodeFile_RejectsBinaryEncoding(t *testing.T) {
 	_, err := manifestcodec.EncodeFile(sampleManifest(),
 		domain.ManifestEncodingBinary, domain.ManifestCryptoPlain)
-	if !errors.Is(err, manifestcodec.ErrUnsupportedEncoding) {
-		t.Fatalf("expected ErrUnsupportedEncoding, got %v", err)
+	if !errors.Is(err, errs.ErrUnsupportedEncoding) {
+		t.Fatalf("expected errs.ErrUnsupportedEncoding, got %v", err)
 	}
 }
 
 func TestEncodeFile_RejectsNonPlainCrypto(t *testing.T) {
 	_, err := manifestcodec.EncodeFile(sampleManifest(),
 		domain.ManifestEncodingJSON, domain.ManifestCryptoEnvelope)
-	if !errors.Is(err, manifestcodec.ErrUnsupportedCrypto) {
-		t.Fatalf("expected ErrUnsupportedCrypto, got %v", err)
+	if !errors.Is(err, errs.ErrUnsupportedCrypto) {
+		t.Fatalf("expected errs.ErrUnsupportedCrypto, got %v", err)
 	}
 }
 
@@ -232,16 +233,16 @@ func TestDecodeFile_RejectsUnknownMagic(t *testing.T) {
 func TestDecodeFile_RejectsBinaryMagic(t *testing.T) {
 	bad := []byte{0x00, 'S', 'C', '2', 0x00, '{', '}'}
 	_, err := manifestcodec.DecodeFile(bad)
-	if !errors.Is(err, manifestcodec.ErrUnsupportedEncoding) {
-		t.Fatalf("expected ErrUnsupportedEncoding, got %v", err)
+	if !errors.Is(err, errs.ErrUnsupportedEncoding) {
+		t.Fatalf("expected errs.ErrUnsupportedEncoding, got %v", err)
 	}
 }
 
 func TestDecodeFile_RejectsEnvelopeFlag(t *testing.T) {
 	bad := []byte{0x00, 'S', 'C', '1', 0x02, '{', '}'}
 	_, err := manifestcodec.DecodeFile(bad)
-	if !errors.Is(err, manifestcodec.ErrUnsupportedCrypto) {
-		t.Fatalf("expected ErrUnsupportedCrypto, got %v", err)
+	if !errors.Is(err, errs.ErrUnsupportedCrypto) {
+		t.Fatalf("expected errs.ErrUnsupportedCrypto, got %v", err)
 	}
 }
 
@@ -260,8 +261,8 @@ func TestDecodeFile_RejectsFutureSchemaVersion(t *testing.T) {
 	body := `{"blob_ref":"sha256-x","layout_header":{"blob_storage":"Target"},"namespace":"","pipeline":[],"schema_version":99,"session_id":"","type":"blob","created_at":"2026-04-01T12:00:00Z"}`
 	bs := append([]byte{0x00, 'S', 'C', '1', 0x00}, body...)
 	_, err := manifestcodec.DecodeFile(bs)
-	if !errors.Is(err, domain.ErrUnsupportedSchemaVersion) {
-		t.Fatalf("expected ErrUnsupportedSchemaVersion, got %v", err)
+	if !errors.Is(err, errs.ErrUnsupportedSchemaVersion) {
+		t.Fatalf("expected errs.ErrUnsupportedSchemaVersion, got %v", err)
 	}
 }
 
@@ -322,7 +323,38 @@ func TestVerifyArtifactID_DetectsTampering(t *testing.T) {
 		tampered[20] = 'Y'
 	}
 	err = manifestcodec.VerifyArtifactID(id, tampered, registry)
-	if !errors.Is(err, domain.ErrCorruptedManifest) {
-		t.Errorf("expected ErrCorruptedManifest, got %v", err)
+	if !errors.Is(err, errs.ErrCorruptedManifest) {
+		t.Errorf("expected errs.ErrCorruptedManifest, got %v", err)
+	}
+}
+
+// TestEncodeFile_ArtifactIDNotInBody is an invariant: per docs §7.4
+// the ArtifactID is the hash of the full file bytes, so it cannot
+// appear inside the body — that would create a chicken-and-egg
+// dependency. The Manifest.ArtifactID field is in-memory only and
+// must NEVER round-trip to disk through EncodeFile. If this test
+// fails, codec.go's jsonBody started leaking the field.
+func TestEncodeFile_ArtifactIDNotInBody(t *testing.T) {
+	m := sampleManifest()
+	m.ArtifactID = domain.ArtifactID("sha256-deadbeef")
+	bs, err := manifestcodec.EncodeFile(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(bs, []byte("artifact_id")) {
+		t.Error("artifact_id key leaked into manifest body")
+	}
+	if bytes.Contains(bs, []byte("deadbeef")) {
+		t.Error("ArtifactID value leaked into manifest body")
+	}
+
+	// And the round-trip clears it on the way back.
+	got, err := manifestcodec.DecodeFile(bs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ArtifactID != "" {
+		t.Errorf("DecodeFile populated ArtifactID from body: got %q, want empty",
+			got.ArtifactID)
 	}
 }

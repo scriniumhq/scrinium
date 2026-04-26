@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // File-format magic bytes from docs §7.1.
@@ -53,14 +54,9 @@ const (
 // will be possible to read once we ship migrations.
 const SchemaVersion = 1
 
-// ErrUnsupportedEncoding is returned when a caller asks to
-// encode/decode under ManifestEncoding: Binary, which lands in M2.
-var ErrUnsupportedEncoding = errors.New("manifestcodec: encoding not supported in M1.4")
-
-// ErrUnsupportedCrypto is returned when a manifest requires crypto
-// flags other than Plain. Same reasoning as encoding: the crypto
-// pipeline arrives in M2.
-var ErrUnsupportedCrypto = errors.New("manifestcodec: crypto flag not supported in M1.4")
+// Temporary sentinels (errs.ErrUnsupportedEncoding,
+// errs.ErrUnsupportedCrypto) for the M1.4 perimeter live in the
+// errs package — see errs/temporary.go for their sunset milestone.
 
 // EncodeFile produces the full file bytes (header + body) for a
 // manifest in JSON Plain format.
@@ -78,10 +74,10 @@ var ErrUnsupportedCrypto = errors.New("manifestcodec: crypto flag not supported 
 // in Verify.
 func EncodeFile(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.ManifestCrypto) ([]byte, error) {
 	if encoding != domain.ManifestEncodingJSON && encoding != "" {
-		return nil, ErrUnsupportedEncoding
+		return nil, errs.ErrUnsupportedEncoding
 	}
 	if crypto != domain.ManifestCryptoPlain && crypto != "" {
-		return nil, ErrUnsupportedCrypto
+		return nil, errs.ErrUnsupportedCrypto
 	}
 
 	body, err := marshalBodyJSON(m)
@@ -103,8 +99,8 @@ func EncodeFile(m domain.Manifest, encoding domain.ManifestEncoding, crypto doma
 // accept it from a trusted source.
 //
 // Encoding mismatch: a manifest with the binary magic returns
-// ErrUnsupportedEncoding; an unknown magic returns a parse error.
-// Crypto flag != Plain returns ErrUnsupportedCrypto.
+// errs.ErrUnsupportedEncoding; an unknown magic returns a parse
+// error. Crypto flag != Plain returns errs.ErrUnsupportedCrypto.
 func DecodeFile(data []byte) (domain.Manifest, error) {
 	if len(data) < 5 {
 		return domain.Manifest{}, fmt.Errorf("manifestcodec: file too short (%d bytes)", len(data))
@@ -113,14 +109,14 @@ func DecodeFile(data []byte) (domain.Manifest, error) {
 	case bytes.HasPrefix(data, magicJSON):
 		// OK
 	case bytes.HasPrefix(data, magicBinary):
-		return domain.Manifest{}, ErrUnsupportedEncoding
+		return domain.Manifest{}, errs.ErrUnsupportedEncoding
 	default:
 		return domain.Manifest{}, fmt.Errorf("manifestcodec: unknown magic %x", data[:4])
 	}
 
 	flag := data[4]
 	if flag != cryptoPlain {
-		return domain.Manifest{}, ErrUnsupportedCrypto
+		return domain.Manifest{}, errs.ErrUnsupportedCrypto
 	}
 
 	return unmarshalBodyJSON(data[5:])
@@ -184,7 +180,7 @@ func VerifyArtifactID(id domain.ArtifactID, fileBytes []byte, registry domain.Ha
 	}
 	got := domain.ArtifactID(registry.Format(algo, h.Sum(nil)))
 	if got != id {
-		return domain.ErrCorruptedManifest
+		return errs.ErrCorruptedManifest
 	}
 	return nil
 }
@@ -336,7 +332,7 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 
 	if b.SchemaVersion != SchemaVersion {
 		return domain.Manifest{}, fmt.Errorf("%w: got %d, want %d",
-			domain.ErrUnsupportedSchemaVersion, b.SchemaVersion, SchemaVersion)
+			errs.ErrUnsupportedSchemaVersion, b.SchemaVersion, SchemaVersion)
 	}
 
 	m := domain.Manifest{

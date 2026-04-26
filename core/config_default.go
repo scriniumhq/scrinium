@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // applyConfigDefaults fills in zero-valued StoreConfig fields with
@@ -77,41 +78,41 @@ func validateImmutableConfig(cfg domain.StoreConfig) error {
 	switch cfg.PathTopology {
 	case domain.PathTopologyFlat, domain.PathTopologySharded, domain.PathTopologyNative:
 	default:
-		return ErrInvalidConfig
+		return errs.ErrInvalidConfig
 	}
 	switch cfg.ManifestStorage {
 	case domain.ManifestStorageRemote, domain.ManifestStorageLocal, domain.ManifestStorageReplicated:
 	default:
-		return ErrInvalidConfig
+		return errs.ErrInvalidConfig
 	}
 	switch cfg.ManifestEncoding {
 	case domain.ManifestEncodingJSON, domain.ManifestEncodingBinary:
 	default:
-		return ErrInvalidConfig
+		return errs.ErrInvalidConfig
 	}
 	switch cfg.ManifestCrypto {
 	case domain.ManifestCryptoPlain, domain.ManifestCryptoMetadataOnly, domain.ManifestCryptoEnvelope:
 	default:
-		return ErrInvalidConfig
+		return errs.ErrInvalidConfig
 	}
 	switch cfg.ContentHasher {
 	case domain.HashSHA256, domain.HashBLAKE3:
 	default:
-		return ErrInvalidConfig
+		return errs.ErrInvalidConfig
 	}
 
 	// PathTopology: Native is a read-only marker; allowed only
 	// with BlobStorage: ExternalRef.
 	if cfg.PathTopology == domain.PathTopologyNative &&
 		cfg.BlobStorage != domain.BlobStorageExternalRef {
-		return ErrInvalidConfig
+		return errs.ErrInvalidConfig
 	}
 
 	// TombstoneGracePeriod has its own dedicated sentinel because
 	// a too-short value is the only param with cross-host safety
 	// implications. The minimum below matches docs/4 §5.1.
 	if cfg.TombstoneGracePeriod > 0 && cfg.TombstoneGracePeriod < time.Hour {
-		return domain.ErrInvalidTombstoneGracePeriod
+		return errs.ErrInvalidTombstoneGracePeriod
 	}
 	return nil
 }

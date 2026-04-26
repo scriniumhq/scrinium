@@ -1,6 +1,7 @@
 package descriptor
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -126,7 +127,7 @@ func Marshal(d *Descriptor) ([]byte, error) {
 // Validate(); the caller does not need to repeat the check.
 func Unmarshal(data []byte) (*Descriptor, error) {
 	var d Descriptor
-	dec := json.NewDecoder(bytesReader(data))
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields() // catch typos in hand-edited files
 	if err := dec.Decode(&d); err != nil {
 		return nil, fmt.Errorf("descriptor: parse: %w", err)
@@ -141,27 +142,6 @@ func Unmarshal(data []byte) (*Descriptor, error) {
 		return nil, err
 	}
 	return &d, nil
-}
-
-// bytesReader wraps a byte slice into an io.Reader. Used to feed
-// json.Decoder in Unmarshal so we get DisallowUnknownFields without
-// constructing a *bytes.Reader at every call site.
-func bytesReader(b []byte) io.Reader {
-	return &sliceReader{b: b}
-}
-
-type sliceReader struct {
-	b   []byte
-	off int
-}
-
-func (r *sliceReader) Read(p []byte) (int, error) {
-	if r.off >= len(r.b) {
-		return 0, io.EOF
-	}
-	n := copy(p, r.b[r.off:])
-	r.off += n
-	return n, nil
 }
 
 // Read pulls the descriptor through a Driver. It performs a full
@@ -200,5 +180,5 @@ func Write(ctx context.Context, drv driver.Driver, d *Descriptor) error {
 	if err != nil {
 		return err
 	}
-	return drv.Put(ctx, Path, bytesReader(data))
+	return drv.Put(ctx, Path, bytes.NewReader(data))
 }

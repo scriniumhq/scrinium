@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // transformerRegistry implements TransformerRegistry with an RWMutex
@@ -24,7 +25,7 @@ func (r *transformerRegistry) Get(id string) (TransformerFactory, error) {
 	defer r.mu.RUnlock()
 	f, ok := r.factories[id]
 	if !ok {
-		return nil, ErrUnsupportedAlgorithm
+		return nil, errs.ErrUnsupportedAlgorithm
 	}
 	return f, nil
 }
@@ -63,7 +64,7 @@ func (r *hashRegistry) NewHasher(algo string) (hash.Hash, error) {
 	defer r.mu.RUnlock()
 	fn, ok := r.hashers[algo]
 	if !ok {
-		return nil, ErrUnsupportedAlgorithm
+		return nil, errs.ErrUnsupportedAlgorithm
 	}
 	return fn(), nil
 }

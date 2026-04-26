@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // ListByNamespace iterates over manifests whose namespace matches
 // the filter. The callback is invoked once per manifest in
-// (namespace, created_at) order; cancelling via core.ErrStopWalk
+// (namespace, created_at) order; cancelling via errs.ErrStopWalk
 // or any other error from the callback stops the iteration.
 //
 // Filter semantics match the contract of Walk in core.DataStore:
@@ -87,7 +87,7 @@ func (i *Index) ListByNamespace(
 // (one user session, dozens to hundreds of artifacts), so we
 // materialise it into a slice rather than streaming via callback.
 //
-// An empty SessionID guarded at the engine level (core.ErrEmptySessionID).
+// An empty SessionID guarded at the engine level (errs.ErrEmptySessionID).
 // The index itself does NOT enforce that — it would be a useful
 // last-line check, but consistency demands the index honour any
 // query the caller passes. The engine's RollbackSession is the
@@ -141,7 +141,7 @@ func (i *Index) ListOrphanBlobs(
 			return err
 		}
 		if cbErr := cb(ref); cbErr != nil {
-			if errors.Is(cbErr, core.ErrStopWalk) {
+			if errors.Is(cbErr, errs.ErrStopWalk) {
 				return nil
 			}
 			return cbErr
@@ -185,7 +185,7 @@ func (i *Index) ListUnverified(ctx context.Context, before time.Time, cb func(bl
 			return err
 		}
 		if cbErr := cb(ref); cbErr != nil {
-			if errors.Is(cbErr, core.ErrStopWalk) {
+			if errors.Is(cbErr, errs.ErrStopWalk) {
 				return nil
 			}
 			return cbErr
@@ -212,7 +212,7 @@ func iterateManifestRows(
 			return fmt.Errorf("sqlite: scan manifest: %w", err)
 		}
 		if cbErr := cb(m); cbErr != nil {
-			if errors.Is(cbErr, core.ErrStopWalk) {
+			if errors.Is(cbErr, errs.ErrStopWalk) {
 				return nil
 			}
 			return cbErr

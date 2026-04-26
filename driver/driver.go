@@ -2,7 +2,6 @@ package driver
 
 import (
 	"context"
-	"errors"
 	"io"
 	"time"
 )
@@ -36,6 +35,10 @@ type ObjectMeta struct {
 //
 // The tombstone methods (MarkTombstone, IsTombstone) are mandatory
 // for supporting Two-Phase Deletion in a multi-host environment.
+//
+// Sentinel errors (ErrUnsupportedURIScheme for Open; ErrStopWalk for
+// the ListObjectsWithModTime callback) live in the errs package and
+// are matched via errors.Is.
 type Driver interface {
 	// I/O.
 	Put(ctx context.Context, path string, r io.Reader) error
@@ -60,18 +63,3 @@ type Driver interface {
 	MarkTombstone(ctx context.Context, path string) error
 	IsTombstone(ctx context.Context, path string) (bool, error)
 }
-
-// ErrUnsupportedURIScheme indicates that the driver does not support
-// the URI scheme passed to Open. Used with BlobStorage: ExternalRef
-// for schemes unknown to the driver.
-//
-// This sentinel is also exported from core (see
-// core.ErrUnsupportedURIScheme) so that the same identifier is
-// available on both layers.
-var ErrUnsupportedURIScheme = errors.New("driver: unsupported URI scheme")
-
-// ErrStopWalk is the sentinel for an early but successful exit from
-// ListObjectsWithModTime. Returning this value from the callback
-// stops the walk without an error — the function returns nil to its
-// caller.
-var ErrStopWalk = errors.New("driver: stop walk")

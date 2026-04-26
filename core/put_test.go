@@ -13,6 +13,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
 )
 
@@ -226,8 +227,8 @@ func TestPut_RejectsSystemNamespace(t *testing.T) {
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		core.PutOptions{Namespace: "system.config"})
-	if !errors.Is(err, core.ErrReservedNamespace) {
-		t.Fatalf("expected ErrReservedNamespace, got %v", err)
+	if !errors.Is(err, errs.ErrReservedNamespace) {
+		t.Fatalf("expected errs.ErrReservedNamespace, got %v", err)
 	}
 }
 
@@ -236,8 +237,8 @@ func TestPut_RejectsWildcardNamespace(t *testing.T) {
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		core.PutOptions{Namespace: "*"})
-	if !errors.Is(err, core.ErrReservedNamespace) {
-		t.Fatalf("expected ErrReservedNamespace, got %v", err)
+	if !errors.Is(err, errs.ErrReservedNamespace) {
+		t.Fatalf("expected errs.ErrReservedNamespace, got %v", err)
 	}
 }
 
@@ -246,8 +247,8 @@ func TestPut_RejectsTooLongNamespace(t *testing.T) {
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		core.PutOptions{Namespace: strings.Repeat("a", 256)})
-	if !errors.Is(err, domain.ErrNamespaceTooLong) {
-		t.Fatalf("expected ErrNamespaceTooLong, got %v", err)
+	if !errors.Is(err, errs.ErrNamespaceTooLong) {
+		t.Fatalf("expected errs.ErrNamespaceTooLong, got %v", err)
 	}
 }
 
@@ -256,8 +257,8 @@ func TestPut_RejectsTooLongSessionID(t *testing.T) {
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		core.PutOptions{SessionID: strings.Repeat("a", 256)})
-	if !errors.Is(err, domain.ErrSessionIDTooLong) {
-		t.Fatalf("expected ErrSessionIDTooLong, got %v", err)
+	if !errors.Is(err, errs.ErrSessionIDTooLong) {
+		t.Fatalf("expected errs.ErrSessionIDTooLong, got %v", err)
 	}
 }
 
@@ -270,8 +271,8 @@ func TestPut_RejectsHugeMetadata(t *testing.T) {
 			Metadata: append([]byte(`"`), append(huge, '"')...),
 		},
 		core.PutOptions{})
-	if !errors.Is(err, domain.ErrMetadataTooLarge) {
-		t.Fatalf("expected ErrMetadataTooLarge, got %v", err)
+	if !errors.Is(err, errs.ErrMetadataTooLarge) {
+		t.Fatalf("expected errs.ErrMetadataTooLarge, got %v", err)
 	}
 }
 
@@ -296,8 +297,8 @@ func TestPut_BlockedInReadOnly(t *testing.T) {
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		core.PutOptions{})
-	if !errors.Is(err, core.ErrStoreReadOnly) {
-		t.Fatalf("expected ErrStoreReadOnly, got %v", err)
+	if !errors.Is(err, errs.ErrStoreReadOnly) {
+		t.Fatalf("expected errs.ErrStoreReadOnly, got %v", err)
 	}
 }
 
@@ -310,8 +311,8 @@ func TestPut_BlockedInOffline(t *testing.T) {
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		core.PutOptions{})
-	if !errors.Is(err, core.ErrStoreOffline) {
-		t.Fatalf("expected ErrStoreOffline, got %v", err)
+	if !errors.Is(err, errs.ErrStoreOffline) {
+		t.Fatalf("expected errs.ErrStoreOffline, got %v", err)
 	}
 }
 

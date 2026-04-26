@@ -14,6 +14,7 @@ import (
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver/localfs"
+	"github.com/rkurbatov/scrinium/errs"
 	sqliteindex "github.com/rkurbatov/scrinium/index/sqlite"
 )
 
@@ -158,8 +159,8 @@ func TestInitStore_AlreadyExists(t *testing.T) {
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
 	)
-	if !errors.Is(err, core.ErrStoreAlreadyExists) {
-		t.Fatalf("expected ErrStoreAlreadyExists, got %v", err)
+	if !errors.Is(err, errs.ErrStoreAlreadyExists) {
+		t.Fatalf("expected errs.ErrStoreAlreadyExists, got %v", err)
 	}
 }
 
@@ -198,8 +199,8 @@ func TestInitStore_CorruptedDescriptor_NoForce(t *testing.T) {
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
 	)
-	if !errors.Is(err, core.ErrStoreCorrupted) {
-		t.Fatalf("expected ErrStoreCorrupted, got %v", err)
+	if !errors.Is(err, errs.ErrStoreCorrupted) {
+		t.Fatalf("expected errs.ErrStoreCorrupted, got %v", err)
 	}
 }
 
@@ -253,8 +254,8 @@ func TestInitStore_RejectsInvalidConfig(t *testing.T) {
 		core.WithConfig(cfg),
 		core.WithStoreIndex(newIndex(t)),
 	)
-	if !errors.Is(err, core.ErrInvalidConfig) {
-		t.Fatalf("expected ErrInvalidConfig, got %v", err)
+	if !errors.Is(err, errs.ErrInvalidConfig) {
+		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
 	}
 }
 
@@ -268,8 +269,8 @@ func TestInitStore_NativeTopologyRequiresExternalRef(t *testing.T) {
 		core.WithConfig(cfg),
 		core.WithStoreIndex(newIndex(t)),
 	)
-	if !errors.Is(err, core.ErrInvalidConfig) {
-		t.Fatalf("expected ErrInvalidConfig, got %v", err)
+	if !errors.Is(err, errs.ErrInvalidConfig) {
+		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
 	}
 }
 
@@ -338,8 +339,8 @@ func TestOpenStore_FreshLocation_NotFound(t *testing.T) {
 	_, err := core.OpenStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
 	)
-	if !errors.Is(err, core.ErrStoreNotFound) {
-		t.Fatalf("expected ErrStoreNotFound, got %v", err)
+	if !errors.Is(err, errs.ErrStoreNotFound) {
+		t.Fatalf("expected errs.ErrStoreNotFound, got %v", err)
 	}
 }
 
@@ -352,8 +353,8 @@ func TestOpenStore_CorruptedDescriptor(t *testing.T) {
 	_, err := core.OpenStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
 	)
-	if !errors.Is(err, core.ErrStoreCorrupted) {
-		t.Fatalf("expected ErrStoreCorrupted, got %v", err)
+	if !errors.Is(err, errs.ErrStoreCorrupted) {
+		t.Fatalf("expected errs.ErrStoreCorrupted, got %v", err)
 	}
 }
 
@@ -432,7 +433,7 @@ func TestOpenStore_MatchingConfig_Succeeds(t *testing.T) {
 	}
 }
 
-// --- OpenStore: ErrConfigMismatch ---
+// --- OpenStore: errs.ErrConfigMismatch ---
 
 func TestOpenStore_ConfigMismatch_PathTopology(t *testing.T) {
 	drv := newDriver(t)
@@ -448,8 +449,8 @@ func TestOpenStore_ConfigMismatch_PathTopology(t *testing.T) {
 		core.WithConfig(domain.StoreConfig{PathTopology: domain.PathTopologySharded}),
 		core.WithStoreIndex(newIndex(t)),
 	)
-	if !errors.Is(err, core.ErrConfigMismatch) {
-		t.Fatalf("expected ErrConfigMismatch, got %v", err)
+	if !errors.Is(err, errs.ErrConfigMismatch) {
+		t.Fatalf("expected errs.ErrConfigMismatch, got %v", err)
 	}
 }
 
@@ -466,14 +467,14 @@ func TestOpenStore_ConfigMismatch_ContentHasher(t *testing.T) {
 		core.WithConfig(domain.StoreConfig{ContentHasher: domain.HashBLAKE3}),
 		core.WithStoreIndex(newIndex(t)),
 	)
-	if !errors.Is(err, core.ErrConfigMismatch) {
-		t.Fatalf("expected ErrConfigMismatch, got %v", err)
+	if !errors.Is(err, errs.ErrConfigMismatch) {
+		t.Fatalf("expected errs.ErrConfigMismatch, got %v", err)
 	}
 }
 
 // TestOpenStore_PartialConfig_NoMismatchOnUnsetFields verifies that
 // an empty/zero immutable field in WithConfig does not trigger
-// ErrConfigMismatch — it is treated as "not asserted by the caller"
+// errs.ErrConfigMismatch — it is treated as "not asserted by the caller"
 // rather than as a request for the zero value.
 func TestOpenStore_PartialConfig_NoMismatchOnUnsetFields(t *testing.T) {
 	drv := newDriver(t)
@@ -521,8 +522,8 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 		core.WithConfig(domain.StoreConfig{DeletionPolicyLock: true}),
 		core.WithStoreIndex(newIndex(t)),
 	)
-	if !errors.Is(err, core.ErrConfigMismatch) {
-		t.Fatalf("expected ErrConfigMismatch on stricter lock request, got %v", err)
+	if !errors.Is(err, errs.ErrConfigMismatch) {
+		t.Fatalf("expected errs.ErrConfigMismatch on stricter lock request, got %v", err)
 	}
 
 	// Caller does NOT assert anything (false). MUST succeed.

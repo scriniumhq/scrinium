@@ -10,6 +10,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // store is the engine's internal implementation of Store. It is
@@ -76,7 +77,7 @@ func (s *store) Capabilities() driver.CapabilityMask {
 // ReadOnly) — that escape hatch is what the Offline doc-comment
 // promises. We do not enforce it through a state-machine matrix
 // here; the priority-of-checks in operation entry points covers
-// it (each method checks ErrStoreOffline at its boundary).
+// it (each method checks errs.ErrStoreOffline at its boundary).
 //
 // The transition is idempotent: setting the current mode again is
 // a no-op success.
@@ -135,7 +136,7 @@ func (s *store) Capacity(ctx context.Context) (StorageInfo, error) {
 		return StorageInfo{}, err
 	}
 	if s.maintenanceMode() == MaintenanceModeOffline {
-		return StorageInfo{}, ErrStoreOffline
+		return StorageInfo{}, errs.ErrStoreOffline
 	}
 
 	out := StorageInfo{
@@ -175,7 +176,7 @@ func (s *store) Capacity(ctx context.Context) (StorageInfo, error) {
 // packed_blobs, never in manifests). System namespaces are
 // excluded by both the index ("*" wildcard skips system.*) and by
 // us at the API surface (an explicit "system.foo" gets
-// ErrReservedNamespace before the index sees it).
+// errs.ErrReservedNamespace before the index sees it).
 func (s *store) Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -207,7 +208,7 @@ func (s *store) WalkSystem(ctx context.Context, namespace string, cb func(domain
 		return err
 	}
 	if !isSystemNamespace(namespace) {
-		return ErrReservedNamespace
+		return errs.ErrReservedNamespace
 	}
 	return s.index.ListByNamespace(ctx, namespace, cb)
 }
@@ -229,14 +230,14 @@ func (s *store) checkOperational() error {
 
 	switch state {
 	case StateCorrupted:
-		return ErrStoreCorrupted
+		return errs.ErrStoreCorrupted
 	case StateLocked:
-		return ErrLocked
+		return errs.ErrLocked
 	case StateBootstrapping:
-		return ErrStoreNotReady
+		return errs.ErrStoreNotReady
 	}
 	if mode == MaintenanceModeOffline {
-		return ErrStoreOffline
+		return errs.ErrStoreOffline
 	}
 	return nil
 }
@@ -245,12 +246,12 @@ func (s *store) checkOperational() error {
 // argument. See docs §4.1.
 func validateUserNamespace(ns string) error {
 	if len(ns) > 255 {
-		return domain.ErrNamespaceTooLong
+		return errs.ErrNamespaceTooLong
 	}
 	// "*" and "" are valid (wildcard / default namespace). Any
 	// "system." prefix is reserved.
 	if strings.HasPrefix(ns, "system.") {
-		return ErrReservedNamespace
+		return errs.ErrReservedNamespace
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // helper: insert a blob row directly, bypassing IndexManifest.
@@ -57,8 +58,8 @@ func TestResolve_Basic(t *testing.T) {
 func TestResolve_Missing(t *testing.T) {
 	idx := newMemoryIndex(t)
 	_, err := idx.Resolve("nonexistent")
-	if !errors.Is(err, core.ErrArtifactNotFound) {
-		t.Fatalf("expected ErrArtifactNotFound, got %v", err)
+	if !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 	}
 }
 
@@ -210,8 +211,8 @@ func TestGetRefCount_Basic(t *testing.T) {
 func TestGetRefCount_Missing(t *testing.T) {
 	idx := newMemoryIndex(t)
 	_, err := idx.GetRefCount("nonexistent")
-	if !errors.Is(err, core.ErrArtifactNotFound) {
-		t.Fatalf("expected ErrArtifactNotFound, got %v", err)
+	if !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 	}
 }
 

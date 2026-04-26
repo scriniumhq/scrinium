@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/driver"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
 	"github.com/rkurbatov/scrinium/internal/blobpath"
 )
@@ -88,7 +89,7 @@ func recoverOrphans(ctx context.Context, drv driver.Driver, idx StoreIndex) (Orp
 
 	// 2. Sweep blobs/. For every file, parse the blob ref out of
 	// the last path segment and ask the index whether it knows
-	// about it. ErrArtifactNotFound — orphan, remove. Any other
+	// about it. errs.ErrArtifactNotFound — orphan, remove. Any other
 	// error from Resolve is index infrastructure trouble; we log
 	// and skip the file (better leave a possible orphan on disk
 	// than mistake healthy data for orphan because of a transient
@@ -106,7 +107,7 @@ func recoverOrphans(ctx context.Context, drv driver.Driver, idx StoreIndex) (Orp
 			}
 			_, resolveErr := idx.Resolve(ref)
 			switch {
-			case errors.Is(resolveErr, ErrArtifactNotFound):
+			case errors.Is(resolveErr, errs.ErrArtifactNotFound):
 				if rmErr := drv.Remove(ctx, om.Path); rmErr != nil {
 					report.Errors = append(report.Errors,
 						fmt.Errorf("recoverOrphans: blobs remove %q: %w", om.Path, rmErr))

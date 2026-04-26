@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/driver"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // helper: spin up a fresh driver in a t.TempDir() with fsync off
@@ -336,8 +337,8 @@ func TestOpen_FileURI(t *testing.T) {
 func TestOpen_UnsupportedScheme(t *testing.T) {
 	d := newTestDriver(t)
 	_, err := d.Open(context.Background(), "s3://bucket/key")
-	if !errors.Is(err, driver.ErrUnsupportedURIScheme) {
-		t.Fatalf("expected ErrUnsupportedURIScheme, got %v", err)
+	if !errors.Is(err, errs.ErrUnsupportedURIScheme) {
+		t.Fatalf("expected errs.ErrUnsupportedURIScheme, got %v", err)
 	}
 }
 
@@ -433,12 +434,12 @@ func TestListObjectsWithModTime_StopWalk(t *testing.T) {
 	err := d.ListObjectsWithModTime(ctx, "", time.Time{}, func(m driver.ObjectMeta) error {
 		seen++
 		if seen == 2 {
-			return driver.ErrStopWalk
+			return errs.ErrStopWalk
 		}
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ErrStopWalk should be swallowed, got %v", err)
+		t.Fatalf("errs.ErrStopWalk should be swallowed, got %v", err)
 	}
 	if seen != 2 {
 		t.Fatalf("expected to stop at 2, saw %d", seen)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // --- MarkVerified ---
@@ -231,8 +232,8 @@ func TestSetMeta_Overwrites(t *testing.T) {
 func TestGetMeta_Missing(t *testing.T) {
 	idx := newMemoryIndex(t)
 	_, err := idx.GetMeta("never-set")
-	if !errors.Is(err, core.ErrMetaKeyNotFound) {
-		t.Fatalf("expected ErrMetaKeyNotFound, got %v", err)
+	if !errors.Is(err, errs.ErrMetaKeyNotFound) {
+		t.Fatalf("expected errs.ErrMetaKeyNotFound, got %v", err)
 	}
 }
 

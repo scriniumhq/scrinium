@@ -9,6 +9,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // helper: count rows in a table for assertion purposes.
@@ -378,8 +379,8 @@ func TestClassifyError_Nil(t *testing.T) {
 
 func TestClassifyError_BusyMaps(t *testing.T) {
 	err := classifyError(errors.New("database is locked"))
-	if !errors.Is(err, core.ErrLeaseHeld) {
-		t.Errorf("expected ErrLeaseHeld, got %v", err)
+	if !errors.Is(err, errs.ErrLeaseHeld) {
+		t.Errorf("expected errs.ErrLeaseHeld, got %v", err)
 	}
 }
 
