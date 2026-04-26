@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // helper: insert a manifest row directly. Lets the iterator tests
 // stay focused on listing semantics without going through
 // IndexManifest's blob-side bookkeeping.
-func insertManifest(t *testing.T, idx *Index, m core.Manifest) {
+func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	t.Helper()
 	createdAt := m.CreatedAt
 	if createdAt.IsZero() {
@@ -37,10 +38,10 @@ func insertManifest(t *testing.T, idx *Index, m core.Manifest) {
 	}
 }
 
-func collectManifests(t *testing.T, idx *Index, ns string) []core.Manifest {
+func collectManifests(t *testing.T, idx *Index, ns string) []domain.Manifest {
 	t.Helper()
-	var got []core.Manifest
-	err := idx.ListByNamespace(context.Background(), ns, func(m core.Manifest) error {
+	var got []domain.Manifest
+	err := idx.ListByNamespace(context.Background(), ns, func(m domain.Manifest) error {
 		got = append(got, m)
 		return nil
 	})
@@ -54,9 +55,9 @@ func collectManifests(t *testing.T, idx *Index, ns string) []core.Manifest {
 
 func TestListByNamespace_ExactMatch(t *testing.T) {
 	idx := newMemoryIndex(t)
-	insertManifest(t, idx, core.Manifest{ArtifactID: "a1", Type: core.ManifestTypeBlob, Namespace: "alpha"})
-	insertManifest(t, idx, core.Manifest{ArtifactID: "a2", Type: core.ManifestTypeBlob, Namespace: "alpha"})
-	insertManifest(t, idx, core.Manifest{ArtifactID: "b1", Type: core.ManifestTypeBlob, Namespace: "beta"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "a1", Type: domain.ManifestTypeBlob, Namespace: "alpha"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "a2", Type: domain.ManifestTypeBlob, Namespace: "alpha"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "b1", Type: domain.ManifestTypeBlob, Namespace: "beta"})
 
 	got := collectManifests(t, idx, "alpha")
 	if len(got) != 2 {
@@ -71,8 +72,8 @@ func TestListByNamespace_ExactMatch(t *testing.T) {
 
 func TestListByNamespace_DefaultNamespace(t *testing.T) {
 	idx := newMemoryIndex(t)
-	insertManifest(t, idx, core.Manifest{ArtifactID: "no-ns-1", Type: core.ManifestTypeBlob, Namespace: ""})
-	insertManifest(t, idx, core.Manifest{ArtifactID: "user-ns", Type: core.ManifestTypeBlob, Namespace: "alpha"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "no-ns-1", Type: domain.ManifestTypeBlob, Namespace: ""})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "user-ns", Type: domain.ManifestTypeBlob, Namespace: "alpha"})
 
 	got := collectManifests(t, idx, "")
 	if len(got) != 1 {
@@ -85,10 +86,10 @@ func TestListByNamespace_DefaultNamespace(t *testing.T) {
 
 func TestListByNamespace_Wildcard_ExcludesSystem(t *testing.T) {
 	idx := newMemoryIndex(t)
-	insertManifest(t, idx, core.Manifest{ArtifactID: "u1", Type: core.ManifestTypeBlob, Namespace: "alpha"})
-	insertManifest(t, idx, core.Manifest{ArtifactID: "u2", Type: core.ManifestTypeBlob, Namespace: "beta"})
-	insertManifest(t, idx, core.Manifest{ArtifactID: "s1", Type: core.ManifestTypeBlob, Namespace: "system.config"})
-	insertManifest(t, idx, core.Manifest{ArtifactID: "s2", Type: core.ManifestTypeBlob, Namespace: "system.state"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "u1", Type: domain.ManifestTypeBlob, Namespace: "alpha"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "u2", Type: domain.ManifestTypeBlob, Namespace: "beta"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "s1", Type: domain.ManifestTypeBlob, Namespace: "system.config"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "s2", Type: domain.ManifestTypeBlob, Namespace: "system.state"})
 
 	got := collectManifests(t, idx, "*")
 	if len(got) != 2 {
@@ -105,21 +106,21 @@ func TestListByNamespace_OrderByCreatedAt(t *testing.T) {
 	idx := newMemoryIndex(t)
 	now := time.Now()
 	// Insert in reverse temporal order.
-	insertManifest(t, idx, core.Manifest{
-		ArtifactID: "third", Type: core.ManifestTypeBlob, Namespace: "ns",
+	insertManifest(t, idx, domain.Manifest{
+		ArtifactID: "third", Type: domain.ManifestTypeBlob, Namespace: "ns",
 		CreatedAt: now.Add(2 * time.Second),
 	})
-	insertManifest(t, idx, core.Manifest{
-		ArtifactID: "first", Type: core.ManifestTypeBlob, Namespace: "ns",
+	insertManifest(t, idx, domain.Manifest{
+		ArtifactID: "first", Type: domain.ManifestTypeBlob, Namespace: "ns",
 		CreatedAt: now,
 	})
-	insertManifest(t, idx, core.Manifest{
-		ArtifactID: "second", Type: core.ManifestTypeBlob, Namespace: "ns",
+	insertManifest(t, idx, domain.Manifest{
+		ArtifactID: "second", Type: domain.ManifestTypeBlob, Namespace: "ns",
 		CreatedAt: now.Add(time.Second),
 	})
 
 	got := collectManifests(t, idx, "ns")
-	wantOrder := []core.ArtifactID{"first", "second", "third"}
+	wantOrder := []domain.ArtifactID{"first", "second", "third"}
 	if len(got) != 3 {
 		t.Fatalf("got %d, want 3", len(got))
 	}
@@ -133,15 +134,15 @@ func TestListByNamespace_OrderByCreatedAt(t *testing.T) {
 func TestListByNamespace_StopWalk(t *testing.T) {
 	idx := newMemoryIndex(t)
 	for i := 0; i < 5; i++ {
-		insertManifest(t, idx, core.Manifest{
-			ArtifactID: core.ArtifactID(string(rune('a' + i))),
-			Type:       core.ManifestTypeBlob,
+		insertManifest(t, idx, domain.Manifest{
+			ArtifactID: domain.ArtifactID(string(rune('a' + i))),
+			Type:       domain.ManifestTypeBlob,
 			Namespace:  "ns",
 		})
 	}
 
 	var seen int
-	err := idx.ListByNamespace(context.Background(), "ns", func(m core.Manifest) error {
+	err := idx.ListByNamespace(context.Background(), "ns", func(m domain.Manifest) error {
 		seen++
 		if seen == 2 {
 			return core.ErrStopWalk
@@ -158,10 +159,10 @@ func TestListByNamespace_StopWalk(t *testing.T) {
 
 func TestListByNamespace_CallbackErrorPropagates(t *testing.T) {
 	idx := newMemoryIndex(t)
-	insertManifest(t, idx, core.Manifest{ArtifactID: "a1", Type: core.ManifestTypeBlob, Namespace: "ns"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "a1", Type: domain.ManifestTypeBlob, Namespace: "ns"})
 
 	sentinel := errors.New("custom callback error")
-	err := idx.ListByNamespace(context.Background(), "ns", func(m core.Manifest) error {
+	err := idx.ListByNamespace(context.Background(), "ns", func(m domain.Manifest) error {
 		return sentinel
 	})
 	if !errors.Is(err, sentinel) {
@@ -174,14 +175,14 @@ func TestListByNamespace_PackManifestsExcluded(t *testing.T) {
 	// Even if a pack manifest somehow ends up in manifests (it
 	// should not — but defence in depth), ListByNamespace must
 	// not surface it.
-	insertManifest(t, idx, core.Manifest{ArtifactID: "blob-1", Type: core.ManifestTypeBlob, Namespace: "ns"})
-	insertManifest(t, idx, core.Manifest{ArtifactID: "pack-1", Type: core.ManifestTypePack, Namespace: "ns"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "blob-1", Type: domain.ManifestTypeBlob, Namespace: "ns"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "pack-1", Type: domain.ManifestTypePack, Namespace: "ns"})
 
 	got := collectManifests(t, idx, "ns")
 	if len(got) != 1 {
 		t.Fatalf("got %d, want 1 (pack excluded)", len(got))
 	}
-	if got[0].Type != core.ManifestTypeBlob {
+	if got[0].Type != domain.ManifestTypeBlob {
 		t.Errorf("type: got %q, want blob", got[0].Type)
 	}
 }
@@ -202,9 +203,9 @@ func TestListByNamespace_FieldsRoundTrip(t *testing.T) {
 	idx := newMemoryIndex(t)
 	now := time.Now().Truncate(time.Microsecond) // SQLite-precision-safe
 	retention := now.Add(time.Hour).Truncate(time.Microsecond)
-	src := core.Manifest{
+	src := domain.Manifest{
 		ArtifactID:     "art-1",
-		Type:           core.ManifestTypeBlob,
+		Type:           domain.ManifestTypeBlob,
 		Namespace:      "ns",
 		SessionID:      "sess-42",
 		BlobRef:        "blob-1",
@@ -245,9 +246,9 @@ func TestListByNamespace_FieldsRoundTrip(t *testing.T) {
 
 func TestGetBySession_Hit(t *testing.T) {
 	idx := newMemoryIndex(t)
-	insertManifest(t, idx, core.Manifest{ArtifactID: "a1", Type: core.ManifestTypeBlob, Namespace: "ns", SessionID: "sess-1"})
-	insertManifest(t, idx, core.Manifest{ArtifactID: "a2", Type: core.ManifestTypeBlob, Namespace: "ns", SessionID: "sess-1"})
-	insertManifest(t, idx, core.Manifest{ArtifactID: "b1", Type: core.ManifestTypeBlob, Namespace: "ns", SessionID: "sess-2"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "a1", Type: domain.ManifestTypeBlob, Namespace: "ns", SessionID: "sess-1"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "a2", Type: domain.ManifestTypeBlob, Namespace: "ns", SessionID: "sess-1"})
+	insertManifest(t, idx, domain.Manifest{ArtifactID: "b1", Type: domain.ManifestTypeBlob, Namespace: "ns", SessionID: "sess-2"})
 
 	ids, err := idx.GetBySession("sess-1")
 	if err != nil {
@@ -256,7 +257,7 @@ func TestGetBySession_Hit(t *testing.T) {
 	if len(ids) != 2 {
 		t.Fatalf("got %d, want 2", len(ids))
 	}
-	seen := make(map[core.ArtifactID]bool)
+	seen := make(map[domain.ArtifactID]bool)
 	for _, id := range ids {
 		seen[id] = true
 	}
@@ -444,9 +445,9 @@ func TestListUnverified_OldestFirst(t *testing.T) {
 func TestListByNamespace_ContextCancelled(t *testing.T) {
 	idx := newMemoryIndex(t)
 	for i := 0; i < 3; i++ {
-		insertManifest(t, idx, core.Manifest{
-			ArtifactID: core.ArtifactID(string(rune('a' + i))),
-			Type:       core.ManifestTypeBlob,
+		insertManifest(t, idx, domain.Manifest{
+			ArtifactID: domain.ArtifactID(string(rune('a' + i))),
+			Type:       domain.ManifestTypeBlob,
 			Namespace:  "ns",
 		})
 	}
@@ -454,7 +455,7 @@ func TestListByNamespace_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := idx.ListByNamespace(ctx, "ns", func(m core.Manifest) error {
+	err := idx.ListByNamespace(ctx, "ns", func(m domain.Manifest) error {
 		return nil
 	})
 	// Cancellation may be observed either before the query starts

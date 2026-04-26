@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // helper: build a Store backed by an in-memory index in a fresh
@@ -15,7 +16,10 @@ import (
 func newStore(t *testing.T, opts ...core.StoreOption) core.Store {
 	t.Helper()
 	drv := newDriver(t)
-	all := append([]core.StoreOption{core.WithStoreIndex(newIndex(t))}, opts...)
+	all := append([]core.StoreOption{
+		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
+	}, opts...)
 	s, _, err := core.InitStore(context.Background(), drv, all...)
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
@@ -166,7 +170,7 @@ func TestStore_Capacity_CtxCancelled(t *testing.T) {
 func TestStore_Walk_EmptyStore(t *testing.T) {
 	s := newStore(t)
 	var seen int
-	err := s.Walk(context.Background(), "*", func(m core.Manifest) error {
+	err := s.Walk(context.Background(), "*", func(m domain.Manifest) error {
 		seen++
 		return nil
 	})
@@ -180,7 +184,7 @@ func TestStore_Walk_EmptyStore(t *testing.T) {
 
 func TestStore_Walk_RejectsSystemPrefix(t *testing.T) {
 	s := newStore(t)
-	err := s.Walk(context.Background(), "system.config", func(m core.Manifest) error {
+	err := s.Walk(context.Background(), "system.config", func(m domain.Manifest) error {
 		t.Fatal("callback must not run for reserved namespace")
 		return nil
 	})
@@ -192,10 +196,10 @@ func TestStore_Walk_RejectsSystemPrefix(t *testing.T) {
 func TestStore_Walk_RejectsTooLongNamespace(t *testing.T) {
 	s := newStore(t)
 	long := strings.Repeat("a", 256)
-	err := s.Walk(context.Background(), long, func(m core.Manifest) error {
+	err := s.Walk(context.Background(), long, func(m domain.Manifest) error {
 		return nil
 	})
-	if !errors.Is(err, core.ErrNamespaceTooLong) {
+	if !errors.Is(err, domain.ErrNamespaceTooLong) {
 		t.Fatalf("expected ErrNamespaceTooLong, got %v", err)
 	}
 }
@@ -203,7 +207,7 @@ func TestStore_Walk_RejectsTooLongNamespace(t *testing.T) {
 func TestStore_Walk_AcceptsEmptyAndWildcard(t *testing.T) {
 	s := newStore(t)
 	for _, ns := range []string{"", "*"} {
-		err := s.Walk(context.Background(), ns, func(m core.Manifest) error {
+		err := s.Walk(context.Background(), ns, func(m domain.Manifest) error {
 			return nil
 		})
 		if err != nil {
@@ -216,7 +220,7 @@ func TestStore_Walk_CtxCancelled(t *testing.T) {
 	s := newStore(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := s.Walk(ctx, "*", func(m core.Manifest) error { return nil })
+	err := s.Walk(ctx, "*", func(m domain.Manifest) error { return nil })
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
@@ -232,7 +236,7 @@ func TestStore_WalkSystem_AcceptsAllFourReserved(t *testing.T) {
 		"system.state",
 		"system.config",
 	} {
-		err := s.WalkSystem(context.Background(), ns, func(m core.Manifest) error {
+		err := s.WalkSystem(context.Background(), ns, func(m domain.Manifest) error {
 			return nil
 		})
 		if err != nil {
@@ -244,13 +248,13 @@ func TestStore_WalkSystem_AcceptsAllFourReserved(t *testing.T) {
 func TestStore_WalkSystem_RejectsNonReserved(t *testing.T) {
 	s := newStore(t)
 	for _, ns := range []string{
-		"",                    // empty
-		"*",                   // wildcard
-		"users",               // user namespace
-		"system.unknown",      // unknown system namespace
-		"system.transit.foo",  // sub-prefix, not exact
+		"",                   // empty
+		"*",                  // wildcard
+		"users",              // user namespace
+		"system.unknown",     // unknown system namespace
+		"system.transit.foo", // sub-prefix, not exact
 	} {
-		err := s.WalkSystem(context.Background(), ns, func(m core.Manifest) error {
+		err := s.WalkSystem(context.Background(), ns, func(m domain.Manifest) error {
 			t.Fatalf("callback must not run for %q", ns)
 			return nil
 		})
@@ -267,7 +271,7 @@ func TestStore_StubsM14_StillUnimplemented(t *testing.T) {
 	ctx := context.Background()
 
 	// Methods that arrive with the data path in M1.4.
-	if _, err := s.Put(ctx, core.Artifact{}, core.PutOptions{}); err == nil {
+	if _, err := s.Put(ctx, domain.Artifact{}, core.PutOptions{}); err == nil {
 		t.Error("Put should be a stub")
 	}
 	if _, err := s.Get(ctx, "x", core.GetOptions{}); err == nil {
@@ -294,7 +298,7 @@ func TestStore_StubsM14_StillUnimplemented(t *testing.T) {
 	if _, err := s.ExportRecoveryKit(ctx); err == nil {
 		t.Error("ExportRecoveryKit should be a stub")
 	}
-	if err := s.UpdateConfig(ctx, core.StoreConfig{}); err == nil {
+	if err := s.UpdateConfig(ctx, domain.StoreConfig{}); err == nil {
 		t.Error("UpdateConfig should be a stub")
 	}
 	if _, err := s.ConfigHistory(ctx); err == nil {

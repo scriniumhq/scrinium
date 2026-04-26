@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // ListByNamespace iterates over manifests whose namespace matches
@@ -28,38 +29,50 @@ import (
 func (i *Index) ListByNamespace(
 	ctx context.Context,
 	ns string,
-	cb func(core.Manifest) error,
+	cb func(domain.Manifest) error,
 ) error {
 	const (
+		// We LEFT JOIN blobs to recover original_size and
+		// content_hash, which live on the blobs row (the dedup
+		// key) rather than on the manifest row. LEFT (not INNER)
+		// because future ExternalRef manifests will not have a
+		// matching blobs row — for them the JOIN yields NULLs and
+		// scanManifestRow leaves OriginalSize at zero.
 		queryDefault = `
-			SELECT artifact_id, type, namespace, session_id,
-			       blob_ref, created_at, retention_until
-			FROM manifests
-			WHERE namespace = '' AND type != ?
-			ORDER BY created_at`
+			SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+			       m.blob_ref, m.created_at, m.retention_until,
+			       b.content_hash, b.original_size
+			FROM manifests m
+			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
+			WHERE m.namespace = '' AND m.type != ?
+			ORDER BY m.created_at`
 		queryAny = `
-			SELECT artifact_id, type, namespace, session_id,
-			       blob_ref, created_at, retention_until
-			FROM manifests
-			WHERE namespace NOT LIKE 'system.%' AND type != ?
-			ORDER BY namespace, created_at`
+			SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+			       m.blob_ref, m.created_at, m.retention_until,
+			       b.content_hash, b.original_size
+			FROM manifests m
+			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
+			WHERE m.namespace NOT LIKE 'system.%' AND m.type != ?
+			ORDER BY m.namespace, m.created_at`
 		queryExact = `
-			SELECT artifact_id, type, namespace, session_id,
-			       blob_ref, created_at, retention_until
-			FROM manifests
-			WHERE namespace = ? AND type != ?
-			ORDER BY created_at`
+			SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+			       m.blob_ref, m.created_at, m.retention_until,
+			       b.content_hash, b.original_size
+			FROM manifests m
+			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
+			WHERE m.namespace = ? AND m.type != ?
+			ORDER BY m.created_at`
 	)
 
 	var rows *sql.Rows
 	var err error
 	switch ns {
 	case "*":
-		rows, err = i.db.QueryContext(ctx, queryAny, string(core.ManifestTypePack))
+		rows, err = i.db.QueryContext(ctx, queryAny, string(domain.ManifestTypePack))
 	case "":
-		rows, err = i.db.QueryContext(ctx, queryDefault, string(core.ManifestTypePack))
+		rows, err = i.db.QueryContext(ctx, queryDefault, string(domain.ManifestTypePack))
 	default:
-		rows, err = i.db.QueryContext(ctx, queryExact, ns, string(core.ManifestTypePack))
+		rows, err = i.db.QueryContext(ctx, queryExact, ns, string(domain.ManifestTypePack))
 	}
 	if err != nil {
 		return classifyError(err)
@@ -79,7 +92,7 @@ func (i *Index) ListByNamespace(
 // last-line check, but consistency demands the index honour any
 // query the caller passes. The engine's RollbackSession is the
 // place where mass-delete safety lives.
-func (i *Index) GetBySession(sessionID string) ([]core.ArtifactID, error) {
+func (i *Index) GetBySession(sessionID string) ([]domain.ArtifactID, error) {
 	const stmt = `SELECT artifact_id FROM manifests WHERE session_id = ?`
 	rows, err := i.db.QueryContext(context.Background(), stmt, sessionID)
 	if err != nil {
@@ -87,13 +100,13 @@ func (i *Index) GetBySession(sessionID string) ([]core.ArtifactID, error) {
 	}
 	defer rows.Close()
 
-	var out []core.ArtifactID
+	var out []domain.ArtifactID
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		out = append(out, core.ArtifactID(id))
+		out = append(out, domain.ArtifactID(id))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, classifyError(err)
@@ -184,13 +197,13 @@ func (i *Index) ListUnverified(
 }
 
 // iterateManifestRows is the shared cursor loop for callbacks that
-// take core.Manifest. Centralised because three iteration sites
+// take domain.Manifest. Centralised because three iteration sites
 // (ListByNamespace and the two future query variants) want the
 // same context check / ErrStopWalk / scan pattern.
 func iterateManifestRows(
 	ctx context.Context,
 	rows *sql.Rows,
-	cb func(core.Manifest) error,
+	cb func(domain.Manifest) error,
 ) error {
 	for rows.Next() {
 		if err := ctx.Err(); err != nil {

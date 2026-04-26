@@ -19,8 +19,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/curator"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // HostStorage is the full contract of the transit store. Used
@@ -55,7 +55,7 @@ type HostAdmin interface {
 	// Returns the number of files actually moved. Files missing
 	// from quarantine are silently skipped — the operation is
 	// idempotent.
-	Requeue(ctx context.Context, artifactID *core.ArtifactID) (int, error)
+	Requeue(ctx context.Context, artifactID *domain.ArtifactID) (int, error)
 
 	// ListQuarantined returns a snapshot of the current quarantine
 	// state. It does not block Drain. QuarantineFilter provides
@@ -78,7 +78,7 @@ type QuarantineFilter struct {
 
 // QuarantinedItem describes a single file in quarantine.
 type QuarantinedItem struct {
-	ArtifactID    core.ArtifactID
+	ArtifactID    domain.ArtifactID
 	BlobRef       string
 	Namespace     string
 	OriginalSize  int64

@@ -6,6 +6,8 @@ import (
 	"hash"
 	"strings"
 	"sync"
+
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // transformerRegistry implements TransformerRegistry with an RWMutex
@@ -70,7 +72,7 @@ func (r *hashRegistry) Format(algo string, raw []byte) string {
 	return algo + "-" + hex.EncodeToString(raw)
 }
 
-func (r *hashRegistry) Register(algo string, fn func() hash.Hash) HashRegistry {
+func (r *hashRegistry) Register(algo string, fn func() hash.Hash) domain.HashRegistry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.hashers[algo] = fn

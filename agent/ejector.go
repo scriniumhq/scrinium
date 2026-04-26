@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/event"
 )
 
@@ -23,7 +24,7 @@ type SyncAgent interface {
 	// Trigger schedules an out-of-band synchronisation of the
 	// given artifact between the Target and the Backup Store
 	// outside the event queue.
-	Trigger(ctx context.Context, artifactID core.ArtifactID) error
+	Trigger(ctx context.Context, artifactID domain.ArtifactID) error
 }
 
 // --- Ejector Agent ---
@@ -56,7 +57,7 @@ type Ejector interface {
 	// copy. It returns immediately with an error on a full queue or
 	// a missing artifact. The execution result (success/failure)
 	// is delivered through EventAgentCycle or EventAgentFailed.
-	Eject(ctx context.Context, id core.ArtifactID, targetPath string) error
+	Eject(ctx context.Context, id domain.ArtifactID, targetPath string) error
 }
 
 // NewEjector creates an Ejector instance. Implementation lands in

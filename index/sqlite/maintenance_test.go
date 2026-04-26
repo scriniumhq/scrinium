@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // --- MarkVerified ---
@@ -50,31 +51,31 @@ func TestDeletePacked_RemovesAllEntriesForPack(t *testing.T) {
 	idx := newMemoryIndex(t)
 
 	// Build two packs with two entries each.
-	pack1 := core.Manifest{
+	pack1 := domain.Manifest{
 		ArtifactID:   "pack-1",
-		Type:         core.ManifestTypePack,
-		ContentHash:  "sha256-" + core.ContentHash(strings.Repeat("1", 64)),
+		Type:         domain.ManifestTypePack,
+		ContentHash:  "sha256-" + domain.ContentHash(strings.Repeat("1", 64)),
 		BlobRef:      "pack-blob-1",
 		OriginalSize: 4096,
 		CreatedAt:    time.Now(),
 	}
 	if err := idx.IndexManifest(pack1, newPhysAddr("packs/p1"), nil, []core.PackedEntry{
-		{ArtifactID: "a1", BlobRef: "b1", BlobSize: 100, ContentHash: "sha256-" + core.ContentHash(strings.Repeat("a", 64)), PipelineParams: []byte{}},
-		{ArtifactID: "a2", BlobRef: "b2", BlobSize: 200, ContentHash: "sha256-" + core.ContentHash(strings.Repeat("b", 64)), PipelineParams: []byte{}},
+		{ArtifactID: "a1", BlobRef: "b1", BlobSize: 100, ContentHash: "sha256-" + domain.ContentHash(strings.Repeat("a", 64)), PipelineParams: []byte{}},
+		{ArtifactID: "a2", BlobRef: "b2", BlobSize: 200, ContentHash: "sha256-" + domain.ContentHash(strings.Repeat("b", 64)), PipelineParams: []byte{}},
 	}); err != nil {
 		t.Fatalf("setup pack-1: %v", err)
 	}
 
-	pack2 := core.Manifest{
+	pack2 := domain.Manifest{
 		ArtifactID:   "pack-2",
-		Type:         core.ManifestTypePack,
-		ContentHash:  "sha256-" + core.ContentHash(strings.Repeat("2", 64)),
+		Type:         domain.ManifestTypePack,
+		ContentHash:  "sha256-" + domain.ContentHash(strings.Repeat("2", 64)),
 		BlobRef:      "pack-blob-2",
 		OriginalSize: 4096,
 		CreatedAt:    time.Now(),
 	}
 	if err := idx.IndexManifest(pack2, newPhysAddr("packs/p2"), nil, []core.PackedEntry{
-		{ArtifactID: "c1", BlobRef: "d1", BlobSize: 300, ContentHash: "sha256-" + core.ContentHash(strings.Repeat("c", 64)), PipelineParams: []byte{}},
+		{ArtifactID: "c1", BlobRef: "d1", BlobSize: 300, ContentHash: "sha256-" + domain.ContentHash(strings.Repeat("c", 64)), PipelineParams: []byte{}},
 	}); err != nil {
 		t.Fatalf("setup pack-2: %v", err)
 	}
@@ -114,8 +115,8 @@ func TestVacuumInto_CreatesSnapshot(t *testing.T) {
 	// Seed some data so the snapshot is a meaningful copy.
 	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
 		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
-	insertManifest(t, idx, core.Manifest{
-		ArtifactID: "art-1", Type: core.ManifestTypeBlob, Namespace: "ns",
+	insertManifest(t, idx, domain.Manifest{
+		ArtifactID: "art-1", Type: domain.ManifestTypeBlob, Namespace: "ns",
 		BlobRef: "blob-1", CreatedAt: time.Now(),
 	})
 

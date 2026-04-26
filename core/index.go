@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"time"
+
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // BlobExistStatus is the result of ExistsByHash. The tombstone
@@ -32,14 +34,14 @@ type PackedBlobInfo struct {
 // IndexManifest when creating a pack manifest. It carries
 // everything required to insert a row into the packed_blobs table.
 type PackedEntry struct {
-	ArtifactID     ArtifactID
+	ArtifactID     domain.ArtifactID
 	BlobRef        string
 	ManifestOffset int64
 	ManifestSize   int64
 	BlobOffset     int64
 	BlobSize       int64
 
-	ContentHash    ContentHash
+	ContentHash    domain.ContentHash
 	Namespace      string
 	SessionID      string
 	PipelineParams []byte
@@ -61,7 +63,7 @@ type StoreIndex interface {
 	//   - pack: transitive registration of every packed artifact via
 	//     packedEntries (see docs/2. Internals/09 §9.2.1).
 	IndexManifest(
-		m Manifest,
+		m domain.Manifest,
 		addr PhysicalAddress,
 		chunkRefs []string,
 		packedEntries []PackedEntry,
@@ -70,7 +72,7 @@ type StoreIndex interface {
 	// DeleteManifest performs a logical deletion: a single
 	// transaction, DELETE manifest + decrement ref_count for each
 	// blobRef.
-	DeleteManifest(artifactID ArtifactID, blobRefs []string) error
+	DeleteManifest(artifactID domain.ArtifactID, blobRefs []string) error
 
 	// RebindBlob moves a blob from Workspace: Host to
 	// Workspace: Location after a successful Drain. ref_count is
@@ -85,11 +87,11 @@ type StoreIndex interface {
 	// ExistsByContent is an exact check by the composite key
 	// (ContentHash, OriginalSize). The deduplication key for regular
 	// blobs.
-	ExistsByContent(hash ContentHash, originalSize int64) (blobRef string, exists bool, err error)
+	ExistsByContent(hash domain.ContentHash, originalSize int64) (blobRef string, exists bool, err error)
 
 	// ExistsByHash is the check by ContentHash with tombstone
 	// distinction. Used by chunker.Wrapper for chunk deduplication.
-	ExistsByHash(hash ContentHash) (BlobExistStatus, error)
+	ExistsByHash(hash domain.ContentHash) (BlobExistStatus, error)
 
 	// GetRefCount returns the current reference count of a blob.
 	GetRefCount(blobRef string) (int, error)
@@ -98,7 +100,7 @@ type StoreIndex interface {
 	// ArtifactID of a packed artifact. The second return value is
 	// false when the artifact is not packed (it lives in /blobs/ or
 	// /manifests/ as usual).
-	LookupPacked(artifactID ArtifactID) (PackedBlobInfo, bool, error)
+	LookupPacked(artifactID domain.ArtifactID) (PackedBlobInfo, bool, error)
 
 	// Iteration. Implementations are required to stream through the
 	// callback rather than load the whole result set into memory.
@@ -106,7 +108,7 @@ type StoreIndex interface {
 	// ListByNamespace iterates over manifests with the given
 	// namespace. "*" — all namespaces; "" — only the default
 	// (empty). Returns blob and toc; pack is excluded.
-	ListByNamespace(ctx context.Context, ns string, cb func(Manifest) error) error
+	ListByNamespace(ctx context.Context, ns string, cb func(domain.Manifest) error) error
 
 	// ListOrphanBlobs iterates over blobs with ref_count = 0. Used
 	// by the GC Agent.
@@ -118,7 +120,7 @@ type StoreIndex interface {
 
 	// GetBySession returns every ArtifactID with the given
 	// SessionID. Used by RollbackSession.
-	GetBySession(sessionID string) ([]ArtifactID, error)
+	GetBySession(sessionID string) ([]domain.ArtifactID, error)
 
 	// Verification and maintenance.
 

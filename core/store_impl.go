@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
 )
 
@@ -31,7 +32,7 @@ type store struct {
 	// Configuration. activeConfig is the StoreConfig in effect for
 	// new operations; it is replaced atomically by UpdateConfig.
 	cfgMu        sync.RWMutex
-	activeConfig StoreConfig
+	activeConfig domain.StoreConfig
 
 	// State machine.
 	stateMu     sync.RWMutex
@@ -40,7 +41,7 @@ type store struct {
 
 	// Plugin registries — populated at construction; never mutated
 	// after that.
-	hashes       HashRegistry
+	hashes       domain.HashRegistry
 	transformers TransformerRegistry
 	keyResolver  KeyResolver
 
@@ -175,7 +176,7 @@ func (s *store) Capacity(ctx context.Context) (StorageInfo, error) {
 // excluded by both the index ("*" wildcard skips system.*) and by
 // us at the API surface (an explicit "system.foo" gets
 // ErrReservedNamespace before the index sees it).
-func (s *store) Walk(ctx context.Context, namespace string, cb func(Manifest) error) error {
+func (s *store) Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -198,7 +199,7 @@ func (s *store) Walk(ctx context.Context, namespace string, cb func(Manifest) er
 // does not yet block calls based on token contents. Tracking:
 // 4. API Reference/01 §1.3.1 (WithCapabilityToken) and the
 // related authorisation work in M2.
-func (s *store) WalkSystem(ctx context.Context, namespace string, cb func(Manifest) error) error {
+func (s *store) WalkSystem(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -244,7 +245,7 @@ func (s *store) checkOperational() error {
 // argument. See docs §4.1.
 func validateUserNamespace(ns string) error {
 	if len(ns) > 255 {
-		return ErrNamespaceTooLong
+		return domain.ErrNamespaceTooLong
 	}
 	// "*" and "" are valid (wildcard / default namespace). Any
 	// "system." prefix is reserved.
@@ -283,33 +284,29 @@ func (s *store) RotateKEK(ctx context.Context) error {
 	return errors.New("core.Store.RotateKEK: not implemented")
 }
 
-func (s *store) UpdateConfig(ctx context.Context, cfg StoreConfig) error {
+func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {
 	return errors.New("core.Store.UpdateConfig: not implemented")
 }
 
-func (s *store) ConfigHistory(ctx context.Context) ([]StoreConfig, error) {
+func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
 	return nil, errors.New("core.Store.ConfigHistory: not implemented")
 }
 
 // --- DataStore: stubs implemented in M1.4 ---
 
-func (s *store) Put(ctx context.Context, a Artifact, opts PutOptions) (ArtifactID, error) {
-	return "", errors.New("core.Store.Put: not implemented")
-}
-
-func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType BlobType) (ContentHash, error) {
+func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType BlobType) (domain.ContentHash, error) {
 	return "", errors.New("core.Store.PutBlob: not implemented")
 }
 
-func (s *store) Get(ctx context.Context, id ArtifactID, opts GetOptions) (ReadHandle, error) {
+func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts GetOptions) (ReadHandle, error) {
 	return nil, errors.New("core.Store.Get: not implemented")
 }
 
-func (s *store) Delete(ctx context.Context, id ArtifactID) error {
+func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	return errors.New("core.Store.Delete: not implemented")
 }
 
-func (s *store) Verify(ctx context.Context, id ArtifactID) error {
+func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 	return errors.New("core.Store.Verify: not implemented")
 }
 

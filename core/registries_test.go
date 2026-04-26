@@ -7,6 +7,8 @@ import (
 	"hash/crc32"
 	"io"
 	"testing"
+
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // --- HashRegistry tests ---
@@ -91,8 +93,8 @@ func TestHashRegistry_RoundTrip(t *testing.T) {
 
 type stubFactory struct{ id string }
 
-func (f *stubFactory) NewEncoder() Encoder                { return nil }
-func (f *stubFactory) NewDecoder(_ PipelineStage) Decoder { return nil }
+func (f *stubFactory) NewEncoder() Encoder                       { return nil }
+func (f *stubFactory) NewDecoder(_ domain.PipelineStage) Decoder { return nil }
 
 func TestTransformerRegistry_RegisterAndGet(t *testing.T) {
 	r := NewTransformerRegistry()
@@ -191,4 +193,3 @@ var _ io.Reader = (*nopReader)(nil)
 type nopReader struct{}
 
 func (nopReader) Read(p []byte) (int, error) { return 0, io.EOF }
-

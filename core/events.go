@@ -1,6 +1,10 @@
 package core
 
-import "time"
+import (
+	"time"
+
+	"github.com/rkurbatov/scrinium/domain"
+)
 
 // Engine event-type constants. Used as the value of
 // event.Event.Type. Curator-level events (curator.*), index events
@@ -36,7 +40,7 @@ const (
 // Target. After Drain (at the Curator level) EventDrainCompleted
 // is emitted.
 type ManifestSavedPayload struct {
-	Manifest  Manifest
+	Manifest  domain.Manifest
 	IsTransit bool
 }
 
@@ -45,7 +49,7 @@ type ManifestSavedPayload struct {
 // deletion is rejected by retention or policy, the event is not
 // emitted.
 type ArtifactDeletedPayload struct {
-	ArtifactID ArtifactID
+	ArtifactID domain.ArtifactID
 }
 
 // BlobPhysicallyDeletedPayload is the payload of
@@ -79,7 +83,7 @@ type CapacityWarningPayload struct {
 // ScrubFailedPayload is the payload of EventScrubFailed. Emitted
 // by the Scrub Agent or by Store.Verify on a hash divergence.
 type ScrubFailedPayload struct {
-	ArtifactID ArtifactID
+	ArtifactID domain.ArtifactID
 	Err        error
 }
 

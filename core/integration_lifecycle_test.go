@@ -9,6 +9,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
+	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver/localfs"
 	sqliteindex "github.com/rkurbatov/scrinium/index/sqlite"
 )
@@ -17,21 +18,21 @@ import (
 // for milestone M1.3. It exercises the full lifecycle of a Store
 // through real on-disk artifacts:
 //
-//   1. InitStore creates store.json and a SQLite index file on
-//      a localfs-backed driver. The Store is in StateUnlocked.
-//   2. Capacity, Walk, and SetMaintenanceMode work on the open
-//      Store.
-//   3. The caller (= the test) closes the StoreIndex when done.
-//      This is the documented DI-style ownership: the index is
-//      injected from the outside, so the outside must close it.
-//      core itself does not close caller-owned dependencies.
-//   4. A second process / session reopens the Location with a
-//      fresh sqlite.NewStore over the SAME on-disk file. It also
-//      observes StateUnlocked and the same StoreID — the
-//      descriptor and the index both survived the round-trip.
-//   5. ErrConfigMismatch is raised when the second open passes a
-//      WithConfig that disagrees with the descriptor on an
-//      immutable parameter.
+//  1. InitStore creates store.json and a SQLite index file on
+//     a localfs-backed driver. The Store is in StateUnlocked.
+//  2. Capacity, Walk, and SetMaintenanceMode work on the open
+//     Store.
+//  3. The caller (= the test) closes the StoreIndex when done.
+//     This is the documented DI-style ownership: the index is
+//     injected from the outside, so the outside must close it.
+//     core itself does not close caller-owned dependencies.
+//  4. A second process / session reopens the Location with a
+//     fresh sqlite.NewStore over the SAME on-disk file. It also
+//     observes StateUnlocked and the same StoreID — the
+//     descriptor and the index both survived the round-trip.
+//  5. ErrConfigMismatch is raised when the second open passes a
+//     WithConfig that disagrees with the descriptor on an
+//     immutable parameter.
 //
 // This test deliberately uses on-disk SQLite (not :memory:) so it
 // exercises the realistic deployment shape and catches any
@@ -60,10 +61,10 @@ func TestM13_FullLifecycle_DiskBacked(t *testing.T) {
 		t.Fatalf("sqlite.NewStore (phase 1): %v", err)
 	}
 
-	custom := core.StoreConfig{
-		PathTopology:     core.PathTopologyFlat,
-		ContentHasher:    core.HashBLAKE3,
-		ManifestEncoding: core.ManifestEncodingBinary,
+	custom := domain.StoreConfig{
+		PathTopology:     domain.PathTopologyFlat,
+		ContentHasher:    domain.HashBLAKE3,
+		ManifestEncoding: domain.ManifestEncodingBinary,
 	}
 	s1, kit, err := core.InitStore(context.Background(), drv1,
 		core.WithConfig(custom),
@@ -117,7 +118,7 @@ func TestM13_FullLifecycle_DiskBacked(t *testing.T) {
 
 	// Walk is empty.
 	var walked int
-	if err := s1.Walk(context.Background(), "*", func(m core.Manifest) error {
+	if err := s1.Walk(context.Background(), "*", func(m domain.Manifest) error {
 		walked++
 		return nil
 	}); err != nil {
@@ -147,11 +148,11 @@ func TestM13_FullLifecycle_DiskBacked(t *testing.T) {
 		Workspace: core.WorkspaceLocation,
 		Path:      "blobs/aa/bb/blob-test",
 	}
-	manifest := core.Manifest{
+	manifest := domain.Manifest{
 		ArtifactID:   "art-test",
-		Type:         core.ManifestTypeBlob,
+		Type:         domain.ManifestTypeBlob,
 		Namespace:    "users",
-		ContentHash:  "sha256-" + core.ContentHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+		ContentHash:  "sha256-" + domain.ContentHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
 		BlobRef:      "blob-test",
 		OriginalSize: 1024,
 	}
@@ -246,8 +247,8 @@ func TestM13_FullLifecycle_DiskBacked(t *testing.T) {
 	}
 	defer closeIndex(idx3)
 
-	conflict := core.StoreConfig{
-		PathTopology: core.PathTopologySharded, // descriptor has Flat
+	conflict := domain.StoreConfig{
+		PathTopology: domain.PathTopologySharded, // descriptor has Flat
 	}
 	_, err = core.OpenStore(context.Background(), drv3,
 		core.WithConfig(conflict),

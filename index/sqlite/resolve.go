@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // Resolve returns the physical address of a blob. It is the
@@ -47,7 +48,7 @@ func (i *Index) Resolve(blobRef string) (core.PhysicalAddress, error) {
 //
 // Returns (blobRef, true, nil) when found; ("", false, nil) when
 // absent; and ("", false, err) for unexpected failures.
-func (i *Index) ExistsByContent(hash core.ContentHash, originalSize int64) (string, bool, error) {
+func (i *Index) ExistsByContent(hash domain.ContentHash, originalSize int64) (string, bool, error) {
 	const stmt = `
 		SELECT blob_ref FROM blobs
 		WHERE content_hash = ? AND original_size = ?
@@ -81,7 +82,7 @@ func (i *Index) ExistsByContent(hash core.ContentHash, originalSize int64) (stri
 // uses the index for liveness (ref_count > 0) and the driver for
 // physical state. Until M3.2 (GC) ties them together, BlobIsTombstone
 // returns are not produced.
-func (i *Index) ExistsByHash(hash core.ContentHash) (core.BlobExistStatus, error) {
+func (i *Index) ExistsByHash(hash domain.ContentHash) (core.BlobExistStatus, error) {
 	const stmt = `SELECT 1 FROM blobs WHERE content_hash = ? LIMIT 1`
 	var one int
 	err := i.db.QueryRowContext(context.Background(), stmt, string(hash)).Scan(&one)
@@ -125,7 +126,7 @@ func (i *Index) GetRefCount(blobRef string) (int, error) {
 // it is the only way to know whether to open a sliced range read
 // or a full blob. A missing packed_blobs row is the normal case:
 // most artifacts are not packed.
-func (i *Index) LookupPacked(artifactID core.ArtifactID) (core.PackedBlobInfo, bool, error) {
+func (i *Index) LookupPacked(artifactID domain.ArtifactID) (core.PackedBlobInfo, bool, error) {
 	const stmt = `
 		SELECT pack_blob_ref, manifest_offset, manifest_size,
 		       blob_offset, blob_size, COALESCE(pipeline_params, x'')
@@ -151,29 +152,42 @@ func (i *Index) LookupPacked(artifactID core.ArtifactID) (core.PackedBlobInfo, b
 // consume them. Kept unexported and minimal. ---
 
 // scanManifestRow scans one manifests-table row into a partial
-// core.Manifest. Used by Walk-style methods. Returns a Manifest
+// domain.Manifest. Used by Walk-style methods. Returns a Manifest
 // with the fields we actually persist; the rest (Pipeline,
 // LayoutHeader, InlineBlob, Metadata, etc.) are absent — the
 // caller reconstructs them from the manifest file on disk if
 // needed. This is intentional: the index is the cheap routing
 // layer, not the source of truth for manifest content.
-func scanManifestRow(rows *sql.Rows) (core.Manifest, error) {
+// scanManifestRow scans one row produced by the JOIN
+// `manifests m LEFT JOIN blobs b USING (blob_ref)`. The blobs side
+// supplies content_hash and original_size; nullable here because
+// future ExternalRef manifests have no blobs row.
+func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	var (
 		artifactID, mtype, namespace, sessionID, blobRef string
 		createdAt, retentionUntil                        int64
+		contentHash                                      sql.NullString
+		originalSize                                     sql.NullInt64
 	)
 	if err := rows.Scan(
 		&artifactID, &mtype, &namespace, &sessionID,
 		&blobRef, &createdAt, &retentionUntil,
+		&contentHash, &originalSize,
 	); err != nil {
-		return core.Manifest{}, err
+		return domain.Manifest{}, err
 	}
-	m := core.Manifest{
-		ArtifactID: core.ArtifactID(artifactID),
-		Type:       core.ManifestType(mtype),
+	m := domain.Manifest{
+		ArtifactID: domain.ArtifactID(artifactID),
+		Type:       domain.ManifestType(mtype),
 		Namespace:  namespace,
 		SessionID:  sessionID,
-		BlobRef:    core.BlobRef(blobRef),
+		BlobRef:    domain.BlobRef(blobRef),
+	}
+	if contentHash.Valid {
+		m.ContentHash = domain.ContentHash(contentHash.String)
+	}
+	if originalSize.Valid {
+		m.OriginalSize = originalSize.Int64
 	}
 	m.CreatedAt = nsToTime(createdAt)
 	if retentionUntil != 0 {

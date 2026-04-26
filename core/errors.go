@@ -91,10 +91,6 @@ var ErrRecoveryKitCorrupted = errors.New("core: recovery kit corrupted")
 // Recovery Kit.
 var ErrInvalidRecoveryKey = errors.New("core: invalid recovery key")
 
-// ErrInvalidKDFParams — InitStore with KDFParams that fail the
-// minimum-validity check: Time < 1, Memory < 19456 KiB, Threads < 1.
-var ErrInvalidKDFParams = errors.New("core: invalid KDF params")
-
 // --- Encryption and key resolution ---
 
 // ErrKeyNotFound — the KeyResolver does not know the key for the
@@ -110,27 +106,6 @@ var ErrDecryptionFailed = errors.New("core: decryption failed")
 // ErrInvalidConfig — a StoreConfig parameter is out of range or
 // violates the Rules Engine.
 var ErrInvalidConfig = errors.New("core: invalid config")
-
-// ErrInvalidTombstoneGracePeriod — TombstoneGracePeriod < 1h. A
-// dedicated sentinel: this is the only parameter with runtime
-// implications for multi-host safety.
-var ErrInvalidTombstoneGracePeriod = errors.New("core: invalid tombstone grace period")
-
-// ErrNamespaceTooLong — namespace > 255 bytes.
-var ErrNamespaceTooLong = errors.New("core: namespace too long")
-
-// ErrSessionIDTooLong — SessionID > 255 bytes.
-var ErrSessionIDTooLong = errors.New("core: session ID too long")
-
-// ErrEmptySessionID — RollbackSession called with an empty string;
-// guards against a mass deletion of sessionless artifacts.
-var ErrEmptySessionID = errors.New("core: empty session ID")
-
-// ErrMetadataTooLarge — Artifact.Metadata > 64 KB.
-var ErrMetadataTooLarge = errors.New("core: metadata too large")
-
-// ErrManifestTooLarge — serialised Manifest > 1 MB.
-var ErrManifestTooLarge = errors.New("core: manifest too large")
 
 // ErrReservedNamespace — an attempt to use "*" or the "system."
 // prefix without a CapabilityToken.
@@ -155,29 +130,7 @@ var ErrRetentionNotExpired = errors.New("core: retention not expired")
 // Backup with ReadPolicy: Never; AllowColdRead is required.
 var ErrArchivedArtifact = errors.New("core: archived artifact")
 
-// --- Verification and integrity ---
-
-// ErrCorruptedManifest — the hash of the manifest file does not
-// match its ArtifactID.
-var ErrCorruptedManifest = errors.New("core: corrupted manifest")
-
-// ErrCorruptedBlob — the hash of the physical blob does not match
-// its BlobRef.
-var ErrCorruptedBlob = errors.New("core: corrupted blob")
-
-// ErrCorruptedContent — after the inverse Pipeline the hash does
-// not match ContentHash.
-var ErrCorruptedContent = errors.New("core: corrupted content")
-
 // --- Formats and compatibility ---
-
-// ErrUnsupportedSchemaVersion — the manifest's schema_version is
-// not supported.
-var ErrUnsupportedSchemaVersion = errors.New("core: unsupported schema version")
-
-// ErrUnknownPackFormat — the magic bytes of a .pack volume are
-// unrecognised.
-var ErrUnknownPackFormat = errors.New("core: unknown pack format")
 
 // ErrUnsupportedURIScheme — the driver does not support the URI
 // scheme. Shared sentinel with driver.ErrUnsupportedURIScheme.

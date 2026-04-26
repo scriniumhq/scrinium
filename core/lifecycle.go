@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
+	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
 )
 
@@ -38,10 +39,10 @@ type storeOptions struct {
 	// functions are wired up.
 	forceReinit     bool
 	purgeOnReinit   bool
-	cfg             *StoreConfig
+	cfg             *domain.StoreConfig
 	storeIndex      StoreIndex
 	publisher       Publisher
-	hashRegistry    HashRegistry
+	hashRegistry    domain.HashRegistry
 	readRegistry    TransformerRegistry
 	keyResolver     KeyResolver
 	passphrase      PassphraseProvider
@@ -67,7 +68,7 @@ func WithPurgeOnReinit() StoreOption {
 // fixes the immutable parameters. At OpenStore it is checked
 // against the configuration loaded from system.config/current —
 // a divergence in immutable fields produces ErrConfigMismatch.
-func WithConfig(cfg StoreConfig) StoreOption {
+func WithConfig(cfg domain.StoreConfig) StoreOption {
 	return func(o *storeOptions) { o.cfg = &cfg }
 }
 
@@ -85,7 +86,7 @@ func WithPublisher(p Publisher) StoreOption {
 // WithHashRegistry provides the registry of hash algorithms.
 // Required. Used by the Pipeline runner, Recovery Agent, and
 // parsers.
-func WithHashRegistry(r HashRegistry) StoreOption {
+func WithHashRegistry(r domain.HashRegistry) StoreOption {
 	return func(o *storeOptions) { o.hashRegistry = r }
 }
 
@@ -160,7 +161,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// Apply defaults to the requested config (the user may have
 	// passed nothing, or only some fields).
-	cfg := StoreConfig{}
+	cfg := domain.StoreConfig{}
 	if o.cfg != nil {
 		cfg = *o.cfg
 	}
@@ -361,7 +362,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	// non-Plain is rejected — better an explicit "not implemented"
 	// than a silently broken Store.
 	state := StateUnlocked
-	if active.ManifestCrypto != ManifestCryptoPlain {
+	if active.ManifestCrypto != domain.ManifestCryptoPlain {
 		return nil, fmt.Errorf(
 			"core.OpenStore: encrypted Stores (ManifestCrypto=%q) are not supported in M1.3; "+
 				"crypto pipeline lands in M2",
@@ -391,8 +392,8 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 // omitted). The result is validated through validateImmutableConfig
 // so a corrupted descriptor cannot hand a malformed config to the
 // Store.
-func buildActiveConfig(desc *descriptor.Descriptor, overlay *StoreConfig) (StoreConfig, error) {
-	cfg := StoreConfig{}
+func buildActiveConfig(desc *descriptor.Descriptor, overlay *domain.StoreConfig) (domain.StoreConfig, error) {
+	cfg := domain.StoreConfig{}
 	if overlay != nil {
 		cfg = *overlay
 	}
@@ -404,15 +405,15 @@ func buildActiveConfig(desc *descriptor.Descriptor, overlay *StoreConfig) (Store
 	// caught separately by validateAgainstDescriptor — here we
 	// just ensure the resulting StoreConfig matches what is
 	// actually persisted.
-	cfg.PathTopology = PathTopology(desc.PathTopology)
-	cfg.ManifestStorage = ManifestStorage(desc.ManifestStorage)
-	cfg.ManifestEncoding = ManifestEncoding(desc.ManifestEncoding)
-	cfg.ManifestCrypto = ManifestCrypto(desc.ManifestCrypto)
-	cfg.ContentHasher = ContentHashAlgorithm(desc.ContentHasher)
+	cfg.PathTopology = domain.PathTopology(desc.PathTopology)
+	cfg.ManifestStorage = domain.ManifestStorage(desc.ManifestStorage)
+	cfg.ManifestEncoding = domain.ManifestEncoding(desc.ManifestEncoding)
+	cfg.ManifestCrypto = domain.ManifestCrypto(desc.ManifestCrypto)
+	cfg.ContentHasher = domain.ContentHashAlgorithm(desc.ContentHasher)
 	cfg.DeletionPolicyLock = desc.DeletionPolicyLock
 
 	if err := validateImmutableConfig(cfg); err != nil {
-		return StoreConfig{}, fmt.Errorf("%w: descriptor produced invalid config: %v",
+		return domain.StoreConfig{}, fmt.Errorf("%w: descriptor produced invalid config: %v",
 			ErrStoreCorrupted, err)
 	}
 	return cfg, nil
@@ -435,7 +436,7 @@ func buildActiveConfig(desc *descriptor.Descriptor, overlay *StoreConfig) (Store
 // pass an explicit value to opt into the check; a default value
 // passes silently. This matches the contract documented in
 // 4. API Reference/01 Lifecycle §1.2.
-func validateAgainstDescriptor(req StoreConfig, desc *descriptor.Descriptor) error {
+func validateAgainstDescriptor(req domain.StoreConfig, desc *descriptor.Descriptor) error {
 	mismatches := []string{}
 
 	if req.PathTopology != "" && string(req.PathTopology) != desc.PathTopology {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // helper: count rows in a table for assertion purposes.
@@ -35,13 +36,13 @@ func refCount(t *testing.T, idx *Index, blobRef string) int {
 }
 
 // helper: build a minimal blob manifest.
-func newBlobManifest(id, blobRef string) core.Manifest {
-	return core.Manifest{
-		ArtifactID:   core.ArtifactID(id),
-		Type:         core.ManifestTypeBlob,
+func newBlobManifest(id, blobRef string) domain.Manifest {
+	return domain.Manifest{
+		ArtifactID:   domain.ArtifactID(id),
+		Type:         domain.ManifestTypeBlob,
 		Namespace:    "test",
-		ContentHash:  core.ContentHash("sha256-" + strings.Repeat("a", 64)),
-		BlobRef:      core.BlobRef(blobRef),
+		ContentHash:  domain.ContentHash("sha256-" + strings.Repeat("a", 64)),
+		BlobRef:      domain.BlobRef(blobRef),
 		OriginalSize: 1024,
 		CreatedAt:    time.Now(),
 	}
@@ -149,11 +150,11 @@ func TestIndexManifest_TOC_RegistersChunks(t *testing.T) {
 		}
 	}
 
-	tocManifest := core.Manifest{
+	tocManifest := domain.Manifest{
 		ArtifactID:   "art-toc",
-		Type:         core.ManifestTypeTOC,
+		Type:         domain.ManifestTypeTOC,
 		Namespace:    "test",
-		ContentHash:  "sha256-" + core.ContentHash(strings.Repeat("0", 64)),
+		ContentHash:  "sha256-" + domain.ContentHash(strings.Repeat("0", 64)),
 		BlobRef:      "toc-blob",
 		OriginalSize: 3072,
 		CreatedAt:    time.Now(),
@@ -182,11 +183,11 @@ func TestIndexManifest_TOC_RegistersChunks(t *testing.T) {
 func TestIndexManifest_TOC_MissingChunkFails(t *testing.T) {
 	idx := newMemoryIndex(t)
 
-	tocManifest := core.Manifest{
+	tocManifest := domain.Manifest{
 		ArtifactID:   "art-toc",
-		Type:         core.ManifestTypeTOC,
+		Type:         domain.ManifestTypeTOC,
 		Namespace:    "test",
-		ContentHash:  "sha256-" + core.ContentHash(strings.Repeat("0", 64)),
+		ContentHash:  "sha256-" + domain.ContentHash(strings.Repeat("0", 64)),
 		BlobRef:      "toc-blob",
 		OriginalSize: 3072,
 		CreatedAt:    time.Now(),
@@ -210,10 +211,10 @@ func TestIndexManifest_TOC_MissingChunkFails(t *testing.T) {
 func TestIndexManifest_Pack_RegistersEntries(t *testing.T) {
 	idx := newMemoryIndex(t)
 
-	packManifest := core.Manifest{
+	packManifest := domain.Manifest{
 		ArtifactID:   "pack-1",
-		Type:         core.ManifestTypePack,
-		ContentHash:  "sha256-" + core.ContentHash(strings.Repeat("p", 64)),
+		Type:         domain.ManifestTypePack,
+		ContentHash:  "sha256-" + domain.ContentHash(strings.Repeat("p", 64)),
 		BlobRef:      "pack-blob-1",
 		OriginalSize: 65536,
 		CreatedAt:    time.Now(),
@@ -226,7 +227,7 @@ func TestIndexManifest_Pack_RegistersEntries(t *testing.T) {
 			ManifestSize:   200,
 			BlobOffset:     200,
 			BlobSize:       1024,
-			ContentHash:    core.ContentHash("sha256-" + strings.Repeat("1", 64)),
+			ContentHash:    domain.ContentHash("sha256-" + strings.Repeat("1", 64)),
 			PipelineParams: []byte{},
 		},
 		{
@@ -236,7 +237,7 @@ func TestIndexManifest_Pack_RegistersEntries(t *testing.T) {
 			ManifestSize:   200,
 			BlobOffset:     1424,
 			BlobSize:       2048,
-			ContentHash:    core.ContentHash("sha256-" + strings.Repeat("2", 64)),
+			ContentHash:    domain.ContentHash("sha256-" + strings.Repeat("2", 64)),
 			PipelineParams: []byte{},
 		},
 	}

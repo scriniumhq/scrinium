@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
 )
 
@@ -17,17 +18,17 @@ type DataStore interface {
 	// performs deduplication, and writes the blob and the manifest.
 	// It returns ArtifactID — the cryptographic hash of the
 	// serialised manifest file.
-	Put(ctx context.Context, a Artifact, opts PutOptions) (ArtifactID, error)
+	Put(ctx context.Context, a domain.Artifact, opts PutOptions) (domain.ArtifactID, error)
 
 	// PutBlob writes an anonymous blob without creating a manifest.
 	// Not a client method: it is used by level-3 decorators
 	// (chunker.Wrapper for writing anonymous chunks).
-	PutBlob(ctx context.Context, r io.Reader, blobType BlobType) (ContentHash, error)
+	PutBlob(ctx context.Context, r io.Reader, blobType BlobType) (domain.ContentHash, error)
 
 	// Get opens an artifact for reading. It returns a ReadHandle —
 	// a streaming primitive with lazy resolution of the physical
 	// address.
-	Get(ctx context.Context, id ArtifactID, opts GetOptions) (ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts GetOptions) (ReadHandle, error)
 
 	// Management and verification.
 
@@ -35,13 +36,13 @@ type DataStore interface {
 	// file from disk and decrements ref_count for every related blob
 	// in a single StoreIndex transaction. Physical removal is
 	// delegated to the GC Agent.
-	Delete(ctx context.Context, id ArtifactID) error
+	Delete(ctx context.Context, id domain.ArtifactID) error
 
 	// Verify performs a full integrity check of an artifact: it
 	// re-hashes the manifest and the blob and runs the inverse
 	// Pipeline with ContentHash verification. It ignores
 	// CapNativeChecksum and VerifyOnRead.
-	Verify(ctx context.Context, id ArtifactID) error
+	Verify(ctx context.Context, id domain.ArtifactID) error
 
 	// RollbackSession is a group rollback of every artifact carrying
 	// the given SessionID. It is idempotent: when interrupted, a
@@ -53,11 +54,11 @@ type DataStore interface {
 	// Walk iterates over user manifests. namespace = "*" — every user
 	// namespace; an empty string — only the default one.
 	// system.* is unreachable through Walk.
-	Walk(ctx context.Context, namespace string, cb func(Manifest) error) error
+	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
 
 	// WalkSystem iterates over system manifests (the system.*
 	// namespace). It requires a CapabilityToken.
-	WalkSystem(ctx context.Context, namespace string, cb func(Manifest) error) error
+	WalkSystem(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
 
 	// Capacity returns aggregated storage metrics.
 	Capacity(ctx context.Context) (StorageInfo, error)
@@ -94,11 +95,11 @@ type AdminStore interface {
 
 	// UpdateConfig updates the mutable parameters of StoreConfig.
 	// Immutable parameters cannot be changed — ErrConfigMismatch.
-	UpdateConfig(ctx context.Context, cfg StoreConfig) error
+	UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error
 
 	// ConfigHistory returns the full history of configuration
 	// versions.
-	ConfigHistory(ctx context.Context) ([]StoreConfig, error)
+	ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 }
 
 // Store is the union of DataStore and AdminStore. Returned by

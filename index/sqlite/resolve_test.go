@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // helper: insert a blob row directly, bypassing IndexManifest.
@@ -91,7 +92,7 @@ func TestResolve_PackedBlob(t *testing.T) {
 
 func TestExistsByContent_Hit(t *testing.T) {
 	idx := newMemoryIndex(t)
-	hash := core.ContentHash("sha256-" + strings.Repeat("a", 64))
+	hash := domain.ContentHash("sha256-" + strings.Repeat("a", 64))
 	insertBlob(t, idx, "blob-1", string(hash), 1024,
 		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
 
@@ -127,7 +128,7 @@ func TestExistsByContent_Miss(t *testing.T) {
 // must not match each other.
 func TestExistsByContent_HashHitSizeMiss(t *testing.T) {
 	idx := newMemoryIndex(t)
-	hash := core.ContentHash("sha256-" + strings.Repeat("x", 64))
+	hash := domain.ContentHash("sha256-" + strings.Repeat("x", 64))
 	insertBlob(t, idx, "blob-1k", string(hash), 1024,
 		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p1"}, 1)
 
@@ -145,7 +146,7 @@ func TestExistsByContent_HashHitSizeMiss(t *testing.T) {
 
 func TestExistsByHash_Hit(t *testing.T) {
 	idx := newMemoryIndex(t)
-	hash := core.ContentHash("sha256-" + strings.Repeat("a", 64))
+	hash := domain.ContentHash("sha256-" + strings.Repeat("a", 64))
 	insertBlob(t, idx, "blob-1", string(hash), 1024,
 		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
 
@@ -175,7 +176,7 @@ func TestExistsByHash_Miss(t *testing.T) {
 // it only checks "have we seen this content before?".
 func TestExistsByHash_IgnoresSize(t *testing.T) {
 	idx := newMemoryIndex(t)
-	hash := core.ContentHash("sha256-" + strings.Repeat("x", 64))
+	hash := domain.ContentHash("sha256-" + strings.Repeat("x", 64))
 	insertBlob(t, idx, "blob-1k", string(hash), 1024,
 		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p1"}, 1)
 	insertBlob(t, idx, "blob-2k", string(hash), 2048,
@@ -239,10 +240,10 @@ func TestLookupPacked_Hit(t *testing.T) {
 	// Register a pack volume with two packed entries via the
 	// regular pack-manifest path; we want the realistic insertion
 	// shape, not a hand-built INSERT.
-	packManifest := core.Manifest{
+	packManifest := domain.Manifest{
 		ArtifactID:   "pack-1",
-		Type:         core.ManifestTypePack,
-		ContentHash:  "sha256-" + core.ContentHash(strings.Repeat("p", 64)),
+		Type:         domain.ManifestTypePack,
+		ContentHash:  "sha256-" + domain.ContentHash(strings.Repeat("p", 64)),
 		BlobRef:      "pack-blob-1",
 		OriginalSize: 65536,
 		CreatedAt:    time.Now(),
@@ -255,7 +256,7 @@ func TestLookupPacked_Hit(t *testing.T) {
 			ManifestSize:   200,
 			BlobOffset:     200,
 			BlobSize:       1024,
-			ContentHash:    core.ContentHash("sha256-" + strings.Repeat("1", 64)),
+			ContentHash:    domain.ContentHash("sha256-" + strings.Repeat("1", 64)),
 			PipelineParams: []byte{0xde, 0xad, 0xbe, 0xef},
 		},
 	}

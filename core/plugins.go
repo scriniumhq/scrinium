@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/event"
 )
 
@@ -64,7 +65,7 @@ type TransformResult struct {
 // zstd dictionary, a common encryption key) belongs to the factory.
 type TransformerFactory interface {
 	NewEncoder() Encoder
-	NewDecoder(stage PipelineStage) Decoder
+	NewDecoder(stage domain.PipelineStage) Decoder
 }
 
 // TransformerRegistry is the registry of transformation factories
@@ -73,27 +74,6 @@ type TransformerFactory interface {
 type TransformerRegistry interface {
 	Get(id string) (TransformerFactory, error)
 	Register(id string, f TransformerFactory) TransformerRegistry
-}
-
-// HashRegistry is the registry of hash algorithms. Used by the
-// Pipeline runner for TeeReader at every stage, by the Recovery
-// Agent when parsing TOC blobs and Pack TOCs, and by parsers of
-// "<algo>-<hex>" identifiers.
-type HashRegistry interface {
-	// Parse splits an "<algo>-<hex>" identifier into the algorithm
-	// name and the raw hash bytes.
-	Parse(h string) (algo string, raw []byte, err error)
-
-	// NewHasher creates a fresh hash.Hash for the given algorithm.
-	NewHasher(algo string) (hash.Hash, error)
-
-	// Format builds an identifier string from an algorithm name and
-	// raw bytes.
-	Format(algo string, raw []byte) string
-
-	// Register registers a hasher factory under an algorithm name.
-	// Returns the registry itself for chained registration.
-	Register(algo string, fn func() hash.Hash) HashRegistry
 }
 
 // --- Encryption-key resolution ---
@@ -154,7 +134,7 @@ func NewTransformerRegistry() TransformerRegistry {
 
 // NewHashRegistry creates an empty hash-algorithm registry.
 // The host application registers factories through Register.
-func NewHashRegistry() HashRegistry {
+func NewHashRegistry() domain.HashRegistry {
 	return &hashRegistry{hashers: make(map[string]func() hash.Hash)}
 }
 

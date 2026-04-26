@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // Curator is the L3 facade. It implements core.DataStore, adds
@@ -89,7 +90,7 @@ type HostStorageFullPayload struct {
 type BackupUnavailablePayload struct {
 	StoreID    string
 	TargetID   string
-	ArtifactID core.ArtifactID
+	ArtifactID domain.ArtifactID
 }
 
 type ReplicationLagPayload struct {
@@ -104,34 +105,34 @@ type StoreUnreachablePayload struct {
 }
 
 type DrainCompletedPayload struct {
-	ArtifactID core.ArtifactID
+	ArtifactID domain.ArtifactID
 	StoreID    string
 	BlobRef    string
 }
 
 type DrainNoTargetPayload struct {
-	ArtifactID core.ArtifactID
+	ArtifactID domain.ArtifactID
 	BlobRef    string
 	Namespace  string
 	Reason     string
 }
 
 type DrainQuarantinedPayload struct {
-	ArtifactID core.ArtifactID
+	ArtifactID domain.ArtifactID
 	BlobRef    string
 	Namespace  string
 	Reason     string
 }
 
 type DrainRequeuedPayload struct {
-	ArtifactID    core.ArtifactID
+	ArtifactID    domain.ArtifactID
 	BlobRef       string
 	Namespace     string
 	QuarantinedAt time.Time
 }
 
 type DrainRetryPayload struct {
-	ArtifactID   core.ArtifactID
+	ArtifactID   domain.ArtifactID
 	BlobRef      string
 	TotalTargets int
 	FailedCount  int

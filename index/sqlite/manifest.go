@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // IndexManifest registers an artifact in the index. Branches on
@@ -24,7 +25,7 @@ import (
 // All work happens inside a single transaction; partial registration
 // is impossible.
 func (i *Index) IndexManifest(
-	m core.Manifest,
+	m domain.Manifest,
 	addr core.PhysicalAddress,
 	chunkRefs []string,
 	packedEntries []core.PackedEntry,
@@ -48,7 +49,7 @@ func (i *Index) IndexManifest(
 // honest even on the error path.
 func (i *Index) indexManifestTx(
 	ctx context.Context,
-	m core.Manifest,
+	m domain.Manifest,
 	addr core.PhysicalAddress,
 	chunkRefs []string,
 	packedEntries []core.PackedEntry,
@@ -65,15 +66,15 @@ func (i *Index) indexManifestTx(
 	}()
 
 	switch m.Type {
-	case core.ManifestTypeBlob:
+	case domain.ManifestTypeBlob:
 		if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
 			return err
 		}
-	case core.ManifestTypeTOC:
+	case domain.ManifestTypeTOC:
 		if err := indexTOCManifest(ctx, tx, m, addr, chunkRefs); err != nil {
 			return err
 		}
-	case core.ManifestTypePack:
+	case domain.ManifestTypePack:
 		if err := indexPackManifest(ctx, tx, m, addr, packedEntries); err != nil {
 			return err
 		}
@@ -99,7 +100,7 @@ func upsertBlob(
 	ctx context.Context,
 	tx *sql.Tx,
 	blobRef string,
-	contentHash core.ContentHash,
+	contentHash domain.ContentHash,
 	originalSize int64,
 	addr core.PhysicalAddress,
 ) error {
@@ -152,7 +153,7 @@ func bumpRefCount(ctx context.Context, tx *sql.Tx, blobRef string) error {
 // artifact registered twice (after a crash, for instance) is a
 // no-op rather than an error — the content is by definition
 // identical because ArtifactID is its hash.
-func insertManifestRow(ctx context.Context, tx *sql.Tx, m core.Manifest) error {
+func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error {
 	const stmt = `
 		INSERT INTO manifests (
 			artifact_id, type, namespace, session_id,
@@ -186,7 +187,7 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m core.Manifest) error {
 func linkManifestToBlob(
 	ctx context.Context,
 	tx *sql.Tx,
-	artifactID core.ArtifactID,
+	artifactID domain.ArtifactID,
 	blobRef string,
 	position int,
 ) error {
@@ -205,7 +206,7 @@ func linkManifestToBlob(
 func indexBlobManifest(
 	ctx context.Context,
 	tx *sql.Tx,
-	m core.Manifest,
+	m domain.Manifest,
 	addr core.PhysicalAddress,
 ) error {
 	if m.BlobRef == "" {
@@ -229,7 +230,7 @@ func indexBlobManifest(
 func indexTOCManifest(
 	ctx context.Context,
 	tx *sql.Tx,
-	m core.Manifest,
+	m domain.Manifest,
 	addr core.PhysicalAddress,
 	chunkRefs []string,
 ) error {
@@ -282,7 +283,7 @@ func indexTOCManifest(
 func indexPackManifest(
 	ctx context.Context,
 	tx *sql.Tx,
-	m core.Manifest,
+	m domain.Manifest,
 	addr core.PhysicalAddress,
 	entries []core.PackedEntry,
 ) error {
@@ -338,7 +339,7 @@ func indexPackManifest(
 //
 // Idempotency: deleting an already-deleted artifact is a no-op
 // (returns nil). This matches the GC retry semantics.
-func (i *Index) DeleteManifest(artifactID core.ArtifactID, blobRefs []string) error {
+func (i *Index) DeleteManifest(artifactID domain.ArtifactID, blobRefs []string) error {
 	const op = "DeleteManifest"
 	start := time.Now()
 	defer func() { i.emitLatency(op, time.Since(start)) }()
@@ -355,7 +356,7 @@ func (i *Index) DeleteManifest(artifactID core.ArtifactID, blobRefs []string) er
 
 func (i *Index) deleteManifestTx(
 	ctx context.Context,
-	artifactID core.ArtifactID,
+	artifactID domain.ArtifactID,
 	blobRefs []string,
 ) error {
 	tx, err := i.db.BeginTx(ctx, nil)

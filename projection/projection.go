@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 )
 
 // NodeSeq is a sequence of nodes with an optional error attached
@@ -35,15 +36,15 @@ const (
 // *curator.Curator on the Projection side — a deliberate decision
 // that avoids leaking curator dependencies down the DAG.
 type ProjectionSource interface {
-	Walk(ctx context.Context, namespace string, cb func(core.Manifest) error) error
-	Get(ctx context.Context, id core.ArtifactID, opts core.GetOptions) (core.ReadHandle, error)
+	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
+	Get(ctx context.Context, id domain.ArtifactID, opts core.GetOptions) (core.ReadHandle, error)
 }
 
 // PathResolver extracts the virtual path from a manifest. It
 // returns a path in the "a/b/c.txt" style or an empty string if
 // no path is defined (the artifact will appear only under
 // by-artifact/).
-type PathResolver func(m core.Manifest) string
+type PathResolver func(m domain.Manifest) string
 
 // --- Node and facets ---
 
@@ -59,15 +60,15 @@ type FilesystemFacet struct {
 // ArtifactFacet holds the data of a concrete artifact. Filled for
 // file nodes; nil for directories.
 type ArtifactFacet struct {
-	ArtifactID core.ArtifactID
-	Manifest   core.Manifest
+	ArtifactID domain.ArtifactID
+	Manifest   domain.Manifest
 }
 
 // StorageFacet holds placement data within the Curator stack.
 // Filled only when SourceKind == Curator. nil when SourceKind ==
 // Store.
 type StorageFacet struct {
-	StoreID   core.StoreID
+	StoreID   domain.StoreID
 	Workspace core.Workspace
 	IsTransit bool
 	RefCount  int
@@ -133,7 +134,7 @@ func WithFilter(filter ViewFilter) ViewOption {
 
 // ViewFilter is the manifest-inclusion predicate for a View.
 // true means include.
-type ViewFilter func(m core.Manifest) bool
+type ViewFilter func(m domain.Manifest) bool
 
 // View is an open representation. Every method is safe for
 // concurrent reads. After Close every call returns ErrViewClosed.
@@ -226,8 +227,8 @@ const (
 // by-path/, the loser remains reachable only through by-artifact/.
 type PathCollisionPayload struct {
 	Path       string
-	WinnerID   core.ArtifactID
-	LoserID    core.ArtifactID
+	WinnerID   domain.ArtifactID
+	LoserID    domain.ArtifactID
 	Resolution string
 }
 

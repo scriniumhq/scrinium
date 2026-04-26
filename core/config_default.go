@@ -1,6 +1,10 @@
 package core
 
-import "time"
+import (
+	"time"
+
+	"github.com/rkurbatov/scrinium/domain"
+)
 
 // applyConfigDefaults fills in zero-valued StoreConfig fields with
 // sensible defaults. Called once at InitStore before serialising
@@ -15,33 +19,33 @@ import "time"
 // scenario: hashed paths for big trees, no encryption, JSON
 // manifests, immediate deletion. Non-default scenarios (S3,
 // encrypted, WORM) require explicit StoreConfig overrides.
-func applyConfigDefaults(cfg StoreConfig) StoreConfig {
+func applyConfigDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 	if cfg.PathTopology == "" {
-		cfg.PathTopology = PathTopologySharded
+		cfg.PathTopology = domain.PathTopologySharded
 	}
 	if cfg.ManifestStorage == "" {
-		cfg.ManifestStorage = ManifestStorageRemote
+		cfg.ManifestStorage = domain.ManifestStorageRemote
 	}
 	if cfg.BlobStorage == "" {
-		cfg.BlobStorage = BlobStorageTarget
+		cfg.BlobStorage = domain.BlobStorageTarget
 	}
 	if cfg.ManifestEncoding == "" {
-		cfg.ManifestEncoding = ManifestEncodingJSON
+		cfg.ManifestEncoding = domain.ManifestEncodingJSON
 	}
 	if cfg.ManifestCrypto == "" {
-		cfg.ManifestCrypto = ManifestCryptoPlain
+		cfg.ManifestCrypto = domain.ManifestCryptoPlain
 	}
 	if cfg.ContentHasher == "" {
-		cfg.ContentHasher = HashSHA256
+		cfg.ContentHasher = domain.HashSHA256
 	}
 	if cfg.VerifyOnRead == "" {
-		cfg.VerifyOnRead = VerifyOnReadAuto
+		cfg.VerifyOnRead = domain.VerifyOnReadAuto
 	}
 	if cfg.DeletionPolicy == "" {
-		cfg.DeletionPolicy = DeletionPolicyFree
+		cfg.DeletionPolicy = domain.DeletionPolicyFree
 	}
 	if cfg.GCLeasePolicy == "" {
-		cfg.GCLeasePolicy = GCLeaseAuto
+		cfg.GCLeasePolicy = domain.GCLeaseAuto
 	}
 	if cfg.PackAlignment == 0 {
 		// Zero literal in Go for an int-typed enum is also
@@ -49,7 +53,7 @@ func applyConfigDefaults(cfg StoreConfig) StoreConfig {
 		// from "user left it zero" by promoting zero to Auto: most
 		// callers want the engine to derive alignment from the
 		// Driver's capabilities, not "no alignment whatsoever".
-		cfg.PackAlignment = PackAlignmentAuto
+		cfg.PackAlignment = domain.PackAlignmentAuto
 	}
 	if cfg.TombstoneGracePeriod == 0 {
 		cfg.TombstoneGracePeriod = 24 * time.Hour
@@ -69,37 +73,37 @@ func applyConfigDefaults(cfg StoreConfig) StoreConfig {
 // The set of checks here is deliberately small. We catch the
 // obvious mistakes — empty enum, contradictory hashes — and let
 // later milestones add the full matrix.
-func validateImmutableConfig(cfg StoreConfig) error {
+func validateImmutableConfig(cfg domain.StoreConfig) error {
 	switch cfg.PathTopology {
-	case PathTopologyFlat, PathTopologySharded, PathTopologyNative:
+	case domain.PathTopologyFlat, domain.PathTopologySharded, domain.PathTopologyNative:
 	default:
 		return ErrInvalidConfig
 	}
 	switch cfg.ManifestStorage {
-	case ManifestStorageRemote, ManifestStorageLocal, ManifestStorageReplicated:
+	case domain.ManifestStorageRemote, domain.ManifestStorageLocal, domain.ManifestStorageReplicated:
 	default:
 		return ErrInvalidConfig
 	}
 	switch cfg.ManifestEncoding {
-	case ManifestEncodingJSON, ManifestEncodingBinary:
+	case domain.ManifestEncodingJSON, domain.ManifestEncodingBinary:
 	default:
 		return ErrInvalidConfig
 	}
 	switch cfg.ManifestCrypto {
-	case ManifestCryptoPlain, ManifestCryptoMetadataOnly, ManifestCryptoEnvelope:
+	case domain.ManifestCryptoPlain, domain.ManifestCryptoMetadataOnly, domain.ManifestCryptoEnvelope:
 	default:
 		return ErrInvalidConfig
 	}
 	switch cfg.ContentHasher {
-	case HashSHA256, HashBLAKE3:
+	case domain.HashSHA256, domain.HashBLAKE3:
 	default:
 		return ErrInvalidConfig
 	}
 
 	// PathTopology: Native is a read-only marker; allowed only
 	// with BlobStorage: ExternalRef.
-	if cfg.PathTopology == PathTopologyNative &&
-		cfg.BlobStorage != BlobStorageExternalRef {
+	if cfg.PathTopology == domain.PathTopologyNative &&
+		cfg.BlobStorage != domain.BlobStorageExternalRef {
 		return ErrInvalidConfig
 	}
 
@@ -107,7 +111,7 @@ func validateImmutableConfig(cfg StoreConfig) error {
 	// a too-short value is the only param with cross-host safety
 	// implications. The minimum below matches docs/4 §5.1.
 	if cfg.TombstoneGracePeriod > 0 && cfg.TombstoneGracePeriod < time.Hour {
-		return ErrInvalidTombstoneGracePeriod
+		return domain.ErrInvalidTombstoneGracePeriod
 	}
 	return nil
 }

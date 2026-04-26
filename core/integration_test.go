@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/event"
 )
 
@@ -31,7 +32,7 @@ func TestStoreOptionsApply(t *testing.T) {
 	opts := []core.StoreOption{
 		core.WithForceReinit(),
 		core.WithPurgeOnReinit(),
-		core.WithConfig(core.StoreConfig{}),
+		core.WithConfig(domain.StoreConfig{}),
 		core.WithStoreIndex(nil),
 		core.WithPublisher(nil),
 		core.WithHashRegistry(nil),
