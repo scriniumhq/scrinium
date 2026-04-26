@@ -7,8 +7,15 @@ import (
 )
 
 // Engine event-type constants. Used as the value of
-// event.Event.Type. Curator-level events (curator.*), index events
-// (index.*), and agent events (agent.*) live in their own packages.
+// event.Event.Type.
+//
+// Other reserved namespaces and their owners:
+//   - "agent.*"   — agent/events.go
+//   - "curator.*" — curator/curator.go
+//   - "index.*"   — index/events.go
+//
+// User code must emit events under its own namespace. The reserved
+// prefixes are enforced by convention; see docs/2. Internals/01 §1.7.
 const (
 	EventManifestSaved         = "core.manifest_saved"
 	EventArtifactDeleted       = "core.artifact_deleted"
@@ -20,17 +27,6 @@ const (
 	EventKEKRotated            = "core.kek_rotated"
 	EventStaleLeaseTakeover    = "core.stale_lease_takeover"
 	EventOrphanScanCompleted   = "core.orphan_scan_completed"
-
-	// Agent lifecycle events. The host application filters by
-	// AgentType in the payload.
-	EventAgentStarted    = "agent.started"
-	EventAgentProgress   = "agent.progress"
-	EventAgentCycle      = "agent.cycle"
-	EventAgentCompleted  = "agent.completed"
-	EventAgentFailed     = "agent.failed"
-	EventAgentStopped    = "agent.stopped"
-	EventAgentCancelled  = "agent.cancelled"
-	EventAgentStaleLease = "agent.stale_lease"
 )
 
 // --- Payload structs ---
@@ -111,33 +107,14 @@ type StoreDegradedPayload struct {
 	Reason string
 }
 
-// AgentStartedPayload is the payload of EventAgentStarted.
-type AgentStartedPayload struct {
-	AgentType string
-	StoreID   string
-	StartedAt time.Time
-}
-
-// AgentProgressPayload is the payload of EventAgentProgress. Total
-// is 0 when the total amount of work is unknown up front (for
-// example, in a continuous loop).
-type AgentProgressPayload struct {
-	AgentType   string
-	StoreID     string
-	Processed   int64
-	Total       int64
-	CurrentItem string
-}
-
-// AgentFailedPayload is the payload of EventAgentFailed.
-type AgentFailedPayload struct {
-	AgentType string
-	StoreID   string
-	Err       error
-}
-
-// LeaseTakeoverPayload is the payload of
-// EventStaleLeaseTakeover and EventAgentStaleLease.
+// LeaseTakeoverPayload is the payload of two events:
+// core.EventStaleLeaseTakeover (Store-level lease — Open under
+// stale location.lock) and agent.EventAgentStaleLease (an agent
+// took over from a previous holder that stopped renewing). The
+// stale-lease concept is layer-agnostic, so a single struct
+// describes both. Lives in core because core was the first
+// emitter; agent imports core for unrelated reasons already, so
+// no new dependency is introduced.
 type LeaseTakeoverPayload struct {
 	LeaseKey       string
 	PreviousHolder string
