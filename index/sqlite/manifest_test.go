@@ -10,6 +10,7 @@ import (
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/testutil/manifestfx"
 )
 
 // helper: count rows in a table for assertion purposes.
@@ -36,25 +37,11 @@ func refCount(t *testing.T, idx *Index, blobRef string) int {
 	return n
 }
 
-// helper: build a minimal blob manifest.
-func newBlobManifest(id, blobRef string) domain.Manifest {
-	return domain.Manifest{
-		ArtifactID:   domain.ArtifactID(id),
-		Type:         domain.ManifestTypeBlob,
-		Namespace:    "test",
-		ContentHash:  domain.ContentHash("sha256-" + strings.Repeat("a", 64)),
-		BlobRef:      domain.BlobRef(blobRef),
-		OriginalSize: 1024,
-		CreatedAt:    time.Now(),
-	}
-}
-
-func newPhysAddr(path string) core.PhysicalAddress {
-	return core.PhysicalAddress{
-		Workspace: core.WorkspaceLocation,
-		Path:      path,
-	}
-}
+// Aliases to the canonical fixtures.
+var (
+	newBlobManifest = manifestfx.Blob
+	newPhysAddr     = manifestfx.PhysAddr
+)
 
 // --- IndexManifest: blob ---
 

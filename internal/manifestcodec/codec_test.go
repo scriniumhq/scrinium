@@ -2,43 +2,26 @@ package manifestcodec_test
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"hash"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
+	"github.com/rkurbatov/scrinium/internal/testutil/manifestfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// helper: minimal valid manifest for round-trip tests.
-func sampleManifest() domain.Manifest {
-	return domain.Manifest{
-		Type:         domain.ManifestTypeBlob,
-		Namespace:    "users",
-		SessionID:    "sess-1",
-		CreatedAt:    time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC),
-		ContentHash:  domain.ContentHash("sha256-" + strings.Repeat("a", 64)),
-		OriginalSize: 4096,
-		BlobRef:      domain.BlobRef("sha256-" + strings.Repeat("b", 64)),
-		LayoutHeader: domain.LayoutHeader{BlobStorage: "Target"},
-		Pipeline:     nil,
-	}
-}
-
-// helper: real HashRegistry pre-populated with sha256. core's
-// NewHashRegistry returns an empty registry — engine policy is
-// that the host application chooses which hashers to bundle. Tests
-// here own the policy: sha256 is the project default.
-func newHashRegistry() domain.HashRegistry {
-	return core.NewHashRegistry().
-		Register("sha256", func() hash.Hash { return sha256.New() })
-}
+// Aliases — see internal/testutil/{manifestfx,storefx} for the
+// canonical fixtures. Local names are kept so the test bodies
+// don't get verbose with package qualifiers.
+var (
+	sampleManifest  = manifestfx.Sample
+	newHashRegistry = storefx.Hashes
+)
 
 // --- EncodeFile / DecodeFile round-trip ---
 

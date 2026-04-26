@@ -2,9 +2,7 @@ package core_test
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
-	"hash"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,69 +11,22 @@ import (
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
 	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/driver/localfs"
 	"github.com/rkurbatov/scrinium/errs"
-	sqliteindex "github.com/rkurbatov/scrinium/index/sqlite"
+	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// newHashes returns a HashRegistry pre-populated with sha256 — the
-// project default. Tests that go through Put need this; tests
-// that only exercise InitStore/OpenStore lifecycle do not, but
-// passing it always keeps test setup uniform.
-func newHashes() domain.HashRegistry {
-	return core.NewHashRegistry().
-		Register("sha256", func() hash.Hash { return sha256.New() })
-}
-
-// helper: create a fresh localfs driver in a temp dir.
-func newDriver(t *testing.T) *localfs.Driver {
-	t.Helper()
-	d, err := localfs.New(t.TempDir(), localfs.WithFsync(false))
-	if err != nil {
-		t.Fatalf("localfs.New: %v", err)
-	}
-	return d
-}
-
-// helper: build an in-memory StoreIndex per test. Mirrors the DI
-// Example wiring pattern: the caller constructs the index and
-// passes it to InitStore via WithStoreIndex. core never opens
-// a backend itself.
-func newIndex(t *testing.T) core.StoreIndex {
-	t.Helper()
-	idx, err := sqliteindex.NewStore(context.Background(), ":memory:")
-	if err != nil {
-		t.Fatalf("sqlite.NewStore: %v", err)
-	}
-	t.Cleanup(func() {
-		// Tests exit either way; the in-memory DB is freed by GC,
-		// but a graceful Close releases the *sql.DB pool early.
-		if c, ok := idx.(interface{ Close() error }); ok {
-			_ = c.Close()
-		}
-	})
-	return idx
-}
-
-// helper: build a disk-backed StoreIndex when a test needs an
-// on-disk file (e.g., to verify that core does NOT auto-create
-// system.index/ paths).
-func newDiskIndex(t *testing.T, path string) core.StoreIndex {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	idx, err := sqliteindex.NewStore(context.Background(), path)
-	if err != nil {
-		t.Fatalf("sqlite.NewStore: %v", err)
-	}
-	t.Cleanup(func() {
-		if c, ok := idx.(interface{ Close() error }); ok {
-			_ = c.Close()
-		}
-	})
-	return idx
-}
+// Local aliases for the few testutil helpers used in this file.
+// The aliases keep the test bodies readable (newDriver vs
+// driverfx.LocalFS) without re-introducing the duplicated
+// implementation.
+var (
+	newHashes    = storefx.Hashes
+	newDriver    = driverfx.LocalFS
+	newIndex     = indexfx.Memory
+	newDiskIndex = indexfx.Disk
+)
 
 // --- InitStore happy path ---
 

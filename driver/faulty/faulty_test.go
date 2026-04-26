@@ -11,6 +11,15 @@ import (
 	"github.com/rkurbatov/scrinium/errs"
 )
 
+// newWrapped builds a faulty driver around a fresh localfs in a
+// per-test temp dir. Lives here (not in internal/testutil/driverfx)
+// because faulty_test.go is in package faulty for white-box access
+// to internal types — and a fixture in driverfx would import
+// driver/faulty, creating an import cycle for the test binary.
+//
+// This is the second documented in-package exception alongside
+// index/sqlite/sqlite_test.go, which similarly needs the
+// package-private *Index type.
 func newWrapped(t *testing.T, opts ...Option) *Driver {
 	t.Helper()
 	inner, err := localfs.New(t.TempDir(), localfs.WithFsync(false))
@@ -116,10 +125,10 @@ func TestFailureRate_Distribution(t *testing.T) {
 		}
 	}
 	// With seed=1 and N=2000 the fraction is well within ±5%.
-	minValue := int(0.45 * N)
-	maxValue := int(0.55 * N)
-	if failed < minValue || failed > maxValue {
-		t.Errorf("expected ~%d–%d failures out of %d, got %d", minValue, maxValue, N, failed)
+	min := int(0.45 * N)
+	max := int(0.55 * N)
+	if failed < min || failed > max {
+		t.Errorf("expected ~%d–%d failures out of %d, got %d", min, max, N, failed)
 	}
 }
 

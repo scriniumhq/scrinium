@@ -9,24 +9,13 @@ import (
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// helper: build a Store backed by an in-memory index in a fresh
-// temp dir. Wraps the InitStore boilerplate; reuses newDriver and
-// newIndex from init_test.go (same _test package).
-func newStore(t *testing.T, opts ...core.StoreOption) core.Store {
-	t.Helper()
-	drv := newDriver(t)
-	all := append([]core.StoreOption{
-		core.WithStoreIndex(newIndex(t)),
-		core.WithHashRegistry(newHashes()),
-	}, opts...)
-	s, _, err := core.InitStore(context.Background(), drv, all...)
-	if err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
-	return s
-}
+// newStore is an alias to storefx.Init so the rest of this file
+// reads naturally (newStore(t, ...) vs storefx.Init(t, ...)) without
+// duplicating the wiring logic.
+var newStore = storefx.Init
 
 // --- State / Capabilities ---
 

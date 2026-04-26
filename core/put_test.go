@@ -15,34 +15,15 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
+	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// helper: build a Store backed by a localfs driver and an
-// in-memory sqlite index, with sha256 registered. Returns the
-// Store and a handle to the underlying driver root for direct
-// disk inspection.
-func newStoreWithRoot(t *testing.T, opts ...core.StoreOption) (core.Store, string) {
-	t.Helper()
-	drv := newDriver(t)
-	root := drv.Root()
-	all := append([]core.StoreOption{
-		core.WithStoreIndex(newIndex(t)),
-		core.WithHashRegistry(newHashes()),
-	}, opts...)
-	s, _, err := core.InitStore(context.Background(), drv, all...)
-	if err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
-	_ = root
-	return s, root
-}
-
-// helper: a payload of repeated bytes with known content.
-func payload(content string) domain.Artifact {
-	return domain.Artifact{
-		Payload: strings.NewReader(content),
-	}
-}
+// Local aliases — see init_test.go for the full set of testutil
+// helpers in use across this package.
+var (
+	newStoreWithRoot = storefx.InitWithRoot
+	payload          = storefx.Payload
+)
 
 // --- Happy path ---
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,7 +13,9 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
-	sqliteindex "github.com/rkurbatov/scrinium/index/sqlite"
+	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
 // TestSmoke_MillionSmallFiles is the M1 exit-criterion smoke:
@@ -256,25 +257,9 @@ func humanBytes(n int64) string {
 // side streaming behaviour.
 func newDiskStore(t *testing.T) (core.Store, string) {
 	t.Helper()
-	drv := newDriver(t)
+	drv := driverfx.LocalFS(t)
 	root := drv.Root()
-	idx, err := sqliteindex.NewStore(context.Background(),
-		filepath.Join(t.TempDir(), "store.idx"))
-	if err != nil {
-		t.Fatalf("disk sqlite: %v", err)
-	}
-	t.Cleanup(func() {
-		if c, ok := idx.(io.Closer); ok {
-			_ = c.Close()
-		}
-	})
-
-	s, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(newHashes()),
-	)
-	if err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
+	idx := indexfx.Disk(t, filepath.Join(t.TempDir(), "store.idx"))
+	s := storefx.InitOn(t, drv, core.WithStoreIndex(idx))
 	return s, root
 }

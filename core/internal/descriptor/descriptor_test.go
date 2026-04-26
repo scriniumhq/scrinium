@@ -8,8 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/driver/localfs"
+	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
 )
+
+// newDriver is a thin alias to driverfx.LocalFS so the test bodies
+// stay readable. driverfx.LocalFS returns *localfs.Driver, which
+// implements the Driver interface this package needs.
+var newDriver = driverfx.LocalFS
 
 // helper: build a minimal valid descriptor for tests.
 func validDescriptor() *Descriptor {
@@ -179,15 +184,6 @@ func TestUnmarshal_RejectsMalformedJSON(t *testing.T) {
 }
 
 // --- Read / Write through localfs ---
-
-func newDriver(t *testing.T) *localfs.Driver {
-	t.Helper()
-	drv, err := localfs.New(t.TempDir(), localfs.WithFsync(false))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return drv
-}
 
 func TestWrite_Read_RoundTrip(t *testing.T) {
 	drv := newDriver(t)
