@@ -19,6 +19,7 @@ const (
 	EventStoreDegraded         = "core.store_degraded"
 	EventKEKRotated            = "core.kek_rotated"
 	EventStaleLeaseTakeover    = "core.stale_lease_takeover"
+	EventOrphanScanCompleted   = "core.orphan_scan_completed"
 
 	// Agent lifecycle events. The host application filters by
 	// AgentType in the payload.
@@ -50,6 +51,22 @@ type ManifestSavedPayload struct {
 // emitted.
 type ArtifactDeletedPayload struct {
 	ArtifactID domain.ArtifactID
+}
+
+// OrphanScanCompletedPayload is the payload of
+// EventOrphanScanCompleted. Emitted by the bootstrap recovery
+// after every transition into Unlocked, summarising what the scan
+// found and removed. Counts are physical files removed; non-fatal
+// I/O errors during the scan (per-file Remove failures, individual
+// path-parse glitches) are aggregated into NonFatalErrors. The
+// scan never refuses to open a Store — operators read the count
+// here and dig into engine logs for details.
+type OrphanScanCompletedPayload struct {
+	StagingRemoved   int
+	BlobsRemoved     int
+	ManifestsRemoved int
+	NonFatalErrors   int
+	Duration         time.Duration
 }
 
 // BlobPhysicallyDeletedPayload is the payload of

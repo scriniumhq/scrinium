@@ -389,3 +389,97 @@ func TestClassifyError_PassThrough(t *testing.T) {
 		t.Errorf("non-busy error should pass through unchanged")
 	}
 }
+
+// --- ManifestExists ---
+
+func TestManifestExists_FreshIndex_ReturnsFalse(t *testing.T) {
+	idx := newMemoryIndex(t)
+	exists, err := idx.ManifestExists(domain.ArtifactID("sha256-" + strings.Repeat("a", 64)))
+	if err != nil {
+		t.Fatalf("ManifestExists: %v", err)
+	}
+	if exists {
+		t.Errorf("fresh index: ManifestExists must be false")
+	}
+}
+
+func TestManifestExists_AfterIndexManifest_ReturnsTrue(t *testing.T) {
+	idx := newMemoryIndex(t)
+	m := newBlobManifest("art-1", "blob-1")
+	if err := idx.IndexManifest(m, newPhysAddr("blobs/aa/bb/blob-1"), nil, nil); err != nil {
+		t.Fatalf("IndexManifest: %v", err)
+	}
+	exists, err := idx.ManifestExists("art-1")
+	if err != nil {
+		t.Fatalf("ManifestExists: %v", err)
+	}
+	if !exists {
+		t.Errorf("after IndexManifest: ManifestExists must be true")
+	}
+}
+
+func TestManifestExists_AfterDelete_ReturnsFalse(t *testing.T) {
+	idx := newMemoryIndex(t)
+	m := newBlobManifest("art-2", "blob-2")
+	if err := idx.IndexManifest(m, newPhysAddr("blobs/aa/bb/blob-2"), nil, nil); err != nil {
+		t.Fatalf("IndexManifest: %v", err)
+	}
+	if err := idx.DeleteManifest("art-2", []string{"blob-2"}); err != nil {
+		t.Fatalf("DeleteManifest: %v", err)
+	}
+	exists, err := idx.ManifestExists("art-2")
+	if err != nil {
+		t.Fatalf("ManifestExists: %v", err)
+	}
+	if exists {
+		t.Errorf("after DeleteManifest: ManifestExists must be false")
+	}
+}
+
+func TestManifestExists_DistinguishesIDs(t *testing.T) {
+	idx := newMemoryIndex(t)
+	m := newBlobManifest("art-known", "blob-known")
+	if err := idx.IndexManifest(m, newPhysAddr("blobs/aa/bb/blob-known"), nil, nil); err != nil {
+		t.Fatalf("IndexManifest: %v", err)
+	}
+
+	known, err := idx.ManifestExists("art-known")
+	if err != nil {
+		t.Fatalf("ManifestExists(known): %v", err)
+	}
+	if !known {
+		t.Errorf("ManifestExists(known) = false, want true")
+	}
+
+	unknown, err := idx.ManifestExists("art-unknown")
+	if err != nil {
+		t.Fatalf("ManifestExists(unknown): %v", err)
+	}
+	if unknown {
+		t.Errorf("ManifestExists(unknown) = true, want false")
+	}
+}
+
+// TestManifestExists_NotConfusedByBlobsTable confirms the lookup
+// hits the manifests table, not the blobs one. A blob row exists
+// with the artifact-id-shaped string used as its blob_ref; the
+// manifest does NOT exist. ManifestExists must still return false
+// — the implementation must not accidentally search the wrong
+// table.
+func TestManifestExists_NotConfusedByBlobsTable(t *testing.T) {
+	idx := newMemoryIndex(t)
+	// IndexManifest with an artifact-id that differs from blob_ref.
+	m := newBlobManifest("art-real", "blob-real")
+	if err := idx.IndexManifest(m, newPhysAddr("blobs/aa/bb/blob-real"), nil, nil); err != nil {
+		t.Fatalf("IndexManifest: %v", err)
+	}
+	// Probe with the BLOB ref as if it were an ArtifactID — it is
+	// in the blobs table but not the manifests table.
+	exists, err := idx.ManifestExists("blob-real")
+	if err != nil {
+		t.Fatalf("ManifestExists: %v", err)
+	}
+	if exists {
+		t.Errorf("ManifestExists(blob-ref) = true, want false (must look in manifests, not blobs)")
+	}
+}

@@ -493,6 +493,24 @@ func sameSet(a, b []string) bool {
 	return true
 }
 
+// ManifestExists reports whether a manifest row with the given
+// ArtifactID exists. Cheap point-lookup: SELECT 1 ... LIMIT 1
+// against the primary key. Returns (false, nil) when the row is
+// absent — the caller distinguishes "not present" from
+// "infrastructure error" via the boolean.
+func (i *Index) ManifestExists(id domain.ArtifactID) (bool, error) {
+	const stmt = `SELECT 1 FROM manifests WHERE artifact_id = ? LIMIT 1`
+	var one int
+	err := i.db.QueryRowContext(context.Background(), stmt, string(id)).Scan(&one)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, classifyError(err)
+	}
+	return true, nil
+}
+
 // RebindBlob updates a blob's physical address after a successful
 // Drain (HostStorage transit -> Location). ref_count and other
 // counters are untouched. Idempotent: a missing blob_ref is a

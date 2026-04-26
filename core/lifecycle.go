@@ -247,12 +247,27 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		index:           idx,
 		pub:             o.publisher,
 		activeConfig:    cfg,
-		state:           StateUnlocked,
+		state:           StateBootstrapping,
 		hashes:          o.hashRegistry,
 		transformers:    o.readRegistry,
 		keyResolver:     o.keyResolver,
 		capabilityToken: o.capabilityToken,
 	}
+
+	// Bootstrap recovery: Orphan Scan per docs §10.2. On a freshly
+	// initialised Store all three sweeps walk over absent prefixes
+	// and return an empty report instantly; the call is here for
+	// symmetry with OpenStore and to handle WithForceReinit, where
+	// blobs/ and manifests/ may legitimately survive across reinits.
+	report, err := recoverOrphans(ctx, drv, idx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("core.InitStore: orphan scan: %w", err)
+	}
+	publishOrphanReport(o.publisher, report)
+
+	s.stateMu.Lock()
+	s.state = StateUnlocked
+	s.stateMu.Unlock()
 
 	// Recovery Kit: nil for Plain manifests. M2 fills this in for
 	// encrypted Stores.
@@ -361,7 +376,6 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	// WithAutoUnlock plus the crypto pipeline). For now anything
 	// non-Plain is rejected — better an explicit "not implemented"
 	// than a silently broken Store.
-	state := StateUnlocked
 	if active.ManifestCrypto != domain.ManifestCryptoPlain {
 		return nil, fmt.Errorf(
 			"core.OpenStore: encrypted Stores (ManifestCrypto=%q) are not supported in M1.3; "+
@@ -377,12 +391,26 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		index:           idx,
 		pub:             o.publisher,
 		activeConfig:    active,
-		state:           state,
+		state:           StateBootstrapping,
 		hashes:          o.hashRegistry,
 		transformers:    o.readRegistry,
 		keyResolver:     o.keyResolver,
 		capabilityToken: o.capabilityToken,
 	}
+
+	// Bootstrap recovery: Orphan Scan per docs §10.2. Runs on every
+	// transition into Unlocked; for Plain Stores that is here, for
+	// encrypted Stores it will move into Unlock when M2 lands.
+	report, err := recoverOrphans(ctx, drv, idx)
+	if err != nil {
+		return nil, fmt.Errorf("core.OpenStore: orphan scan: %w", err)
+	}
+	publishOrphanReport(o.publisher, report)
+
+	s.stateMu.Lock()
+	s.state = StateUnlocked
+	s.stateMu.Unlock()
+
 	return s, nil
 }
 

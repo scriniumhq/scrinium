@@ -102,6 +102,19 @@ type StoreIndex interface {
 	// /manifests/ as usual).
 	LookupPacked(artifactID domain.ArtifactID) (PackedBlobInfo, bool, error)
 
+	// ManifestExists reports whether a manifest row with the given
+	// ArtifactID is present in the index. It is the manifests-side
+	// counterpart of Resolve: a point-lookup that does not return
+	// the row contents, only its presence. Used by the bootstrap
+	// Orphan Scan to find manifest files on disk that have no
+	// matching index row (the crash window between Driver.Put on
+	// the manifest path and the IndexManifest transaction).
+	//
+	// A false return with a nil error is the normal "not present"
+	// signal. Errors are reserved for index-infrastructure
+	// failures.
+	ManifestExists(id domain.ArtifactID) (bool, error)
+
 	// Iteration. Implementations are required to stream through the
 	// callback rather than load the whole result set into memory.
 

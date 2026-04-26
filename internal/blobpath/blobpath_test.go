@@ -174,3 +174,129 @@ func TestManifestPath_RejectsMalformedID(t *testing.T) {
 		t.Fatal("expected error on id without algo prefix")
 	}
 }
+
+// --- RefFromPath ---
+
+func TestRefFromPath_Sharded(t *testing.T) {
+	got, err := blobpath.RefFromPath(
+		"blobs/de/ad/sha256-deadbeef" + strings.Repeat("0", 56))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "sha256-deadbeef" + strings.Repeat("0", 56)
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestRefFromPath_Flat(t *testing.T) {
+	got, err := blobpath.RefFromPath(
+		"blobs/sha256-aabbccdd" + strings.Repeat("0", 56))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "sha256-aabbccdd" + strings.Repeat("0", 56)
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestRefFromPath_RoundTripsResolve(t *testing.T) {
+	// The whole point of RefFromPath is being the inverse of
+	// Resolve for orphan scanning. Assert the round-trip on both
+	// topologies.
+	ref := "sha256-cafebabe" + strings.Repeat("f", 56)
+
+	for _, topo := range []domain.PathTopology{
+		domain.PathTopologySharded,
+		domain.PathTopologyFlat,
+	} {
+		path, err := blobpath.Resolve(topo, domain.BlobTypeRegular, ref)
+		if err != nil {
+			t.Fatalf("Resolve(%s): %v", topo, err)
+		}
+		got, err := blobpath.RefFromPath(path)
+		if err != nil {
+			t.Fatalf("RefFromPath(%q): %v", path, err)
+		}
+		if got != ref {
+			t.Errorf("topology %s: got %q, want %q", topo, got, ref)
+		}
+	}
+}
+
+func TestRefFromPath_RejectsEmpty(t *testing.T) {
+	if _, err := blobpath.RefFromPath(""); err == nil {
+		t.Fatal("expected error on empty path")
+	}
+}
+
+func TestRefFromPath_RejectsMissingAlgoPrefix(t *testing.T) {
+	if _, err := blobpath.RefFromPath("blobs/aa/bb/justhexnoalgo"); err == nil {
+		t.Fatal("expected error on ref without algo prefix")
+	}
+}
+
+func TestRefFromPath_RejectsTooShortHex(t *testing.T) {
+	if _, err := blobpath.RefFromPath("blobs/aa/bb/sha256-abc"); err == nil {
+		t.Fatal("expected error on hex tail shorter than 4 chars")
+	}
+}
+
+func TestRefFromPath_RejectsNonHexChars(t *testing.T) {
+	// "z" is not in [0-9a-f]. The ref-shape validator must reject
+	// it — orphan-scan callers rely on this to skip junk files
+	// rather than try to Resolve on garbage.
+	if _, err := blobpath.RefFromPath("blobs/aa/bb/sha256-zzzz"); err == nil {
+		t.Fatal("expected error on non-hex chars in ref")
+	}
+}
+
+func TestRefFromPath_FlatPathSingleSegment(t *testing.T) {
+	// No slashes at all — the path IS the ref itself.
+	ref := "sha256-1234" + strings.Repeat("a", 60)
+	got, err := blobpath.RefFromPath(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != ref {
+		t.Errorf("got %q, want %q", got, ref)
+	}
+}
+
+// --- ArtifactIDFromManifestPath ---
+
+func TestArtifactIDFromManifestPath_Basic(t *testing.T) {
+	id := domain.ArtifactID("sha256-deadbeef" + strings.Repeat("0", 56))
+	path, err := blobpath.ManifestPath(id)
+	if err != nil {
+		t.Fatalf("ManifestPath: %v", err)
+	}
+	got, err := blobpath.ArtifactIDFromManifestPath(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != id {
+		t.Errorf("got %q, want %q", got, id)
+	}
+}
+
+func TestArtifactIDFromManifestPath_RejectsEmpty(t *testing.T) {
+	if _, err := blobpath.ArtifactIDFromManifestPath(""); err == nil {
+		t.Fatal("expected error on empty path")
+	}
+}
+
+func TestArtifactIDFromManifestPath_RejectsMalformedSegment(t *testing.T) {
+	if _, err := blobpath.ArtifactIDFromManifestPath(
+		"manifests/aa/bb/no-algo-just-text"); err == nil {
+		t.Fatal("expected error on malformed segment")
+	}
+}
+
+func TestArtifactIDFromManifestPath_RejectsNonHex(t *testing.T) {
+	if _, err := blobpath.ArtifactIDFromManifestPath(
+		"manifests/aa/bb/sha256-zzzz"); err == nil {
+		t.Fatal("expected error on non-hex tail")
+	}
+}

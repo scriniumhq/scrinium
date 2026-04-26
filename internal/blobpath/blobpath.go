@@ -116,3 +116,72 @@ func ManifestPath(id domain.ArtifactID) (string, error) {
 	}
 	return "manifests/" + s1 + "/" + s2 + "/" + string(id), nil
 }
+
+// RefFromPath extracts the blob ref ("<algo>-<hex>") from a
+// driver-side blob path produced by Resolve. Both topologies are
+// supported:
+//
+//	Sharded:  blobs/<aa>/<bb>/<algo>-<hex>  → "<algo>-<hex>"
+//	Flat:     blobs/<algo>-<hex>            → "<algo>-<hex>"
+//
+// The function performs only structural validation — last segment
+// shape "<algo>-<hex>" with a non-empty algo and a hex tail at
+// least four characters long (matching shardOf's lower bound).
+// It does NOT cross-check the segment against the topology shards;
+// callers that need that level of paranoia (e.g. distinguishing a
+// real orphan from an unrelated stray file under blobs/) re-run
+// Resolve on the result and compare paths.
+//
+// Used by the bootstrap Orphan Scan to map a driver-listed file
+// back to a StoreIndex.Resolve key.
+func RefFromPath(p string) (string, error) {
+	if p == "" {
+		return "", fmt.Errorf("blobpath: empty path")
+	}
+	last := p
+	if i := strings.LastIndexByte(p, '/'); i >= 0 {
+		last = p[i+1:]
+	}
+	if err := validateRefShape(last); err != nil {
+		return "", fmt.Errorf("blobpath: %w (path %q)", err, p)
+	}
+	return last, nil
+}
+
+// ArtifactIDFromManifestPath is the manifests-side counterpart of
+// RefFromPath. Manifest paths follow the Sharded layout exclusively
+// (see ManifestPath); the structural validation is identical.
+func ArtifactIDFromManifestPath(p string) (domain.ArtifactID, error) {
+	if p == "" {
+		return "", fmt.Errorf("blobpath: empty path")
+	}
+	last := p
+	if i := strings.LastIndexByte(p, '/'); i >= 0 {
+		last = p[i+1:]
+	}
+	if err := validateRefShape(last); err != nil {
+		return "", fmt.Errorf("blobpath: manifest %w (path %q)", err, p)
+	}
+	return domain.ArtifactID(last), nil
+}
+
+// validateRefShape checks the structural form "<algo>-<hex>" with
+// a non-empty algo prefix and at least four lowercase hex chars
+// after the dash (matching shardOf's lower bound).
+func validateRefShape(s string) error {
+	dash := strings.IndexByte(s, '-')
+	if dash <= 0 {
+		return fmt.Errorf("ref %q missing algo prefix", s)
+	}
+	hex := s[dash+1:]
+	if len(hex) < 4 {
+		return fmt.Errorf("ref %q has hex tail shorter than 4 chars", s)
+	}
+	for i := 0; i < len(hex); i++ {
+		c := hex[i]
+		if !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') {
+			return fmt.Errorf("ref %q has non-hex char at position %d", s, i)
+		}
+	}
+	return nil
+}
