@@ -97,6 +97,12 @@ type AdminStore interface {
 	// Immutable parameters cannot be changed — errs.ErrConfigMismatch.
 	UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error
 
+	// Config returns a snapshot of the active StoreConfig — the
+	// projection persisted in system.config/current, with defaults
+	// applied. Read-only; mutations of the returned value have no
+	// effect on the running Store.
+	Config() domain.StoreConfig
+
 	// ConfigHistory returns the full history of configuration
 	// versions.
 	ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)

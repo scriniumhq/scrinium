@@ -7,110 +7,72 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/rkurbatov/scrinium/driver"
 )
 
-// CurrentFormatVersion is the version this build of the package
-// writes. Incremented on any breaking change to the on-disk shape
-// of store.json. Forward compatibility is one-way: a binary
-// reading a descriptor with FormatVersion > CurrentFormatVersion
-// must refuse to open the Store, just as for StoreIndex.
-const CurrentFormatVersion = 1
+// CurrentSchemaVersion is the schema version this build writes.
+// A binary reading a descriptor with schema_version > CurrentSchemaVersion
+// must refuse to open the Store.
+const CurrentSchemaVersion = 1
 
-// Path is the conventional location of the descriptor inside a
-// Store's Location. Relative to the Driver root.
+// Path is the descriptor file location relative to the driver root.
 const Path = "store.json"
 
-// Descriptor is the on-disk shape of store.json. The struct is the
-// JSON schema: every exported field is a key, JSON tags fix the
-// names so renaming the Go field never breaks the format.
+// Descriptor is the on-disk shape of store.json per §10.1.3.
 //
-// Fields are ordered top-down by stability:
-//   - identity (never changes)
-//   - format version (changes on schema migrations)
-//   - immutable StoreConfig snapshot (set at InitStore, validated
-//     at every OpenStore)
-//   - audit trail (createdAt, lastWrittenAt)
-//
-// All immutable params are captured as plain strings/ints rather
-// than typed enums. The descriptor file should be readable by any
-// future binary, including ones that don't recognise newer enum
-// values; storing strings preserves the option to upcast on read.
+// Holds Store identity and the cryptographic envelope. Projection
+// parameters (PathTopology, ManifestStorage, ManifestEncoding,
+// ManifestCrypto, ContentHasher, DeletionPolicyLock) live in the
+// system.config artifact pointed to by system.config/current
+// (§10.1.4) — not here.
 type Descriptor struct {
-	// StoreID — the global identity of this Store. UUID v4,
-	// generated once at InitStore, never changes.
-	StoreID string `json:"storeId"`
-
-	// FormatVersion of store.json itself.
-	FormatVersion int `json:"formatVersion"`
-
-	// Immutable StoreConfig snapshot. None of these can change
-	// after InitStore; OpenStore validates them strictly.
-	PathTopology     string `json:"pathTopology"`
-	ManifestStorage  string `json:"manifestStorage"`
-	ManifestEncoding string `json:"manifestEncoding"`
-	ManifestCrypto   string `json:"manifestCrypto"`
-	ContentHasher    string `json:"contentHasher"`
-
-	// DeletionPolicyLock — the only flag from DeletionPolicy that
-	// is itself immutable (it locks the policy from being
-	// downgraded away from NoDelete via UpdateConfig). The policy
-	// value itself is mutable and lives in the active StoreConfig
-	// artifact, not here.
-	DeletionPolicyLock bool `json:"deletionPolicyLock"`
-
-	// CreatedAt and LastWrittenAt are RFC 3339 timestamps. We
-	// store strings (not time.Time encoded as JSON) so a human
-	// reading the file can immediately tell the date.
-	CreatedAt     string `json:"createdAt"`
-	LastWrittenAt string `json:"lastWrittenAt"`
+	StoreID       string     `json:"store_id"`
+	SchemaVersion int        `json:"schema_version"`
+	Sequence      uint64     `json:"sequence"`
+	DEK           []byte     `json:"dek"` // base64 in JSON; empty when DEKEncrypted=false
+	DEKEncrypted  bool       `json:"dek_encrypted"`
+	KDFParams     *KDFParams `json:"kdf_params,omitempty"`
 }
 
-// Validate performs syntactic and structural checks on the
-// descriptor. It does NOT compare against an external StoreConfig;
-// that comparison is the caller's job (core.OpenStore).
+// KDFParams describes the Argon2id parameters used to derive a KEK
+// from a passphrase. Present only when DEKEncrypted=true.
+type KDFParams struct {
+	Algorithm string `json:"algorithm"` // "argon2id"
+	Time      uint32 `json:"time"`
+	Memory    uint32 `json:"memory"`
+	Threads   uint8  `json:"threads"`
+	Salt      []byte `json:"salt"` // base64 in JSON
+}
+
+// Validate checks the descriptor for syntactic well-formedness.
+// Cross-checks against external state are the caller's job.
 func (d *Descriptor) Validate() error {
 	if d.StoreID == "" {
-		return errors.New("descriptor: empty storeId")
+		return errors.New("descriptor: empty store_id")
 	}
-	if d.FormatVersion <= 0 {
-		return fmt.Errorf("descriptor: invalid formatVersion: %d", d.FormatVersion)
+	if d.SchemaVersion <= 0 {
+		return fmt.Errorf("descriptor: invalid schema_version: %d", d.SchemaVersion)
 	}
-	if d.FormatVersion > CurrentFormatVersion {
-		return fmt.Errorf("descriptor: formatVersion %d exceeds supported %d",
-			d.FormatVersion, CurrentFormatVersion)
+	if d.SchemaVersion > CurrentSchemaVersion {
+		return fmt.Errorf("descriptor: schema_version %d exceeds supported %d",
+			d.SchemaVersion, CurrentSchemaVersion)
 	}
-	if d.PathTopology == "" {
-		return errors.New("descriptor: empty pathTopology")
+	if d.Sequence == 0 {
+		return errors.New("descriptor: sequence must be >= 1")
 	}
-	if d.ManifestStorage == "" {
-		return errors.New("descriptor: empty manifestStorage")
-	}
-	if d.ManifestEncoding == "" {
-		return errors.New("descriptor: empty manifestEncoding")
-	}
-	if d.ManifestCrypto == "" {
-		return errors.New("descriptor: empty manifestCrypto")
-	}
-	if d.ContentHasher == "" {
-		return errors.New("descriptor: empty contentHasher")
-	}
-	if _, err := time.Parse(time.RFC3339Nano, d.CreatedAt); err != nil {
-		return fmt.Errorf("descriptor: invalid createdAt: %w", err)
-	}
-	if _, err := time.Parse(time.RFC3339Nano, d.LastWrittenAt); err != nil {
-		return fmt.Errorf("descriptor: invalid lastWrittenAt: %w", err)
+	if d.DEKEncrypted {
+		if len(d.DEK) == 0 {
+			return errors.New("descriptor: dek_encrypted=true but dek is empty")
+		}
+		if d.KDFParams == nil {
+			return errors.New("descriptor: dek_encrypted=true but kdf_params is missing")
+		}
 	}
 	return nil
 }
 
-// Marshal serialises d to pretty-printed JSON with a trailing
-// newline. Pretty-printing is intentional: the file is a debugging
-// surface, not a hot-path payload, and a few extra bytes are not
-// worth fighting for. The trailing newline keeps the file
-// well-formed for POSIX text utilities.
+// Marshal serialises d to pretty-printed JSON with a trailing newline.
 func Marshal(d *Descriptor) ([]byte, error) {
 	if err := d.Validate(); err != nil {
 		return nil, err
@@ -122,19 +84,14 @@ func Marshal(d *Descriptor) ([]byte, error) {
 	return append(out, '\n'), nil
 }
 
-// Unmarshal parses bytes into a Descriptor and validates them.
-// A successfully unmarshalled descriptor is guaranteed to satisfy
-// Validate(); the caller does not need to repeat the check.
+// Unmarshal parses and validates descriptor bytes.
 func Unmarshal(data []byte) (*Descriptor, error) {
 	var d Descriptor
 	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields() // catch typos in hand-edited files
+	dec.DisallowUnknownFields()
 	if err := dec.Decode(&d); err != nil {
 		return nil, fmt.Errorf("descriptor: parse: %w", err)
 	}
-	// json.Decoder leaves trailing whitespace untouched; verify
-	// there is no second JSON document in the buffer (a defensive
-	// check against accidentally appended content).
 	if dec.More() {
 		return nil, errors.New("descriptor: trailing content after JSON object")
 	}
@@ -144,13 +101,8 @@ func Unmarshal(data []byte) (*Descriptor, error) {
 	return &d, nil
 }
 
-// Read pulls the descriptor through a Driver. It performs a full
-// read into memory because the descriptor is bounded (single
-// kilobytes); streaming would only complicate the JSON parse.
-//
-// Returns os.ErrNotExist (via the driver) when no descriptor is
-// present at the standard Path; the caller distinguishes a fresh
-// Location from a corrupted one based on this signal.
+// Read pulls the descriptor through a Driver. Returns os.ErrNotExist
+// (via the driver) when no descriptor is present.
 func Read(ctx context.Context, drv driver.Driver) (*Descriptor, error) {
 	rc, err := drv.Get(ctx, Path)
 	if err != nil {
@@ -165,17 +117,8 @@ func Read(ctx context.Context, drv driver.Driver) (*Descriptor, error) {
 }
 
 // Write serialises and stores the descriptor through a Driver.
-// LastWrittenAt is set to time.Now() on every Write — the field is
-// mutated even when the rest of the struct is unchanged, so the
-// file's mtime always reflects the latest engine touch.
-//
-// Driver.Put is atomic (temp + rename); a parallel Read from
-// another process never observes a partial descriptor.
+// Driver.Put is atomic (temp + rename).
 func Write(ctx context.Context, drv driver.Driver, d *Descriptor) error {
-	d.LastWrittenAt = time.Now().UTC().Format(time.RFC3339Nano)
-	if d.CreatedAt == "" {
-		d.CreatedAt = d.LastWrittenAt
-	}
 	data, err := Marshal(d)
 	if err != nil {
 		return err

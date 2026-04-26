@@ -113,24 +113,24 @@ func (s *store) maintenanceMode() MaintenanceMode {
 	return s.maintenance
 }
 
-// Capacity returns aggregated storage info. Best-effort in M1.3:
+// Capacity returns aggregated storage info. Best-effort in M1.4:
 //
-//   - ArtifactCount / BlobCount come from the Driver's
-//     CountObjects on the conventional prefixes ("manifests",
-//     "blobs"). This is a physical count of files, which agrees
-//     with the index for healthy Stores; it diverges only during
-//     pre-GC orphan windows and during recovery, both of which
-//     are diagnostic situations where seeing the on-disk count is
-//     exactly what the operator wants.
+//   - ArtifactCount: count of user-visible manifests, sourced from
+//     the index walked with the "*" wildcard. system.* namespaces
+//     are excluded — Capacity reports what users see through Walk,
+//     not the raw on-disk manifest count.
+//   - BlobCount: physical count of files under "blobs/" via the
+//     Driver. Inline manifests carry no separate blob file and so
+//     do not appear here.
 //   - TotalBytes / UsedBytes / AvailableBytes are -1 (sentinel
 //     "unavailable"). Driver does not expose disk-free; precise
 //     byte accounting requires a full scan we do not want to do
 //     on Capacity. Real numbers arrive in M2 once StoreIndex
 //     grows a sized-summary method.
 //
-// The method honours ctx cancellation between the two driver
-// calls. Offline Stores reject Capacity (operators can still
-// inspect through State / Capabilities).
+// The method honours ctx cancellation between the two operations.
+// Offline Stores reject Capacity (operators can still inspect
+// through State / Capabilities).
 func (s *store) Capacity(ctx context.Context) (StorageInfo, error) {
 	if err := ctx.Err(); err != nil {
 		return StorageInfo{}, err
@@ -145,19 +145,27 @@ func (s *store) Capacity(ctx context.Context) (StorageInfo, error) {
 		AvailableBytes: -1,
 	}
 
-	// Both prefixes may not exist on a fresh Store. A missing
-	// prefix yields 0 from localfs (see meta.go), which is the
-	// right answer for "no artifacts written yet".
-	manifests, err := s.drv.CountObjects(ctx, "manifests")
-	if err != nil {
+	// ArtifactCount: count of user-visible manifests. Walks the
+	// index with the "*" wildcard, which already excludes system.*
+	// namespaces (see index/sqlite ListByNamespace queryAny), so
+	// system.config and the future system.state writers do not
+	// inflate user-facing storage stats.
+	var artifactCount int64
+	if err := s.index.ListByNamespace(ctx, "*", func(domain.Manifest) error {
+		artifactCount++
+		return nil
+	}); err != nil {
 		return StorageInfo{}, fmt.Errorf("core.Capacity: count manifests: %w", err)
 	}
-	out.ArtifactCount = manifests
+	out.ArtifactCount = artifactCount
 
 	if err := ctx.Err(); err != nil {
 		return StorageInfo{}, err
 	}
 
+	// BlobCount: physical blobs/ count. Inline manifests (system.*
+	// artifacts in M1.4) carry no separate blob file, so they do
+	// not contribute here.
 	blobs, err := s.drv.CountObjects(ctx, "blobs")
 	if err != nil {
 		return StorageInfo{}, fmt.Errorf("core.Capacity: count blobs: %w", err)
@@ -289,6 +297,10 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	return errors.New("core.Store.UpdateConfig: not implemented")
 }
 
+func (s *store) Config() domain.StoreConfig {
+	return s.snapshotConfig()
+}
+
 func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
 	return nil, errors.New("core.Store.ConfigHistory: not implemented")
 }
@@ -297,10 +309,6 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 
 func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType BlobType) (domain.ContentHash, error) {
 	return "", errors.New("core.Store.PutBlob: not implemented")
-}
-
-func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
-	return errors.New("core.Store.Verify: not implemented")
 }
 
 func (s *store) RollbackSession(ctx context.Context, sessionID string) error {

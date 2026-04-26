@@ -6,26 +6,19 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
 )
 
 var newDriver = driverfx.LocalFS
 
-// helper: build a minimal valid descriptor for tests.
 func validDescriptor() *Descriptor {
-	now := time.Now().UTC().Format(time.RFC3339Nano)
 	return &Descriptor{
-		StoreID:          "11111111-2222-3333-4444-555555555555",
-		FormatVersion:    CurrentFormatVersion,
-		PathTopology:     "Sharded",
-		ManifestStorage:  "Remote",
-		ManifestEncoding: "JSON",
-		ManifestCrypto:   "Plain",
-		ContentHasher:    "sha256",
-		CreatedAt:        now,
-		LastWrittenAt:    now,
+		StoreID:       "11111111-2222-3333-4444-555555555555",
+		SchemaVersion: CurrentSchemaVersion,
+		Sequence:      1,
+		DEK:           nil,
+		DEKEncrypted:  false,
 	}
 }
 
@@ -45,53 +38,61 @@ func TestValidate_RejectsEmptyStoreID(t *testing.T) {
 	}
 }
 
-func TestValidate_RejectsZeroFormatVersion(t *testing.T) {
+func TestValidate_RejectsZeroSchemaVersion(t *testing.T) {
 	d := validDescriptor()
-	d.FormatVersion = 0
+	d.SchemaVersion = 0
 	if err := d.Validate(); err == nil {
-		t.Fatal("expected error on zero FormatVersion")
+		t.Fatal("expected error on zero SchemaVersion")
 	}
 }
 
-func TestValidate_RejectsFutureFormatVersion(t *testing.T) {
+func TestValidate_RejectsFutureSchemaVersion(t *testing.T) {
 	d := validDescriptor()
-	d.FormatVersion = CurrentFormatVersion + 1
+	d.SchemaVersion = CurrentSchemaVersion + 1
 	err := d.Validate()
 	if err == nil {
-		t.Fatal("expected error on future FormatVersion")
+		t.Fatal("expected error on future SchemaVersion")
 	}
 	if !strings.Contains(err.Error(), "exceeds supported") {
 		t.Errorf("error should mention version mismatch: %v", err)
 	}
 }
 
-func TestValidate_RejectsBadTimestamp(t *testing.T) {
+func TestValidate_RejectsZeroSequence(t *testing.T) {
 	d := validDescriptor()
-	d.CreatedAt = "not-a-timestamp"
+	d.Sequence = 0
 	if err := d.Validate(); err == nil {
-		t.Fatal("expected error on bad CreatedAt")
+		t.Fatal("expected error on zero Sequence")
 	}
 }
 
-func TestValidate_RejectsEmptyImmutableField(t *testing.T) {
-	cases := []struct {
-		name string
-		mut  func(*Descriptor)
-	}{
-		{"PathTopology", func(d *Descriptor) { d.PathTopology = "" }},
-		{"ManifestStorage", func(d *Descriptor) { d.ManifestStorage = "" }},
-		{"ManifestEncoding", func(d *Descriptor) { d.ManifestEncoding = "" }},
-		{"ManifestCrypto", func(d *Descriptor) { d.ManifestCrypto = "" }},
-		{"ContentHasher", func(d *Descriptor) { d.ContentHasher = "" }},
+func TestValidate_DEKEncryptedWithoutDEK(t *testing.T) {
+	d := validDescriptor()
+	d.DEKEncrypted = true
+	d.DEK = nil
+	d.KDFParams = &KDFParams{Algorithm: "argon2id", Time: 1, Memory: 19456, Threads: 1, Salt: []byte{1}}
+	if err := d.Validate(); err == nil {
+		t.Fatal("expected error: DEKEncrypted=true with empty DEK")
 	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			d := validDescriptor()
-			c.mut(d)
-			if err := d.Validate(); err == nil {
-				t.Errorf("expected error on empty %s", c.name)
-			}
-		})
+}
+
+func TestValidate_DEKEncryptedWithoutKDFParams(t *testing.T) {
+	d := validDescriptor()
+	d.DEKEncrypted = true
+	d.DEK = []byte{1, 2, 3}
+	d.KDFParams = nil
+	if err := d.Validate(); err == nil {
+		t.Fatal("expected error: DEKEncrypted=true without KDFParams")
+	}
+}
+
+func TestValidate_PlainStoreOK(t *testing.T) {
+	d := validDescriptor()
+	d.DEKEncrypted = false
+	d.DEK = nil
+	d.KDFParams = nil
+	if err := d.Validate(); err != nil {
+		t.Fatalf("Plain store should be valid, got %v", err)
 	}
 }
 
@@ -114,50 +115,41 @@ func TestMarshalUnmarshal_RoundTrip(t *testing.T) {
 	if got.StoreID != src.StoreID {
 		t.Errorf("StoreID: got %q, want %q", got.StoreID, src.StoreID)
 	}
-	if got.FormatVersion != src.FormatVersion {
-		t.Errorf("FormatVersion: got %d, want %d", got.FormatVersion, src.FormatVersion)
+	if got.SchemaVersion != src.SchemaVersion {
+		t.Errorf("SchemaVersion: got %d, want %d", got.SchemaVersion, src.SchemaVersion)
 	}
-	if got.ManifestCrypto != src.ManifestCrypto {
-		t.Errorf("ManifestCrypto: got %q, want %q", got.ManifestCrypto, src.ManifestCrypto)
-	}
-}
-
-func TestMarshal_PrettyPrinted(t *testing.T) {
-	data, err := Marshal(validDescriptor())
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Pretty-printed JSON has a newline between top-level fields;
-	// a one-liner would be a single byte sequence with no '\n'
-	// inside the braces.
-	innerNewlines := 0
-	for _, b := range data {
-		if b == '\n' {
-			innerNewlines++
-		}
-	}
-	if innerNewlines < 5 {
-		t.Errorf("expected pretty-printed JSON with multiple lines, got %d newlines", innerNewlines)
+	if got.Sequence != src.Sequence {
+		t.Errorf("Sequence: got %d, want %d", got.Sequence, src.Sequence)
 	}
 }
 
 func TestUnmarshal_RejectsUnknownField(t *testing.T) {
 	bad := []byte(`{
-		"storeId": "11111111-2222-3333-4444-555555555555",
-		"formatVersion": 1,
-		"pathTopology": "Sharded",
-		"manifestStorage": "Remote",
-		"manifestEncoding": "JSON",
-		"manifestCrypto": "Plain",
-		"contentHasher": "sha256",
-		"deletionPolicyLock": false,
-		"createdAt": "2025-01-01T00:00:00Z",
-		"lastWrittenAt": "2025-01-01T00:00:00Z",
-		"unknownExtraField": "value"
+		"store_id": "11111111-2222-3333-4444-555555555555",
+		"schema_version": 1,
+		"sequence": 1,
+		"dek": null,
+		"dek_encrypted": false,
+		"unknown_extra_field": "value"
 	}`)
-	_, err := Unmarshal(bad)
-	if err == nil {
+	if _, err := Unmarshal(bad); err == nil {
 		t.Fatal("expected error on unknown field")
+	}
+}
+
+func TestUnmarshal_RejectsLegacyProjectionFields(t *testing.T) {
+	// Pre-§10.1.3 descriptors carried PathTopology, ManifestStorage, etc.
+	// New code rejects them: they are now in system.config.
+	bad := []byte(`{
+		"store_id": "11111111-2222-3333-4444-555555555555",
+		"schema_version": 1,
+		"sequence": 1,
+		"dek": null,
+		"dek_encrypted": false,
+		"pathTopology": "Sharded"
+	}`)
+	if _, err := Unmarshal(bad); err == nil {
+		t.Fatal("expected legacy pathTopology field to be rejected")
 	}
 }
 
@@ -174,8 +166,7 @@ func TestUnmarshal_RejectsTrailingContent(t *testing.T) {
 }
 
 func TestUnmarshal_RejectsMalformedJSON(t *testing.T) {
-	_, err := Unmarshal([]byte(`{not json`))
-	if err == nil {
+	if _, err := Unmarshal([]byte(`{not json`)); err == nil {
 		t.Fatal("expected parse error")
 	}
 }
@@ -196,51 +187,8 @@ func TestWrite_Read_RoundTrip(t *testing.T) {
 	if got.StoreID != src.StoreID {
 		t.Errorf("StoreID round-trip: got %q, want %q", got.StoreID, src.StoreID)
 	}
-	if got.LastWrittenAt == "" {
-		t.Error("LastWrittenAt should be populated by Write")
-	}
-}
-
-func TestWrite_PopulatesCreatedAtOnFirstWrite(t *testing.T) {
-	drv := newDriver(t)
-	d := validDescriptor()
-	d.CreatedAt = "" // fresh descriptor — let Write populate it.
-	d.LastWrittenAt = ""
-
-	if err := Write(context.Background(), drv, d); err != nil {
-		t.Fatal(err)
-	}
-	if d.CreatedAt == "" {
-		t.Error("CreatedAt was not populated")
-	}
-	if d.LastWrittenAt == "" {
-		t.Error("LastWrittenAt was not populated")
-	}
-	if d.CreatedAt != d.LastWrittenAt {
-		t.Errorf("on first write CreatedAt and LastWrittenAt should match: %q vs %q",
-			d.CreatedAt, d.LastWrittenAt)
-	}
-}
-
-func TestWrite_AdvancesLastWrittenAt(t *testing.T) {
-	drv := newDriver(t)
-	d := validDescriptor()
-	if err := Write(context.Background(), drv, d); err != nil {
-		t.Fatal(err)
-	}
-	first := d.LastWrittenAt
-
-	// Sleep just enough so the new RFC3339Nano differs.
-	time.Sleep(2 * time.Millisecond)
-
-	if err := Write(context.Background(), drv, d); err != nil {
-		t.Fatal(err)
-	}
-	if d.LastWrittenAt == first {
-		t.Errorf("LastWrittenAt did not advance: %q", first)
-	}
-	if d.CreatedAt == d.LastWrittenAt {
-		t.Errorf("CreatedAt should not advance after first write")
+	if got.Sequence != src.Sequence {
+		t.Errorf("Sequence round-trip: got %d, want %d", got.Sequence, src.Sequence)
 	}
 }
 

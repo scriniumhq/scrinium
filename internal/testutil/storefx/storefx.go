@@ -15,10 +15,14 @@ import (
 	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
 )
 
-// Hashes returns a HashRegistry with sha256 registered.
+// Hashes returns a HashRegistry suitable for tests. sha256 is real;
+// blake3 is registered as an sha256-backed stub so tests that set
+// ContentHasher: HashBLAKE3 do not need to pull in a blake3 library.
+// Tests that care about a specific algorithm register their own.
 func Hashes() domain.HashRegistry {
 	return core.NewHashRegistry().
-		Register("sha256", func() hash.Hash { return sha256.New() })
+		Register("sha256", func() hash.Hash { return sha256.New() }).
+		Register("blake3", func() hash.Hash { return sha256.New() })
 }
 
 // Init: fresh Store on localfs + in-memory sqlite index + sha256.
@@ -60,4 +64,16 @@ func initStore(t *testing.T, drv driver.Driver, opts ...core.StoreOption) (core.
 // Payload wraps a string as a domain.Artifact body.
 func Payload(content string) domain.Artifact {
 	return domain.Artifact{Payload: strings.NewReader(content)}
+}
+
+// Close releases a caller-owned StoreIndex. The interface does not
+// declare Close — caller-owned by DI contract — but every concrete
+// implementation has it (sqlite, postgres, in-memory). Type-asserts
+// for the method, no-op if absent so callers can be unconditional.
+func Close(idx core.StoreIndex) error {
+	c, ok := idx.(interface{ Close() error })
+	if !ok {
+		return nil
+	}
+	return c.Close()
 }

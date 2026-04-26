@@ -17,10 +17,6 @@ import (
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// Local aliases for the few testutil helpers used in this file.
-// The aliases keep the test bodies readable (newDriver vs
-// driverfx.LocalFS) without re-introducing the duplicated
-// implementation.
 var (
 	newHashes    = storefx.Hashes
 	newDriver    = driverfx.LocalFS
@@ -35,6 +31,7 @@ func TestInitStore_FreshLocation_Succeeds(t *testing.T) {
 
 	s, kit, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
@@ -56,18 +53,28 @@ func TestInitStore_FreshLocation_Succeeds(t *testing.T) {
 	if desc.StoreID == "" {
 		t.Error("descriptor.StoreID is empty")
 	}
-	if desc.FormatVersion != descriptor.CurrentFormatVersion {
-		t.Errorf("descriptor.FormatVersion: got %d, want %d",
-			desc.FormatVersion, descriptor.CurrentFormatVersion)
+	if desc.SchemaVersion != descriptor.CurrentSchemaVersion {
+		t.Errorf("descriptor.SchemaVersion: got %d, want %d",
+			desc.SchemaVersion, descriptor.CurrentSchemaVersion)
 	}
-	if desc.ManifestCrypto != "Plain" {
-		t.Errorf("default ManifestCrypto: got %q, want Plain", desc.ManifestCrypto)
+	if desc.Sequence != 1 {
+		t.Errorf("descriptor.Sequence on InitStore: got %d, want 1", desc.Sequence)
 	}
-	if desc.PathTopology != "Sharded" {
-		t.Errorf("default PathTopology: got %q, want Sharded", desc.PathTopology)
+	if desc.DEKEncrypted {
+		t.Error("descriptor.DEKEncrypted should be false on Plain Store")
 	}
-	if desc.ContentHasher != "sha256" {
-		t.Errorf("default ContentHasher: got %q, want sha256", desc.ContentHasher)
+
+	// Projection params now live in system.config — read them via
+	// the active config snapshot.
+	cfg := s.Config()
+	if cfg.ManifestCrypto != "Plain" {
+		t.Errorf("default ManifestCrypto: got %q, want Plain", cfg.ManifestCrypto)
+	}
+	if cfg.PathTopology != "Sharded" {
+		t.Errorf("default PathTopology: got %q, want Sharded", cfg.PathTopology)
+	}
+	if cfg.ContentHasher != "sha256" {
+		t.Errorf("default ContentHasher: got %q, want sha256", cfg.ContentHasher)
 	}
 
 	// Capabilities pass-through.
@@ -104,11 +111,13 @@ func TestInitStore_AlreadyExists(t *testing.T) {
 	drv := newDriver(t)
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatalf("first InitStore: %v", err)
 	}
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if !errors.Is(err, errs.ErrStoreAlreadyExists) {
 		t.Fatalf("expected errs.ErrStoreAlreadyExists, got %v", err)
@@ -119,6 +128,7 @@ func TestInitStore_ForceReinit(t *testing.T) {
 	drv := newDriver(t)
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatalf("first InitStore: %v", err)
 	}
@@ -128,6 +138,7 @@ func TestInitStore_ForceReinit(t *testing.T) {
 	s2, _, err := core.InitStore(context.Background(), drv,
 		core.WithForceReinit(),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Fatalf("force-reinit InitStore: %v", err)
@@ -149,6 +160,7 @@ func TestInitStore_CorruptedDescriptor_NoForce(t *testing.T) {
 	}
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if !errors.Is(err, errs.ErrStoreCorrupted) {
 		t.Fatalf("expected errs.ErrStoreCorrupted, got %v", err)
@@ -164,6 +176,7 @@ func TestInitStore_CorruptedDescriptor_WithForce(t *testing.T) {
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithForceReinit(),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Fatalf("WithForceReinit must clobber corrupted descriptor: %v", err)
@@ -179,22 +192,23 @@ func TestInitStore_CustomConfigPersisted(t *testing.T) {
 		ContentHasher:    domain.HashBLAKE3,
 		ManifestEncoding: domain.ManifestEncodingBinary,
 	}
-	_, _, err := core.InitStore(context.Background(), drv,
+	s, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(cfg),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
 	}
-	desc, _ := descriptor.Read(context.Background(), drv)
-	if desc.PathTopology != "Flat" {
-		t.Errorf("PathTopology: got %q, want Flat", desc.PathTopology)
+	got := s.Config()
+	if got.PathTopology != "Flat" {
+		t.Errorf("PathTopology: got %q, want Flat", got.PathTopology)
 	}
-	if desc.ContentHasher != "blake3" {
-		t.Errorf("ContentHasher: got %q, want blake3", desc.ContentHasher)
+	if got.ContentHasher != "blake3" {
+		t.Errorf("ContentHasher: got %q, want blake3", got.ContentHasher)
 	}
-	if desc.ManifestEncoding != "Binary" {
-		t.Errorf("ManifestEncoding: got %q, want Binary", desc.ManifestEncoding)
+	if got.ManifestEncoding != "Binary" {
+		t.Errorf("ManifestEncoding: got %q, want Binary", got.ManifestEncoding)
 	}
 }
 
@@ -204,6 +218,7 @@ func TestInitStore_RejectsInvalidConfig(t *testing.T) {
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(cfg),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
@@ -219,6 +234,7 @@ func TestInitStore_NativeTopologyRequiresExternalRef(t *testing.T) {
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(cfg),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
@@ -237,6 +253,7 @@ func TestInitStore_DiskBackedIndex(t *testing.T) {
 
 	s, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(idx),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
@@ -264,6 +281,7 @@ func TestInitStore_GeneratesUniqueStoreIDs(t *testing.T) {
 		drv := newDriver(t)
 		_, _, err := core.InitStore(context.Background(), drv,
 			core.WithStoreIndex(newIndex(t)),
+			core.WithHashRegistry(newHashes()),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -289,6 +307,7 @@ func TestOpenStore_FreshLocation_NotFound(t *testing.T) {
 	drv := newDriver(t)
 	_, err := core.OpenStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if !errors.Is(err, errs.ErrStoreNotFound) {
 		t.Fatalf("expected errs.ErrStoreNotFound, got %v", err)
@@ -303,6 +322,7 @@ func TestOpenStore_CorruptedDescriptor(t *testing.T) {
 	}
 	_, err := core.OpenStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if !errors.Is(err, errs.ErrStoreCorrupted) {
 		t.Fatalf("expected errs.ErrStoreCorrupted, got %v", err)
@@ -314,6 +334,7 @@ func TestOpenStore_RequiresStoreIndex(t *testing.T) {
 	// Init first so the descriptor is in place.
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -341,6 +362,7 @@ func TestOpenStore_NoConfig_Succeeds(t *testing.T) {
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(custom),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -348,6 +370,7 @@ func TestOpenStore_NoConfig_Succeeds(t *testing.T) {
 	// Open without WithConfig — legitimate diagnostic-style open.
 	s, err := core.OpenStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
@@ -367,6 +390,7 @@ func TestOpenStore_MatchingConfig_Succeeds(t *testing.T) {
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(custom),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -375,6 +399,7 @@ func TestOpenStore_MatchingConfig_Succeeds(t *testing.T) {
 	s, err := core.OpenStore(context.Background(), drv,
 		core.WithConfig(custom),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
@@ -391,6 +416,7 @@ func TestOpenStore_ConfigMismatch_PathTopology(t *testing.T) {
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(domain.StoreConfig{PathTopology: domain.PathTopologyFlat}),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -399,6 +425,7 @@ func TestOpenStore_ConfigMismatch_PathTopology(t *testing.T) {
 	_, err := core.OpenStore(context.Background(), drv,
 		core.WithConfig(domain.StoreConfig{PathTopology: domain.PathTopologySharded}),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Fatalf("expected errs.ErrConfigMismatch, got %v", err)
@@ -410,6 +437,7 @@ func TestOpenStore_ConfigMismatch_ContentHasher(t *testing.T) {
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(domain.StoreConfig{ContentHasher: domain.HashSHA256}),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -417,6 +445,7 @@ func TestOpenStore_ConfigMismatch_ContentHasher(t *testing.T) {
 	_, err := core.OpenStore(context.Background(), drv,
 		core.WithConfig(domain.StoreConfig{ContentHasher: domain.HashBLAKE3}),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Fatalf("expected errs.ErrConfigMismatch, got %v", err)
@@ -435,6 +464,7 @@ func TestOpenStore_PartialConfig_NoMismatchOnUnsetFields(t *testing.T) {
 			ContentHasher: domain.HashBLAKE3,
 		}),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -447,6 +477,7 @@ func TestOpenStore_PartialConfig_NoMismatchOnUnsetFields(t *testing.T) {
 			// PathTopology omitted — must not be checked.
 		}),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Errorf("partial WithConfig should not trigger mismatch, got %v", err)
@@ -463,6 +494,7 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(domain.StoreConfig{DeletionPolicyLock: false}),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -472,6 +504,7 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 	_, err := core.OpenStore(context.Background(), drv,
 		core.WithConfig(domain.StoreConfig{DeletionPolicyLock: true}),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Fatalf("expected errs.ErrConfigMismatch on stricter lock request, got %v", err)
@@ -481,52 +514,59 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 	_, err = core.OpenStore(context.Background(), drv,
 		core.WithConfig(domain.StoreConfig{DeletionPolicyLock: false}),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Errorf("opening with relaxed lock request must succeed, got %v", err)
 	}
 }
 
-// --- OpenStore: encrypted Store rejection in M1.3 ---
+// --- OpenStore: encrypted Store rejection in M1.4 ---
 
 func TestOpenStore_EncryptedStoreNotYetSupported(t *testing.T) {
 	drv := newDriver(t)
-	// Init normally, then hand-edit the descriptor to claim
-	// encryption. This sidesteps the InitStore validation that
-	// would otherwise refuse a passphrase-less encrypted Store —
-	// we want to reach the OpenStore-level check.
+	idx := newIndex(t)
+
+	// Init normally — system.config will hold Plain.
 	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(newIndex(t)),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
 
-	// Read, mutate, write back via the descriptor package directly.
-	desc, err := descriptor.Read(context.Background(), drv)
-	if err != nil {
-		t.Fatal(err)
+	// Overwrite system.config with a MetadataOnly variant. The
+	// pointer is bumped to the new ArtifactID atomically.
+	// WriteSystemConfig is a test-only export of the package-private
+	// writer (see core/export_test.go).
+	bad := domain.StoreConfig{
+		PathTopology:     domain.PathTopologySharded,
+		ContentHasher:    domain.HashSHA256,
+		ManifestEncoding: domain.ManifestEncodingJSON,
+		ManifestStorage:  domain.ManifestStorageLocal,
+		ManifestCrypto:   domain.ManifestCryptoMetadataOnly,
 	}
-	desc.ManifestCrypto = "MetadataOnly"
-	if err := descriptor.Write(context.Background(), drv, desc); err != nil {
-		t.Fatal(err)
+	if _, err := core.WriteSystemConfig(context.Background(), drv, idx, newHashes(), bad); err != nil {
+		t.Fatalf("WriteSystemConfig: %v", err)
 	}
 
-	_, err = core.OpenStore(context.Background(), drv,
+	_, err := core.OpenStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err == nil {
-		t.Fatal("expected encrypted-Store rejection in M1.3")
+		t.Fatal("expected encrypted-Store rejection in M1.4")
 	}
 	if !strings.Contains(err.Error(), "M2") {
 		t.Errorf("error should reference M2 milestone: %v", err)
 	}
 }
 
-// TestOpenStore_RestoresImmutableConfigFromDescriptor verifies that
+// TestOpenStore_RestoresImmutableConfigFromSystemConfig verifies that
 // the active StoreConfig of the opened Store reflects the values
-// persisted in the descriptor, not whatever defaults the caller
+// persisted in system.config, not whatever defaults the caller
 // might pass through.
-func TestOpenStore_RestoresImmutableConfigFromDescriptor(t *testing.T) {
+func TestOpenStore_RestoresImmutableConfigFromSystemConfig(t *testing.T) {
 	drv := newDriver(t)
 	custom := domain.StoreConfig{
 		PathTopology:     domain.PathTopologyFlat,
@@ -536,22 +576,20 @@ func TestOpenStore_RestoresImmutableConfigFromDescriptor(t *testing.T) {
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(custom),
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
 
-	// Reopen without WithConfig: descriptor values must drive the
-	// active StoreConfig. We cannot read activeConfig directly
-	// (unexported); we observe the effects through descriptor
-	// re-read instead.
-	_, err := core.OpenStore(context.Background(), drv,
+	s, err := core.OpenStore(context.Background(), drv,
 		core.WithStoreIndex(newIndex(t)),
+		core.WithHashRegistry(newHashes()),
 	)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
-	desc, _ := descriptor.Read(context.Background(), drv)
-	if desc.PathTopology != "Flat" || desc.ContentHasher != "blake3" {
-		t.Errorf("descriptor should preserve InitStore values: %+v", desc)
+	got := s.Config()
+	if got.PathTopology != "Flat" || got.ContentHasher != "blake3" {
+		t.Errorf("active config should preserve InitStore values: %+v", got)
 	}
 }

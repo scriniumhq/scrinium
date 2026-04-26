@@ -3,6 +3,8 @@ package core_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -105,27 +107,25 @@ func TestStore_Capacity_FreshStoreIsEmpty(t *testing.T) {
 	}
 }
 
-func TestStore_Capacity_ReflectsDriverFiles(t *testing.T) {
-	drv := newDriver(t)
-	idx := newIndex(t)
+// TestStore_Capacity_BlobCountReflectsDriver verifies that BlobCount
+// is sourced from the driver, not the index — so orphan blobs (files
+// on disk with no matching index row, e.g. between Driver.Put and
+// IndexManifest in the Put pipeline, or pre-GC) still show up. This
+// is what makes Capacity useful for diagnosing recovery situations.
+//
+// ArtifactCount, in contrast, comes from the index and is unaffected
+// by orphan manifest files.
+func TestStore_Capacity_BlobCountReflectsDriver(t *testing.T) {
+	s, root := storefx.InitWithRoot(t)
 
-	s, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(idx),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Drop a couple of fake blob and manifest files directly via
-	// the driver. We are not exercising the full Put pipeline (it
-	// is a stub) — Capacity should reflect what is on disk.
+	// Drop orphan blob files directly via the filesystem — Driver
+	// is wired through s but newStore does not export it.
 	for _, p := range []string{"blobs/aa/blob-1", "blobs/aa/blob-2", "blobs/bb/blob-3"} {
-		if err := drv.Put(context.Background(), p, strings.NewReader("x")); err != nil {
+		full := filepath.Join(root, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			t.Fatal(err)
 		}
-	}
-	for _, p := range []string{"manifests/m-1", "manifests/m-2"} {
-		if err := drv.Put(context.Background(), p, strings.NewReader("y")); err != nil {
+		if err := os.WriteFile(full, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -137,8 +137,10 @@ func TestStore_Capacity_ReflectsDriverFiles(t *testing.T) {
 	if info.BlobCount != 3 {
 		t.Errorf("BlobCount: got %d, want 3", info.BlobCount)
 	}
-	if info.ArtifactCount != 2 {
-		t.Errorf("ArtifactCount: got %d, want 2", info.ArtifactCount)
+	// ArtifactCount is index-sourced, so no user manifests exist
+	// (system.config is filtered out by the "*" wildcard).
+	if info.ArtifactCount != 0 {
+		t.Errorf("ArtifactCount: got %d, want 0 (orphan manifests don't count)", info.ArtifactCount)
 	}
 }
 

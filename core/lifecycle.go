@@ -225,19 +225,29 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	}
 
 	desc := &descriptor.Descriptor{
-		StoreID:            storeID,
-		FormatVersion:      descriptor.CurrentFormatVersion,
-		PathTopology:       string(cfg.PathTopology),
-		ManifestStorage:    string(cfg.ManifestStorage),
-		ManifestEncoding:   string(cfg.ManifestEncoding),
-		ManifestCrypto:     string(cfg.ManifestCrypto),
-		ContentHasher:      string(cfg.ContentHasher),
-		DeletionPolicyLock: cfg.DeletionPolicyLock,
+		StoreID:       storeID,
+		SchemaVersion: descriptor.CurrentSchemaVersion,
+		Sequence:      1,
+		// Plain Store on M1.4 — DEK is empty, KDFParams absent.
+		// M2 fills these for encrypted Stores.
+		DEK:          nil,
+		DEKEncrypted: false,
 	}
 	if err := descriptor.Write(ctx, drv, desc); err != nil {
-		// Same as above: do not close caller-owned idx on our
-		// error paths.
 		return nil, nil, fmt.Errorf("core.InitStore: write descriptor: %w", err)
+	}
+
+	// --- Persist the active StoreConfig as system.config ---
+	//
+	// Per §10.1.4 system.config/current is the source of truth for
+	// projection parameters. It must be writable before the Store
+	// is open for users — Hash registry is therefore required.
+	if o.hashRegistry == nil {
+		return nil, nil, fmt.Errorf(
+			"core.InitStore: WithHashRegistry is required to persist system.config")
+	}
+	if _, err := writeSystemConfig(ctx, drv, idx, o.hashRegistry, cfg); err != nil {
+		return nil, nil, fmt.Errorf("core.InitStore: write system.config: %w", err)
 	}
 
 	// --- Construct *store ---
@@ -331,25 +341,39 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		return nil, fmt.Errorf("%w: %v", errs.ErrStoreCorrupted, err)
 	}
 
-	// --- Reconstruct the active StoreConfig ---
+	// --- StoreIndex dependency ---
 	//
-	// Immutable parameters come from the descriptor (the source of
-	// truth for identity-bound config). Mutable ones come from the
-	// caller-supplied WithConfig as an overlay; absent that, we
-	// fall back to applyConfigDefaults so behaviour is well-defined
-	// even when a caller opens with no config at all.
-	//
-	// In M2 this step grows into "load system.config/current and
-	// merge with WithConfig"; the M1.3 shape is forward-compatible
-	// because mutable parameters keep coming from a layer above
-	// the descriptor.
+	// Required up-front: readSystemConfig has no use for it but the
+	// orphan scan and the open Store do, and refusing here gives a
+	// clearer error than failing later on a nil index.
 
-	active, err := buildActiveConfig(desc, o.cfg)
-	if err != nil {
-		return nil, err
+	idx := o.storeIndex
+	if idx == nil {
+		return nil, fmt.Errorf(
+			"core.OpenStore: WithStoreIndex is required (see DI Example)")
+	}
+	if o.hashRegistry == nil {
+		return nil, fmt.Errorf(
+			"core.OpenStore: WithHashRegistry is required to read system.config")
 	}
 
-	// --- Validate WithConfig against the descriptor (immutable) ---
+	// --- Load the active StoreConfig from system.config/current ---
+	//
+	// Per §10.1.4 the pointer is the source of truth for projection
+	// parameters. Defaults are applied to the loaded config so legacy
+	// fields stay populated even when the writer omitted them.
+
+	active, err := readSystemConfig(ctx, drv, o.hashRegistry)
+	if err != nil {
+		return nil, fmt.Errorf("core.OpenStore: read system.config: %w", err)
+	}
+	active = applyConfigDefaults(active)
+	if err := validateImmutableConfig(active); err != nil {
+		return nil, fmt.Errorf("%w: system.config produced invalid config: %v",
+			errs.ErrStoreCorrupted, err)
+	}
+
+	// --- Validate WithConfig against the active config (immutable) ---
 	//
 	// Only runs when the caller explicitly passed WithConfig. The
 	// "open without config" path is legitimate — diagnostic tools,
@@ -357,29 +381,21 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	// opens each store without re-asserting its config.
 
 	if o.cfg != nil {
-		if err := validateAgainstDescriptor(*o.cfg, desc); err != nil {
+		if err := validateAgainstActiveConfig(*o.cfg, active); err != nil {
 			return nil, err
 		}
 	}
 
-	// --- StoreIndex dependency ---
-
-	idx := o.storeIndex
-	if idx == nil {
-		return nil, fmt.Errorf(
-			"core.OpenStore: WithStoreIndex is required (see DI Example)")
-	}
-
 	// --- Determine final state ---
 	//
-	// M1.3 supports Plain only. Encrypted Stores will produce
+	// M1.4 supports Plain only. Encrypted Stores will produce
 	// StateLocked here (and possibly auto-unlock when M2 lands
 	// WithAutoUnlock plus the crypto pipeline). For now anything
 	// non-Plain is rejected — better an explicit "not implemented"
 	// than a silently broken Store.
 	if active.ManifestCrypto != domain.ManifestCryptoPlain {
 		return nil, fmt.Errorf(
-			"core.OpenStore: encrypted Stores (ManifestCrypto=%q) are not supported in M1.3; "+
+			"core.OpenStore: encrypted Stores (ManifestCrypto=%q) are not supported in M1.4; "+
 				"crypto pipeline lands in M2",
 			active.ManifestCrypto)
 	}
@@ -415,93 +431,57 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	return s, nil
 }
 
-// buildActiveConfig assembles the StoreConfig that the open Store
-// will use. Immutable fields come from the descriptor; mutable
-// ones come from the caller-supplied overlay (or defaults if
-// omitted). The result is validated through validateImmutableConfig
-// so a corrupted descriptor cannot hand a malformed config to the
-// Store.
-func buildActiveConfig(desc *descriptor.Descriptor, overlay *domain.StoreConfig) (domain.StoreConfig, error) {
-	cfg := domain.StoreConfig{}
-	if overlay != nil {
-		cfg = *overlay
-	}
-	cfg = applyConfigDefaults(cfg)
-
-	// Descriptor-bound immutables override anything the caller
-	// passed. This is what makes the descriptor the source of
-	// truth for identity-shaped config. WithConfig divergence is
-	// caught separately by validateAgainstDescriptor — here we
-	// just ensure the resulting StoreConfig matches what is
-	// actually persisted.
-	cfg.PathTopology = domain.PathTopology(desc.PathTopology)
-	cfg.ManifestStorage = domain.ManifestStorage(desc.ManifestStorage)
-	cfg.ManifestEncoding = domain.ManifestEncoding(desc.ManifestEncoding)
-	cfg.ManifestCrypto = domain.ManifestCrypto(desc.ManifestCrypto)
-	cfg.ContentHasher = domain.ContentHashAlgorithm(desc.ContentHasher)
-	cfg.DeletionPolicyLock = desc.DeletionPolicyLock
-
-	if err := validateImmutableConfig(cfg); err != nil {
-		return domain.StoreConfig{}, fmt.Errorf("%w: descriptor produced invalid config: %v",
-			errs.ErrStoreCorrupted, err)
-	}
-	return cfg, nil
-}
-
-// validateAgainstDescriptor checks that the caller-supplied
-// StoreConfig agrees with the descriptor on every immutable
-// parameter the descriptor records. Mutable parameters are NOT
-// compared — they are legitimately reassignable through
-// UpdateConfig on a running Store.
+// validateAgainstActiveConfig checks that the caller-supplied
+// StoreConfig agrees with the active system.config on every
+// immutable parameter. Mutable parameters are not compared — they
+// are reassignable through UpdateConfig (M2+).
 //
-// We compare only those fields that the caller actually populated
-// (non-zero values in the requested config). A caller who passes
-// WithConfig{} or partial WithConfig with only mutable fields
-// passes through cleanly. A caller who passes an immutable that
-// does NOT match the descriptor gets errs.ErrConfigMismatch.
+// Only fields the caller actually populated (non-zero values in the
+// requested config) are compared; a caller who passes WithConfig{}
+// or partial WithConfig with only mutable fields passes through.
+// A caller who passes an immutable that does not match the active
+// config gets errs.ErrConfigMismatch.
 //
-// Rationale for the "non-zero comparison": go zero values are
+// Rationale for "non-zero comparison": go zero values are
 // indistinguishable from "field omitted". The caller can always
 // pass an explicit value to opt into the check; a default value
 // passes silently. This matches the contract documented in
 // 4. API Reference/01 Lifecycle §1.2.
-func validateAgainstDescriptor(req domain.StoreConfig, desc *descriptor.Descriptor) error {
-	mismatches := []string{}
+func validateAgainstActiveConfig(req, active domain.StoreConfig) error {
+	var mismatches []string
 
-	if req.PathTopology != "" && string(req.PathTopology) != desc.PathTopology {
+	if req.PathTopology != "" && req.PathTopology != active.PathTopology {
 		mismatches = append(mismatches,
-			fmt.Sprintf("PathTopology: requested %q, descriptor has %q",
-				req.PathTopology, desc.PathTopology))
+			fmt.Sprintf("PathTopology: requested %q, active %q",
+				req.PathTopology, active.PathTopology))
 	}
-	if req.ManifestStorage != "" && string(req.ManifestStorage) != desc.ManifestStorage {
+	if req.ManifestStorage != "" && req.ManifestStorage != active.ManifestStorage {
 		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestStorage: requested %q, descriptor has %q",
-				req.ManifestStorage, desc.ManifestStorage))
+			fmt.Sprintf("ManifestStorage: requested %q, active %q",
+				req.ManifestStorage, active.ManifestStorage))
 	}
-	if req.ManifestEncoding != "" && string(req.ManifestEncoding) != desc.ManifestEncoding {
+	if req.ManifestEncoding != "" && req.ManifestEncoding != active.ManifestEncoding {
 		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestEncoding: requested %q, descriptor has %q",
-				req.ManifestEncoding, desc.ManifestEncoding))
+			fmt.Sprintf("ManifestEncoding: requested %q, active %q",
+				req.ManifestEncoding, active.ManifestEncoding))
 	}
-	if req.ManifestCrypto != "" && string(req.ManifestCrypto) != desc.ManifestCrypto {
+	if req.ManifestCrypto != "" && req.ManifestCrypto != active.ManifestCrypto {
 		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestCrypto: requested %q, descriptor has %q",
-				req.ManifestCrypto, desc.ManifestCrypto))
+			fmt.Sprintf("ManifestCrypto: requested %q, active %q",
+				req.ManifestCrypto, active.ManifestCrypto))
 	}
-	if req.ContentHasher != "" && string(req.ContentHasher) != desc.ContentHasher {
+	if req.ContentHasher != "" && req.ContentHasher != active.ContentHasher {
 		mismatches = append(mismatches,
-			fmt.Sprintf("ContentHasher: requested %q, descriptor has %q",
-				req.ContentHasher, desc.ContentHasher))
+			fmt.Sprintf("ContentHasher: requested %q, active %q",
+				req.ContentHasher, active.ContentHasher))
 	}
 	// DeletionPolicyLock: bool, "not set" indistinguishable from
-	// "false" by zero-value rule. We compare ONLY when the caller
-	// explicitly asked to lock — false is the relaxed default and
-	// passing it to OpenStore should not fail against a locked
-	// descriptor (the caller may simply not care). A locked
-	// descriptor read into a Store stays locked regardless.
-	if req.DeletionPolicyLock && !desc.DeletionPolicyLock {
+	// "false". Compare only when the caller explicitly asked to
+	// lock — false is the relaxed default and passing it should not
+	// fail against a locked active config.
+	if req.DeletionPolicyLock && !active.DeletionPolicyLock {
 		mismatches = append(mismatches,
-			"DeletionPolicyLock: requested true, descriptor has false")
+			"DeletionPolicyLock: requested true, active false")
 	}
 
 	if len(mismatches) == 0 {
