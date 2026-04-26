@@ -11,9 +11,6 @@ import (
 	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
 )
 
-// newDriver is a thin alias to driverfx.LocalFS so the test bodies
-// stay readable. driverfx.LocalFS returns *localfs.Driver, which
-// implements the Driver interface this package needs.
 var newDriver = driverfx.LocalFS
 
 // helper: build a minimal valid descriptor for tests.

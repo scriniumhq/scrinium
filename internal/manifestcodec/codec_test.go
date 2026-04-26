@@ -15,9 +15,6 @@ import (
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// Aliases — see internal/testutil/{manifestfx,storefx} for the
-// canonical fixtures. Local names are kept so the test bodies
-// don't get verbose with package qualifiers.
 var (
 	sampleManifest  = manifestfx.Sample
 	newHashRegistry = storefx.Hashes

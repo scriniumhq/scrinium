@@ -37,7 +37,6 @@ func refCount(t *testing.T, idx *Index, blobRef string) int {
 	return n
 }
 
-// Aliases to the canonical fixtures.
 var (
 	newBlobManifest = manifestfx.Blob
 	newPhysAddr     = manifestfx.PhysAddr

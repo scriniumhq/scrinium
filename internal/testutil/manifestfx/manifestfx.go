@@ -1,8 +1,5 @@
 // Package manifestfx supplies domain.Manifest and core.PhysicalAddress
-// builders used across tests. Centralised so the project's "what
-// counts as a valid manifest for round-trip tests" definition lives
-// in exactly one place; if the schema grows a required field, the
-// fix lands here and every test compiles again.
+// builders for tests.
 package manifestfx
 
 import (
@@ -13,20 +10,15 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 )
 
-// sha256-padded hashes used in test manifests. The "aaa..." and
-// "bbb..." patterns are intentional: they are obviously
-// synthetic, never accidentally collide with a real hash, and
-// stay stable across runs so test failures diff cleanly.
+// Synthetic hashes used in fixtures. Cannot be const because
+// strings.Repeat is a runtime call.
 var (
 	contentHashAaa = "sha256-" + strings.Repeat("a", 64)
 	blobRefBbb     = "sha256-" + strings.Repeat("b", 64)
 )
 
-// Sample returns a minimal valid blob manifest suitable for
-// round-trip tests in manifestcodec and similar low-level code.
-// All required fields are populated with deterministic values;
-// CreatedAt is fixed (not time.Now()) so the produced manifest is
-// byte-stable across runs.
+// Sample returns a minimal valid blob manifest with a fixed
+// CreatedAt — byte-stable across runs for round-trip tests.
 func Sample() domain.Manifest {
 	return domain.Manifest{
 		Type:         domain.ManifestTypeBlob,
@@ -37,18 +29,12 @@ func Sample() domain.Manifest {
 		OriginalSize: 4096,
 		BlobRef:      domain.BlobRef(blobRefBbb),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: "Target"},
-		Pipeline:     nil,
 	}
 }
 
 // Blob returns a small blob manifest with caller-supplied id and
-// blobRef but otherwise default fields. Used by index tests that
-// exercise the (artifact_id, blob_ref) relationship and don't care
-// about the rest of the manifest body.
-//
-// CreatedAt is time.Now() — these tests check timestamps for
-// "looks recent" rather than byte stability, so wall-clock time
-// is the right default.
+// blobRef. CreatedAt is time.Now() — fine for index tests that
+// don't check byte stability.
 func Blob(id, blobRef string) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   domain.ArtifactID(id),
@@ -61,9 +47,7 @@ func Blob(id, blobRef string) domain.Manifest {
 	}
 }
 
-// PhysAddr is a one-liner for tests that need a Location-workspace
-// address — by far the most common shape. Tests that need Host
-// workspace or pack offsets construct PhysicalAddress directly.
+// PhysAddr is a Location-workspace address at path.
 func PhysAddr(path string) core.PhysicalAddress {
 	return core.PhysicalAddress{
 		Workspace: core.WorkspaceLocation,

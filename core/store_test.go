@@ -12,9 +12,6 @@ import (
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// newStore is an alias to storefx.Init so the rest of this file
-// reads naturally (newStore(t, ...) vs storefx.Init(t, ...)) without
-// duplicating the wiring logic.
 var newStore = storefx.Init
 
 // --- State / Capabilities ---

@@ -11,15 +11,8 @@ import (
 	"github.com/rkurbatov/scrinium/errs"
 )
 
-// newWrapped builds a faulty driver around a fresh localfs in a
-// per-test temp dir. Lives here (not in internal/testutil/driverfx)
-// because faulty_test.go is in package faulty for white-box access
-// to internal types — and a fixture in driverfx would import
-// driver/faulty, creating an import cycle for the test binary.
-//
-// This is the second documented in-package exception alongside
-// index/sqlite/sqlite_test.go, which similarly needs the
-// package-private *Index type.
+// newWrapped is local because faulty_test is in package faulty;
+// a fixture in internal/testutil/driverfx would create an import cycle.
 func newWrapped(t *testing.T, opts ...Option) *Driver {
 	t.Helper()
 	inner, err := localfs.New(t.TempDir(), localfs.WithFsync(false))

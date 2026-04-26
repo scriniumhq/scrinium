@@ -18,8 +18,6 @@ import (
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// Local aliases — see init_test.go for the full set of testutil
-// helpers in use across this package.
 var (
 	newStoreWithRoot = storefx.InitWithRoot
 	payload          = storefx.Payload
