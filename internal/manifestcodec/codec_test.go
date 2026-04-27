@@ -338,3 +338,52 @@ func TestEncodeFile_ArtifactIDNotInBody(t *testing.T) {
 			got.ArtifactID)
 	}
 }
+
+// --- Manifest size limit (domain.MaxManifestSize) ---
+
+func TestEncodeFile_ManifestTooLarge(t *testing.T) {
+	// Inflate Metadata to a JSON string of MaxManifestSize bytes.
+	// The body always adds the other fields on top, so the final
+	// file is guaranteed to exceed the limit. The payload uses
+	// only 'x' bytes — no JSON escaping inflates the count.
+	huge := make([]byte, domain.MaxManifestSize)
+	huge[0] = '"'
+	for i := 1; i < len(huge)-1; i++ {
+		huge[i] = 'x'
+	}
+	huge[len(huge)-1] = '"'
+
+	m := sampleManifest()
+	m.Metadata = huge
+
+	_, err := manifestcodec.EncodeFile(m,
+		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if !errors.Is(err, errs.ErrManifestTooLarge) {
+		t.Fatalf("EncodeFile: got %v, want errs.ErrManifestTooLarge", err)
+	}
+}
+
+func TestEncodeFile_ManifestUnderLimit_OK(t *testing.T) {
+	// Boundary positive check: a manifest comfortably under the
+	// limit must still encode. Half the limit leaves plenty of
+	// room for the other body fields.
+	huge := make([]byte, domain.MaxManifestSize/2)
+	huge[0] = '"'
+	for i := 1; i < len(huge)-1; i++ {
+		huge[i] = 'x'
+	}
+	huge[len(huge)-1] = '"'
+
+	m := sampleManifest()
+	m.Metadata = huge
+
+	bs, err := manifestcodec.EncodeFile(m,
+		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if err != nil {
+		t.Fatalf("EncodeFile: %v", err)
+	}
+	if len(bs) > domain.MaxManifestSize {
+		t.Fatalf("encoded size %d exceeds limit %d",
+			len(bs), domain.MaxManifestSize)
+	}
+}

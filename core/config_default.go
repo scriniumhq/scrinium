@@ -111,7 +111,7 @@ func validateImmutableConfig(cfg domain.StoreConfig) error {
 	// TombstoneGracePeriod has its own dedicated sentinel because
 	// a too-short value is the only param with cross-host safety
 	// implications. The minimum below matches docs/4 §5.1.
-	if cfg.TombstoneGracePeriod > 0 && cfg.TombstoneGracePeriod < time.Hour {
+	if cfg.TombstoneGracePeriod > 0 && cfg.TombstoneGracePeriod < domain.MinTombstoneGracePeriod {
 		return errs.ErrInvalidTombstoneGracePeriod
 	}
 	return nil

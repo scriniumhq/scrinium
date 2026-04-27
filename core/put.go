@@ -321,16 +321,16 @@ func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	if a.Payload == nil && opts.ExternalURI == "" {
 		return errors.New("core.Put: nil Payload and no ExternalURI")
 	}
-	if len(opts.Namespace) > 255 {
+	if len(opts.Namespace) > domain.MaxNamespaceLen {
 		return errs.ErrNamespaceTooLong
 	}
 	if strings.HasPrefix(opts.Namespace, "system.") || opts.Namespace == "*" {
 		return errs.ErrReservedNamespace
 	}
-	if len(opts.SessionID) > 255 {
+	if len(opts.SessionID) > domain.MaxSessionIDLen {
 		return errs.ErrSessionIDTooLong
 	}
-	if len(a.Metadata) > 64*1024 {
+	if len(a.Metadata) > domain.MaxMetadataSize {
 		return errs.ErrMetadataTooLarge
 	}
 	return nil

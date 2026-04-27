@@ -89,6 +89,9 @@ func EncodeFile(m domain.Manifest, encoding domain.ManifestEncoding, crypto doma
 	out = append(out, magicJSON...)
 	out = append(out, cryptoPlain)
 	out = append(out, body...)
+	if len(out) > domain.MaxManifestSize {
+		return nil, errs.ErrManifestTooLarge
+	}
 	return out, nil
 }
 
