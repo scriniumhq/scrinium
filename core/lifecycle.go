@@ -252,38 +252,14 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Construct *store ---
 
-	s := &store{
-		storeID:         storeID,
-		drv:             drv,
-		index:           idx,
-		pub:             o.publisher,
-		activeConfig:    cfg,
-		state:           domain.StateBootstrapping,
-		hashes:          o.hashRegistry,
-		transformers:    o.readRegistry,
-		keyResolver:     o.keyResolver,
-		capabilityToken: o.capabilityToken,
-	}
-
-	// Bootstrap recovery: Orphan Scan per docs §10.2. On a freshly
-	// initialised Store all three sweeps walk over absent prefixes
-	// and return an empty report instantly; the call is here for
-	// symmetry with OpenStore and to handle WithForceReinit, where
-	// blobs/ and manifests/ may legitimately survive across reinits.
-	report, err := recoverOrphans(ctx, drv, idx)
+	s, err := buildStore(ctx, o, drv, idx, cfg, storeID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("core.InitStore: orphan scan: %w", err)
+		return nil, nil, fmt.Errorf("core.InitStore: %w", err)
 	}
-	publishOrphanReport(o.publisher, report)
 
-	s.stateMu.Lock()
-	s.state = domain.StateUnlocked
-	s.stateMu.Unlock()
-
-	// Recovery Kit: nil for Plain manifests. M2 fills this in for
-	// encrypted Stores.
-	var recoveryKit []byte
-	return s, recoveryKit, nil
+	// Recovery Kit is nil for Plain manifests in M1.4. M2 will
+	// generate one for encrypted Stores.
+	return s, nil, nil
 }
 
 // OpenStore opens an existing Store at the Location served by drv.
@@ -402,12 +378,43 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Construct *store ---
 
+	s, err := buildStore(ctx, o, drv, idx, active, desc.StoreID)
+	if err != nil {
+		return nil, fmt.Errorf("core.OpenStore: %w", err)
+	}
+	return s, nil
+}
+
+// buildStore is the common tail shared by InitStore and OpenStore.
+// It constructs the *store value, runs the bootstrap Orphan Scan,
+// publishes the report, and transitions the Store into
+// StateUnlocked. Errors are surfaced unwrapped — the caller adds
+// its own "core.InitStore" / "core.OpenStore" prefix.
+//
+// Pre-conditions checked by the caller (not re-checked here):
+//   - drv != nil
+//   - idx != nil
+//   - cfg has been defaulted and validated
+//   - storeID is fresh (Init) or read from the descriptor (Open)
+//
+// When M2 lands the Locked → Bootstrapping → Unlocked transition
+// (encrypted Stores), this helper is the single point that learns
+// to wait for Unlock before flipping the state — both entry
+// points then pick up the new flow without further changes.
+func buildStore(
+	ctx context.Context,
+	o storeOptions,
+	drv driver.Driver,
+	idx StoreIndex,
+	cfg domain.StoreConfig,
+	storeID string,
+) (*store, error) {
 	s := &store{
-		storeID:         desc.StoreID,
+		storeID:         storeID,
 		drv:             drv,
 		index:           idx,
 		pub:             o.publisher,
-		activeConfig:    active,
+		activeConfig:    cfg,
 		state:           domain.StateBootstrapping,
 		hashes:          o.hashRegistry,
 		transformers:    o.readRegistry,
@@ -415,12 +422,13 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		capabilityToken: o.capabilityToken,
 	}
 
-	// Bootstrap recovery: Orphan Scan per docs §10.2. Runs on every
-	// transition into Unlocked; for Plain Stores that is here, for
-	// encrypted Stores it will move into Unlock when M2 lands.
+	// Bootstrap recovery: Orphan Scan per docs §10.2. On a freshly
+	// initialised Store all three sweeps walk over absent prefixes
+	// and return an empty report instantly. On open the report
+	// reflects actual divergence between disk and index.
 	report, err := recoverOrphans(ctx, drv, idx)
 	if err != nil {
-		return nil, fmt.Errorf("core.OpenStore: orphan scan: %w", err)
+		return nil, fmt.Errorf("orphan scan: %w", err)
 	}
 	publishOrphanReport(o.publisher, report)
 
