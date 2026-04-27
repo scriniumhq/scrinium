@@ -166,7 +166,7 @@ type RoutingFunc func(meta RoutingMetadata) []StoreTarget
 // MetadataRouter reconstructs RoutingHints from Manifest.Metadata.
 // Used at deferred-Drain time (DL-01) when the original hints
 // from PutOptions are no longer available.
-type MetadataRouter func(m domain.Manifest) core.RoutingHints
+type MetadataRouter func(m domain.Manifest) domain.RoutingHints
 
 // --- Decorators and WrapperFactory ---
 

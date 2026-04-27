@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
@@ -260,10 +259,10 @@ func TestStore_StubsM14_StillUnimplemented(t *testing.T) {
 	ctx := context.Background()
 
 	// Methods that arrive with the data path in M1.4.
-	if _, err := s.Put(ctx, domain.Artifact{}, core.PutOptions{}); err == nil {
+	if _, err := s.Put(ctx, domain.Artifact{}, domain.PutOptions{}); err == nil {
 		t.Error("Put should be a stub")
 	}
-	if _, err := s.Get(ctx, "x", core.GetOptions{}); err == nil {
+	if _, err := s.Get(ctx, "x", domain.GetOptions{}); err == nil {
 		t.Error("Get should be a stub")
 	}
 	if err := s.Delete(ctx, "x"); err == nil {

@@ -48,7 +48,7 @@ const stagingPrefix = "system.state/staging"
 // ExternalRef, Pipeline, Encryption, HostStorage transit, and
 // Pack volumes are deferred to later milestones. Reaching a code
 // path that needs them returns an explicit error.
-func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (domain.ArtifactID, error) {
+func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -62,7 +62,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 	cfg := s.snapshotConfig()
 
 	// M1.4 perimeter: bail out on the surfaces that are stubbed.
-	if opts.BlobType != "" && opts.BlobType != BlobTypeRegular {
+	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
 		return "", fmt.Errorf("core.Put: BlobType %q deferred to M3", opts.BlobType)
 	}
 	if cfg.BlobStorage == domain.BlobStorageExternalRef {
@@ -317,7 +317,7 @@ func (s *store) checkWritable() error {
 // validatePutInputs covers the cheap, side-effect-free checks that
 // must reject before any I/O. Order matches the priority of
 // docs/2. Internals/01 §1.4.
-func validatePutInputs(a domain.Artifact, opts PutOptions) error {
+func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	if a.Payload == nil && opts.ExternalURI == "" {
 		return errors.New("core.Put: nil Payload and no ExternalURI")
 	}

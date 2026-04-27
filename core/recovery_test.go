@@ -274,7 +274,7 @@ func TestRecovery_DoesNotTouchLiveArtifact(t *testing.T) {
 	// a subsequent recovery pass must leave them alone.
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader([]byte("real payload"))},
-		core.PutOptions{Namespace: "live"})
+		domain.PutOptions{Namespace: "live"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestRecovery_DoesNotTouchLiveArtifact(t *testing.T) {
 	}
 
 	// Get: the artifact is still readable (the blob file survived).
-	rh, err := s2.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s2.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get after recovery: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestRecovery_OpenStore_RemovesOrphanInjectedAfterInit(t *testing.T) {
 	// Recovery must distinguish it from the planted orphans.
 	liveID, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader([]byte("survivor"))},
-		core.PutOptions{Namespace: "live"})
+		domain.PutOptions{Namespace: "live"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -372,7 +372,7 @@ func TestRecovery_OpenStore_RemovesOrphanInjectedAfterInit(t *testing.T) {
 	}
 
 	// Live artifact is still readable.
-	rh, err := s2.Get(context.Background(), liveID, core.GetOptions{})
+	rh, err := s2.Get(context.Background(), liveID, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(live): %v", err)
 	}

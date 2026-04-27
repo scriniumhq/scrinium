@@ -98,7 +98,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 		p := makePayload(i, payloadSize)
 		id, err := s.Put(ctx,
 			domain.Artifact{Payload: bytes.NewReader(p)},
-			core.PutOptions{Namespace: "smoke"})
+			domain.PutOptions{Namespace: "smoke"})
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
@@ -160,7 +160,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 			sampleIdx = n - 1
 		}
 		want := makePayload(sampleIdx, payloadSize)
-		rh, err := s.Get(ctx, id, core.GetOptions{})
+		rh, err := s.Get(ctx, id, domain.GetOptions{})
 		if err != nil {
 			t.Fatalf("Get sample #%d (id=%q): %v", sampleIdx, id, err)
 		}

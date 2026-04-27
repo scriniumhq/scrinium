@@ -18,17 +18,17 @@ type DataStore interface {
 	// performs deduplication, and writes the blob and the manifest.
 	// It returns ArtifactID — the cryptographic hash of the
 	// serialised manifest file.
-	Put(ctx context.Context, a domain.Artifact, opts PutOptions) (domain.ArtifactID, error)
+	Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error)
 
 	// PutBlob writes an anonymous blob without creating a manifest.
 	// Not a client method: it is used by level-3 decorators
 	// (chunker.Wrapper for writing anonymous chunks).
-	PutBlob(ctx context.Context, r io.Reader, blobType BlobType) (domain.ContentHash, error)
+	PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error)
 
 	// Get opens an artifact for reading. It returns a ReadHandle —
 	// a streaming primitive with lazy resolution of the physical
 	// address.
-	Get(ctx context.Context, id domain.ArtifactID, opts GetOptions) (ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (ReadHandle, error)
 
 	// Management and verification.
 

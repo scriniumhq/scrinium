@@ -47,7 +47,7 @@ type store struct {
 	keyResolver  KeyResolver
 
 	// Capability token for system.* access. nil disables WalkSystem
-	// only when authorisation enforcement is wired in M2+. M1.3
+	// only when authorisation enforcement is wired in M2+. M1.4
 	// treats the token as opt-in metadata: presence does not yet
 	// restrict, absence does not yet block.
 	capabilityToken []byte
@@ -70,7 +70,7 @@ func (s *store) Capabilities() driver.CapabilityMask {
 }
 
 // SetMaintenanceMode transitions the Store into the requested
-// maintenance regime. Allowed transitions in M1.3 are: any → any.
+// maintenance regime. Allowed transitions in M1.4 are: any → any.
 //
 // A transition into MaintenanceModeOffline blocks all subsequent
 // operations except SetMaintenanceMode itself (back to None or
@@ -204,7 +204,7 @@ func (s *store) Walk(ctx context.Context, namespace string, cb func(domain.Manif
 // system.state, system.config.
 //
 // Capability-token enforcement is opt-in by docs and TBD by
-// implementation; M1.3 honours the namespace-syntax rules but
+// implementation; M1.4 honours the namespace-syntax rules but
 // does not yet block calls based on token contents. Tracking:
 // 4. API Reference/01 §1.3.1 (WithCapabilityToken) and the
 // related authorisation work in M2.
@@ -223,7 +223,7 @@ func (s *store) WalkSystem(ctx context.Context, namespace string, cb func(domain
 
 // checkOperational returns the first sentinel that blocks read or
 // write according to the priority-of-checks order documented in
-// 2. Internals/01 Topology §1.4. M1.3 does not implement the
+// 2. Internals/01 Topology §1.4. M1.4 does not implement the
 // Bootstrapping / Locked / Corrupted transitions yet (they arrive
 // with the crypto pipeline in M2 and the descriptor consensus in
 // M2.2), so this method handles Offline and ReadOnly only — for
@@ -307,7 +307,7 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 
 // --- DataStore: stubs implemented in M1.4 ---
 
-func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType BlobType) (domain.ContentHash, error) {
+func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error) {
 	return "", errors.New("core.Store.PutBlob: not implemented")
 }
 

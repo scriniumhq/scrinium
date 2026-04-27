@@ -37,7 +37,7 @@ const (
 // that avoids leaking curator dependencies down the DAG.
 type ProjectionSource interface {
 	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
-	Get(ctx context.Context, id domain.ArtifactID, opts core.GetOptions) (core.ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (core.ReadHandle, error)
 }
 
 // PathResolver extracts the virtual path from a manifest. It

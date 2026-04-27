@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 )
@@ -21,11 +20,11 @@ func TestGet_TargetRoundTrip(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	const text = "round-trip target"
 
-	id, err := s.Put(context.Background(), payload(text), core.PutOptions{Namespace: "rt"})
+	id, err := s.Put(context.Background(), payload(text), domain.PutOptions{Namespace: "rt"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -44,11 +43,11 @@ func TestGet_InlineRoundTrip(t *testing.T) {
 	s, _ := newInlineStore(t, 100)
 	const text = "round-trip inline"
 
-	id, err := s.Put(context.Background(), payload(text), core.PutOptions{Namespace: "rt"})
+	id, err := s.Put(context.Background(), payload(text), domain.PutOptions{Namespace: "rt"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -69,11 +68,11 @@ func TestGet_EmptyTarget(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(nil)},
-		core.PutOptions{Namespace: "empty"})
+		domain.PutOptions{Namespace: "empty"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -91,11 +90,11 @@ func TestGet_EmptyInline(t *testing.T) {
 	s, _ := newInlineStore(t, 100)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(nil)},
-		core.PutOptions{Namespace: "empty"})
+		domain.PutOptions{Namespace: "empty"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -115,11 +114,11 @@ func TestGet_ManifestAvailableBeforeRead(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("manifest first"),
-		core.PutOptions{Namespace: "ns", SessionID: "sess-x"})
+		domain.PutOptions{Namespace: "ns", SessionID: "sess-x"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -145,11 +144,11 @@ func TestGet_ManifestAvailableBeforeRead(t *testing.T) {
 func TestGet_ReadAt_TargetMidStream(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	const text = "abcdefghijklmnop" // 16 bytes
-	id, err := s.Put(context.Background(), payload(text), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload(text), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -172,11 +171,11 @@ func TestGet_ReadAt_TargetMidStream(t *testing.T) {
 func TestGet_ReadAt_InlineMidStream(t *testing.T) {
 	s, _ := newInlineStore(t, 100)
 	const text = "abcdefghij"
-	id, err := s.Put(context.Background(), payload(text), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload(text), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -198,7 +197,7 @@ func TestGet_NotFound(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	_, err := s.Get(context.Background(),
 		domain.ArtifactID("sha256-"+strings.Repeat("0", 64)),
-		core.GetOptions{})
+		domain.GetOptions{})
 	if !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 	}
@@ -206,7 +205,7 @@ func TestGet_NotFound(t *testing.T) {
 
 func TestGet_EmptyID(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
-	_, err := s.Get(context.Background(), "", core.GetOptions{})
+	_, err := s.Get(context.Background(), "", domain.GetOptions{})
 	if !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 	}
@@ -216,7 +215,7 @@ func TestGet_EmptyID(t *testing.T) {
 
 func TestGet_CorruptedManifest(t *testing.T) {
 	s, root := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("tamper me"), core.PutOptions{Namespace: "t"})
+	id, err := s.Put(context.Background(), payload("tamper me"), domain.PutOptions{Namespace: "t"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +237,7 @@ func TestGet_CorruptedManifest(t *testing.T) {
 		t.Fatalf("rewrite manifest: %v", err)
 	}
 
-	_, err = s.Get(context.Background(), id, core.GetOptions{})
+	_, err = s.Get(context.Background(), id, domain.GetOptions{})
 	if !errors.Is(err, errs.ErrCorruptedManifest) {
 		t.Fatalf("expected errs.ErrCorruptedManifest, got %v", err)
 	}
@@ -248,7 +247,7 @@ func TestGet_CorruptedManifest(t *testing.T) {
 
 func TestGet_CorruptedBlob(t *testing.T) {
 	s, root := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("blob will vanish"), core.PutOptions{Namespace: "v"})
+	id, err := s.Put(context.Background(), payload("blob will vanish"), domain.PutOptions{Namespace: "v"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +262,7 @@ func TestGet_CorruptedBlob(t *testing.T) {
 		return nil
 	})
 
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get with missing blob should succeed (manifest still on disk): %v", err)
 	}
@@ -279,11 +278,11 @@ func TestGet_CorruptedBlob(t *testing.T) {
 
 func TestGet_DoubleCloseIsNoOp(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("close twice"), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload("close twice"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,14 +298,14 @@ func TestGet_DoubleCloseIsNoOp(t *testing.T) {
 
 func TestGet_BlockedInOffline(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("ok"), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload("ok"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeOffline); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Get(context.Background(), id, core.GetOptions{})
+	_, err = s.Get(context.Background(), id, domain.GetOptions{})
 	if !errors.Is(err, errs.ErrStoreOffline) {
 		t.Fatalf("expected errs.ErrStoreOffline, got %v", err)
 	}
@@ -314,14 +313,14 @@ func TestGet_BlockedInOffline(t *testing.T) {
 
 func TestGet_AllowedInReadOnly(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("ok"), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload("ok"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
 		t.Fatal(err)
 	}
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get under ReadOnly should succeed: %v", err)
 	}
@@ -330,13 +329,13 @@ func TestGet_AllowedInReadOnly(t *testing.T) {
 
 func TestGet_CtxCancelled(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("ok"), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload("ok"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = s.Get(ctx, id, core.GetOptions{})
+	_, err = s.Get(ctx, id, domain.GetOptions{})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}

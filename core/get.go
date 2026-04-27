@@ -65,7 +65,7 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 // ignored — it is a Curator-layer flag). TOC, Pack, ExternalRef,
 // MetadataOnly/Envelope crypto are deferred to later milestones
 // and return explicit errors when reached.
-func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts GetOptions) (ReadHandle, error) {
+func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (ReadHandle, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

@@ -131,7 +131,7 @@ func WithCapabilityToken(token []byte) StoreOption {
 //     present and WithForceReinit is NOT set, return
 //     errs.ErrStoreAlreadyExists.
 //  2. With WithForceReinit, wipe the structural state — the
-//     descriptor, and (in M1.3) the manifests/ directory.
+//     descriptor, and (in M1.4) the manifests/ directory.
 //     Existing blobs/ are NOT removed unless WithPurgeOnReinit
 //     is also set; this lets a user start a fresh Store on top
 //     of orphan blobs and let GC reclaim them.
@@ -145,7 +145,7 @@ func WithCapabilityToken(token []byte) StoreOption {
 //  5. Write store.json atomically through the Driver.
 //  6. Construct the *store object in StateUnlocked and return.
 //
-// Recovery Kit on M1.3: returned as nil because ManifestCrypto
+// Recovery Kit on M1.4: returned as nil because ManifestCrypto
 // defaults to Plain; the Recovery Kit is a meaningful artefact
 // only for encrypted Stores, which arrive in M2.
 func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, []byte, error) {
@@ -184,7 +184,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		// Force reinit: clean up structural state. We stay
 		// conservative — only the well-known files are touched.
 		// blobs/ stay in place unless purge is also requested
-		// (purge wiring lands in M3 alongside the GC; M1.3 just
+		// (purge wiring lands in M3 alongside the GC; M1.4 just
 		// honours WithForceReinit for descriptor + index).
 		if err := drv.Remove(ctx, descriptor.Path); err != nil {
 			return nil, nil, fmt.Errorf("core.InitStore: remove old descriptor: %w", err)
@@ -288,7 +288,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 // OpenStore opens an existing Store at the Location served by drv.
 //
-// Behaviour (M1.3 subset):
+// Behaviour (M1.4 subset):
 //  1. Read store.json. Missing → errs.ErrStoreNotFound. Unreadable →
 //     errs.ErrStoreCorrupted.
 //  2. Validate the descriptor against any caller-supplied
@@ -303,7 +303,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 //     come from the descriptor, mutable ones from WithConfig
 //     (overlay) or defaults. In M2 this step will load
 //     system.config/current as a real artifact pointer.
-//  5. Construct *store. The state machine is simplified for M1.3:
+//  5. Construct *store. The state machine is simplified for M1.4:
 //     ManifestCrypto == Plain → StateUnlocked. Encrypted Stores
 //     (StateLocked, optional auto-unlock) arrive with the crypto
 //     pipeline in M2.

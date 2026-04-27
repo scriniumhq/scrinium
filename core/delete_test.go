@@ -19,7 +19,7 @@ import (
 
 func TestDelete_TargetRemovesManifestAndDecrementsRefCount(t *testing.T) {
 	s, root := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("delete me"), core.PutOptions{Namespace: "d"})
+	id, err := s.Put(context.Background(), payload("delete me"), domain.PutOptions{Namespace: "d"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestDelete_TargetRemovesManifestAndDecrementsRefCount(t *testing.T) {
 	}
 
 	// Get returns errs.ErrArtifactNotFound.
-	if _, err := s.Get(context.Background(), id, core.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
+	if _, err := s.Get(context.Background(), id, domain.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Errorf("Get after delete: expected errs.ErrArtifactNotFound, got %v", err)
 	}
 
@@ -66,7 +66,7 @@ func TestDelete_TargetRemovesManifestAndDecrementsRefCount(t *testing.T) {
 
 func TestDelete_InlineRemovesManifestRow(t *testing.T) {
 	s, root := newInlineStore(t, 100)
-	id, err := s.Put(context.Background(), payload("inline delete"), core.PutOptions{Namespace: "d"})
+	id, err := s.Put(context.Background(), payload("inline delete"), domain.PutOptions{Namespace: "d"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,12 +103,12 @@ func TestDelete_SharedBlobKeepsRefCount(t *testing.T) {
 	s, root := newStoreWithRoot(t)
 	const text = "shared content for delete"
 	idA, err := s.Put(context.Background(), payload(text),
-		core.PutOptions{Namespace: "ns", SessionID: "a"})
+		domain.PutOptions{Namespace: "ns", SessionID: "a"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	idB, err := s.Put(context.Background(), payload(text),
-		core.PutOptions{Namespace: "ns", SessionID: "b"})
+		domain.PutOptions{Namespace: "ns", SessionID: "b"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,10 +121,10 @@ func TestDelete_SharedBlobKeepsRefCount(t *testing.T) {
 	}
 
 	// A is gone; B still readable.
-	if _, err := s.Get(context.Background(), idA, core.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
+	if _, err := s.Get(context.Background(), idA, domain.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Errorf("Get(A) after delete: expected errs.ErrArtifactNotFound, got %v", err)
 	}
-	rh, err := s.Get(context.Background(), idB, core.GetOptions{})
+	rh, err := s.Get(context.Background(), idB, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get(B) after deleting A: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestDelete_BlockedByActiveRetention(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	when := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	id, err := s.Put(context.Background(), payload("retained"),
-		core.PutOptions{Namespace: "v", RetentionUntil: when})
+		domain.PutOptions{Namespace: "v", RetentionUntil: when})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +168,7 @@ func TestDelete_AllowedAfterRetentionExpires(t *testing.T) {
 	// Retention in the past: expired the moment Put returns.
 	when := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
 	id, err := s.Put(context.Background(), payload("expired"),
-		core.PutOptions{Namespace: "v", RetentionUntil: when})
+		domain.PutOptions{Namespace: "v", RetentionUntil: when})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestDelete_DoubleDeleteIsNotFound(t *testing.T) {
 	// (manifest file is gone after the first). Documented as
 	// the natural CAS semantics in the §2.2 plan.
 	s, _ := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("twice"), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload("twice"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestDelete_DoubleDeleteIsNotFound(t *testing.T) {
 
 func TestDelete_BlockedInReadOnly(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("ro"), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload("ro"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestDelete_BlockedInReadOnly(t *testing.T) {
 
 func TestDelete_BlockedInOffline(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("off"), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload("off"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestDelete_BlockedByDeletionPolicyNoDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
 	}
-	id, err := s.Put(context.Background(), payload("locked"), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload("locked"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestDelete_RetentionBeatsPolicy(t *testing.T) {
 	}
 	when := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	id, err := s.Put(context.Background(), payload("both"),
-		core.PutOptions{RetentionUntil: when})
+		domain.PutOptions{RetentionUntil: when})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestDelete_RetentionBeatsPolicy(t *testing.T) {
 
 func TestDelete_CtxCancelled(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
-	id, err := s.Put(context.Background(), payload("cx"), core.PutOptions{})
+	id, err := s.Put(context.Background(), payload("cx"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

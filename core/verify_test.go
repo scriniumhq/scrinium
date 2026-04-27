@@ -59,7 +59,7 @@ func TestVerify_TargetBlob_Roundtrip(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("verify me"),
-		core.PutOptions{Namespace: "v"})
+		domain.PutOptions{Namespace: "v"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestVerify_InlineBlob_Roundtrip(t *testing.T) {
 	s, _ := newInlineStore(t, 1024)
 	id, err := s.Put(context.Background(),
 		payload("inline data"),
-		core.PutOptions{Namespace: "v"})
+		domain.PutOptions{Namespace: "v"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestVerify_TargetBlob_TamperedBytes_ReturnsCorruptedBlob(t *testing.T) {
 	s, root := newStoreWithRoot(t, core.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("tamper target"),
-		core.PutOptions{Namespace: "v"})
+		domain.PutOptions{Namespace: "v"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestVerify_TargetBlob_Missing_ReturnsCorruptedBlob(t *testing.T) {
 	s, root := newStoreWithRoot(t, core.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("delete the blob"),
-		core.PutOptions{Namespace: "v"})
+		domain.PutOptions{Namespace: "v"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestVerify_OfflineMode_Blocked(t *testing.T) {
 	s := newStore(t)
 	id, err := s.Put(context.Background(),
 		payload("offline test"),
-		core.PutOptions{Namespace: "v"})
+		domain.PutOptions{Namespace: "v"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestVerify_CancelledContext(t *testing.T) {
 // manifest off the resulting handle.
 func readBlobRef(t *testing.T, s core.Store, id domain.ArtifactID) domain.BlobRef {
 	t.Helper()
-	rh, err := s.Get(context.Background(), id, core.GetOptions{})
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get for manifest: %v", err)
 	}

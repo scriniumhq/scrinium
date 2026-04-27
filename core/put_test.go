@@ -29,7 +29,7 @@ func TestPut_FreshBlob_WritesArtifacts(t *testing.T) {
 	s, root := newStoreWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("hello scrinium"),
-		core.PutOptions{Namespace: "users"})
+		domain.PutOptions{Namespace: "users"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestPut_VisibleThroughWalk(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("walk-test"),
-		core.PutOptions{Namespace: "users"})
+		domain.PutOptions{Namespace: "users"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,12 +101,12 @@ func TestPut_DeduplicatesIdenticalContent(t *testing.T) {
 	const text = "duplicate me"
 
 	id1, err := s.Put(context.Background(), payload(text),
-		core.PutOptions{Namespace: "ns", SessionID: "sess-1"})
+		domain.PutOptions{Namespace: "ns", SessionID: "sess-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	id2, err := s.Put(context.Background(), payload(text),
-		core.PutOptions{Namespace: "ns", SessionID: "sess-2"})
+		domain.PutOptions{Namespace: "ns", SessionID: "sess-2"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,12 +144,12 @@ func TestPut_TwoArtifactsShareBlob_RefCountIs2(t *testing.T) {
 	const text = "shared content"
 
 	id1, err := s.Put(context.Background(), payload(text),
-		core.PutOptions{Namespace: "n", SessionID: "a"})
+		domain.PutOptions{Namespace: "n", SessionID: "a"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	id2, err := s.Put(context.Background(), payload(text),
-		core.PutOptions{Namespace: "n", SessionID: "b"})
+		domain.PutOptions{Namespace: "n", SessionID: "b"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestPut_PreservesRetentionUntil(t *testing.T) {
 	when := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	id, err := s.Put(context.Background(),
 		payload("retention test"),
-		core.PutOptions{
+		domain.PutOptions{
 			Namespace:      "vault",
 			RetentionUntil: when,
 		})
@@ -205,7 +205,7 @@ func TestPut_RejectsSystemNamespace(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
-		core.PutOptions{Namespace: "system.config"})
+		domain.PutOptions{Namespace: "system.config"})
 	if !errors.Is(err, errs.ErrReservedNamespace) {
 		t.Fatalf("expected errs.ErrReservedNamespace, got %v", err)
 	}
@@ -215,7 +215,7 @@ func TestPut_RejectsWildcardNamespace(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
-		core.PutOptions{Namespace: "*"})
+		domain.PutOptions{Namespace: "*"})
 	if !errors.Is(err, errs.ErrReservedNamespace) {
 		t.Fatalf("expected errs.ErrReservedNamespace, got %v", err)
 	}
@@ -225,7 +225,7 @@ func TestPut_RejectsTooLongNamespace(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
-		core.PutOptions{Namespace: strings.Repeat("a", 256)})
+		domain.PutOptions{Namespace: strings.Repeat("a", 256)})
 	if !errors.Is(err, errs.ErrNamespaceTooLong) {
 		t.Fatalf("expected errs.ErrNamespaceTooLong, got %v", err)
 	}
@@ -235,7 +235,7 @@ func TestPut_RejectsTooLongSessionID(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
-		core.PutOptions{SessionID: strings.Repeat("a", 256)})
+		domain.PutOptions{SessionID: strings.Repeat("a", 256)})
 	if !errors.Is(err, errs.ErrSessionIDTooLong) {
 		t.Fatalf("expected errs.ErrSessionIDTooLong, got %v", err)
 	}
@@ -249,7 +249,7 @@ func TestPut_RejectsHugeMetadata(t *testing.T) {
 			Payload:  strings.NewReader("ok"),
 			Metadata: append([]byte(`"`), append(huge, '"')...),
 		},
-		core.PutOptions{})
+		domain.PutOptions{})
 	if !errors.Is(err, errs.ErrMetadataTooLarge) {
 		t.Fatalf("expected errs.ErrMetadataTooLarge, got %v", err)
 	}
@@ -259,7 +259,7 @@ func TestPut_RejectsNilPayload(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	_, err := s.Put(context.Background(),
 		domain.Artifact{Payload: nil},
-		core.PutOptions{})
+		domain.PutOptions{})
 	if err == nil {
 		t.Fatal("expected error on nil payload")
 	}
@@ -275,7 +275,7 @@ func TestPut_BlockedInReadOnly(t *testing.T) {
 	}
 	_, err := s.Put(context.Background(),
 		payload("nope"),
-		core.PutOptions{})
+		domain.PutOptions{})
 	if !errors.Is(err, errs.ErrStoreReadOnly) {
 		t.Fatalf("expected errs.ErrStoreReadOnly, got %v", err)
 	}
@@ -289,7 +289,7 @@ func TestPut_BlockedInOffline(t *testing.T) {
 	}
 	_, err := s.Put(context.Background(),
 		payload("nope"),
-		core.PutOptions{})
+		domain.PutOptions{})
 	if !errors.Is(err, errs.ErrStoreOffline) {
 		t.Fatalf("expected errs.ErrStoreOffline, got %v", err)
 	}
@@ -299,7 +299,7 @@ func TestPut_CtxCancelled(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := s.Put(ctx, payload("nope"), core.PutOptions{})
+	_, err := s.Put(ctx, payload("nope"), domain.PutOptions{})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
@@ -311,7 +311,7 @@ func TestPut_BlobTypeOtherThanRegular_Deferred(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
-		core.PutOptions{BlobType: core.BlobTypeChunk})
+		domain.PutOptions{BlobType: domain.BlobTypeChunk})
 	if err == nil {
 		t.Fatal("expected error on Chunk BlobType")
 	}
@@ -328,7 +328,7 @@ func TestPut_LargePayload(t *testing.T) {
 	data := bytes.Repeat([]byte{0xab}, N)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(data)},
-		core.PutOptions{Namespace: "big"})
+		domain.PutOptions{Namespace: "big"})
 	if err != nil {
 		t.Fatalf("Put 1MiB: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestPut_DefaultNamespace(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("default ns"),
-		core.PutOptions{}) // empty Namespace = default
+		domain.PutOptions{}) // empty Namespace = default
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -378,7 +378,7 @@ func TestPut_EmptyPayload(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(nil)},
-		core.PutOptions{Namespace: "empty"})
+		domain.PutOptions{Namespace: "empty"})
 	if err != nil {
 		t.Fatalf("Put empty: %v", err)
 	}
@@ -469,7 +469,7 @@ func TestPut_Inline_BelowLimit_NoBlobFile(t *testing.T) {
 
 	id, err := s.Put(context.Background(),
 		payload("small"),
-		core.PutOptions{Namespace: "tiny"})
+		domain.PutOptions{Namespace: "tiny"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -517,7 +517,7 @@ func TestPut_Inline_ExactlyAtLimit_StaysInline(t *testing.T) {
 	exact := strings.Repeat("a", int(limit))
 	id, err := s.Put(context.Background(),
 		payload(exact),
-		core.PutOptions{Namespace: "edge"})
+		domain.PutOptions{Namespace: "edge"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -544,7 +544,7 @@ func TestPut_Inline_OverLimit_FallsBackToTarget(t *testing.T) {
 	over := strings.Repeat("b", int(limit)+1)
 	id, err := s.Put(context.Background(),
 		payload(over),
-		core.PutOptions{Namespace: "spill"})
+		domain.PutOptions{Namespace: "spill"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestPut_Inline_NoDedupForInline(t *testing.T) {
 	for _, sid := range []string{"a", "b"} {
 		_, err := s.Put(context.Background(),
 			payload(content),
-			core.PutOptions{Namespace: "ns", SessionID: sid})
+			domain.PutOptions{Namespace: "ns", SessionID: sid})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -605,7 +605,7 @@ func TestPut_Inline_EmptyPayload(t *testing.T) {
 
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(nil)},
-		core.PutOptions{Namespace: "empty"})
+		domain.PutOptions{Namespace: "empty"})
 	if err != nil {
 		t.Fatalf("Put empty: %v", err)
 	}
@@ -635,7 +635,7 @@ func TestPut_Inline_DisabledByZeroLimit(t *testing.T) {
 
 	id, err := s.Put(context.Background(),
 		payload("anything"),
-		core.PutOptions{Namespace: "disabled"})
+		domain.PutOptions{Namespace: "disabled"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
