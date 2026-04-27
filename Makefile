@@ -103,6 +103,34 @@ endif
 #   make smoke              default 100k, ~1-2min, M1 O(1)-memory proof
 #   make smoke N=1000000    full 1M, ~12-15min, literal spec target
 #                            (run before tagging a release)
+#
+# Disk vs ramdisk. Default uses $TMPDIR on the system disk: APFS
+# (macOS) and ext4 (Linux) handle a million small files at roughly
+# 800-1500 Put/s on NVMe. The smoke is IOPS-bound, not bandwidth-
+# bound — small files spend most of their time in directory ops
+# and fsync (which is off, but the kernel still serialises).
+#
+# Ramdisk gives a 5-10x speedup and avoids wearing the SSD on
+# repeated runs. Setup is one-shot per session:
+#
+#   macOS (4 GiB ramdisk under /Volumes/scrinium-ram):
+#     diskutil erasevolume APFS scrinium-ram \
+#         $$(hdiutil attach -nomount ram://8388608)
+#     TMPDIR=/Volumes/scrinium-ram make smoke N=1000000
+#     diskutil eject /Volumes/scrinium-ram        # cleanup; one shot
+#
+#   Linux (4 GiB tmpfs under /mnt/scrinium-ram):
+#     sudo mkdir -p /mnt/scrinium-ram
+#     sudo mount -t tmpfs -o size=4G tmpfs /mnt/scrinium-ram
+#     sudo chown $$USER /mnt/scrinium-ram
+#     TMPDIR=/mnt/scrinium-ram make smoke N=1000000
+#     sudo umount /mnt/scrinium-ram               # cleanup; one shot
+#
+# Ctrl-C during a smoke leaves the partial tree behind (Go's
+# t.TempDir cleanup runs on test completion, not on signal).
+# On ramdisk: eject/umount nukes everything in one operation.
+# On regular $TMPDIR: find $TMPDIR -maxdepth 1 -name 'TestSmoke_*'
+# -exec rm -rf {} +
 .PHONY: smoke
 smoke:
 ifdef N

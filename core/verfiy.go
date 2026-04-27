@@ -10,7 +10,6 @@ import (
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
-	"github.com/rkurbatov/scrinium/internal/blobpath"
 )
 
 // Verify performs a full integrity check of an artifact: re-reads
@@ -84,13 +83,15 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 		}
 
 	case "Target":
-		cfg := s.snapshotConfig()
-		blobPath, err := blobpath.Resolve(cfg.PathTopology,
-			domain.BlobTypeRegular, string(m.BlobRef))
+		// PhysicalAddress is sourced from the index — see the
+		// layout invariant in Internals/01. The read-path follows
+		// what the index recorded at IndexManifest time, not what
+		// the current PathTopology would compute.
+		addr, err := s.index.Resolve(string(m.BlobRef))
 		if err != nil {
 			return fmt.Errorf("core.Verify: resolve blob path: %w", err)
 		}
-		rc, err := s.drv.Get(ctx, blobPath)
+		rc, err := s.drv.Get(ctx, addr.Path)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				return errs.ErrCorruptedBlob

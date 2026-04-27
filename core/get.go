@@ -76,8 +76,6 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts GetOptions) 
 		return nil, errs.ErrArtifactNotFound
 	}
 
-	cfg := s.snapshotConfig()
-
 	manifest, err := s.loadManifest(ctx, id)
 	if err != nil {
 		return nil, err
@@ -109,20 +107,24 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts GetOptions) 
 		}, nil
 
 	case "Target":
-		// PathTopology comes from current StoreConfig, not the
-		// manifest. This is intentional: the manifest does not
-		// encode a "where on disk" — that is a Store-wide concern.
-		// A Store that changes PathTopology mid-life would break
-		// historical reads; that migration is MigrateIndexAgent's
-		// job in M3.
-		blobPath, err := blobpath.Resolve(cfg.PathTopology, domain.BlobTypeRegular, string(manifest.BlobRef))
+		// PhysicalAddress is sourced from the index — the
+		// authoritative cache populated at IndexManifest time.
+		// Read-path does not recompute the path from the current
+		// PathTopology: per the layout invariant (Internals/01),
+		// manifests carry no placement data, and the path under
+		// which a blob was actually written is what the index
+		// records. This makes future layout changes (Reshuffle
+		// Agent, OQ-21) safe by construction — the read-path
+		// follows whatever the index says, the topology config
+		// only governs where new writes go.
+		addr, err := s.index.Resolve(string(manifest.BlobRef))
 		if err != nil {
 			return nil, fmt.Errorf("core.Get: resolve blob path: %w", err)
 		}
 		return &targetReadHandle{
 			manifest: manifest,
 			drv:      s.drv,
-			blobPath: blobPath,
+			blobPath: addr.Path,
 			ctx:      ctx,
 		}, nil
 
