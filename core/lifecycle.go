@@ -258,7 +258,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		index:           idx,
 		pub:             o.publisher,
 		activeConfig:    cfg,
-		state:           StateBootstrapping,
+		state:           domain.StateBootstrapping,
 		hashes:          o.hashRegistry,
 		transformers:    o.readRegistry,
 		keyResolver:     o.keyResolver,
@@ -277,7 +277,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	publishOrphanReport(o.publisher, report)
 
 	s.stateMu.Lock()
-	s.state = StateUnlocked
+	s.state = domain.StateUnlocked
 	s.stateMu.Unlock()
 
 	// Recovery Kit: nil for Plain manifests. M2 fills this in for
@@ -408,7 +408,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		index:           idx,
 		pub:             o.publisher,
 		activeConfig:    active,
-		state:           StateBootstrapping,
+		state:           domain.StateBootstrapping,
 		hashes:          o.hashRegistry,
 		transformers:    o.readRegistry,
 		keyResolver:     o.keyResolver,
@@ -425,7 +425,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	publishOrphanReport(o.publisher, report)
 
 	s.stateMu.Lock()
-	s.state = StateUnlocked
+	s.state = domain.StateUnlocked
 	s.stateMu.Unlock()
 
 	return s, nil

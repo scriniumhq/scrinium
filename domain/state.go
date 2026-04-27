@@ -4,11 +4,29 @@ package domain
 type StoreState string
 
 const (
+	// StateBootstrapping — initialisation, Orphan Scan, or descriptor
+	// consensus is in progress. The API is blocked.
 	StateBootstrapping StoreState = "Bootstrapping"
-	StateLocked        StoreState = "Locked"
-	StateUnlocked      StoreState = "Unlocked"
-	StateDegraded      StoreState = "Degraded"
-	StateCorrupted     StoreState = "Corrupted"
+
+	// StateLocked — the descriptor has been read; the DEK has not
+	// yet been decrypted. Awaits Unlock with a passphrase.
+	StateLocked StoreState = "Locked"
+
+	// StateUnlocked — normal working state. All operations are
+	// available unless restricted by MaintenanceMode or configuration
+	// policy.
+	StateUnlocked StoreState = "Unlocked"
+
+	// StateDegraded — a divergence in descriptor consensus has been
+	// detected. The API is available; Auto-Heal will reconcile the
+	// divergence and transition the Store to Unlocked.
+	StateDegraded StoreState = "Degraded"
+
+	// StateCorrupted — a critical initialisation failure (every
+	// descriptor replica is corrupted, or the StoreIndex is
+	// corrupted). The API is blocked. Recovery is performed through
+	// an explicit RebuildIndexAgent.
+	StateCorrupted StoreState = "Corrupted"
 )
 
 // MaintenanceMode is a maintenance regime orthogonal to StoreState.

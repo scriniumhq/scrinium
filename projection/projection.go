@@ -69,7 +69,7 @@ type ArtifactFacet struct {
 // Store.
 type StorageFacet struct {
 	StoreID   domain.StoreID
-	Workspace core.Workspace
+	Workspace domain.Workspace
 	IsTransit bool
 	RefCount  int
 }

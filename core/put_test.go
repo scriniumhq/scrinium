@@ -270,7 +270,7 @@ func TestPut_RejectsNilPayload(t *testing.T) {
 func TestPut_BlockedInReadOnly(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	if err := s.SetMaintenanceMode(context.Background(),
-		core.MaintenanceModeReadOnly); err != nil {
+		domain.MaintenanceModeReadOnly); err != nil {
 		t.Fatal(err)
 	}
 	_, err := s.Put(context.Background(),
@@ -284,7 +284,7 @@ func TestPut_BlockedInReadOnly(t *testing.T) {
 func TestPut_BlockedInOffline(t *testing.T) {
 	s, _ := newStoreWithRoot(t)
 	if err := s.SetMaintenanceMode(context.Background(),
-		core.MaintenanceModeOffline); err != nil {
+		domain.MaintenanceModeOffline); err != nil {
 		t.Fatal(err)
 	}
 	_, err := s.Put(context.Background(),

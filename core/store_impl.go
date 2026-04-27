@@ -37,8 +37,8 @@ type store struct {
 
 	// State machine.
 	stateMu     sync.RWMutex
-	state       StoreState
-	maintenance MaintenanceMode
+	state       domain.StoreState
+	maintenance domain.MaintenanceMode
 
 	// Plugin registries — populated at construction; never mutated
 	// after that.
@@ -55,7 +55,7 @@ type store struct {
 
 // State returns the current state of the Store. Cheap and
 // lock-free for readers (RWMutex read).
-func (s *store) State() StoreState {
+func (s *store) State() domain.StoreState {
 	s.stateMu.RLock()
 	defer s.stateMu.RUnlock()
 	return s.state
@@ -81,12 +81,12 @@ func (s *store) Capabilities() driver.CapabilityMask {
 //
 // The transition is idempotent: setting the current mode again is
 // a no-op success.
-func (s *store) SetMaintenanceMode(ctx context.Context, mode MaintenanceMode) error {
+func (s *store) SetMaintenanceMode(ctx context.Context, mode domain.MaintenanceMode) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	switch mode {
-	case MaintenanceModeNone, MaintenanceModeReadOnly, MaintenanceModeOffline:
+	case domain.MaintenanceModeNone, domain.MaintenanceModeReadOnly, domain.MaintenanceModeOffline:
 		// OK
 	default:
 		return fmt.Errorf("core.SetMaintenanceMode: invalid mode %d", mode)
@@ -107,7 +107,7 @@ func (s *store) SetMaintenanceMode(ctx context.Context, mode MaintenanceMode) er
 // state lock. Used internally by methods that need to honour it
 // (Walk, WalkSystem do not — they are read-only — but Capacity
 // does, etc.).
-func (s *store) maintenanceMode() MaintenanceMode {
+func (s *store) maintenanceMode() domain.MaintenanceMode {
 	s.stateMu.RLock()
 	defer s.stateMu.RUnlock()
 	return s.maintenance
@@ -131,15 +131,15 @@ func (s *store) maintenanceMode() MaintenanceMode {
 // The method honours ctx cancellation between the two operations.
 // Offline Stores reject Capacity (operators can still inspect
 // through State / Capabilities).
-func (s *store) Capacity(ctx context.Context) (StorageInfo, error) {
+func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 	if err := ctx.Err(); err != nil {
-		return StorageInfo{}, err
+		return domain.StorageInfo{}, err
 	}
-	if s.maintenanceMode() == MaintenanceModeOffline {
-		return StorageInfo{}, errs.ErrStoreOffline
+	if s.maintenanceMode() == domain.MaintenanceModeOffline {
+		return domain.StorageInfo{}, errs.ErrStoreOffline
 	}
 
-	out := StorageInfo{
+	out := domain.StorageInfo{
 		TotalBytes:     -1,
 		UsedBytes:      -1,
 		AvailableBytes: -1,
@@ -155,12 +155,12 @@ func (s *store) Capacity(ctx context.Context) (StorageInfo, error) {
 		artifactCount++
 		return nil
 	}); err != nil {
-		return StorageInfo{}, fmt.Errorf("core.Capacity: count manifests: %w", err)
+		return domain.StorageInfo{}, fmt.Errorf("core.Capacity: count manifests: %w", err)
 	}
 	out.ArtifactCount = artifactCount
 
 	if err := ctx.Err(); err != nil {
-		return StorageInfo{}, err
+		return domain.StorageInfo{}, err
 	}
 
 	// BlobCount: physical blobs/ count. Inline manifests (system.*
@@ -168,7 +168,7 @@ func (s *store) Capacity(ctx context.Context) (StorageInfo, error) {
 	// not contribute here.
 	blobs, err := s.drv.CountObjects(ctx, "blobs")
 	if err != nil {
-		return StorageInfo{}, fmt.Errorf("core.Capacity: count blobs: %w", err)
+		return domain.StorageInfo{}, fmt.Errorf("core.Capacity: count blobs: %w", err)
 	}
 	out.BlobCount = blobs
 
@@ -237,14 +237,14 @@ func (s *store) checkOperational() error {
 	s.stateMu.RUnlock()
 
 	switch state {
-	case StateCorrupted:
+	case domain.StateCorrupted:
 		return errs.ErrStoreCorrupted
-	case StateLocked:
+	case domain.StateLocked:
 		return errs.ErrLocked
-	case StateBootstrapping:
+	case domain.StateBootstrapping:
 		return errs.ErrStoreNotReady
 	}
-	if mode == MaintenanceModeOffline {
+	if mode == domain.MaintenanceModeOffline {
 		return errs.ErrStoreOffline
 	}
 	return nil

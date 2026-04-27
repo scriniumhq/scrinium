@@ -178,7 +178,7 @@ func TestVerify_OfflineMode_Blocked(t *testing.T) {
 		t.Fatalf("Put: %v", err)
 	}
 	if err := s.SetMaintenanceMode(context.Background(),
-		core.MaintenanceModeOffline); err != nil {
+		domain.MaintenanceModeOffline); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Verify(context.Background(), id); !errors.Is(err, errs.ErrStoreOffline) {

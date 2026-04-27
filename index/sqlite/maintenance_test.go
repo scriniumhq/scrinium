@@ -19,7 +19,7 @@ import (
 func TestMarkVerified_Updates(t *testing.T) {
 	idx := newMemoryIndex(t)
 	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 1)
 
 	// Truncate to the storage precision (RFC 3339 seconds, UTC) so
 	// the round-trip Equal check below survives.
@@ -65,7 +65,7 @@ func TestDeletePacked_RemovesAllEntriesForPack(t *testing.T) {
 		OriginalSize: 4096,
 		CreatedAt:    time.Now(),
 	}
-	if err := idx.IndexManifest(pack1, newPhysAddr("packs/p1"), nil, []core.PackedEntry{
+	if err := idx.IndexManifest(pack1, newPhysAddr("packs/p1"), nil, []domain.PackedEntry{
 		{ArtifactID: "a1", BlobRef: "b1", BlobSize: 100, ContentHash: "sha256-" + domain.ContentHash(strings.Repeat("a", 64)), PipelineParams: []byte{}},
 		{ArtifactID: "a2", BlobRef: "b2", BlobSize: 200, ContentHash: "sha256-" + domain.ContentHash(strings.Repeat("b", 64)), PipelineParams: []byte{}},
 	}); err != nil {
@@ -80,7 +80,7 @@ func TestDeletePacked_RemovesAllEntriesForPack(t *testing.T) {
 		OriginalSize: 4096,
 		CreatedAt:    time.Now(),
 	}
-	if err := idx.IndexManifest(pack2, newPhysAddr("packs/p2"), nil, []core.PackedEntry{
+	if err := idx.IndexManifest(pack2, newPhysAddr("packs/p2"), nil, []domain.PackedEntry{
 		{ArtifactID: "c1", BlobRef: "d1", BlobSize: 300, ContentHash: "sha256-" + domain.ContentHash(strings.Repeat("c", 64)), PipelineParams: []byte{}},
 	}); err != nil {
 		t.Fatalf("setup pack-2: %v", err)
@@ -120,7 +120,7 @@ func TestVacuumInto_CreatesSnapshot(t *testing.T) {
 	idx, _ := newDiskIndex(t)
 	// Seed some data so the snapshot is a meaningful copy.
 	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 1)
 	insertManifest(t, idx, domain.Manifest{
 		ArtifactID: "art-1", Type: domain.ManifestTypeBlob, Namespace: "ns",
 		BlobRef: "blob-1", CreatedAt: time.Now(),
@@ -257,7 +257,7 @@ func TestSetMeta_BinarySafe(t *testing.T) {
 // --- Compile-time interface conformance ---
 
 func TestIndex_ImplementsStoreIndex(t *testing.T) {
-	// The compile-time check var _ core.StoreIndex = (*Index)(nil)
+	// The compile-time check var _ domain.StoreIndex = (*Index)(nil)
 	// in maintenance.go is the real guarantee; this test just
 	// confirms it at runtime so a regression shows up in test
 	// output, not just a build error.
@@ -265,6 +265,6 @@ func TestIndex_ImplementsStoreIndex(t *testing.T) {
 	idx := newMemoryIndex(t)
 	var asInterface core.StoreIndex = idx
 	if asInterface == nil {
-		t.Fatal("Index does not satisfy core.StoreIndex")
+		t.Fatal("Index does not satisfy domain.StoreIndex")
 	}
 }

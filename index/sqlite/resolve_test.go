@@ -7,14 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 )
 
 // helper: insert a blob row directly, bypassing IndexManifest.
 // Lets resolve-side tests stay focused on the read paths.
-func insertBlob(t *testing.T, idx *Index, ref, contentHash string, size int64, addr core.PhysicalAddress, refCount int) {
+func insertBlob(t *testing.T, idx *Index, ref, contentHash string, size int64, addr domain.PhysicalAddress, refCount int) {
 	t.Helper()
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO blobs (
@@ -38,8 +37,8 @@ func insertBlob(t *testing.T, idx *Index, ref, contentHash string, size int64, a
 func TestResolve_Basic(t *testing.T) {
 	idx := newMemoryIndex(t)
 	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
-		core.PhysicalAddress{
-			Workspace: core.WorkspaceLocation,
+		domain.PhysicalAddress{
+			Workspace: domain.WorkspaceLocation,
 			Path:      "blobs/aa/bb/blob-1",
 		}, 1)
 
@@ -47,8 +46,8 @@ func TestResolve_Basic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if addr.Workspace != core.WorkspaceLocation {
-		t.Errorf("Workspace: got %d, want %d", addr.Workspace, core.WorkspaceLocation)
+	if addr.Workspace != domain.WorkspaceLocation {
+		t.Errorf("Workspace: got %d, want %d", addr.Workspace, domain.WorkspaceLocation)
 	}
 	if addr.Path != "blobs/aa/bb/blob-1" {
 		t.Errorf("Path: got %q, want %q", addr.Path, "blobs/aa/bb/blob-1")
@@ -69,8 +68,8 @@ func TestResolve_PackedBlob(t *testing.T) {
 	// pack_offset/pack_size populated; physical_path points to the
 	// pack file.
 	insertBlob(t, idx, "blob-in-pack", "sha256-"+strings.Repeat("p", 64), 4096,
-		core.PhysicalAddress{
-			Workspace: core.WorkspaceLocation,
+		domain.PhysicalAddress{
+			Workspace: domain.WorkspaceLocation,
 			Path:      "packs/pack-1",
 			PackRef:   "pack-blob-1",
 			Offset:    8192,
@@ -95,7 +94,7 @@ func TestExistsByContent_Hit(t *testing.T) {
 	idx := newMemoryIndex(t)
 	hash := domain.ContentHash("sha256-" + strings.Repeat("a", 64))
 	insertBlob(t, idx, "blob-1", string(hash), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 1)
 
 	ref, ok, err := idx.ExistsByContent(hash, 1024)
 	if err != nil {
@@ -131,7 +130,7 @@ func TestExistsByContent_HashHitSizeMiss(t *testing.T) {
 	idx := newMemoryIndex(t)
 	hash := domain.ContentHash("sha256-" + strings.Repeat("x", 64))
 	insertBlob(t, idx, "blob-1k", string(hash), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p1"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p1"}, 1)
 
 	// Same hash, different size — must NOT match.
 	_, ok, err := idx.ExistsByContent(hash, 2048)
@@ -149,13 +148,13 @@ func TestExistsByHash_Hit(t *testing.T) {
 	idx := newMemoryIndex(t)
 	hash := domain.ContentHash("sha256-" + strings.Repeat("a", 64))
 	insertBlob(t, idx, "blob-1", string(hash), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 1)
 
 	status, err := idx.ExistsByHash(hash)
 	if err != nil {
 		t.Fatalf("ExistsByHash: %v", err)
 	}
-	if status != core.BlobExists {
+	if status != domain.BlobExists {
 		t.Errorf("status: got %d, want BlobExists", status)
 	}
 }
@@ -166,7 +165,7 @@ func TestExistsByHash_Miss(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExistsByHash: %v", err)
 	}
-	if status != core.BlobNotFound {
+	if status != domain.BlobNotFound {
 		t.Errorf("status: got %d, want BlobNotFound", status)
 	}
 }
@@ -179,15 +178,15 @@ func TestExistsByHash_IgnoresSize(t *testing.T) {
 	idx := newMemoryIndex(t)
 	hash := domain.ContentHash("sha256-" + strings.Repeat("x", 64))
 	insertBlob(t, idx, "blob-1k", string(hash), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p1"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p1"}, 1)
 	insertBlob(t, idx, "blob-2k", string(hash), 2048,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p2"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p2"}, 1)
 
 	status, err := idx.ExistsByHash(hash)
 	if err != nil {
 		t.Fatalf("ExistsByHash: %v", err)
 	}
-	if status != core.BlobExists {
+	if status != domain.BlobExists {
 		t.Errorf("status: got %d, want BlobExists", status)
 	}
 }
@@ -197,7 +196,7 @@ func TestExistsByHash_IgnoresSize(t *testing.T) {
 func TestGetRefCount_Basic(t *testing.T) {
 	idx := newMemoryIndex(t)
 	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 3)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 3)
 
 	n, err := idx.GetRefCount("blob-1")
 	if err != nil {
@@ -222,7 +221,7 @@ func TestGetRefCount_Missing(t *testing.T) {
 func TestGetRefCount_Zero(t *testing.T) {
 	idx := newMemoryIndex(t)
 	insertBlob(t, idx, "orphan-1", "sha256-"+strings.Repeat("a", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 0)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 0)
 
 	n, err := idx.GetRefCount("orphan-1")
 	if err != nil {
@@ -249,7 +248,7 @@ func TestLookupPacked_Hit(t *testing.T) {
 		OriginalSize: 65536,
 		CreatedAt:    time.Now(),
 	}
-	entries := []core.PackedEntry{
+	entries := []domain.PackedEntry{
 		{
 			ArtifactID:     "art-p1",
 			BlobRef:        "blob-p1",

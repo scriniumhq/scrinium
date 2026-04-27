@@ -110,7 +110,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts PutOptions) (do
 		originalSize int64
 		inlineBytes  []byte // non-nil iff this Put goes inline
 		blobRef      domain.BlobRef
-		blobAddr     PhysicalAddress
+		blobAddr     domain.PhysicalAddress
 	)
 
 	if useInlineFallback {
@@ -258,19 +258,19 @@ func (s *store) commitBlob(
 	stagingPath string,
 	contentHash domain.ContentHash,
 	originalSize int64,
-) (domain.BlobRef, PhysicalAddress, error) {
+) (domain.BlobRef, domain.PhysicalAddress, error) {
 	existingRef, found, err := s.index.ExistsByContent(contentHash, originalSize)
 	if err != nil {
 		_ = s.drv.Remove(ctx, stagingPath)
-		return "", PhysicalAddress{}, fmt.Errorf("core.Put: dedup probe: %w", err)
+		return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: dedup probe: %w", err)
 	}
 	if found {
 		if err := s.drv.Remove(ctx, stagingPath); err != nil {
-			return "", PhysicalAddress{}, fmt.Errorf("core.Put: drop staging: %w", err)
+			return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: drop staging: %w", err)
 		}
 		addr, err := s.index.Resolve(existingRef)
 		if err != nil {
-			return "", PhysicalAddress{}, fmt.Errorf("core.Put: resolve existing blob: %w", err)
+			return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: resolve existing blob: %w", err)
 		}
 		return domain.BlobRef(existingRef), addr, nil
 	}
@@ -280,14 +280,14 @@ func (s *store) commitBlob(
 	finalPath, err := blobpath.Resolve(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
 	if err != nil {
 		_ = s.drv.Remove(ctx, stagingPath)
-		return "", PhysicalAddress{}, fmt.Errorf("core.Put: resolve blob path: %w", err)
+		return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: resolve blob path: %w", err)
 	}
 	if err := s.drv.Rename(ctx, stagingPath, finalPath); err != nil {
 		_ = s.drv.Remove(ctx, stagingPath)
-		return "", PhysicalAddress{}, fmt.Errorf("core.Put: commit blob: %w", err)
+		return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: commit blob: %w", err)
 	}
-	return blobRef, PhysicalAddress{
-		Workspace: WorkspaceLocation,
+	return blobRef, domain.PhysicalAddress{
+		Workspace: domain.WorkspaceLocation,
 		Path:      finalPath,
 	}, nil
 }
@@ -308,7 +308,7 @@ func (s *store) checkWritable() error {
 	if err := s.checkOperational(); err != nil {
 		return err
 	}
-	if s.maintenanceMode() == MaintenanceModeReadOnly {
+	if s.maintenanceMode() == domain.MaintenanceModeReadOnly {
 		return errs.ErrStoreReadOnly
 	}
 	return nil

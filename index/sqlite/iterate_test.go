@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 )
@@ -294,13 +293,13 @@ func TestListOrphanBlobs(t *testing.T) {
 	idx := newMemoryIndex(t)
 	// Mix of orphan (ref_count=0) and live blobs.
 	insertBlob(t, idx, "live-1", "sha256-"+strings.Repeat("a", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p1"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p1"}, 1)
 	insertBlob(t, idx, "orphan-1", "sha256-"+strings.Repeat("b", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p2"}, 0)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p2"}, 0)
 	insertBlob(t, idx, "orphan-2", "sha256-"+strings.Repeat("c", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p3"}, 0)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p3"}, 0)
 	insertBlob(t, idx, "live-2", "sha256-"+strings.Repeat("d", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p4"}, 5)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p4"}, 5)
 
 	var got []string
 	err := idx.ListOrphanBlobs(context.Background(), func(ref string) error {
@@ -326,7 +325,7 @@ func TestListOrphanBlobs_StopWalk(t *testing.T) {
 	idx := newMemoryIndex(t)
 	for i := 0; i < 5; i++ {
 		insertBlob(t, idx, string(rune('a'+i)), "sha256-"+strings.Repeat(string(rune('a'+i)), 64), 1024,
-			core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 0)
+			domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 0)
 	}
 
 	var seen int
@@ -356,11 +355,11 @@ func TestListUnverified(t *testing.T) {
 	// in iterate.go, NULL rows are matched by `last_verified_at IS NULL`
 	// regardless of cutoff.
 	insertBlob(t, idx, "never", "sha256-"+strings.Repeat("a", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p1"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p1"}, 1)
 
 	// Verified ten minutes ago: stale per a five-minute cutoff.
 	insertBlob(t, idx, "stale", "sha256-"+strings.Repeat("b", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p2"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p2"}, 1)
 	tenMinAgo := fmtRFC3339(now.Add(-10 * time.Minute))
 	if _, err := idx.db.ExecContext(context.Background(),
 		`UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`,
@@ -371,7 +370,7 @@ func TestListUnverified(t *testing.T) {
 
 	// Verified one minute ago: fresh per the same cutoff.
 	insertBlob(t, idx, "fresh", "sha256-"+strings.Repeat("c", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p3"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p3"}, 1)
 	oneMinAgo := fmtRFC3339(now.Add(-time.Minute))
 	if _, err := idx.db.ExecContext(context.Background(),
 		`UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`,
@@ -413,11 +412,11 @@ func TestListUnverified_OldestFirst(t *testing.T) {
 
 	// Three blobs, verified at different times in the past.
 	insertBlob(t, idx, "older", "sha256-"+strings.Repeat("o", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 1)
 	insertBlob(t, idx, "middle", "sha256-"+strings.Repeat("m", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 1)
 	insertBlob(t, idx, "newer", "sha256-"+strings.Repeat("n", 64), 1024,
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"}, 1)
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 1)
 
 	for ref, ago := range map[string]time.Duration{
 		"older":  -3 * time.Hour,

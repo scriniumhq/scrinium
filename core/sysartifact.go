@@ -83,8 +83,8 @@ func writeInlineSystemArtifact(
 	}
 
 	// 5. Index. WalkSystem(namespace) reads from here.
-	if err := idx.IndexManifest(manifest, PhysicalAddress{
-		Workspace: WorkspaceLocation,
+	if err := idx.IndexManifest(manifest, domain.PhysicalAddress{
+		Workspace: domain.WorkspaceLocation,
 		Path:      manifestPath,
 	}, nil, nil); err != nil {
 		return "", fmt.Errorf("system artifact: index: %w", err)

@@ -20,8 +20,8 @@ var newStore = storefx.Init
 
 func TestStore_State_StartsUnlocked(t *testing.T) {
 	s := newStore(t)
-	if s.State() != core.StateUnlocked {
-		t.Errorf("state: got %v, want %v", s.State(), core.StateUnlocked)
+	if s.State() != domain.StateUnlocked {
+		t.Errorf("state: got %v, want %v", s.State(), domain.StateUnlocked)
 	}
 }
 
@@ -39,11 +39,11 @@ func TestStore_SetMaintenanceMode_AllValidValues(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	for _, mode := range []core.MaintenanceMode{
-		core.MaintenanceModeNone,
-		core.MaintenanceModeReadOnly,
-		core.MaintenanceModeOffline,
-		core.MaintenanceModeNone, // back to normal
+	for _, mode := range []domain.MaintenanceMode{
+		domain.MaintenanceModeNone,
+		domain.MaintenanceModeReadOnly,
+		domain.MaintenanceModeOffline,
+		domain.MaintenanceModeNone, // back to normal
 	} {
 		if err := s.SetMaintenanceMode(ctx, mode); err != nil {
 			t.Errorf("SetMaintenanceMode(%d): %v", mode, err)
@@ -53,7 +53,7 @@ func TestStore_SetMaintenanceMode_AllValidValues(t *testing.T) {
 
 func TestStore_SetMaintenanceMode_RejectsInvalid(t *testing.T) {
 	s := newStore(t)
-	err := s.SetMaintenanceMode(context.Background(), core.MaintenanceMode(99))
+	err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceMode(99))
 	if err == nil {
 		t.Fatal("expected error on invalid mode")
 	}
@@ -70,7 +70,7 @@ func TestStore_SetMaintenanceMode_OfflineBlocksCapacity(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
 
-	if err := s.SetMaintenanceMode(ctx, core.MaintenanceModeOffline); err != nil {
+	if err := s.SetMaintenanceMode(ctx, domain.MaintenanceModeOffline); err != nil {
 		t.Fatal(err)
 	}
 	_, err := s.Capacity(ctx)
@@ -79,7 +79,7 @@ func TestStore_SetMaintenanceMode_OfflineBlocksCapacity(t *testing.T) {
 	}
 
 	// Returning to None must restore Capacity.
-	if err := s.SetMaintenanceMode(ctx, core.MaintenanceModeNone); err != nil {
+	if err := s.SetMaintenanceMode(ctx, domain.MaintenanceModeNone); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Capacity(ctx); err != nil {

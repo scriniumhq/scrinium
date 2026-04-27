@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/testutil/manifestfx"
@@ -206,7 +205,7 @@ func TestIndexManifest_Pack_RegistersEntries(t *testing.T) {
 		OriginalSize: 65536,
 		CreatedAt:    time.Now(),
 	}
-	entries := []core.PackedEntry{
+	entries := []domain.PackedEntry{
 		{
 			ArtifactID:     "art-p1",
 			BlobRef:        "blob-p1",
@@ -321,8 +320,8 @@ func TestRebindBlob(t *testing.T) {
 	}
 
 	// Rebind to Location.
-	newAddr := core.PhysicalAddress{
-		Workspace: core.WorkspaceLocation,
+	newAddr := domain.PhysicalAddress{
+		Workspace: domain.WorkspaceLocation,
 		Path:      "blobs/aa/bb/blob-1",
 	}
 	if err := idx.RebindBlob(context.Background(), "blob-1", newAddr); err != nil {
@@ -337,8 +336,8 @@ func TestRebindBlob(t *testing.T) {
 	if path != "blobs/aa/bb/blob-1" {
 		t.Errorf("rebinded path: got %q, want %q", path, "blobs/aa/bb/blob-1")
 	}
-	if ws != int(core.WorkspaceLocation) {
-		t.Errorf("workspace: got %d, want %d", ws, core.WorkspaceLocation)
+	if ws != int(domain.WorkspaceLocation) {
+		t.Errorf("workspace: got %d, want %d", ws, domain.WorkspaceLocation)
 	}
 	// ref_count untouched.
 	if got := refCount(t, idx, "blob-1"); got != 1 {
@@ -349,7 +348,7 @@ func TestRebindBlob(t *testing.T) {
 func TestRebindBlob_MissingBlobIsNoOp(t *testing.T) {
 	idx := newMemoryIndex(t)
 	err := idx.RebindBlob(context.Background(), "nonexistent",
-		core.PhysicalAddress{Workspace: core.WorkspaceLocation, Path: "p"})
+		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"})
 	if err != nil {
 		t.Errorf("missing blob should be no-op, got %v", err)
 	}

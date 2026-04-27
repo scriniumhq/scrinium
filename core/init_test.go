@@ -42,8 +42,8 @@ func TestInitStore_FreshLocation_Succeeds(t *testing.T) {
 	if kit != nil {
 		t.Errorf("expected nil RecoveryKit on Plain Store, got %d bytes", len(kit))
 	}
-	if s.State() != core.StateUnlocked {
-		t.Errorf("state: got %v, want %v", s.State(), core.StateUnlocked)
+	if s.State() != domain.StateUnlocked {
+		t.Errorf("state: got %v, want %v", s.State(), domain.StateUnlocked)
 	}
 
 	desc, err := descriptor.Read(context.Background(), drv)
@@ -143,8 +143,8 @@ func TestInitStore_ForceReinit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("force-reinit InitStore: %v", err)
 	}
-	if s2.State() != core.StateUnlocked {
-		t.Errorf("state after force reinit: got %v, want %v", s2.State(), core.StateUnlocked)
+	if s2.State() != domain.StateUnlocked {
+		t.Errorf("state after force reinit: got %v, want %v", s2.State(), domain.StateUnlocked)
 	}
 	desc2, _ := descriptor.Read(context.Background(), drv)
 	if desc2.StoreID == id1 {
@@ -258,8 +258,8 @@ func TestInitStore_DiskBackedIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
 	}
-	if s.State() != core.StateUnlocked {
-		t.Errorf("state: got %v, want %v", s.State(), core.StateUnlocked)
+	if s.State() != domain.StateUnlocked {
+		t.Errorf("state: got %v, want %v", s.State(), domain.StateUnlocked)
 	}
 	if _, err := os.Stat(idxPath); err != nil {
 		t.Errorf("disk-backed index file: %v", err)
@@ -375,8 +375,8 @@ func TestOpenStore_NoConfig_Succeeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
-	if s.State() != core.StateUnlocked {
-		t.Errorf("state: got %v, want %v", s.State(), core.StateUnlocked)
+	if s.State() != domain.StateUnlocked {
+		t.Errorf("state: got %v, want %v", s.State(), domain.StateUnlocked)
 	}
 }
 
@@ -404,8 +404,8 @@ func TestOpenStore_MatchingConfig_Succeeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
-	if s.State() != core.StateUnlocked {
-		t.Errorf("state: got %v, want %v", s.State(), core.StateUnlocked)
+	if s.State() != domain.StateUnlocked {
+		t.Errorf("state: got %v, want %v", s.State(), domain.StateUnlocked)
 	}
 }
 

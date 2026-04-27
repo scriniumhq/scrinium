@@ -1,4 +1,4 @@
-// Package manifestfx supplies domain.Manifest and core.PhysicalAddress
+// Package manifestfx supplies domain.Manifest and domain.PhysicalAddress
 // builders for tests.
 package manifestfx
 
@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 )
 
@@ -48,9 +47,9 @@ func Blob(id, blobRef string) domain.Manifest {
 }
 
 // PhysAddr is a Location-workspace address at path.
-func PhysAddr(path string) core.PhysicalAddress {
-	return core.PhysicalAddress{
-		Workspace: core.WorkspaceLocation,
+func PhysAddr(path string) domain.PhysicalAddress {
+	return domain.PhysicalAddress{
+		Workspace: domain.WorkspaceLocation,
 		Path:      path,
 	}
 }

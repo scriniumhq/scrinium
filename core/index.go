@@ -7,46 +7,6 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 )
 
-// BlobExistStatus is the result of ExistsByHash. The tombstone
-// distinction lets the Deduplication Guard skip the Driver.Stat
-// call on the normal, deletion-free path.
-type BlobExistStatus uint8
-
-const (
-	BlobNotFound    BlobExistStatus = 0
-	BlobExists      BlobExistStatus = 1
-	BlobIsTombstone BlobExistStatus = 2
-)
-
-// PackedBlobInfo is the data needed for a range read of a single
-// packed blob from a .pack volume. Returned by
-// StoreIndex.LookupPacked.
-type PackedBlobInfo struct {
-	PackBlobRef    string
-	ManifestOffset int64
-	ManifestSize   int64
-	BlobOffset     int64
-	BlobSize       int64
-	PipelineParams []byte
-}
-
-// PackedEntry describes one entry inside a .pack volume passed to
-// IndexManifest when creating a pack manifest. It carries
-// everything required to insert a row into the packed_blobs table.
-type PackedEntry struct {
-	ArtifactID     domain.ArtifactID
-	BlobRef        string
-	ManifestOffset int64
-	ManifestSize   int64
-	BlobOffset     int64
-	BlobSize       int64
-
-	ContentHash    domain.ContentHash
-	Namespace      string
-	SessionID      string
-	PipelineParams []byte
-}
-
 // StoreIndex is the index of a single Store. Every mutating method
 // encapsulates its transaction inside; the calling code never
 // drives transactions explicitly.
@@ -64,9 +24,9 @@ type StoreIndex interface {
 	//     packedEntries (see docs/2. Internals/09 §9.2.1).
 	IndexManifest(
 		m domain.Manifest,
-		addr PhysicalAddress,
+		addr domain.PhysicalAddress,
 		chunkRefs []string,
-		packedEntries []PackedEntry,
+		packedEntries []domain.PackedEntry,
 	) error
 
 	// DeleteManifest performs a logical deletion: a single
@@ -77,12 +37,12 @@ type StoreIndex interface {
 	// RebindBlob moves a blob from Workspace: Host to
 	// Workspace: Location after a successful Drain. ref_count is
 	// not changed. Idempotent: a no-op when the record is missing.
-	RebindBlob(ctx context.Context, blobRef string, newAddr PhysicalAddress) error
+	RebindBlob(ctx context.Context, blobRef string, newAddr domain.PhysicalAddress) error
 
 	// Resolution and existence checks.
 
 	// Resolve returns the physical address for a BlobRef.
-	Resolve(blobRef string) (PhysicalAddress, error)
+	Resolve(blobRef string) (domain.PhysicalAddress, error)
 
 	// ExistsByContent is an exact check by the composite key
 	// (ContentHash, OriginalSize). The deduplication key for regular
@@ -91,7 +51,7 @@ type StoreIndex interface {
 
 	// ExistsByHash is the check by ContentHash with tombstone
 	// distinction. Used by chunker.Wrapper for chunk deduplication.
-	ExistsByHash(hash domain.ContentHash) (BlobExistStatus, error)
+	ExistsByHash(hash domain.ContentHash) (domain.BlobExistStatus, error)
 
 	// GetRefCount returns the current reference count of a blob.
 	GetRefCount(blobRef string) (int, error)
@@ -100,7 +60,7 @@ type StoreIndex interface {
 	// ArtifactID of a packed artifact. The second return value is
 	// false when the artifact is not packed (it lives in /blobs/ or
 	// /manifests/ as usual).
-	LookupPacked(artifactID domain.ArtifactID) (PackedBlobInfo, bool, error)
+	LookupPacked(artifactID domain.ArtifactID) (domain.PackedBlobInfo, bool, error)
 
 	// ManifestExists reports whether a manifest row with the given
 	// ArtifactID is present in the index. It is the manifests-side

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 )
 
@@ -26,9 +25,9 @@ import (
 // is impossible.
 func (i *Index) IndexManifest(
 	m domain.Manifest,
-	addr core.PhysicalAddress,
+	addr domain.PhysicalAddress,
 	chunkRefs []string,
-	packedEntries []core.PackedEntry,
+	packedEntries []domain.PackedEntry,
 ) error {
 	const op = "IndexManifest"
 	start := time.Now()
@@ -50,9 +49,9 @@ func (i *Index) IndexManifest(
 func (i *Index) indexManifestTx(
 	ctx context.Context,
 	m domain.Manifest,
-	addr core.PhysicalAddress,
+	addr domain.PhysicalAddress,
 	chunkRefs []string,
-	packedEntries []core.PackedEntry,
+	packedEntries []domain.PackedEntry,
 ) error {
 	tx, err := i.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -102,7 +101,7 @@ func upsertBlob(
 	blobRef string,
 	contentHash domain.ContentHash,
 	originalSize int64,
-	addr core.PhysicalAddress,
+	addr domain.PhysicalAddress,
 ) error {
 	// last_verified_at is NULL on insert — the blob has never been
 	// scrubbed yet. Scrub Agent (M3) updates it via MarkVerified.
@@ -230,7 +229,7 @@ func indexBlobManifest(
 	ctx context.Context,
 	tx *sql.Tx,
 	m domain.Manifest,
-	addr core.PhysicalAddress,
+	addr domain.PhysicalAddress,
 ) error {
 	// Inline manifests carry their bytes inside the manifest
 	// itself and do not have a separate blob record. The manifest
@@ -264,7 +263,7 @@ func indexTOCManifest(
 	ctx context.Context,
 	tx *sql.Tx,
 	m domain.Manifest,
-	addr core.PhysicalAddress,
+	addr domain.PhysicalAddress,
 	chunkRefs []string,
 ) error {
 	if m.BlobRef == "" {
@@ -317,8 +316,8 @@ func indexPackManifest(
 	ctx context.Context,
 	tx *sql.Tx,
 	m domain.Manifest,
-	addr core.PhysicalAddress,
-	entries []core.PackedEntry,
+	addr domain.PhysicalAddress,
+	entries []domain.PackedEntry,
 ) error {
 	if m.BlobRef == "" {
 		return fmt.Errorf("sqlite: pack manifest %q has empty BlobRef", m.ArtifactID)
@@ -516,7 +515,7 @@ func (i *Index) ManifestExists(id domain.ArtifactID) (bool, error) {
 // counters are untouched. Idempotent: a missing blob_ref is a
 // no-op (returns nil) — the same Drain may be retried after a crash
 // once the rebind has already committed.
-func (i *Index) RebindBlob(ctx context.Context, blobRef string, newAddr core.PhysicalAddress) error {
+func (i *Index) RebindBlob(ctx context.Context, blobRef string, newAddr domain.PhysicalAddress) error {
 	const op = "RebindBlob"
 	start := time.Now()
 	defer func() { i.emitLatency(op, time.Since(start)) }()

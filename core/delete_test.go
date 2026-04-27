@@ -222,7 +222,7 @@ func TestDelete_BlockedInReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetMaintenanceMode(context.Background(), core.MaintenanceModeReadOnly); err != nil {
+	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
 		t.Fatal(err)
 	}
 	err = s.Delete(context.Background(), id)
@@ -237,7 +237,7 @@ func TestDelete_BlockedInOffline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetMaintenanceMode(context.Background(), core.MaintenanceModeOffline); err != nil {
+	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeOffline); err != nil {
 		t.Fatal(err)
 	}
 	err = s.Delete(context.Background(), id)

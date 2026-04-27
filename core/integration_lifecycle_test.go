@@ -67,8 +67,8 @@ func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
 	if kit != nil {
 		t.Errorf("RecoveryKit on Plain Store should be nil, got %d bytes", len(kit))
 	}
-	if s1.State() != core.StateUnlocked {
-		t.Errorf("phase 1 state: got %v, want %v", s1.State(), core.StateUnlocked)
+	if s1.State() != domain.StateUnlocked {
+		t.Errorf("phase 1 state: got %v, want %v", s1.State(), domain.StateUnlocked)
 	}
 
 	// On-disk artefacts.
@@ -129,16 +129,16 @@ func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
 		t.Errorf("Walk on fresh Store yielded %d manifests", walked)
 	}
 
-	if err := s1.SetMaintenanceMode(context.Background(), core.MaintenanceModeReadOnly); err != nil {
+	if err := s1.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
 		t.Errorf("SetMaintenanceMode ReadOnly: %v", err)
 	}
-	if err := s1.SetMaintenanceMode(context.Background(), core.MaintenanceModeNone); err != nil {
+	if err := s1.SetMaintenanceMode(context.Background(), domain.MaintenanceModeNone); err != nil {
 		t.Errorf("SetMaintenanceMode None: %v", err)
 	}
 
 	// --- Phase 3: write some index content directly, then close ---
-	addr := core.PhysicalAddress{
-		Workspace: core.WorkspaceLocation,
+	addr := domain.PhysicalAddress{
+		Workspace: domain.WorkspaceLocation,
 		Path:      "blobs/aa/bb/blob-test",
 	}
 	manifest := domain.Manifest{
@@ -173,8 +173,8 @@ func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
-	if s2.State() != core.StateUnlocked {
-		t.Errorf("phase 4 state: got %v, want %v", s2.State(), core.StateUnlocked)
+	if s2.State() != domain.StateUnlocked {
+		t.Errorf("phase 4 state: got %v, want %v", s2.State(), domain.StateUnlocked)
 	}
 
 	desc2, err := descriptor.Read(context.Background(), drv2)

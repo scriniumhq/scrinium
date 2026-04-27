@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 )
@@ -22,22 +21,22 @@ import (
 // engine-level "this thing is not here" error; from the StoreIndex
 // perspective there is no separate "blob not found" — the index
 // either knows where to find a blob or it does not.
-func (i *Index) Resolve(blobRef string) (core.PhysicalAddress, error) {
+func (i *Index) Resolve(blobRef string) (domain.PhysicalAddress, error) {
 	const stmt = `
 		SELECT physical_workspace, physical_path,
 		       pack_ref, pack_offset, pack_size
 		FROM blobs WHERE blob_ref = ?`
-	var addr core.PhysicalAddress
+	var addr domain.PhysicalAddress
 	var ws int
 	err := i.db.QueryRowContext(context.Background(), stmt, blobRef).
 		Scan(&ws, &addr.Path, &addr.PackRef, &addr.Offset, &addr.Size)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return core.PhysicalAddress{}, errs.ErrArtifactNotFound
+		return domain.PhysicalAddress{}, errs.ErrArtifactNotFound
 	case err != nil:
-		return core.PhysicalAddress{}, classifyError(err)
+		return domain.PhysicalAddress{}, classifyError(err)
 	}
-	addr.Workspace = core.Workspace(ws)
+	addr.Workspace = domain.Workspace(ws)
 	return addr, nil
 }
 
@@ -83,17 +82,17 @@ func (i *Index) ExistsByContent(hash domain.ContentHash, originalSize int64) (st
 // uses the index for liveness (ref_count > 0) and the driver for
 // physical state. Until M3.2 (GC) ties them together, BlobIsTombstone
 // returns are not produced.
-func (i *Index) ExistsByHash(hash domain.ContentHash) (core.BlobExistStatus, error) {
+func (i *Index) ExistsByHash(hash domain.ContentHash) (domain.BlobExistStatus, error) {
 	const stmt = `SELECT 1 FROM blobs WHERE content_hash = ? LIMIT 1`
 	var one int
 	err := i.db.QueryRowContext(context.Background(), stmt, string(hash)).Scan(&one)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return core.BlobNotFound, nil
+		return domain.BlobNotFound, nil
 	case err != nil:
-		return core.BlobNotFound, classifyError(err)
+		return domain.BlobNotFound, classifyError(err)
 	}
-	return core.BlobExists, nil
+	return domain.BlobExists, nil
 }
 
 // GetRefCount returns the current reference count of a blob. A
@@ -127,12 +126,12 @@ func (i *Index) GetRefCount(blobRef string) (int, error) {
 // it is the only way to know whether to open a sliced range read
 // or a full blob. A missing packed_blobs row is the normal case:
 // most artifacts are not packed.
-func (i *Index) LookupPacked(artifactID domain.ArtifactID) (core.PackedBlobInfo, bool, error) {
+func (i *Index) LookupPacked(artifactID domain.ArtifactID) (domain.PackedBlobInfo, bool, error) {
 	const stmt = `
 		SELECT pack_blob_ref, manifest_offset, manifest_size,
 		       blob_offset, blob_size, COALESCE(pipeline_params, x'')
 		FROM packed_blobs WHERE artifact_id = ?`
-	var info core.PackedBlobInfo
+	var info domain.PackedBlobInfo
 	err := i.db.QueryRowContext(context.Background(), stmt, string(artifactID)).Scan(
 		&info.PackBlobRef,
 		&info.ManifestOffset, &info.ManifestSize,
@@ -141,9 +140,9 @@ func (i *Index) LookupPacked(artifactID domain.ArtifactID) (core.PackedBlobInfo,
 	)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return core.PackedBlobInfo{}, false, nil
+		return domain.PackedBlobInfo{}, false, nil
 	case err != nil:
-		return core.PackedBlobInfo{}, false, classifyError(err)
+		return domain.PackedBlobInfo{}, false, classifyError(err)
 	}
 	return info, true, nil
 }

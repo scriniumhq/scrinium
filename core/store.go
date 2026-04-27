@@ -61,7 +61,7 @@ type DataStore interface {
 	WalkSystem(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
 
 	// Capacity returns aggregated storage metrics.
-	Capacity(ctx context.Context) (StorageInfo, error)
+	Capacity(ctx context.Context) (domain.StorageInfo, error)
 }
 
 // AdminStore is the administrative API. It is required by the Store
@@ -69,7 +69,7 @@ type DataStore interface {
 // passed to decorators or Curator.
 type AdminStore interface {
 	// State returns the current state of the Store.
-	State() StoreState
+	State() domain.StoreState
 
 	// Capabilities returns the bitmask of the underlying driver's
 	// abilities. It is stable for the entire lifetime of the Store.
@@ -91,7 +91,7 @@ type AdminStore interface {
 
 	// SetMaintenanceMode transitions the Store into a maintenance
 	// mode. Used before running a Maintenance Agent.
-	SetMaintenanceMode(ctx context.Context, mode MaintenanceMode) error
+	SetMaintenanceMode(ctx context.Context, mode domain.MaintenanceMode) error
 
 	// UpdateConfig updates the mutable parameters of StoreConfig.
 	// Immutable parameters cannot be changed — errs.ErrConfigMismatch.

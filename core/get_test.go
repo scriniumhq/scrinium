@@ -303,7 +303,7 @@ func TestGet_BlockedInOffline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetMaintenanceMode(context.Background(), core.MaintenanceModeOffline); err != nil {
+	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeOffline); err != nil {
 		t.Fatal(err)
 	}
 	_, err = s.Get(context.Background(), id, core.GetOptions{})
@@ -318,7 +318,7 @@ func TestGet_AllowedInReadOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetMaintenanceMode(context.Background(), core.MaintenanceModeReadOnly); err != nil {
+	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
 		t.Fatal(err)
 	}
 	rh, err := s.Get(context.Background(), id, core.GetOptions{})
