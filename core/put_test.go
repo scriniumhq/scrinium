@@ -16,6 +16,8 @@ import (
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
+	scriniumzstd "github.com/rkurbatov/scrinium/plugin/compress/zstd"
+	"github.com/rkurbatov/scrinium/plugin/crypto/aesgcm"
 )
 
 var (
@@ -646,6 +648,242 @@ func TestPut_Inline_DisabledByZeroLimit(t *testing.T) {
 	disk := readManifestFromDisk(t, root, id)
 	if disk.LayoutHeader.BlobStorage != "Target" {
 		t.Errorf("LayoutHeader: got %q, want Target", disk.LayoutHeader.BlobStorage)
+	}
+}
+
+// --- Pipeline round-trip (M2.1) ---
+
+func TestPut_Pipeline_ZstdRoundTrip(t *testing.T) {
+	// Build a Store whose active config compresses via zstd. The
+	// content we write must come back identical via Get.
+	reg := core.NewTransformerRegistry().
+		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
+
+	cfg := domain.StoreConfig{
+		Pipeline: []string{"zstd"},
+	}
+
+	drv := newDriver(t)
+	idx := newIndex(t)
+	store, _, err := core.InitStore(context.Background(), drv,
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(newHashes()),
+		core.WithReadRegistry(reg),
+		core.WithConfig(cfg),
+	)
+	if err != nil {
+		t.Fatalf("InitStore: %v", err)
+	}
+
+	original := bytes.Repeat([]byte("scrinium "), 4096)
+	id, err := store.Put(context.Background(),
+		domain.Artifact{Payload: bytes.NewReader(original)},
+		domain.PutOptions{Namespace: "ns"})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	rh, err := store.Get(context.Background(), id, domain.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer rh.Close()
+
+	got, err := io.ReadAll(rh)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Fatalf("round-trip mismatch (len got=%d want=%d)",
+			len(got), len(original))
+	}
+	if rh.SupportsRandomAccess() {
+		t.Fatalf("SupportsRandomAccess must be false for non-empty Pipeline")
+	}
+	if _, err := rh.ReadAt(make([]byte, 16), 0); !errors.Is(err, errs.ErrRandomAccessNotSupported) {
+		t.Fatalf("ReadAt: got %v, want ErrRandomAccessNotSupported", err)
+	}
+
+	manifest := rh.Manifest()
+	if len(manifest.Pipeline) != 1 || manifest.Pipeline[0].Algorithm != "zstd" {
+		t.Fatalf("manifest Pipeline = %+v, want [{zstd}]", manifest.Pipeline)
+	}
+	if manifest.OriginalSize != int64(len(original)) {
+		t.Fatalf("OriginalSize = %d, want %d", manifest.OriginalSize, len(original))
+	}
+}
+
+func TestPut_Pipeline_AESGCMRoundTrip(t *testing.T) {
+	dek := make([]byte, 32)
+	for i := range dek {
+		dek[i] = byte(i)
+	}
+	aesFactory, err := aesgcm.New(dek)
+	if err != nil {
+		t.Fatalf("aesgcm.New: %v", err)
+	}
+	reg := core.NewTransformerRegistry().Register("aes-gcm", aesFactory)
+
+	cfg := domain.StoreConfig{
+		Pipeline: []string{"aes-gcm"},
+	}
+
+	drv := newDriver(t)
+	idx := newIndex(t)
+	store, _, err := core.InitStore(context.Background(), drv,
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(newHashes()),
+		core.WithReadRegistry(reg),
+		core.WithConfig(cfg),
+	)
+	if err != nil {
+		t.Fatalf("InitStore: %v", err)
+	}
+
+	original := []byte("Hello, ciphertext on disk")
+	id, err := store.Put(context.Background(),
+		domain.Artifact{Payload: bytes.NewReader(original)},
+		domain.PutOptions{Namespace: "ns"})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	rh, err := store.Get(context.Background(), id, domain.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer rh.Close()
+
+	got, err := io.ReadAll(rh)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Fatalf("round-trip mismatch")
+	}
+
+	manifest := rh.Manifest()
+	if len(manifest.Pipeline) != 1 || manifest.Pipeline[0].Algorithm != "aes-gcm" {
+		t.Fatalf("manifest Pipeline = %+v", manifest.Pipeline)
+	}
+	if len(manifest.Pipeline[0].IV) != 12 {
+		t.Fatalf("IV length = %d, want 12", len(manifest.Pipeline[0].IV))
+	}
+}
+
+func TestPut_Pipeline_ZstdThenAESGCM(t *testing.T) {
+	dek := make([]byte, 32)
+	for i := range dek {
+		dek[i] = byte(i + 1)
+	}
+	aesFactory, _ := aesgcm.New(dek)
+	reg := core.NewTransformerRegistry().
+		Register("zstd", scriniumzstd.New(scriniumzstd.Options{})).
+		Register("aes-gcm", aesFactory)
+
+	cfg := domain.StoreConfig{
+		Pipeline: []string{"zstd", "aes-gcm"},
+	}
+
+	drv := newDriver(t)
+	idx := newIndex(t)
+	store, _, err := core.InitStore(context.Background(), drv,
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(newHashes()),
+		core.WithReadRegistry(reg),
+		core.WithConfig(cfg),
+	)
+	if err != nil {
+		t.Fatalf("InitStore: %v", err)
+	}
+
+	original := bytes.Repeat([]byte("compress then encrypt "), 1024)
+	id, err := store.Put(context.Background(),
+		domain.Artifact{Payload: bytes.NewReader(original)},
+		domain.PutOptions{Namespace: "ns"})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	rh, err := store.Get(context.Background(), id, domain.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer rh.Close()
+
+	got, _ := io.ReadAll(rh)
+	if !bytes.Equal(got, original) {
+		t.Fatalf("round-trip mismatch")
+	}
+
+	manifest := rh.Manifest()
+	if len(manifest.Pipeline) != 2 ||
+		manifest.Pipeline[0].Algorithm != "zstd" ||
+		manifest.Pipeline[1].Algorithm != "aes-gcm" {
+		t.Fatalf("manifest Pipeline = %+v", manifest.Pipeline)
+	}
+}
+
+func TestPut_Pipeline_MissingAlgorithm(t *testing.T) {
+	// Empty registry — "zstd" is not registered.
+	reg := core.NewTransformerRegistry()
+
+	cfg := domain.StoreConfig{
+		Pipeline: []string{"zstd"},
+	}
+
+	drv := newDriver(t)
+	idx := newIndex(t)
+	store, _, err := core.InitStore(context.Background(), drv,
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(newHashes()),
+		core.WithReadRegistry(reg),
+		core.WithConfig(cfg),
+	)
+	if err != nil {
+		t.Fatalf("InitStore: %v", err)
+	}
+
+	_, err = store.Put(context.Background(),
+		domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
+		domain.PutOptions{Namespace: "ns"})
+	if !errors.Is(err, errs.ErrUnsupportedAlgorithm) {
+		t.Fatalf("Put: got %v, want ErrUnsupportedAlgorithm", err)
+	}
+}
+
+func TestPut_Pipeline_RefusedOnInline(t *testing.T) {
+	reg := core.NewTransformerRegistry().
+		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
+
+	cfg := domain.StoreConfig{
+		Pipeline:        []string{"zstd"},
+		BlobStorage:     domain.BlobStorageInlineFallback,
+		InlineBlobLimit: 1024,
+	}
+
+	drv := newDriver(t)
+	idx := newIndex(t)
+	store, _, err := core.InitStore(context.Background(), drv,
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(newHashes()),
+		core.WithReadRegistry(reg),
+		core.WithConfig(cfg),
+	)
+	if err != nil {
+		// If InitStore refuses Inline+Pipeline at config-validation
+		// time (a future Rules Engine check), that is also a valid
+		// outcome — the engine guarantees the combination is never
+		// silently accepted.
+		t.Skipf("InitStore refused Inline+Pipeline at startup: %v", err)
+	}
+
+	// Otherwise Put must refuse it explicitly.
+	_, err = store.Put(context.Background(),
+		domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
+		domain.PutOptions{Namespace: "ns"})
+	if err == nil {
+		t.Fatalf("Put: expected refusal for Inline + Pipeline, got nil")
 	}
 }
 

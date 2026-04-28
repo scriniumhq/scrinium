@@ -126,6 +126,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 			drv:      s.drv,
 			blobPath: addr.Path,
 			ctx:      ctx,
+			store:    s,
 		}, nil
 
 	case "ExternalRef":
@@ -190,7 +191,8 @@ type targetReadHandle struct {
 	// ctx captured at Get-time; used for non-Ctx Read/ReadAt that
 	// have no ambient context per the io.Reader/io.ReaderAt
 	// contracts. ReadAtCtx ignores this field and uses its own.
-	ctx context.Context
+	ctx   context.Context
+	store *store
 
 	mu     sync.Mutex
 	rc     io.ReadCloser // lazily opened on first Read
@@ -204,20 +206,22 @@ func (h *targetReadHandle) Read(p []byte) (int, error) {
 		return 0, os.ErrClosed
 	}
 	if h.rc == nil {
-		rc, err := h.drv.Get(h.ctx, h.blobPath)
+		// Open the on-disk blob.
+		raw, err := h.drv.Get(h.ctx, h.blobPath)
 		if err != nil {
 			h.mu.Unlock()
 			if errors.Is(err, os.ErrNotExist) {
-				// Manifest references a blob that is not on disk.
-				// The classical Scrub-failure case from §3.1.Эффекты;
-				// surfacing as errs.ErrCorruptedBlob lets callers
-				// distinguish "wrong id" (errs.ErrArtifactNotFound at Get)
-				// from "blob missing" (here, during Read).
 				return 0, errs.ErrCorruptedBlob
 			}
 			return 0, err
 		}
-		h.rc = rc
+		// Compose the inverse Pipeline (no-op when empty).
+		decoded, err := h.store.buildGetReader(h.manifest.Pipeline, raw)
+		if err != nil {
+			h.mu.Unlock()
+			return 0, err
+		}
+		h.rc = decoded
 	}
 	rc := h.rc
 	h.mu.Unlock()
@@ -225,10 +229,16 @@ func (h *targetReadHandle) Read(p []byte) (int, error) {
 }
 
 func (h *targetReadHandle) ReadAt(p []byte, off int64) (int, error) {
+	if !h.SupportsRandomAccess() {
+		return 0, errs.ErrRandomAccessNotSupported
+	}
 	return h.readAt(h.ctx, p, off)
 }
 
 func (h *targetReadHandle) ReadAtCtx(ctx context.Context, p []byte, off int64) (int, error) {
+	if !h.SupportsRandomAccess() {
+		return 0, errs.ErrRandomAccessNotSupported
+	}
 	return h.readAt(ctx, p, off)
 }
 
@@ -263,11 +273,12 @@ func (h *targetReadHandle) readAt(ctx context.Context, p []byte, off int64) (int
 }
 
 func (h *targetReadHandle) SupportsRandomAccess() bool {
-	// Target blobs on a localfs-style driver always support
-	// random access. When pipelines arrive in M2+ this will need
-	// to consult the manifest.Pipeline composition (a streaming
-	// decompressor disables ReadAt) — for now Pipeline is empty.
-	return true
+	// A non-empty Pipeline transforms the on-disk bytes; ReadAt
+	// would have to replay the inverse chain from the start to
+	// reach an arbitrary offset, defeating its purpose. We
+	// therefore advertise random access only when the manifest
+	// stores the original bytes verbatim.
+	return len(h.manifest.Pipeline) == 0
 }
 
 func (h *targetReadHandle) Close() error {

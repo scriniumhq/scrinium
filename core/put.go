@@ -61,6 +61,16 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 
 	cfg := s.snapshotConfig()
 
+	// Pipeline check: every algorithm referenced in the active
+	// config must be present in the TransformerRegistry. This is
+	// per-Put rather than per-Open because a registry can be
+	// extended at runtime (historical-compat use-case from docs
+	// §7.3) and we want errors at the call that needs the algo,
+	// not at startup.
+	if err := s.validatePipelineAlgos(cfg.Pipeline); err != nil {
+		return "", fmt.Errorf("core.Put: %w", err)
+	}
+
 	// M1.4 perimeter: bail out on the surfaces that are stubbed.
 	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
 		return "", fmt.Errorf("core.Put: BlobType %q deferred to M3", opts.BlobType)
@@ -96,74 +106,65 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	// to staging via MultiReader.
 
 	hashAlgo := string(cfg.ContentHasher)
-	hasher, err := s.hashes.NewHasher(hashAlgo)
-	if err != nil {
-		return "", fmt.Errorf("core.Put: hasher: %w", err)
-	}
 
 	useInlineFallback := cfg.BlobStorage == domain.BlobStorageInlineFallback &&
 		cfg.InlineBlobLimit > 0
 	inlineLimit := cfg.InlineBlobLimit
 
+	// Inline + Pipeline is reserved (M2-extra in backlog). The
+	// engine refuses early so users do not silently get
+	// untransformed bytes inside the manifest.
+	if useInlineFallback && len(cfg.Pipeline) > 0 {
+		return "", errPipelineWithInline
+	}
+
 	var (
-		contentHash  domain.ContentHash
-		originalSize int64
-		inlineBytes  []byte // non-nil iff this Put goes inline
-		blobRef      domain.BlobRef
-		blobAddr     domain.PhysicalAddress
+		contentHash    domain.ContentHash
+		originalSize   int64
+		inlineBytes    []byte // non-nil iff this Put goes inline
+		blobRef        domain.BlobRef
+		blobAddr       domain.PhysicalAddress
+		pipelineStages []domain.PipelineStage
 	)
 
 	if useInlineFallback {
+		// Inline path: no Pipeline (refused above), no dedup probe.
+		// Same as M1.4 — kept verbatim modulo the helper hashes.
 		head, err := io.ReadAll(io.LimitReader(a.Payload, inlineLimit+1))
 		if err != nil {
 			return "", fmt.Errorf("core.Put: read payload head: %w", err)
 		}
 		if int64(len(head)) <= inlineLimit {
-			// Fits inline. Hash the head, no staging file, no
-			// dedup probe — inline blobs do not participate in
-			// dedup (their bytes live inside the manifest).
-			if _, err := hasher.Write(head); err != nil {
+			h, err := s.hashes.NewHasher(hashAlgo)
+			if err != nil {
+				return "", fmt.Errorf("core.Put: hasher: %w", err)
+			}
+			if _, err := h.Write(head); err != nil {
 				return "", fmt.Errorf("core.Put: hash inline: %w", err)
 			}
-			contentHash = domain.ContentHash(s.hashes.Format(hashAlgo, hasher.Sum(nil)))
+			contentHash = domain.ContentHash(s.hashes.Format(hashAlgo, h.Sum(nil)))
 			originalSize = int64(len(head))
 			inlineBytes = head
 			blobRef = domain.BlobRef(contentHash)
+			pipelineStages = []domain.PipelineStage{}
 			// blobAddr stays zero: no driver entry for inline.
 		} else {
-			// Overflowed inline. Stream head + remainder to a
-			// staging file, hashing the full thing.
-			stagingPath, err := s.makeStagingPath()
-			if err != nil {
-				return "", err
-			}
+			// Overflowed inline → fall through to Target streaming
+			// using the standard runner. Splice the consumed head
+			// back in front of the remaining Payload.
 			combined := io.MultiReader(bytes.NewReader(head), a.Payload)
-			tee := io.TeeReader(combined, hasher)
-			counter := &countingReader{r: tee}
-			if err := s.drv.Put(ctx, stagingPath, counter); err != nil {
-				return "", fmt.Errorf("core.Put: stage payload: %w", err)
-			}
-			contentHash = domain.ContentHash(s.hashes.Format(hashAlgo, hasher.Sum(nil)))
-			originalSize = counter.n
-			blobRef, blobAddr, err = s.commitBlob(ctx, cfg, stagingPath, contentHash, originalSize)
+			contentHash, blobRef, originalSize, pipelineStages, blobAddr, err =
+				s.streamThroughPipeline(ctx, cfg, hashAlgo, combined)
 			if err != nil {
 				return "", err
 			}
 		}
 	} else {
-		// Plain Target path: stream straight to staging.
-		stagingPath, err := s.makeStagingPath()
-		if err != nil {
-			return "", err
-		}
-		tee := io.TeeReader(a.Payload, hasher)
-		counter := &countingReader{r: tee}
-		if err := s.drv.Put(ctx, stagingPath, counter); err != nil {
-			return "", fmt.Errorf("core.Put: stage payload: %w", err)
-		}
-		contentHash = domain.ContentHash(s.hashes.Format(hashAlgo, hasher.Sum(nil)))
-		originalSize = counter.n
-		blobRef, blobAddr, err = s.commitBlob(ctx, cfg, stagingPath, contentHash, originalSize)
+		// Plain Target path: stream straight through the Pipeline
+		// (which may be empty — runner handles that).
+		var err error
+		contentHash, blobRef, originalSize, pipelineStages, blobAddr, err =
+			s.streamThroughPipeline(ctx, cfg, hashAlgo, a.Payload)
 		if err != nil {
 			return "", err
 		}
@@ -195,7 +196,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		OriginalSize:   originalSize,
 		BlobRef:        blobRef,
 		LayoutHeader:   domain.LayoutHeader{BlobStorage: layout},
-		Pipeline:       []domain.PipelineStage{},
+		Pipeline:       pipelineStages,
 		InlineBlob:     inlineBytes,
 		RetentionUntil: opts.RetentionUntil,
 		Metadata:       a.Metadata,
@@ -248,6 +249,61 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	return artifactID, nil
 }
 
+// streamThroughPipeline runs the active Pipeline over input and
+// commits the resulting bytes to a blob slot. It is the shared
+// tail of every Put path that ends up on disk.
+//
+// The hashAlgo is taken from cfg.ContentHasher; we accept it as
+// an argument so the caller does not need to read it twice.
+func (s *store) streamThroughPipeline(
+	ctx context.Context,
+	cfg domain.StoreConfig,
+	hashAlgo string,
+	input io.Reader,
+) (
+	contentHash domain.ContentHash,
+	blobRef domain.BlobRef,
+	originalSize int64,
+	pipelineStages []domain.PipelineStage,
+	blobAddr domain.PhysicalAddress,
+	err error,
+) {
+	stagingPath, err := s.makeStagingPath()
+	if err != nil {
+		return "", "", 0, nil, domain.PhysicalAddress{}, err
+	}
+
+	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline)
+	if err != nil {
+		return "", "", 0, nil, domain.PhysicalAddress{}, fmt.Errorf("core.Put: %w", err)
+	}
+
+	// originalSize must measure the ORIGINAL payload, not the
+	// post-Pipeline output. We count via a tee on the input layer
+	// — the runner already tees content for the hasher, but counter
+	// and hasher are separate concerns.
+	counter := &countingReader{r: streamReader}
+
+	if err := s.drv.Put(ctx, stagingPath, counter); err != nil {
+		return "", "", 0, nil, domain.PhysicalAddress{},
+			fmt.Errorf("core.Put: stage payload: %w", err)
+	}
+
+	contentHash, blobRef, pipelineStages = pp.finalize(s.hashes.Format)
+
+	// counter.n now equals the byte count of the FINAL stream
+	// (post-Pipeline). originalSize must come from the
+	// pre-Pipeline tee — see comment below.
+	originalSize = pp.contentBytesRead()
+
+	commitRef, addr, err := s.commitBlob(ctx, cfg, stagingPath, contentHash,
+		originalSize, blobRef)
+	if err != nil {
+		return "", "", 0, nil, domain.PhysicalAddress{}, err
+	}
+	return contentHash, commitRef, originalSize, pipelineStages, addr, nil
+}
+
 // commitBlob is the tail of the Target write path: dedup probe,
 // then either drop the staging file (hit) or rename it to its
 // final hash-derived path (miss). Returns the BlobRef and the
@@ -258,6 +314,7 @@ func (s *store) commitBlob(
 	stagingPath string,
 	contentHash domain.ContentHash,
 	originalSize int64,
+	blobRef domain.BlobRef,
 ) (domain.BlobRef, domain.PhysicalAddress, error) {
 	existingRef, found, err := s.index.ExistsByContent(contentHash, originalSize)
 	if err != nil {
@@ -274,9 +331,6 @@ func (s *store) commitBlob(
 		}
 		return domain.BlobRef(existingRef), addr, nil
 	}
-	// Fresh blob. BlobRef equals ContentHash in M1.4 (no Pipeline
-	// transforms the bytes between content and on-disk form).
-	blobRef := domain.BlobRef(contentHash)
 	finalPath, err := blobpath.Resolve(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
 	if err != nil {
 		_ = s.drv.Remove(ctx, stagingPath)
@@ -319,6 +373,7 @@ func (s *store) checkWritable() error {
 // docs/2. Internals/01 §1.4.
 func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	if a.Payload == nil && opts.ExternalURI == "" {
+
 		return errors.New("core.Put: nil Payload and no ExternalURI")
 	}
 	if len(opts.Namespace) > domain.MaxNamespaceLen {
