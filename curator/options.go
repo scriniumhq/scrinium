@@ -3,8 +3,8 @@ package curator
 import (
 	"context"
 	"errors"
-	"time"
 
+	"github.com/rkurbatov/scrinium/agent"
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/driver"
 	"github.com/rkurbatov/scrinium/event"
@@ -22,8 +22,8 @@ type curatorOptions struct {
 	routingFunc   RoutingFunc
 	metaRouter    MetadataRouter
 	eventBus      event.EventBus
-	scrubCfg      *ScrubConfig
-	snapshotCfg   *SnapshotConfig
+	scrubCfg      *agent.ScrubConfig
+	snapshotCfg   *agent.SnapshotConfig
 }
 
 type registeredStore struct {
@@ -106,14 +106,14 @@ func WithEventBus(bus event.EventBus) CuratorOption {
 // WithScrubConfig configures the Curator-managed Scrub Agent.
 // Curator automatically launches a Scrub for every registered
 // Target Store.
-func WithScrubConfig(cfg ScrubConfig) CuratorOption {
+func WithScrubConfig(cfg agent.ScrubConfig) CuratorOption {
 	return func(o *curatorOptions) { o.scrubCfg = &cfg }
 }
 
 // WithSnapshotConfig configures the Curator-managed Snapshot
 // Agent. Curator automatically launches a Snapshot for every
 // registered Target Store with an available StoreIndex.
-func WithSnapshotConfig(cfg SnapshotConfig) CuratorOption {
+func WithSnapshotConfig(cfg agent.SnapshotConfig) CuratorOption {
 	return func(o *curatorOptions) { o.snapshotCfg = &cfg }
 }
 
@@ -121,24 +121,6 @@ func WithSnapshotConfig(cfg SnapshotConfig) CuratorOption {
 // These types are declared here (rather than in agent/) because
 // Curator accepts them through its options. The agents themselves
 // live in agent/scrub and agent/snapshot.
-
-// ScrubConfig configures background verification.
-type ScrubConfig struct {
-	Enabled              bool
-	ScanInterval         time.Duration
-	MaxAge               time.Duration
-	MaxAgeNativeChecksum time.Duration
-	BatchSize            int
-}
-
-// SnapshotConfig configures the background indexing snapshot.
-type SnapshotConfig struct {
-	Enabled           bool
-	Interval          time.Duration
-	ArtifactThreshold int
-	Retention         int
-	RecoveryOverlap   time.Duration
-}
 
 // New creates a Curator. It applies the options, validates the
 // configuration (the Rules Engine for forbidden combinations),

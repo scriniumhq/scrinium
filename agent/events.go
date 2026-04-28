@@ -27,9 +27,11 @@ const (
 	EventAgentProgress = "agent.progress"
 
 	// EventAgentCycle — one unit of work completed (a full GC
-	// pass, a single Scrub batch, one Ingester flush). Carries no
-	// payload — operators read counts and timings from
-	// AgentResult, queried separately.
+	// pass, a single Scrub batch, one Ingester flush). Payload:
+	// core.AgentResult with the cycle's stats. The same payload
+	// shape is reused by EventAgentCompleted; the difference is
+	// semantic — Cycle means "one unit done, agent continues",
+	// Completed means "agent finished, Run returned".
 	EventAgentCycle = "agent.cycle"
 
 	// EventAgentCompleted — Run returned cleanly (only meaningful

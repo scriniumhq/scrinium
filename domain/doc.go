@@ -13,9 +13,11 @@
 //	   ↑              ↑
 //	   └──────────────┘  (helpers also import domain)
 //
-// core re-exports every type from this package as an alias, so the
-// rest of the codebase keeps importing "core" as before. New code
-// can import "domain" directly when it only needs value types.
+// User code imports both packages: "core" for the verbs (InitStore,
+// OpenStore, options, plugins, events) and "domain" for the values
+// passed into them (StoreConfig, PutOptions, Manifest, the policy
+// enums). The convention follows database/sql ↔ database/sql/driver
+// and net/http ↔ net/url in the standard library.
 //
 // DAG: domain imports nothing from the project. It is the leaf.
 package domain

@@ -32,14 +32,10 @@ type Index struct {
 	pubMu sync.RWMutex
 }
 
-// Compile-time interface conformance. The full surface lives across
-// later packs (manifest.go, resolve.go, iterate.go, maintenance.go);
-// we wire the assertion now and let the missing methods fail to
-// compile until the rest of the pack lands.
-//
-// var _ core.StoreIndex = (*Index)(nil)
-//
-// Commented out until the methods exist; uncommenting in pack 5.
+// Compile-time interface conformance. Catches signature drift
+// between core.StoreIndex and *Index immediately at build time
+// instead of at the first assignment site.
+var _ core.StoreIndex = (*Index)(nil)
 
 // options is the resolved configuration. Defaults applied by Open.
 type options struct {
