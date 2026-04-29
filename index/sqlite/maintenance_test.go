@@ -14,105 +14,13 @@ import (
 	"github.com/rkurbatov/scrinium/errs"
 )
 
-// --- MarkVerified ---
-
-func TestMarkVerified_Updates(t *testing.T) {
-	idx := newMemoryIndex(t)
-	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
-		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 1)
-
-	// Truncate to the storage precision (RFC 3339 seconds, UTC) so
-	// the round-trip Equal check below survives.
-	now := time.Now().UTC().Truncate(time.Second)
-	if err := idx.MarkVerified("blob-1", now); err != nil {
-		t.Fatalf("MarkVerified: %v", err)
-	}
-
-	var ts string
-	err := idx.db.QueryRowContext(context.Background(),
-		`SELECT last_verified_at FROM blobs WHERE blob_ref = ?`, "blob-1",
-	).Scan(&ts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := parseRFC3339(ts)
-	if err != nil {
-		t.Fatalf("parse stored timestamp: %v", err)
-	}
-	if !got.Equal(now) {
-		t.Errorf("last_verified_at: got %v, want %v", got, now)
-	}
-}
-
-func TestMarkVerified_MissingBlobIsNoOp(t *testing.T) {
-	idx := newMemoryIndex(t)
-	if err := idx.MarkVerified("nonexistent", time.Now()); err != nil {
-		t.Errorf("missing blob should be no-op, got %v", err)
-	}
-}
-
-// --- DeletePacked ---
-
-func TestDeletePacked_RemovesAllEntriesForPack(t *testing.T) {
-	idx := newMemoryIndex(t)
-
-	// Build two packs with two entries each.
-	pack1 := domain.Manifest{
-		ArtifactID:   "pack-1",
-		Type:         domain.ManifestTypePack,
-		ContentHash:  "sha256-" + domain.ContentHash(strings.Repeat("1", 64)),
-		BlobRef:      "pack-blob-1",
-		OriginalSize: 4096,
-		CreatedAt:    time.Now(),
-	}
-	if err := idx.IndexManifest(pack1, newPhysAddr("packs/p1"), nil, []domain.PackedEntry{
-		{ArtifactID: "a1", BlobRef: "b1", BlobSize: 100, ContentHash: "sha256-" + domain.ContentHash(strings.Repeat("a", 64)), PipelineParams: []byte{}},
-		{ArtifactID: "a2", BlobRef: "b2", BlobSize: 200, ContentHash: "sha256-" + domain.ContentHash(strings.Repeat("b", 64)), PipelineParams: []byte{}},
-	}); err != nil {
-		t.Fatalf("setup pack-1: %v", err)
-	}
-
-	pack2 := domain.Manifest{
-		ArtifactID:   "pack-2",
-		Type:         domain.ManifestTypePack,
-		ContentHash:  "sha256-" + domain.ContentHash(strings.Repeat("2", 64)),
-		BlobRef:      "pack-blob-2",
-		OriginalSize: 4096,
-		CreatedAt:    time.Now(),
-	}
-	if err := idx.IndexManifest(pack2, newPhysAddr("packs/p2"), nil, []domain.PackedEntry{
-		{ArtifactID: "c1", BlobRef: "d1", BlobSize: 300, ContentHash: "sha256-" + domain.ContentHash(strings.Repeat("c", 64)), PipelineParams: []byte{}},
-	}); err != nil {
-		t.Fatalf("setup pack-2: %v", err)
-	}
-
-	// Sanity: 3 rows in packed_blobs total.
-	if got := countRows(t, idx, "packed_blobs"); got != 3 {
-		t.Fatalf("packed_blobs rows before: got %d, want 3", got)
-	}
-
-	// Delete entries of pack-blob-1 only.
-	if err := idx.DeletePacked("pack-blob-1"); err != nil {
-		t.Fatalf("DeletePacked: %v", err)
-	}
-
-	// Pack-1's entries gone, pack-2's untouched.
-	if got := countRows(t, idx, "packed_blobs"); got != 1 {
-		t.Errorf("packed_blobs rows after: got %d, want 1", got)
-	}
-	_, ok, err := idx.LookupPacked("c1")
-	if err != nil || !ok {
-		t.Errorf("pack-2 entry c1 should still exist: ok=%v err=%v", ok, err)
-	}
-}
-
-func TestDeletePacked_Idempotent(t *testing.T) {
-	idx := newMemoryIndex(t)
-	// No packs at all; deleting a non-existent pack must succeed.
-	if err := idx.DeletePacked("nonexistent-pack"); err != nil {
-		t.Errorf("idempotent DeletePacked: %v", err)
-	}
-}
+// MarkVerified, DeletePacked, and MarkVerified-related listing
+// behaviour live in the conformance suite at
+// internal/testutil/indextest. This file is for sqlite-specific
+// behaviour: VacuumInto (which produces an on-disk SQLite file
+// snapshot — a sqlite-and-postgres concept that does not map to
+// in-memory backends), and the store_meta storage details that
+// rely on SQLite's UPSERT and TEXT encoding.
 
 // --- VacuumInto ---
 
@@ -223,7 +131,7 @@ func TestSetMeta_Overwrites(t *testing.T) {
 	if got != "second" {
 		t.Errorf("got %q, want %q", got, "second")
 	}
-	// Still one row total.
+	// Still one row total — the UPSERT replaced, not appended.
 	if got := countRows(t, idx, "store_meta"); got != 1 {
 		t.Errorf("store_meta rows: got %d, want 1", got)
 	}
@@ -257,14 +165,14 @@ func TestSetMeta_BinarySafe(t *testing.T) {
 // --- Compile-time interface conformance ---
 
 func TestIndex_ImplementsStoreIndex(t *testing.T) {
-	// The compile-time check var _ domain.StoreIndex = (*Index)(nil)
-	// in maintenance.go is the real guarantee; this test just
-	// confirms it at runtime so a regression shows up in test
-	// output, not just a build error.
+	// The compile-time check var _ core.StoreIndex = (*Index)(nil)
+	// in sqlite.go is the real guarantee; this test just confirms
+	// it at runtime so a regression shows up in test output, not
+	// just a build error.
 	var _ core.StoreIndex = (*Index)(nil)
 	idx := newMemoryIndex(t)
 	var asInterface core.StoreIndex = idx
 	if asInterface == nil {
-		t.Fatal("Index does not satisfy domain.StoreIndex")
+		t.Fatal("Index does not satisfy core.StoreIndex")
 	}
 }
