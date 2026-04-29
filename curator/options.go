@@ -14,7 +14,7 @@ import (
 type CuratorOption func(*curatorOptions)
 
 type curatorOptions struct {
-	// Populated in M4. In M0 — placeholder for the With* signatures.
+	// Populated by With* options and consumed by curator.New.
 	stores        []registeredStore
 	backups       []registeredBackup
 	hostStorage   *hostStorageRegistration

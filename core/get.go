@@ -137,8 +137,9 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 	}
 
 	// no Curator routing (opts.AllowColdRead is a Curator-layer flag
-	// per §3.1.Параметры — without a Curator it has no effect; the
-	// argument is accepted for ABI compatibility and otherwise ignored).
+	// per docs/4. API Reference/03 §3.1 — without a Curator it has no
+	// effect; the argument is accepted for ABI compatibility and
+	// otherwise ignored).
 }
 
 // --- inlineReadHandle: bytes live in the manifest itself ---
