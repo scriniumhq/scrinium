@@ -13,12 +13,15 @@ import (
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
 // --- Happy paths ---
 
 func TestDelete_TargetRemovesManifestAndDecrementsRefCount(t *testing.T) {
-	s, root := newStoreWithRoot(t)
+	s, root := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("delete me"), domain.PutOptions{Namespace: "d"})
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +103,7 @@ func TestDelete_SharedBlobKeepsRefCount(t *testing.T) {
 	// Two artifacts share one blob. Deleting one must keep the
 	// other readable — i.e. the physical blob stays, ref_count
 	// drops from 2 to 1.
-	s, root := newStoreWithRoot(t)
+	s, root := storefx.InitWithRoot(t)
 	const text = "shared content for delete"
 	idA, err := s.Put(context.Background(), payload(text),
 		domain.PutOptions{Namespace: "ns", SessionID: "a"})
@@ -150,7 +153,7 @@ func TestDelete_SharedBlobKeepsRefCount(t *testing.T) {
 // --- Retention ---
 
 func TestDelete_BlockedByActiveRetention(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	when := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	id, err := s.Put(context.Background(), payload("retained"),
 		domain.PutOptions{Namespace: "v", RetentionUntil: when})
@@ -164,7 +167,7 @@ func TestDelete_BlockedByActiveRetention(t *testing.T) {
 }
 
 func TestDelete_AllowedAfterRetentionExpires(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	// Retention in the past: expired the moment Put returns.
 	when := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
 	id, err := s.Put(context.Background(), payload("expired"),
@@ -180,7 +183,7 @@ func TestDelete_AllowedAfterRetentionExpires(t *testing.T) {
 // --- Errors ---
 
 func TestDelete_NotFound(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	err := s.Delete(context.Background(),
 		domain.ArtifactID("sha256-"+strings.Repeat("0", 64)))
 	if !errors.Is(err, errs.ErrArtifactNotFound) {
@@ -189,7 +192,7 @@ func TestDelete_NotFound(t *testing.T) {
 }
 
 func TestDelete_EmptyID(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	err := s.Delete(context.Background(), "")
 	if !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
@@ -200,7 +203,7 @@ func TestDelete_DoubleDeleteIsNotFound(t *testing.T) {
 	// Second Delete on the same id returns errs.ErrArtifactNotFound
 	// (manifest file is gone after the first). Documented as
 	// the natural CAS semantics in the §2.2 plan.
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("twice"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -217,7 +220,7 @@ func TestDelete_DoubleDeleteIsNotFound(t *testing.T) {
 // --- State / policy gates ---
 
 func TestDelete_BlockedInReadOnly(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("ro"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -232,7 +235,7 @@ func TestDelete_BlockedInReadOnly(t *testing.T) {
 }
 
 func TestDelete_BlockedInOffline(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("off"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -247,13 +250,13 @@ func TestDelete_BlockedInOffline(t *testing.T) {
 }
 
 func TestDelete_BlockedByDeletionPolicyNoDelete(t *testing.T) {
-	drv := newDriver(t)
+	drv := driverfx.LocalFS(t)
 	cfg := domain.StoreConfig{
 		DeletionPolicy: domain.DeletionPolicyNoDelete,
 	}
 	s, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(newIndex(t)),
-		core.WithHashRegistry(newHashes()),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithConfig(cfg),
 	)
 	if err != nil {
@@ -273,11 +276,11 @@ func TestDelete_RetentionBeatsPolicy(t *testing.T) {
 	// §2.2: retention is checked BEFORE policy. A NoDelete store
 	// must still report errs.ErrRetentionNotExpired (not Forbidden)
 	// when both apply.
-	drv := newDriver(t)
+	drv := driverfx.LocalFS(t)
 	cfg := domain.StoreConfig{DeletionPolicy: domain.DeletionPolicyNoDelete}
 	s, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(newIndex(t)),
-		core.WithHashRegistry(newHashes()),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithConfig(cfg),
 	)
 	if err != nil {
@@ -296,7 +299,7 @@ func TestDelete_RetentionBeatsPolicy(t *testing.T) {
 }
 
 func TestDelete_CtxCancelled(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("cx"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)

@@ -14,6 +14,9 @@ import (
 	"github.com/rkurbatov/scrinium/driver"
 	"github.com/rkurbatov/scrinium/event"
 	"github.com/rkurbatov/scrinium/internal/blobpath"
+	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
 // --- shared test fixtures and helpers ---------------------------
@@ -38,13 +41,13 @@ type recoveryFixture struct {
 // and inspect both the on-disk effects and the EventBus payloads.
 func newRecoveryFixture(t *testing.T) *recoveryFixture {
 	t.Helper()
-	d := newDriver(t)
+	d := driverfx.LocalFS(t)
 	caps := newCapturedReports()
 	bus := event.NewEventBus()
 	bus.Subscribe(caps.handle)
 	return &recoveryFixture{
 		drv:  d,
-		idx:  newIndex(t),
+		idx:  indexfx.Memory(t),
 		root: d.Root(),
 		bus:  bus,
 		caps: caps,
@@ -58,7 +61,7 @@ func (f *recoveryFixture) initStore(t *testing.T) core.Store {
 	t.Helper()
 	s, _, err := core.InitStore(context.Background(), f.drv,
 		core.WithStoreIndex(f.idx),
-		core.WithHashRegistry(newHashes()),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithPublisher(f.bus),
 	)
 	if err != nil {
@@ -73,7 +76,7 @@ func (f *recoveryFixture) openStore(t *testing.T) core.Store {
 	t.Helper()
 	s, err := core.OpenStore(context.Background(), f.drv,
 		core.WithStoreIndex(f.idx),
-		core.WithHashRegistry(newHashes()),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithPublisher(f.bus),
 	)
 	if err != nil {
@@ -441,7 +444,7 @@ func TestRecovery_PublishesEvent_PayloadShape(t *testing.T) {
 // --- 9. No publisher wired: recovery still runs, no panic --------
 
 func TestRecovery_NoPublisher_NoPanic(t *testing.T) {
-	d := newDriver(t)
+	d := driverfx.LocalFS(t)
 
 	ref := fakeRef('q')
 	orphan := blobPathForRef(t, ref)
@@ -454,8 +457,8 @@ func TestRecovery_NoPublisher_NoPanic(t *testing.T) {
 	// nil-publisher dereference if one is ever introduced into
 	// publishOrphanReport.
 	_, _, err := core.InitStore(context.Background(), d,
-		core.WithStoreIndex(newIndex(t)),
-		core.WithHashRegistry(newHashes()),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("InitStore (no publisher): %v", err)

@@ -15,20 +15,21 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
+	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 	scriniumzstd "github.com/rkurbatov/scrinium/plugin/compress/zstd"
 	"github.com/rkurbatov/scrinium/plugin/crypto/aesgcm"
 )
 
 var (
-	newStoreWithRoot = storefx.InitWithRoot
-	payload          = storefx.Payload
+	payload = storefx.Payload
 )
 
 // --- Happy path ---
 
 func TestPut_FreshBlob_WritesArtifacts(t *testing.T) {
-	s, root := newStoreWithRoot(t)
+	s, root := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("hello scrinium"),
 		domain.PutOptions{Namespace: "users"})
@@ -76,7 +77,7 @@ func TestPut_FreshBlob_WritesArtifacts(t *testing.T) {
 }
 
 func TestPut_VisibleThroughWalk(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("walk-test"),
 		domain.PutOptions{Namespace: "users"})
@@ -99,7 +100,7 @@ func TestPut_VisibleThroughWalk(t *testing.T) {
 // --- Dedup ---
 
 func TestPut_DeduplicatesIdenticalContent(t *testing.T) {
-	s, root := newStoreWithRoot(t)
+	s, root := storefx.InitWithRoot(t)
 	const text = "duplicate me"
 
 	id1, err := s.Put(context.Background(), payload(text),
@@ -142,7 +143,7 @@ func TestPut_DeduplicatesIdenticalContent(t *testing.T) {
 }
 
 func TestPut_TwoArtifactsShareBlob_RefCountIs2(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	const text = "shared content"
 
 	id1, err := s.Put(context.Background(), payload(text),
@@ -174,7 +175,7 @@ func TestPut_TwoArtifactsShareBlob_RefCountIs2(t *testing.T) {
 // --- Retention ---
 
 func TestPut_PreservesRetentionUntil(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	when := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
 	id, err := s.Put(context.Background(),
 		payload("retention test"),
@@ -204,7 +205,7 @@ func TestPut_PreservesRetentionUntil(t *testing.T) {
 // --- Validation ---
 
 func TestPut_RejectsSystemNamespace(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		domain.PutOptions{Namespace: "system.config"})
@@ -214,7 +215,7 @@ func TestPut_RejectsSystemNamespace(t *testing.T) {
 }
 
 func TestPut_RejectsWildcardNamespace(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		domain.PutOptions{Namespace: "*"})
@@ -224,7 +225,7 @@ func TestPut_RejectsWildcardNamespace(t *testing.T) {
 }
 
 func TestPut_RejectsTooLongNamespace(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		domain.PutOptions{Namespace: strings.Repeat("a", 256)})
@@ -234,7 +235,7 @@ func TestPut_RejectsTooLongNamespace(t *testing.T) {
 }
 
 func TestPut_RejectsTooLongSessionID(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		domain.PutOptions{SessionID: strings.Repeat("a", 256)})
@@ -244,7 +245,7 @@ func TestPut_RejectsTooLongSessionID(t *testing.T) {
 }
 
 func TestPut_RejectsHugeMetadata(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	huge := bytes.Repeat([]byte(`a`), 64*1024+1)
 	_, err := s.Put(context.Background(),
 		domain.Artifact{
@@ -258,7 +259,7 @@ func TestPut_RejectsHugeMetadata(t *testing.T) {
 }
 
 func TestPut_RejectsNilPayload(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Put(context.Background(),
 		domain.Artifact{Payload: nil},
 		domain.PutOptions{})
@@ -270,7 +271,7 @@ func TestPut_RejectsNilPayload(t *testing.T) {
 // --- State checks ---
 
 func TestPut_BlockedInReadOnly(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	if err := s.SetMaintenanceMode(context.Background(),
 		domain.MaintenanceModeReadOnly); err != nil {
 		t.Fatal(err)
@@ -284,7 +285,7 @@ func TestPut_BlockedInReadOnly(t *testing.T) {
 }
 
 func TestPut_BlockedInOffline(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	if err := s.SetMaintenanceMode(context.Background(),
 		domain.MaintenanceModeOffline); err != nil {
 		t.Fatal(err)
@@ -298,7 +299,7 @@ func TestPut_BlockedInOffline(t *testing.T) {
 }
 
 func TestPut_CtxCancelled(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := s.Put(ctx, payload("nope"), domain.PutOptions{})
@@ -310,7 +311,7 @@ func TestPut_CtxCancelled(t *testing.T) {
 // --- Deferred surfaces ---
 
 func TestPut_BlobTypeOtherThanRegular_Deferred(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
 		domain.PutOptions{BlobType: domain.BlobTypeChunk})
@@ -325,7 +326,7 @@ func TestPut_BlobTypeOtherThanRegular_Deferred(t *testing.T) {
 // --- Long payload streaming ---
 
 func TestPut_LargePayload(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	const N = 1 << 20 // 1 MiB
 	data := bytes.Repeat([]byte{0xab}, N)
 	id, err := s.Put(context.Background(),
@@ -353,7 +354,7 @@ func TestPut_LargePayload(t *testing.T) {
 // --- Misc smoke ---
 
 func TestPut_DefaultNamespace(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("default ns"),
 		domain.PutOptions{}) // empty Namespace = default
@@ -377,7 +378,7 @@ func TestPut_DefaultNamespace(t *testing.T) {
 // --- io.EOF behaviour on empty payload ---
 
 func TestPut_EmptyPayload(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(nil)},
 		domain.PutOptions{Namespace: "empty"})
@@ -412,15 +413,15 @@ func TestPut_EmptyPayload(t *testing.T) {
 // cheaply.
 func newInlineStore(t *testing.T, limit int64) (core.Store, string) {
 	t.Helper()
-	drv := newDriver(t)
+	drv := driverfx.LocalFS(t)
 	root := drv.Root()
 	cfg := domain.StoreConfig{
 		BlobStorage:     domain.BlobStorageInlineFallback,
 		InlineBlobLimit: limit,
 	}
 	s, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(newIndex(t)),
-		core.WithHashRegistry(newHashes()),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithConfig(cfg),
 	)
 	if err != nil {
@@ -663,11 +664,11 @@ func TestPut_Pipeline_ZstdRoundTrip(t *testing.T) {
 		Pipeline: []string{"zstd"},
 	}
 
-	drv := newDriver(t)
-	idx := newIndex(t)
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
 	store, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(newHashes()),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)
@@ -728,11 +729,11 @@ func TestPut_Pipeline_AESGCMRoundTrip(t *testing.T) {
 		Pipeline: []string{"aes-gcm"},
 	}
 
-	drv := newDriver(t)
-	idx := newIndex(t)
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
 	store, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(newHashes()),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)
@@ -785,11 +786,11 @@ func TestPut_Pipeline_ZstdThenAESGCM(t *testing.T) {
 		Pipeline: []string{"zstd", "aes-gcm"},
 	}
 
-	drv := newDriver(t)
-	idx := newIndex(t)
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
 	store, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(newHashes()),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)
@@ -832,11 +833,11 @@ func TestPut_Pipeline_MissingAlgorithm(t *testing.T) {
 		Pipeline: []string{"zstd"},
 	}
 
-	drv := newDriver(t)
-	idx := newIndex(t)
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
 	store, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(newHashes()),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)
@@ -862,11 +863,11 @@ func TestPut_Pipeline_RefusedOnInline(t *testing.T) {
 		InlineBlobLimit: 1024,
 	}
 
-	drv := newDriver(t)
-	idx := newIndex(t)
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
 	store, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(newHashes()),
+		core.WithHashRegistry(storefx.Hashes()),
 		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)

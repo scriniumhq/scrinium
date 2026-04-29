@@ -12,6 +12,7 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
+	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
 // scrubCapture collects every ScrubFailedPayload published by the
@@ -56,7 +57,7 @@ func (c *scrubCapture) last(t *testing.T) core.ScrubFailedPayload {
 // --- Happy path ---
 
 func TestVerify_TargetBlob_Roundtrip(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("verify me"),
 		domain.PutOptions{Namespace: "v"})
@@ -88,7 +89,7 @@ func TestVerify_TargetBlob_TamperedBytes_ReturnsCorruptedBlob(t *testing.T) {
 	scrub := newScrubCapture()
 	bus.Subscribe(scrub.handle)
 
-	s, root := newStoreWithRoot(t, core.WithPublisher(bus))
+	s, root := storefx.InitWithRoot(t, core.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("tamper target"),
 		domain.PutOptions{Namespace: "v"})
@@ -129,7 +130,7 @@ func TestVerify_TargetBlob_Missing_ReturnsCorruptedBlob(t *testing.T) {
 	scrub := newScrubCapture()
 	bus.Subscribe(scrub.handle)
 
-	s, root := newStoreWithRoot(t, core.WithPublisher(bus))
+	s, root := storefx.InitWithRoot(t, core.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("delete the blob"),
 		domain.PutOptions{Namespace: "v"})

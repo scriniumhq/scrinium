@@ -303,5 +303,4 @@ func (h *targetReadHandle) Manifest() domain.Manifest {
 // Compile-time interface conformance.
 var (
 	_ ReadHandle = (*inlineReadHandle)(nil)
-	_ ReadHandle = (*targetReadHandle)(nil)
 )

@@ -12,12 +12,13 @@ import (
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
 // --- Round-trip: Put → Get → ReadAll ---
 
 func TestGet_TargetRoundTrip(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	const text = "round-trip target"
 
 	id, err := s.Put(context.Background(), payload(text), domain.PutOptions{Namespace: "rt"})
@@ -65,7 +66,7 @@ func TestGet_InlineRoundTrip(t *testing.T) {
 // --- Empty payload, both layouts ---
 
 func TestGet_EmptyTarget(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(nil)},
 		domain.PutOptions{Namespace: "empty"})
@@ -111,7 +112,7 @@ func TestGet_EmptyInline(t *testing.T) {
 // --- Manifest exposed before first Read ---
 
 func TestGet_ManifestAvailableBeforeRead(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("manifest first"),
 		domain.PutOptions{Namespace: "ns", SessionID: "sess-x"})
@@ -142,7 +143,7 @@ func TestGet_ManifestAvailableBeforeRead(t *testing.T) {
 // --- ReadAt mid-stream ---
 
 func TestGet_ReadAt_TargetMidStream(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	const text = "abcdefghijklmnop" // 16 bytes
 	id, err := s.Put(context.Background(), payload(text), domain.PutOptions{})
 	if err != nil {
@@ -194,7 +195,7 @@ func TestGet_ReadAt_InlineMidStream(t *testing.T) {
 // --- errs.ErrArtifactNotFound ---
 
 func TestGet_NotFound(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Get(context.Background(),
 		domain.ArtifactID("sha256-"+strings.Repeat("0", 64)),
 		domain.GetOptions{})
@@ -204,7 +205,7 @@ func TestGet_NotFound(t *testing.T) {
 }
 
 func TestGet_EmptyID(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Get(context.Background(), "", domain.GetOptions{})
 	if !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
@@ -214,7 +215,7 @@ func TestGet_EmptyID(t *testing.T) {
 // --- errs.ErrCorruptedManifest via on-disk tampering ---
 
 func TestGet_CorruptedManifest(t *testing.T) {
-	s, root := newStoreWithRoot(t)
+	s, root := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("tamper me"), domain.PutOptions{Namespace: "t"})
 	if err != nil {
 		t.Fatal(err)
@@ -246,7 +247,7 @@ func TestGet_CorruptedManifest(t *testing.T) {
 // --- errs.ErrCorruptedBlob: manifest exists but blob file is gone ---
 
 func TestGet_CorruptedBlob(t *testing.T) {
-	s, root := newStoreWithRoot(t)
+	s, root := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("blob will vanish"), domain.PutOptions{Namespace: "v"})
 	if err != nil {
 		t.Fatal(err)
@@ -277,7 +278,7 @@ func TestGet_CorruptedBlob(t *testing.T) {
 // --- Close idempotency ---
 
 func TestGet_DoubleCloseIsNoOp(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("close twice"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -297,7 +298,7 @@ func TestGet_DoubleCloseIsNoOp(t *testing.T) {
 // --- Offline blocks Get ---
 
 func TestGet_BlockedInOffline(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("ok"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -312,7 +313,7 @@ func TestGet_BlockedInOffline(t *testing.T) {
 }
 
 func TestGet_AllowedInReadOnly(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("ok"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -328,7 +329,7 @@ func TestGet_AllowedInReadOnly(t *testing.T) {
 }
 
 func TestGet_CtxCancelled(t *testing.T) {
-	s, _ := newStoreWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("ok"), domain.PutOptions{})
 	if err != nil {
 		t.Fatal(err)

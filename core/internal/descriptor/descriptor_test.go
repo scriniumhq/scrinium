@@ -10,8 +10,6 @@ import (
 	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
 )
 
-var newDriver = driverfx.LocalFS
-
 func validDescriptor() *Descriptor {
 	return &Descriptor{
 		StoreID:       "11111111-2222-3333-4444-555555555555",
@@ -174,7 +172,7 @@ func TestUnmarshal_RejectsMalformedJSON(t *testing.T) {
 // --- Read / Write through localfs ---
 
 func TestWrite_Read_RoundTrip(t *testing.T) {
-	drv := newDriver(t)
+	drv := driverfx.LocalFS(t)
 	src := validDescriptor()
 
 	if err := Write(context.Background(), drv, src); err != nil {
@@ -193,7 +191,7 @@ func TestWrite_Read_RoundTrip(t *testing.T) {
 }
 
 func TestRead_NotFound(t *testing.T) {
-	drv := newDriver(t)
+	drv := driverfx.LocalFS(t)
 	_, err := Read(context.Background(), drv)
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected ErrNotExist, got %v", err)
