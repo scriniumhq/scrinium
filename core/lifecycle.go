@@ -251,7 +251,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		DEK:          nil,
 		DEKEncrypted: false,
 	}
-	if err := descriptor.Write(ctx, drv, desc); err != nil {
+	if err := descriptor.Persist(ctx, drv, desc); err != nil {
 		return nil, nil, fmt.Errorf("core.InitStore: write descriptor: %w", err)
 	}
 

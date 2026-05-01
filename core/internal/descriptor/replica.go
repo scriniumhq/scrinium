@@ -16,6 +16,47 @@ import (
 // synchronously with the primary on every descriptor mutation.
 const BackupPath = ".store.backup.json"
 
+// Replica identifies one of the two on-disk descriptor copies.
+// Used by WriteReplica and by Reconcile-driven self-heal to
+// name which side is being targeted.
+type Replica int
+
+const (
+	// L0 — the primary descriptor (store.json).
+	L0 Replica = iota
+
+	// L1 — the shadow descriptor (.store.backup.json).
+	L1
+)
+
+// String returns the spec-canonical short name of the replica
+// ("L0" or "L1"). Used in error wrapping and debug logging.
+func (r Replica) String() string {
+	switch r {
+	case L0:
+		return "L0"
+	case L1:
+		return "L1"
+	default:
+		return fmt.Sprintf("Replica(%d)", int(r))
+	}
+}
+
+// Path returns the on-disk path of the replica relative to the
+// driver root. Returns an error for an out-of-range Replica
+// value to make typo'd casts (Replica(2)) loud rather than
+// silently writing to "".
+func (r Replica) Path() (string, error) {
+	switch r {
+	case L0:
+		return Path, nil
+	case L1:
+		return BackupPath, nil
+	default:
+		return "", fmt.Errorf("descriptor: unknown Replica %d", int(r))
+	}
+}
+
 // ReplicaStatus is the outcome of attempting to read one
 // descriptor replica from a Driver.
 type ReplicaStatus int

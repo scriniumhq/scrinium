@@ -171,12 +171,12 @@ func TestUnmarshal_RejectsMalformedJSON(t *testing.T) {
 
 // --- Read / Write through localfs ---
 
-func TestWrite_Read_RoundTrip(t *testing.T) {
+func TestPersist_Read_RoundTrip(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	src := validDescriptor()
 
-	if err := Write(context.Background(), drv, src); err != nil {
-		t.Fatalf("Write: %v", err)
+	if err := Persist(context.Background(), drv, src); err != nil {
+		t.Fatalf("Persist: %v", err)
 	}
 	got, err := Read(context.Background(), drv)
 	if err != nil {
@@ -187,6 +187,56 @@ func TestWrite_Read_RoundTrip(t *testing.T) {
 	}
 	if got.Sequence != src.Sequence {
 		t.Errorf("Sequence round-trip: got %d, want %d", got.Sequence, src.Sequence)
+	}
+}
+
+// TestWriteReplica_RoundTripL0 covers the low-level repair API
+// against the L0 path. Persist's L0 leg goes through the same
+// code path; this test exists separately so a regression in
+// WriteReplica fails fast even if Persist still works.
+func TestWriteReplica_RoundTripL0(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	src := validDescriptor()
+
+	if err := WriteReplica(context.Background(), drv, src, L0); err != nil {
+		t.Fatalf("WriteReplica(L0): %v", err)
+	}
+	got, err := Read(context.Background(), drv)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got.StoreID != src.StoreID {
+		t.Errorf("StoreID round-trip: got %q, want %q", got.StoreID, src.StoreID)
+	}
+}
+
+// TestWriteReplica_RoundTripL1 covers the L1 leg of the repair
+// API. Reads the L1 file directly through ReadReplica because
+// Read targets L0 only.
+func TestWriteReplica_RoundTripL1(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	src := validDescriptor()
+
+	if err := WriteReplica(context.Background(), drv, src, L1); err != nil {
+		t.Fatalf("WriteReplica(L1): %v", err)
+	}
+	got, status, err := ReadReplica(context.Background(), drv, BackupPath)
+	if err != nil {
+		t.Fatalf("ReadReplica: %v", err)
+	}
+	if status != ReplicaValid {
+		t.Fatalf("L1 status: got %v, want ReplicaValid", status)
+	}
+	if got.StoreID != src.StoreID {
+		t.Errorf("StoreID round-trip: got %q, want %q", got.StoreID, src.StoreID)
+	}
+}
+
+func TestWriteReplica_RejectsInvalidReplica(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	src := validDescriptor()
+	if err := WriteReplica(context.Background(), drv, src, Replica(99)); err == nil {
+		t.Fatal("expected error on invalid Replica value")
 	}
 }
 

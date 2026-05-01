@@ -116,35 +116,49 @@ func Read(ctx context.Context, drv driver.Driver) (*Descriptor, error) {
 	return Unmarshal(data)
 }
 
-// Write serialises and stores the descriptor through a Driver.
-// Driver.Put is atomic (temp + rename). Writes only L0 (Path) —
-// callers wanting the L0+L1 invariant must use WriteBoth.
-func Write(ctx context.Context, drv driver.Driver, d *Descriptor) error {
-	data, err := Marshal(d)
-	if err != nil {
-		return err
-	}
-	return drv.Put(ctx, Path, bytes.NewReader(data))
-}
-
-// WriteBoth serialises d once and writes the result to both L0
-// (Path) and L1 (BackupPath). Each Put is atomic; the pair is
-// not — a crash between them leaves L1 stale and L0 fresh, which
-// Reconcile heals on the next OpenStore.
+// Persist writes d to both replicas (L0 and L1), serialised once
+// and Put twice. This is the canonical way to put a descriptor
+// on disk: any production path that mutates the descriptor —
+// InitStore, Unlock, SetPassphrase, RotateKEK — goes through
+// Persist.
 //
-// Per §10.1.5 the on-disk invariant after a successful WriteBoth
-// is "L0 ⇄ L1, byte-identical". Reconcile is the recovery path
-// for any other observed state.
-func WriteBoth(ctx context.Context, drv driver.Driver, d *Descriptor) error {
+// Each individual Put is atomic; the pair is not. A crash
+// between the two leaves L1 stale and L0 fresh, which Reconcile
+// heals on the next OpenStore. The on-disk invariant after a
+// successful Persist is "L0 ⇄ L1, byte-identical".
+//
+// For repair-style writes that target one replica only — used
+// by Reconcile self-heal and by tests fabricating divergence —
+// see WriteReplica.
+func Persist(ctx context.Context, drv driver.Driver, d *Descriptor) error {
 	data, err := Marshal(d)
 	if err != nil {
 		return err
 	}
 	if err := drv.Put(ctx, Path, bytes.NewReader(data)); err != nil {
-		return fmt.Errorf("descriptor.WriteBoth: L0: %w", err)
+		return fmt.Errorf("descriptor.Persist: L0: %w", err)
 	}
 	if err := drv.Put(ctx, BackupPath, bytes.NewReader(data)); err != nil {
-		return fmt.Errorf("descriptor.WriteBoth: L1: %w", err)
+		return fmt.Errorf("descriptor.Persist: L1: %w", err)
 	}
 	return nil
+}
+
+// WriteReplica writes d to one specific replica. Reserved for
+// repair flows: Reconcile self-heal needs to overwrite the
+// damaged side without touching the good one, and tests need to
+// fabricate L0/L1 divergence. Production code that simply wants
+// the descriptor on disk uses Persist.
+//
+// Driver.Put is atomic (temp + rename).
+func WriteReplica(ctx context.Context, drv driver.Driver, d *Descriptor, r Replica) error {
+	data, err := Marshal(d)
+	if err != nil {
+		return err
+	}
+	path, err := r.Path()
+	if err != nil {
+		return fmt.Errorf("descriptor.WriteReplica: %w", err)
+	}
+	return drv.Put(ctx, path, bytes.NewReader(data))
 }
