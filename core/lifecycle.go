@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -373,37 +374,65 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		zeroBytes(dek)
 		return nil, nil, fmt.Errorf("core.InitStore: %w", err)
 	}
+	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
+		zeroBytes(dek)
+		return nil, nil, fmt.Errorf("core.InitStore: %w", err)
+	}
 	return s, kit, nil
 }
 
 // OpenStore opens an existing Store at the Location served by drv.
 //
-// Behaviour (M1.4 subset):
-//  1. Read store.json. Missing → errs.ErrStoreNotFound. Unreadable →
-//     errs.ErrStoreCorrupted.
-//  2. Validate the descriptor against any caller-supplied
-//     WithConfig: immutable parameters must match. Mismatch →
-//     errs.ErrConfigMismatch. When WithConfig is omitted, immutable
-//     fields are accepted as-is — a legitimate scenario for
-//     diagnostic tools and projection-only consumers.
+// Behaviour:
+//  1. Read both descriptor replicas (L0 store.json, L1
+//     .store.backup.json) per §10.1.5 and reconcile them. If
+//     both are absent → errs.ErrStoreNotFound. If both are
+//     unrecoverable (corrupted, or one corrupted + one absent)
+//     → errs.ErrStoreCorrupted. If both are valid but content
+//     differs at the same Sequence →
+//     errs.ErrDescriptorSplitBrain. Otherwise the canonical
+//     replica is selected (sequence-wins; equal-content
+//     short-circuit) and any heal action is performed against
+//     the Driver before proceeding.
+//  2. Reconcile the L2 cache (store_meta) with the canonical
+//     descriptor. The cache is rewritten when absent, when its
+//     checksum diverges, or when its load fails — Location is
+//     the source of truth, the cache is a fast-start aid.
 //  3. Validate that a StoreIndex was provided via WithStoreIndex.
 //     core never opens an index itself; the caller is responsible
 //     for the dependency. Missing → error.
-//  4. Reconstruct the active StoreConfig: immutable parameters
-//     come from the descriptor, mutable ones from WithConfig
-//     (overlay) or defaults. In M2 this step will load
-//     system.config/current as a real artifact pointer.
-//  5. Construct *store. The state machine is simplified for M1.4:
-//     ManifestCrypto == Plain → StateUnlocked. Encrypted Stores
-//     (StateLocked, optional auto-unlock) arrive with the crypto
-//     pipeline in M2.
+//  4. Load the active StoreConfig from system.config/current.
+//     Defaults are applied; immutable parameters are validated.
+//  5. Validate WithConfig (when supplied) against the active
+//     config: immutable mismatch → errs.ErrConfigMismatch.
+//     A caller without WithConfig accepts the on-disk config
+//     as-is — a legitimate scenario for diagnostic tools and
+//     projection-only consumers.
+//  6. State machine and bootstrap:
+//     - DEKEncrypted=false: Plain DEK in descriptor, used
+//     directly. Run Orphan Scan, transition to
+//     StateUnlocked.
+//     - DEKEncrypted=true + WithAutoUnlock: invoke the
+//     configured PassphraseProvider with Reason="unlock",
+//     unwrap DEK, run Orphan Scan, transition to
+//     StateUnlocked.
+//     - DEKEncrypted=true without WithAutoUnlock: skip
+//     Orphan Scan (the index walk needs the DEK in M2.3+
+//     for Envelope manifests; until then it would still
+//     succeed for Plain manifests, but we treat the state
+//     uniformly), transition to StateLocked. The next
+//     Store.Unlock call completes bootstrap.
+//
+// MetadataOnly and Envelope manifest crypto are still rejected
+// pending M2.3. The split between "encrypted DEK" (this pack)
+// and "encrypted manifests" (next milestone) is deliberate:
+// they are independent axes of the configuration and a Store
+// with a passphrase-protected DEK plus Plain manifests is a
+// useful intermediate.
 //
 // What does NOT happen yet (planned milestones in parens):
-//   - Three-level descriptor consensus L0/L1/L2 (M2.2).
-//   - system.config/current as an artifact pointer (M2).
 //   - location.lock acquisition / lease model (M3.1).
-//   - StoreIndex schema cross-check against descriptor (M2).
-//   - WithAutoUnlock and Unlock proper (M2).
+//   - StoreIndex schema cross-check against descriptor (M3.4).
 func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, error) {
 	if drv == nil {
 		return nil, errors.New("core.OpenStore: nil driver")
@@ -416,26 +445,10 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		fn(&o)
 	}
 
-	// --- Read the descriptor ---
-
-	desc, err := descriptor.Read(ctx, drv)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return nil, errs.ErrStoreNotFound
-	case err != nil:
-		// Any non-ENOENT error from the descriptor pipeline (parse
-		// failure, validation, schema mismatch) means the file is
-		// present but unreadable — Store is corrupted from the
-		// caller's perspective. The original error is wrapped so
-		// debugging can still see the cause.
-		return nil, fmt.Errorf("%w: %v", errs.ErrStoreCorrupted, err)
-	}
-
 	// --- StoreIndex dependency ---
 	//
-	// Required up-front: readSystemConfig has no use for it but the
-	// orphan scan and the open Store do, and refusing here gives a
-	// clearer error than failing later on a nil index.
+	// Required up-front: readSystemConfig and the L2 cache need
+	// it; refusing here gives a clearer error than failing later.
 
 	idx := o.storeIndex
 	if idx == nil {
@@ -447,11 +460,48 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 			"core.OpenStore: WithHashRegistry is required to read system.config")
 	}
 
-	// --- Load the active StoreConfig from system.config/current ---
+	// --- Read both descriptor replicas; reconcile ---
+
+	l0, l1, l0s, l1s, err := descriptor.ReadBoth(ctx, drv)
+	if err != nil {
+		// Non-recoverable I/O error from the Driver — propagate.
+		return nil, fmt.Errorf("core.OpenStore: read descriptor: %w", err)
+	}
+	rec, err := descriptor.Reconcile(l0, l0s, l1, l1s)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return nil, errs.ErrStoreNotFound
+	case errors.Is(err, errs.ErrStoreCorrupted):
+		return nil, errs.ErrStoreCorrupted
+	case err != nil:
+		// Split-brain, malformed-replica branches — pass through
+		// unchanged so callers can identify by errors.Is.
+		return nil, fmt.Errorf("core.OpenStore: %w", err)
+	}
+	desc := rec.Canonical
+
+	// --- Heal divergent replicas ---
 	//
-	// Per §10.1.4 the pointer is the source of truth for projection
-	// parameters. Defaults are applied to the loaded config so legacy
-	// fields stay populated even when the writer omitted them.
+	// Reconcile selected the canonical descriptor; if the on-disk
+	// state diverges from it, write the side that needs updating.
+	// Each heal is a single atomic Put; a crash mid-heal leaves
+	// the same divergence we are recovering from now, and the
+	// next OpenStore re-applies the same step. Idempotent.
+	if err := healReplicas(ctx, drv, desc, rec.Action); err != nil {
+		return nil, fmt.Errorf("core.OpenStore: %w", err)
+	}
+
+	// --- Reconcile L2 cache with canonical descriptor ---
+	//
+	// Location is the source of truth; the cache is a fast-start
+	// aid only. Save when absent, when corrupted (load returned
+	// an error), or when checksum diverges. Read errors are
+	// non-fatal — we always have the canonical to fall back to.
+	if err := refreshDescriptorCache(idx, desc); err != nil {
+		return nil, fmt.Errorf("core.OpenStore: refresh L2 cache: %w", err)
+	}
+
+	// --- Load the active StoreConfig from system.config/current ---
 
 	active, err := readSystemConfig(ctx, drv, o.hashRegistry)
 	if err != nil {
@@ -463,12 +513,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 			errs.ErrStoreCorrupted, err)
 	}
 
-	// --- Validate WithConfig against the active config (immutable) ---
-	//
-	// Only runs when the caller explicitly passed WithConfig. The
-	// "open without config" path is legitimate — diagnostic tools,
-	// projections, even Curator wiring with multiple Stores often
-	// opens each store without re-asserting its config.
+	// --- Validate WithConfig against the active config ---
 
 	if o.cfg != nil {
 		if err := validateAgainstActiveConfig(*o.cfg, active); err != nil {
@@ -476,28 +521,83 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		}
 	}
 
-	// --- Determine final state ---
+	// --- Refuse manifest-encryption modes still pending M2.3 ---
 	//
-	// M1.4 supports Plain only. Encrypted Stores will produce
-	// StateLocked here (and possibly auto-unlock when M2 lands
-	// WithAutoUnlock plus the crypto pipeline). For now anything
-	// non-Plain is rejected — better an explicit "not implemented"
-	// than a silently broken Store.
+	// MetadataOnly and Envelope require the AEAD-on-manifests
+	// pipeline that lands with the next milestone. The DEK
+	// machinery itself (this pack) is independent: a Store can
+	// have a wrapped DEK and still write Plain manifests, which
+	// is a perfectly working configuration.
 	if active.ManifestCrypto != domain.ManifestCryptoPlain {
 		return nil, fmt.Errorf(
-			"core.OpenStore: encrypted Stores (ManifestCrypto=%q) are not supported in M1.4; "+
-				"crypto pipeline lands in M2",
+			"core.OpenStore: ManifestCrypto=%q is not yet implemented (lands in M2.3)",
 			active.ManifestCrypto)
 	}
 
-	// --- Construct *store ---
-	//
-	// M2.2 Plain path: descriptor carries plaintext DEK; we hand
-	// it straight to buildStore. Encrypted-DEK Stores arrive in
-	// 1.2b.4.4 (Reconcile + auto-unlock). Until then the
-	// "encrypted" branch above refuses to open them.
-	s, err := buildStore(ctx, o, drv, idx, active, desc, desc.DEK)
+	// --- Branch on DEK protection state ---
+
+	if !desc.DEKEncrypted {
+		// Plain DEK: descriptor carries the raw key. Bootstrap
+		// proceeds straight to Unlocked.
+		s, err := buildStore(ctx, o, drv, idx, active, desc, desc.DEK)
+		if err != nil {
+			return nil, fmt.Errorf("core.OpenStore: %w", err)
+		}
+		if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
+			return nil, fmt.Errorf("core.OpenStore: %w", err)
+		}
+		return s, nil
+	}
+
+	// Encrypted DEK below.
+
+	if !o.autoUnlock {
+		// Stop in StateLocked — caller will follow up with
+		// Store.Unlock. Orphan Scan is deferred until DEK is
+		// available so the locked Store is a strictly minimal
+		// in-memory shell.
+		s, err := buildStore(ctx, o, drv, idx, active, desc, nil /* dek */)
+		if err != nil {
+			return nil, fmt.Errorf("core.OpenStore: %w", err)
+		}
+		s.stateMu.Lock()
+		s.state = domain.StateLocked
+		s.stateMu.Unlock()
+		return s, nil
+	}
+
+	// AutoUnlock: invoke the provider, derive KEK, unwrap DEK.
+	if o.passphrase == nil {
+		return nil, fmt.Errorf("core.OpenStore: %w: WithAutoUnlock requires WithPassphrase",
+			errs.ErrPassphraseRequired)
+	}
+	passphrase, err := callProvider(ctx, o.passphrase, PassphraseHint{
+		StoreID: desc.StoreID,
+		Reason:  "unlock",
+	})
 	if err != nil {
+		return nil, fmt.Errorf("core.OpenStore: %w", err)
+	}
+	if desc.KDFParams == nil {
+		// Defensive: a descriptor with DEKEncrypted=true must
+		// have KDFParams (Validate enforces). Reaching this
+		// branch means the Validate contract has drifted.
+		zeroBytes(passphrase)
+		return nil, fmt.Errorf("%w: descriptor reports DEKEncrypted=true without KDFParams",
+			errs.ErrStoreCorrupted)
+	}
+	dek, err := unwrapDEK(desc.DEK, *desc.KDFParams, passphrase)
+	zeroBytes(passphrase)
+	if err != nil {
+		return nil, fmt.Errorf("core.OpenStore: %w", err)
+	}
+
+	s, err := buildStore(ctx, o, drv, idx, active, desc, dek)
+	if err != nil {
+		zeroBytes(dek)
+		return nil, fmt.Errorf("core.OpenStore: %w", err)
+	}
+	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		return nil, fmt.Errorf("core.OpenStore: %w", err)
 	}
 	return s, nil
@@ -522,6 +622,59 @@ func buildRecoveryKit(desc *descriptor.Descriptor, wrappedDEK []byte) ([]byte, e
 		Threads:      desc.KDFParams.Threads,
 		EncryptedDEK: wrappedDEK,
 	})
+}
+
+// healReplicas applies Reconcile's repair action: writes the
+// damaged or missing replica from the canonical descriptor.
+// HealNone is a no-op; the four healing actions reduce to two
+// distinct disk operations (write L0 only, write L1 only) since
+// the canonical content already lives on the surviving side.
+func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.Descriptor, action descriptor.ReconcileAction) error {
+	switch action {
+	case descriptor.HealNone:
+		return nil
+	case descriptor.HealL0FromL1, descriptor.HealBothFromL1:
+		// HealL0FromL1: L0 was missing/corrupted, rewrite it.
+		// HealBothFromL1: sequence-divergence, L1 won, rewrite L0.
+		// Same disk operation; distinct names preserve diagnostic
+		// detail in logs.
+		return descriptor.WriteReplica(ctx, drv, canonical, descriptor.L0)
+	case descriptor.HealL1FromL0, descriptor.HealBothFromL0:
+		return descriptor.WriteReplica(ctx, drv, canonical, descriptor.L1)
+	default:
+		return fmt.Errorf("core: unknown ReconcileAction %d", int(action))
+	}
+}
+
+// refreshDescriptorCache compares the L2 cache against canonical
+// and rewrites it when out of sync.
+//
+// Three branches that all reduce to "save":
+//   - cache absent (loadDescriptorCache returned nil, nil)
+//   - cache load failed (corruption, partial state)
+//   - cache present but checksum diverges from canonical
+//
+// The "load failed" branch swallows the load error on purpose:
+// the cache is a fast-start aid, not authoritative, and a
+// damaged cache is fully recoverable from Location.
+func refreshDescriptorCache(idx metaStore, canonical *descriptor.Descriptor) error {
+	cache, _ := loadDescriptorCache(idx)
+
+	if cache != nil {
+		want, err := descriptor.Checksum(canonical)
+		if err != nil {
+			return fmt.Errorf("checksum canonical: %w", err)
+		}
+		if bytes.Equal(cache.Checksum, want) {
+			return nil // cache is already current
+		}
+	}
+
+	// Save (or re-save). saveDescriptorCache is idempotent.
+	if err := saveDescriptorCache(idx, canonical); err != nil {
+		return fmt.Errorf("save: %w", err)
+	}
+	return nil
 }
 
 // buildStore is the common tail shared by InitStore and OpenStore.
@@ -549,6 +702,7 @@ func buildStore(
 	desc *descriptor.Descriptor,
 	dek []byte,
 ) (*store, error) {
+	_ = ctx // reserved for future bootstrap-time index probes
 	s := &store{
 		storeID:            desc.StoreID,
 		drv:                drv,
@@ -564,22 +718,33 @@ func buildStore(
 		dek:                dek,
 		passphraseProvider: o.passphrase,
 	}
+	return s, nil
+}
 
-	// Bootstrap recovery: Orphan Scan per docs §10.2. On a freshly
-	// initialised Store all three sweeps walk over absent prefixes
-	// and return an empty report instantly. On open the report
-	// reflects actual divergence between disk and index.
-	report, err := recoverOrphans(ctx, drv, idx)
+// unlockBootstrap completes the bootstrap-into-Unlocked transition
+// shared by InitStore (always), the Plain-DEK OpenStore path,
+// the AutoUnlock OpenStore path, and the deferred Store.Unlock
+// path (1.2b.5).
+//
+// The caller has produced a *store in StateBootstrapping with
+// the DEK already populated. unlockBootstrap runs the Orphan
+// Scan per §10.2, publishes the report, and flips state to
+// StateUnlocked atomically.
+//
+// Errors from the Orphan Scan propagate; the *store is left in
+// StateBootstrapping. The caller decides whether to retry, fall
+// back to Locked, or surface the failure.
+func unlockBootstrap(ctx context.Context, s *store, pub Publisher) error {
+	report, err := recoverOrphans(ctx, s.drv, s.index)
 	if err != nil {
-		return nil, fmt.Errorf("orphan scan: %w", err)
+		return fmt.Errorf("orphan scan: %w", err)
 	}
-	publishOrphanReport(o.publisher, report)
+	publishOrphanReport(pub, report)
 
 	s.stateMu.Lock()
 	s.state = domain.StateUnlocked
 	s.stateMu.Unlock()
-
-	return s, nil
+	return nil
 }
 
 // validateAgainstActiveConfig checks that the caller-supplied

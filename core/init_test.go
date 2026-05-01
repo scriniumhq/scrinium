@@ -532,9 +532,9 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 	}
 }
 
-// --- OpenStore: encrypted Store rejection in M1.4 ---
+// --- OpenStore: non-Plain ManifestCrypto pending M2.3 ---
 
-func TestOpenStore_EncryptedStoreNotYetSupported(t *testing.T) {
+func TestOpenStore_NonPlainManifestCryptoNotYetSupported(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
 
@@ -566,10 +566,10 @@ func TestOpenStore_EncryptedStoreNotYetSupported(t *testing.T) {
 		core.WithHashRegistry(storefx.Hashes()),
 	)
 	if err == nil {
-		t.Fatal("expected encrypted-Store rejection in M1.4")
+		t.Fatal("expected non-Plain ManifestCrypto to be rejected pending M2.3")
 	}
-	if !strings.Contains(err.Error(), "M2") {
-		t.Errorf("error should reference M2 milestone: %v", err)
+	if !strings.Contains(err.Error(), "M2.3") {
+		t.Errorf("error should reference M2.3: %v", err)
 	}
 }
 
