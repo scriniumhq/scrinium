@@ -81,6 +81,10 @@ func Run(t *testing.T, f Factory) {
 	t.Run(f.Name+"/LookupPacked", func(t *testing.T) { runLookupPacked(t, f) })
 	t.Run(f.Name+"/MarkVerified", func(t *testing.T) { runMarkVerified(t, f) })
 	t.Run(f.Name+"/DeletePacked", func(t *testing.T) { runDeletePacked(t, f) })
+	t.Run(f.Name+"/ListByNamespace", func(t *testing.T) { runListByNamespace(t, f) })
+	t.Run(f.Name+"/GetBySession", func(t *testing.T) { runGetBySession(t, f) })
+	t.Run(f.Name+"/ListOrphanBlobs", func(t *testing.T) { runListOrphanBlobs(t, f) })
+	t.Run(f.Name+"/ListUnverified", func(t *testing.T) { runListUnverified(t, f) })
 }
 
 // --- Resolve ---
@@ -912,6 +916,556 @@ func runDeletePacked(t *testing.T, f Factory) {
 		idx := f.New(t)
 		if err := idx.DeletePacked("nonexistent-pack"); err != nil {
 			t.Errorf("DeletePacked of unknown pack must be no-op, got %v", err)
+		}
+	})
+}
+
+// --- ListByNamespace ---
+
+func runListByNamespace(t *testing.T, f Factory) {
+	// All staging here goes through IndexManifest with distinct
+	// (contentHash, blobRef) per artifact, so the
+	// (content_hash, original_size) UNIQUE constraint is never
+	// touched. The listing tests only care about manifests-side
+	// behaviour, but a correct implementation must allow this
+	// staging shape.
+
+	t.Run("ExactMatch", func(t *testing.T) {
+		idx := f.New(t)
+		stage := []struct {
+			id, ref, ns string
+			fillChar    byte
+		}{
+			{"a1", "blob-a1", "alpha", 'a'},
+			{"a2", "blob-a2", "alpha", 'b'},
+			{"b1", "blob-b1", "beta", 'c'},
+		}
+		for _, s := range stage {
+			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
+			m.Namespace = s.ns
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+				t.Fatalf("seed %s: %v", s.id, err)
+			}
+		}
+
+		got := collectByNamespace(t, idx, "alpha")
+		if len(got) != 2 {
+			t.Fatalf("got %d manifests, want 2", len(got))
+		}
+		for _, m := range got {
+			if m.Namespace != "alpha" {
+				t.Errorf("namespace leak: got %q", m.Namespace)
+			}
+		}
+	})
+
+	t.Run("DefaultNamespace", func(t *testing.T) {
+		// Empty-string namespace is the "default" bucket; passing
+		// "" to ListByNamespace returns ONLY this bucket, not all
+		// namespaces (that's what "*" is for).
+		idx := f.New(t)
+		mDefault := manifestfx.BlobWithHash("no-ns-1", "blob-d", manifestfx.SyntheticHash('a'), 1024)
+		mDefault.Namespace = ""
+		if err := idx.IndexManifest(mDefault, manifestfx.PhysAddr("p/d"), nil, nil); err != nil {
+			t.Fatal(err)
+		}
+		mAlpha := manifestfx.BlobWithHash("user-ns", "blob-a", manifestfx.SyntheticHash('b'), 1024)
+		mAlpha.Namespace = "alpha"
+		if err := idx.IndexManifest(mAlpha, manifestfx.PhysAddr("p/a"), nil, nil); err != nil {
+			t.Fatal(err)
+		}
+
+		got := collectByNamespace(t, idx, "")
+		if len(got) != 1 {
+			t.Fatalf("got %d, want 1 (default namespace only)", len(got))
+		}
+		if got[0].ArtifactID != "no-ns-1" {
+			t.Errorf("got %q, want no-ns-1", got[0].ArtifactID)
+		}
+	})
+
+	t.Run("Wildcard_ExcludesSystem", func(t *testing.T) {
+		// "*" is the user-namespace wildcard: everything except
+		// the reserved "system." prefix.
+		idx := f.New(t)
+		stage := []struct {
+			id, ref, ns string
+			fillChar    byte
+		}{
+			{"u1", "blob-u1", "alpha", 'a'},
+			{"u2", "blob-u2", "beta", 'b'},
+			{"s1", "blob-s1", "system.config", 'c'},
+			{"s2", "blob-s2", "system.state", 'd'},
+		}
+		for _, s := range stage {
+			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
+			m.Namespace = s.ns
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+				t.Fatalf("seed %s: %v", s.id, err)
+			}
+		}
+
+		got := collectByNamespace(t, idx, "*")
+		if len(got) != 2 {
+			t.Fatalf("got %d, want 2 (system.* excluded)", len(got))
+		}
+		for _, m := range got {
+			if strings.HasPrefix(m.Namespace, "system.") {
+				t.Errorf("system.* leaked: %s", m.Namespace)
+			}
+		}
+	})
+
+	t.Run("OrderByCreatedAt", func(t *testing.T) {
+		// Inserting in reverse temporal order; the iterator must
+		// return them sorted ascending by CreatedAt.
+		idx := f.New(t)
+		now := time.Now().Truncate(time.Second)
+		insert := func(id string, ref string, fillChar byte, at time.Time) {
+			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
+			m.Namespace = "ns"
+			m.CreatedAt = at
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+				t.Fatalf("seed %s: %v", id, err)
+			}
+		}
+		insert("third", "blob-t", 'a', now.Add(2*time.Second))
+		insert("first", "blob-f", 'b', now)
+		insert("second", "blob-s", 'c', now.Add(time.Second))
+
+		got := collectByNamespace(t, idx, "ns")
+		want := []domain.ArtifactID{"first", "second", "third"}
+		if len(got) != len(want) {
+			t.Fatalf("got %d, want %d", len(got), len(want))
+		}
+		for i, m := range got {
+			if m.ArtifactID != want[i] {
+				t.Errorf("position %d: got %q, want %q", i, m.ArtifactID, want[i])
+			}
+		}
+	})
+
+	t.Run("StopWalk", func(t *testing.T) {
+		idx := f.New(t)
+		for i := 0; i < 5; i++ {
+			fillChar := byte('a' + i)
+			id := "art-" + string(fillChar)
+			ref := "blob-" + string(fillChar)
+			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
+			m.Namespace = "ns"
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+				t.Fatalf("seed %s: %v", id, err)
+			}
+		}
+
+		var seen int
+		err := idx.ListByNamespace(context.Background(), "ns", func(m domain.Manifest) error {
+			seen++
+			if seen == 2 {
+				return errs.ErrStopWalk
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("ErrStopWalk must be swallowed by the iterator, got %v", err)
+		}
+		if seen != 2 {
+			t.Fatalf("expected to stop at 2, saw %d", seen)
+		}
+	})
+
+	t.Run("CallbackErrorPropagates", func(t *testing.T) {
+		idx := f.New(t)
+		m := manifestfx.BlobWithHash("a1", "blob-a1", manifestfx.SyntheticHash('a'), 1024)
+		m.Namespace = "ns"
+		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+			t.Fatal(err)
+		}
+
+		sentinel := errors.New("custom callback error")
+		err := idx.ListByNamespace(context.Background(), "ns", func(m domain.Manifest) error {
+			return sentinel
+		})
+		if !errors.Is(err, sentinel) {
+			t.Fatalf("expected sentinel propagated, got %v", err)
+		}
+	})
+
+	t.Run("PackManifestsExcluded", func(t *testing.T) {
+		// Pack manifests live in the index, but listings are for
+		// user-visible artifacts only. ListByNamespace must skip
+		// pack manifests.
+		idx := f.New(t)
+		blob := manifestfx.BlobWithHash("blob-1", "ref-blob-1", manifestfx.SyntheticHash('a'), 1024)
+		blob.Namespace = "ns"
+		if err := idx.IndexManifest(blob, manifestfx.PhysAddr("p/blob"), nil, nil); err != nil {
+			t.Fatal(err)
+		}
+
+		pack := domain.Manifest{
+			ArtifactID:   "pack-1",
+			Type:         domain.ManifestTypePack,
+			Namespace:    "ns",
+			ContentHash:  manifestfx.SyntheticHash('p'),
+			BlobRef:      "pack-blob-1",
+			OriginalSize: 4096,
+			CreatedAt:    time.Now(),
+		}
+		if err := idx.IndexManifest(pack, manifestfx.PhysAddr("p/pack"), nil, []domain.PackedEntry{
+			{ArtifactID: "inner-1", BlobRef: "inner-blob-1", BlobSize: 100,
+				ContentHash: manifestfx.SyntheticHash('i'), PipelineParams: []byte{}},
+		}); err != nil {
+			t.Fatalf("seed pack: %v", err)
+		}
+
+		got := collectByNamespace(t, idx, "ns")
+		if len(got) != 1 {
+			t.Fatalf("got %d, want 1 (pack excluded)", len(got))
+		}
+		if got[0].Type != domain.ManifestTypeBlob {
+			t.Errorf("type: got %q, want blob", got[0].Type)
+		}
+	})
+
+	t.Run("EmptyResult", func(t *testing.T) {
+		idx := f.New(t)
+		got := collectByNamespace(t, idx, "nonexistent-ns")
+		if len(got) != 0 {
+			t.Fatalf("got %d, want 0", len(got))
+		}
+	})
+
+	t.Run("FieldsRoundTrip", func(t *testing.T) {
+		// Every persisted field must round-trip through the
+		// iterator. Non-persisted fields (Pipeline, LayoutHeader,
+		// Metadata) reach the iterator zero-valued — callers
+		// reconstruct them from the manifest file on disk.
+		idx := f.New(t)
+		now := time.Now().UTC().Truncate(time.Second)
+		retention := now.Add(time.Hour)
+		src := manifestfx.BlobWithHash("art-1", "blob-1", manifestfx.SyntheticHash('a'), 1024)
+		src.Namespace = "ns"
+		src.SessionID = "sess-42"
+		src.CreatedAt = now
+		src.RetentionUntil = retention
+		if err := idx.IndexManifest(src, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+			t.Fatal(err)
+		}
+
+		got := collectByNamespace(t, idx, "ns")
+		if len(got) != 1 {
+			t.Fatalf("got %d, want 1", len(got))
+		}
+		m := got[0]
+		if m.ArtifactID != src.ArtifactID {
+			t.Errorf("ArtifactID: got %q, want %q", m.ArtifactID, src.ArtifactID)
+		}
+		if m.Type != src.Type {
+			t.Errorf("Type: got %q, want %q", m.Type, src.Type)
+		}
+		if m.Namespace != src.Namespace {
+			t.Errorf("Namespace: got %q, want %q", m.Namespace, src.Namespace)
+		}
+		if m.SessionID != src.SessionID {
+			t.Errorf("SessionID: got %q, want %q", m.SessionID, src.SessionID)
+		}
+		if m.BlobRef != src.BlobRef {
+			t.Errorf("BlobRef: got %q, want %q", m.BlobRef, src.BlobRef)
+		}
+		if !m.CreatedAt.Equal(src.CreatedAt) {
+			t.Errorf("CreatedAt: got %v, want %v", m.CreatedAt, src.CreatedAt)
+		}
+		if !m.RetentionUntil.Equal(src.RetentionUntil) {
+			t.Errorf("RetentionUntil: got %v, want %v", m.RetentionUntil, src.RetentionUntil)
+		}
+	})
+
+	t.Run("ContextCancelled", func(t *testing.T) {
+		// A pre-cancelled ctx must surface context.Canceled.
+		// Implementations may observe the cancellation either
+		// before the query starts or before the first row is
+		// scanned — both shapes pass.
+		idx := f.New(t)
+		for i := 0; i < 3; i++ {
+			fillChar := byte('a' + i)
+			id := "art-" + string(fillChar)
+			ref := "blob-" + string(fillChar)
+			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
+			m.Namespace = "ns"
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+				t.Fatalf("seed %s: %v", id, err)
+			}
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		err := idx.ListByNamespace(ctx, "ns", func(m domain.Manifest) error {
+			return nil
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled, got %v", err)
+		}
+	})
+}
+
+// collectByNamespace is a small helper that turns a streaming
+// ListByNamespace into a slice for table-style assertions.
+func collectByNamespace(t *testing.T, idx core.StoreIndex, ns string) []domain.Manifest {
+	t.Helper()
+	var got []domain.Manifest
+	err := idx.ListByNamespace(context.Background(), ns, func(m domain.Manifest) error {
+		got = append(got, m)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ListByNamespace(%q): %v", ns, err)
+	}
+	return got
+}
+
+// --- GetBySession ---
+
+func runGetBySession(t *testing.T, f Factory) {
+	t.Run("Hit", func(t *testing.T) {
+		idx := f.New(t)
+		stage := []struct {
+			id, ref, sess string
+			fillChar      byte
+		}{
+			{"a1", "blob-a1", "sess-1", 'a'},
+			{"a2", "blob-a2", "sess-1", 'b'},
+			{"b1", "blob-b1", "sess-2", 'c'},
+		}
+		for _, s := range stage {
+			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
+			m.Namespace = "ns"
+			m.SessionID = s.sess
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+				t.Fatalf("seed %s: %v", s.id, err)
+			}
+		}
+
+		ids, err := idx.GetBySession("sess-1")
+		if err != nil {
+			t.Fatalf("GetBySession: %v", err)
+		}
+		if len(ids) != 2 {
+			t.Fatalf("got %d, want 2", len(ids))
+		}
+		seen := make(map[domain.ArtifactID]bool)
+		for _, id := range ids {
+			seen[id] = true
+		}
+		if !seen["a1"] || !seen["a2"] {
+			t.Errorf("missing expected ids: got %v", ids)
+		}
+	})
+
+	t.Run("Miss", func(t *testing.T) {
+		idx := f.New(t)
+		ids, err := idx.GetBySession("nonexistent")
+		if err != nil {
+			t.Fatalf("GetBySession: %v", err)
+		}
+		if len(ids) != 0 {
+			t.Fatalf("got %d, want 0", len(ids))
+		}
+	})
+}
+
+// --- ListOrphanBlobs ---
+
+func runListOrphanBlobs(t *testing.T, f Factory) {
+	// Reaching ref_count=0 through the public API: IndexManifest
+	// then DeleteManifest. The blob row remains as an orphan —
+	// that is the state ListOrphanBlobs reports.
+
+	t.Run("Basic", func(t *testing.T) {
+		idx := f.New(t)
+		// Two live blobs, two orphans.
+		stage := []struct {
+			id, ref  string
+			fillChar byte
+			deleted  bool
+		}{
+			{"live-1", "blob-l1", 'a', false},
+			{"orph-1", "blob-o1", 'b', true},
+			{"orph-2", "blob-o2", 'c', true},
+			{"live-2", "blob-l2", 'd', false},
+		}
+		for _, s := range stage {
+			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+				t.Fatalf("seed %s: %v", s.id, err)
+			}
+			if s.deleted {
+				if err := idx.DeleteManifest(domain.ArtifactID(s.id), []string{s.ref}); err != nil {
+					t.Fatalf("delete %s: %v", s.id, err)
+				}
+			}
+		}
+
+		var got []string
+		err := idx.ListOrphanBlobs(context.Background(), func(ref string) error {
+			got = append(got, ref)
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("ListOrphanBlobs: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("got %d, want 2", len(got))
+		}
+		seen := make(map[string]bool)
+		for _, ref := range got {
+			seen[ref] = true
+		}
+		if !seen["blob-o1"] || !seen["blob-o2"] {
+			t.Errorf("expected both orphans, got %v", got)
+		}
+	})
+
+	t.Run("StopWalk", func(t *testing.T) {
+		idx := f.New(t)
+		for i := 0; i < 5; i++ {
+			fillChar := byte('a' + i)
+			id := "art-" + string(fillChar)
+			ref := "blob-" + string(fillChar)
+			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+				t.Fatal(err)
+			}
+			if err := idx.DeleteManifest(domain.ArtifactID(id), []string{ref}); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		var seen int
+		err := idx.ListOrphanBlobs(context.Background(), func(ref string) error {
+			seen++
+			if seen == 2 {
+				return errs.ErrStopWalk
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("ErrStopWalk must be swallowed, got %v", err)
+		}
+		if seen != 2 {
+			t.Fatalf("expected stop at 2, saw %d", seen)
+		}
+	})
+}
+
+// --- ListUnverified ---
+
+func runListUnverified(t *testing.T, f Factory) {
+	// IndexManifest creates blobs with no verification timestamp;
+	// MarkVerified sets it. The iterator surfaces blobs whose
+	// last verification (or absence thereof) places them before
+	// the cutoff — never-verified rows always qualify, recently
+	// verified rows are skipped.
+
+	t.Run("CutoffBoundary", func(t *testing.T) {
+		idx := f.New(t)
+		now := time.Now().UTC().Truncate(time.Second)
+
+		stage := []struct {
+			id, ref      string
+			fillChar     byte
+			verifiedAgo  time.Duration
+			everVerified bool
+		}{
+			{"never", "blob-n", 'a', 0, false},
+			{"stale", "blob-s", 'b', 10 * time.Minute, true},
+			{"fresh", "blob-f", 'c', time.Minute, true},
+		}
+		for _, s := range stage {
+			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+				t.Fatalf("seed %s: %v", s.id, err)
+			}
+			if s.everVerified {
+				if err := idx.MarkVerified(s.ref, now.Add(-s.verifiedAgo)); err != nil {
+					t.Fatalf("MarkVerified %s: %v", s.ref, err)
+				}
+			}
+		}
+
+		cutoff := now.Add(-5 * time.Minute)
+		var got []string
+		err := idx.ListUnverified(context.Background(), cutoff, func(ref string) error {
+			got = append(got, ref)
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("ListUnverified: %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("got %d, want 2 (never+stale)", len(got))
+		}
+		seen := make(map[string]bool)
+		for _, ref := range got {
+			seen[ref] = true
+		}
+		if !seen["blob-n"] {
+			t.Error("expected never-verified blob in result")
+		}
+		if !seen["blob-s"] {
+			t.Error("expected stale blob in result")
+		}
+		if seen["blob-f"] {
+			t.Error("fresh blob leaked through cutoff")
+		}
+	})
+
+	t.Run("OldestFirst", func(t *testing.T) {
+		// Sorting order: oldest verification first. NEVER-verified
+		// rows are also reported, but the relative position of
+		// NEVER vs verified rows is implementation-defined when
+		// last_verified_at is treated as a NULL/sentinel value;
+		// this test pins down the pure-time ordering between
+		// rows that have a verification timestamp.
+		idx := f.New(t)
+		now := time.Now().UTC().Truncate(time.Second)
+
+		stage := []struct {
+			id, ref     string
+			fillChar    byte
+			verifiedAgo time.Duration
+		}{
+			{"older", "blob-o", 'a', 3 * time.Hour},
+			{"middle", "blob-m", 'b', 2 * time.Hour},
+			{"newer", "blob-n", 'c', time.Hour},
+		}
+		for _, s := range stage {
+			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
+			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+				t.Fatalf("seed %s: %v", s.id, err)
+			}
+			if err := idx.MarkVerified(s.ref, now.Add(-s.verifiedAgo)); err != nil {
+				t.Fatalf("MarkVerified %s: %v", s.ref, err)
+			}
+		}
+
+		cutoff := now
+		var got []string
+		err := idx.ListUnverified(context.Background(), cutoff, func(ref string) error {
+			got = append(got, ref)
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("ListUnverified: %v", err)
+		}
+		want := []string{"blob-o", "blob-m", "blob-n"}
+		if len(got) != len(want) {
+			t.Fatalf("got %d, want %d", len(got), len(want))
+		}
+		for i, ref := range got {
+			if ref != want[i] {
+				t.Errorf("position %d: got %q, want %q", i, ref, want[i])
+			}
 		}
 	})
 }

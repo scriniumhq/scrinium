@@ -54,9 +54,9 @@ const (
 // will be possible to read once we ship migrations.
 const SchemaVersion = 1
 
-// Temporary sentinels (errs.ErrUnsupportedEncoding,
-// errs.ErrUnsupportedCrypto) for the M1.4 perimeter live in the
-// errs package — see errs/forward_compat.go for their sunset milestone.
+// Forward-compat sentinels (errs.ErrUnsupportedEncoding,
+// errs.ErrUnsupportedCrypto) live in the errs package — see
+// errs/forward_compat.go.
 
 // EncodeFile produces the full file bytes (header + body) for a
 // manifest in JSON Plain format.
