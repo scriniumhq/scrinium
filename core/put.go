@@ -79,7 +79,12 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		return "", errors.New("core.Put: BlobStorage: ExternalRef deferred to a later milestone")
 	}
 	if cfg.ManifestStorage != domain.ManifestStorageRemote && cfg.ManifestStorage != "" {
-		return "", fmt.Errorf("core.Put: ManifestStorage %q deferred to M2.2",
+		// Local and Replicated require HostStorage as the transit
+		// buffer (see 2. Internals/01 Topology and 4. API
+		// Reference/05 Configuration §5). HostStorage lands in
+		// M4.2 alongside Curator — until then only Remote (the
+		// default) is meaningful.
+		return "", fmt.Errorf("core.Put: ManifestStorage %q requires HostStorage (lands in M4.2)",
 			cfg.ManifestStorage)
 	}
 

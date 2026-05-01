@@ -181,9 +181,8 @@ func TestInitStore_CorruptedDescriptor_WithForce(t *testing.T) {
 func TestInitStore_CustomConfigPersisted(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	cfg := domain.StoreConfig{
-		PathTopology:     domain.PathTopologyFlat,
-		ContentHasher:    domain.HashBLAKE3,
-		ManifestEncoding: domain.ManifestEncodingBinary,
+		PathTopology:  domain.PathTopologyFlat,
+		ContentHasher: domain.HashBLAKE3,
 	}
 	s, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(cfg),
@@ -200,8 +199,8 @@ func TestInitStore_CustomConfigPersisted(t *testing.T) {
 	if got.ContentHasher != "blake3" {
 		t.Errorf("ContentHasher: got %q, want blake3", got.ContentHasher)
 	}
-	if got.ManifestEncoding != "Binary" {
-		t.Errorf("ManifestEncoding: got %q, want Binary", got.ManifestEncoding)
+	if got.ManifestEncoding != "JSON" {
+		t.Errorf("ManifestEncoding: got %q, want JSON (default)", got.ManifestEncoding)
 	}
 }
 
@@ -224,6 +223,25 @@ func TestInitStore_NativeTopologyRequiresExternalRef(t *testing.T) {
 		PathTopology: domain.PathTopologyNative,
 		BlobStorage:  domain.BlobStorageTarget,
 	}
+	_, _, err := core.InitStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if !errors.Is(err, errs.ErrInvalidConfig) {
+		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
+	}
+}
+
+// TestInitStore_RejectsBinaryManifestEncoding closes the gap between
+// the validate side (used to accept Binary) and the codec side (which
+// has always rejected it with ErrUnsupportedEncoding). Until the
+// MsgPack encoder lands (backlog §3.3) we refuse Binary at config
+// validation so the failure is loud at InitStore, not deferred to
+// the first user Put.
+func TestInitStore_RejectsBinaryManifestEncoding(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	cfg := domain.StoreConfig{ManifestEncoding: domain.ManifestEncodingBinary}
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(cfg),
 		core.WithStoreIndex(indexfx.Memory(t)),
@@ -348,9 +366,8 @@ func TestOpenStore_NoConfig_Succeeds(t *testing.T) {
 	// Init with custom config so we can assert it is restored
 	// faithfully on Open.
 	custom := domain.StoreConfig{
-		PathTopology:     domain.PathTopologyFlat,
-		ContentHasher:    domain.HashBLAKE3,
-		ManifestEncoding: domain.ManifestEncodingBinary,
+		PathTopology:  domain.PathTopologyFlat,
+		ContentHasher: domain.HashBLAKE3,
 	}
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(custom),
@@ -376,9 +393,8 @@ func TestOpenStore_NoConfig_Succeeds(t *testing.T) {
 func TestOpenStore_MatchingConfig_Succeeds(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	custom := domain.StoreConfig{
-		PathTopology:     domain.PathTopologyFlat,
-		ContentHasher:    domain.HashBLAKE3,
-		ManifestEncoding: domain.ManifestEncodingBinary,
+		PathTopology:  domain.PathTopologyFlat,
+		ContentHasher: domain.HashBLAKE3,
 	}
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(custom),
@@ -562,9 +578,8 @@ func TestOpenStore_EncryptedStoreNotYetSupported(t *testing.T) {
 func TestOpenStore_RestoresImmutableConfigFromSystemConfig(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	custom := domain.StoreConfig{
-		PathTopology:     domain.PathTopologyFlat,
-		ContentHasher:    domain.HashBLAKE3,
-		ManifestEncoding: domain.ManifestEncodingBinary,
+		PathTopology:  domain.PathTopologyFlat,
+		ContentHasher: domain.HashBLAKE3,
 	}
 	if _, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(custom),

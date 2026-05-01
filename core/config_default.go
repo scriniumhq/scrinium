@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
@@ -86,7 +87,18 @@ func validateImmutableConfig(cfg domain.StoreConfig) error {
 		return errs.ErrInvalidConfig
 	}
 	switch cfg.ManifestEncoding {
-	case domain.ManifestEncodingJSON, domain.ManifestEncodingBinary:
+	case domain.ManifestEncodingJSON:
+		// OK
+	case domain.ManifestEncodingBinary:
+		// Binary (\x00SC2 / MsgPack) magic is reserved by the
+		// format and recognised by manifestcodec, but the
+		// deterministic-encode side is not yet shipped — see
+		// 7. Planning/backlog.md §3.3 "Бинарные манифесты
+		// (MsgPack)". Refuse loudly at InitStore rather than
+		// crash on the first user-level Put with
+		// ErrUnsupportedEncoding from manifestcodec.
+		return fmt.Errorf("%w: ManifestEncoding=Binary deferred (see backlog §3.3)",
+			errs.ErrInvalidConfig)
 	default:
 		return errs.ErrInvalidConfig
 	}

@@ -52,9 +52,8 @@ func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
 	}
 
 	custom := domain.StoreConfig{
-		PathTopology:     domain.PathTopologyFlat,
-		ContentHasher:    domain.HashBLAKE3,
-		ManifestEncoding: domain.ManifestEncodingBinary,
+		PathTopology:  domain.PathTopologyFlat,
+		ContentHasher: domain.HashBLAKE3,
 	}
 	s1, kit, err := core.InitStore(context.Background(), drv1,
 		core.WithConfig(custom),
