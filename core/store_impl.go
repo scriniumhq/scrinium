@@ -304,22 +304,22 @@ func isSystemNamespace(ns string) bool {
 	return false
 }
 
-// --- AdminStore: stubs implemented in later packs ---
+// AdminStore crypto methods — bodies live in core/crypto_admin.go.
 
 func (s *store) Unlock(ctx context.Context) error {
-	return errors.New("core.Store.Unlock: not implemented")
+	return s.unlockEncrypted(ctx)
 }
 
 func (s *store) ExportRecoveryKit(ctx context.Context) ([]byte, error) {
-	return nil, errors.New("core.Store.ExportRecoveryKit: not implemented")
+	return s.exportRecoveryKitImpl(ctx)
 }
 
 func (s *store) RotateKEK(ctx context.Context) error {
-	return errors.New("core.Store.RotateKEK: not implemented")
+	return s.rotateKEKImpl(ctx)
 }
 
 func (s *store) SetPassphrase(ctx context.Context) error {
-	return errors.New("core.Store.SetPassphrase: not implemented")
+	return s.setPassphraseImpl(ctx)
 }
 
 func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {

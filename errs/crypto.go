@@ -46,3 +46,12 @@ var ErrDecryptionFailed = errors.New("scrinium: decryption failed")
 // either picks one explicitly (overwriting both) or falls back
 // to the Recovery Kit through RebuildIndexAgent.
 var ErrDescriptorSplitBrain = errors.New("scrinium: descriptor split-brain (L0 and L1 diverged at the same sequence)")
+
+// ErrPassphraseAlreadySet — Store.SetPassphrase was called on a
+// Store whose DEK is already wrapped. The intended path for
+// rotating the passphrase is RotateKEK, which proves possession
+// of the current passphrase before accepting the new one.
+//
+// Returned only by SetPassphrase; the unwrap-then-wrap flow of
+// RotateKEK does not surface it.
+var ErrPassphraseAlreadySet = errors.New("scrinium: passphrase already set (use RotateKEK to change it)")

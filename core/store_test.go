@@ -279,13 +279,6 @@ func TestStore_PendingStubs(t *testing.T) {
 	_, err := s.PutBlob(ctx, strings.NewReader("x"), domain.BlobTypeChunk)
 	wantStub("PutBlob", err)
 
-	// AdminStore: crypto-pipeline trio lands with M2.2 (KEK/KDF).
-	wantStub("Unlock", s.Unlock(ctx))
-	wantStub("RotateKEK", s.RotateKEK(ctx))
-	wantStub("SetPassphrase", s.SetPassphrase(ctx))
-	_, err = s.ExportRecoveryKit(ctx)
-	wantStub("ExportRecoveryKit", err)
-
 	// AdminStore: mutable-config surface lands with the
 	// config-pointer artifact wiring (M2.x).
 	wantStub("UpdateConfig", s.UpdateConfig(ctx, domain.StoreConfig{}))
