@@ -252,44 +252,42 @@ func TestStore_WalkSystem_RejectsNonReserved(t *testing.T) {
 	}
 }
 
-// --- Stub methods stay stubs ---
-
-func TestStore_StubsM14_StillUnimplemented(t *testing.T) {
+// --- Stub methods awaiting future milestones ---
+//
+// Defensive net: every method listed here is a deliberate stub
+// pending implementation in a later milestone. As each one is
+// wired up its line should be removed from this test. Methods
+// already implemented (Put, Get, Delete, Verify, RollbackSession)
+// have their own dedicated test files — do NOT add them back
+// here.
+func TestStore_PendingStubs(t *testing.T) {
 	s := newStore(t)
 	ctx := context.Background()
-
-	// Methods that arrive with the data path in M1.4.
-	if _, err := s.Put(ctx, domain.Artifact{}, domain.PutOptions{}); err == nil {
-		t.Error("Put should be a stub")
-	}
-	if _, err := s.Get(ctx, "x", domain.GetOptions{}); err == nil {
-		t.Error("Get should be a stub")
-	}
-	if err := s.Delete(ctx, "x"); err == nil {
-		t.Error("Delete should be a stub")
-	}
-	if err := s.Verify(ctx, "x"); err == nil {
-		t.Error("Verify should be a stub")
-	}
-	if err := s.RollbackSession(ctx, "sess"); err == nil {
-		t.Error("RollbackSession should be a stub")
+	wantStub := func(label string, err error) {
+		t.Helper()
+		if err == nil {
+			t.Errorf("%s: expected stub error, got nil", label)
+			return
+		}
+		if !strings.Contains(err.Error(), "not implemented") {
+			t.Errorf("%s: expected 'not implemented', got %v", label, err)
+		}
 	}
 
-	// AdminStore stubs (Unlock arrives with the crypto pipeline,
-	// UpdateConfig with the config-pointer artifact wiring).
-	if err := s.Unlock(ctx); err == nil {
-		t.Error("Unlock should be a stub")
-	}
-	if err := s.RotateKEK(ctx); err == nil {
-		t.Error("RotateKEK should be a stub")
-	}
-	if _, err := s.ExportRecoveryKit(ctx); err == nil {
-		t.Error("ExportRecoveryKit should be a stub")
-	}
-	if err := s.UpdateConfig(ctx, domain.StoreConfig{}); err == nil {
-		t.Error("UpdateConfig should be a stub")
-	}
-	if _, err := s.ConfigHistory(ctx); err == nil {
-		t.Error("ConfigHistory should be a stub")
-	}
+	// DataStore: PutBlob is reserved for level-3 decorators
+	// (chunker.Wrapper) and lands in M5.2.
+	_, err := s.PutBlob(ctx, strings.NewReader("x"), domain.BlobTypeChunk)
+	wantStub("PutBlob", err)
+
+	// AdminStore: crypto-pipeline trio lands with M2.2 (KEK/KDF).
+	wantStub("Unlock", s.Unlock(ctx))
+	wantStub("RotateKEK", s.RotateKEK(ctx))
+	_, err = s.ExportRecoveryKit(ctx)
+	wantStub("ExportRecoveryKit", err)
+
+	// AdminStore: mutable-config surface lands with the
+	// config-pointer artifact wiring (M2.x).
+	wantStub("UpdateConfig", s.UpdateConfig(ctx, domain.StoreConfig{}))
+	_, err = s.ConfigHistory(ctx)
+	wantStub("ConfigHistory", err)
 }

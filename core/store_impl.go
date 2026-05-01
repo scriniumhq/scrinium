@@ -311,9 +311,5 @@ func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobTy
 	return "", errors.New("core.Store.PutBlob: not implemented")
 }
 
-func (s *store) RollbackSession(ctx context.Context, sessionID string) error {
-	return errors.New("core.Store.RollbackSession: not implemented")
-}
-
 // Compile-time interface conformance.
 var _ Store = (*store)(nil)
