@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
+	"github.com/rkurbatov/scrinium/core/internal/recoverykit"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
@@ -599,5 +601,274 @@ func TestOpenStore_RestoresImmutableConfigFromSystemConfig(t *testing.T) {
 	got := s.Config()
 	if got.PathTopology != "Flat" || got.ContentHasher != "blake3" {
 		t.Errorf("active config should preserve InitStore values: %+v", got)
+	}
+}
+
+// --- Encrypted Store init (M2.2) ---
+
+// staticPassphraseProvider returns a fixed passphrase regardless
+// of hint. Used in tests to keep the surface narrow; real callers
+// would prompt the user.
+func staticPassphraseProvider(pass string) core.PassphraseProvider {
+	return func(_ context.Context, _ core.PassphraseHint) ([]byte, error) {
+		return []byte(pass), nil
+	}
+}
+
+func TestInitStore_WithPassphrase_ReturnsRecoveryKit(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+
+	s, kit, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(staticPassphraseProvider("hunter2")),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatalf("InitStore: %v", err)
+	}
+	if s == nil {
+		t.Fatal("nil Store returned")
+	}
+	if len(kit) == 0 {
+		t.Fatal("Recovery Kit must be non-empty for encrypted Store")
+	}
+}
+
+func TestInitStore_WithPassphrase_DescriptorIsEncrypted(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	if _, _, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(staticPassphraseProvider("hunter2")),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	desc, err := descriptor.Read(context.Background(), drv)
+	if err != nil {
+		t.Fatalf("read descriptor: %v", err)
+	}
+	if !desc.DEKEncrypted {
+		t.Error("DEKEncrypted should be true")
+	}
+	if len(desc.DEK) == 0 {
+		t.Error("DEK should be non-empty (wrapped)")
+	}
+	if desc.KDFParams == nil {
+		t.Fatal("KDFParams should be present")
+	}
+	if desc.KDFParams.Algorithm != "argon2id" {
+		t.Errorf("KDF Algorithm: got %q, want argon2id", desc.KDFParams.Algorithm)
+	}
+	if len(desc.KDFParams.Salt) != 16 {
+		t.Errorf("KDF Salt length: got %d, want 16", len(desc.KDFParams.Salt))
+	}
+}
+
+func TestInitStore_WithPassphrase_RecoveryKitIsValid(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	_, kit, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(staticPassphraseProvider("hunter2")),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Decoding the kit verifies its checksum and field shape.
+	parsed, err := recoverykit.Decode(kit)
+	if err != nil {
+		t.Fatalf("Decode kit: %v", err)
+	}
+	if parsed.StoreID == "" {
+		t.Error("kit StoreID empty")
+	}
+	if parsed.Algorithm != "argon2id" {
+		t.Errorf("kit Algorithm: got %q, want argon2id", parsed.Algorithm)
+	}
+	if len(parsed.EncryptedDEK) == 0 {
+		t.Error("kit EncryptedDEK empty")
+	}
+}
+
+// TestInitStore_WithPassphrase_KitMatchesDescriptor verifies that
+// the kit and the on-disk descriptor agree byte-for-byte on the
+// wrapped DEK and the KDF parameters. A divergence here would
+// mean a recovery operation could not actually unwrap the DEK.
+func TestInitStore_WithPassphrase_KitMatchesDescriptor(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	_, kit, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(staticPassphraseProvider("hunter2")),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parsed, _ := recoverykit.Decode(kit)
+	desc, _ := descriptor.Read(context.Background(), drv)
+
+	if parsed.StoreID != desc.StoreID {
+		t.Errorf("kit StoreID %q vs descriptor %q",
+			parsed.StoreID, desc.StoreID)
+	}
+	if !bytes.Equal(parsed.EncryptedDEK, desc.DEK) {
+		t.Error("kit EncryptedDEK differs from descriptor.DEK")
+	}
+	if !bytes.Equal(parsed.Salt, desc.KDFParams.Salt) {
+		t.Error("kit Salt differs from descriptor.KDFParams.Salt")
+	}
+	if parsed.Time != desc.KDFParams.Time ||
+		parsed.Memory != desc.KDFParams.Memory ||
+		parsed.Threads != desc.KDFParams.Threads {
+		t.Error("kit cost params differ from descriptor.KDFParams")
+	}
+}
+
+// TestInitStore_PlainGeneratesPlaintextDEK locks in the §3.1
+// invariant: a Plain Store still has a DEK on disk, just
+// unwrapped. This makes future SetPassphrase trivial — wrap the
+// existing DEK, no key generation needed.
+func TestInitStore_PlainGeneratesPlaintextDEK(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	if _, _, err := core.InitStore(context.Background(), drv,
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	desc, _ := descriptor.Read(context.Background(), drv)
+	if desc.DEKEncrypted {
+		t.Error("DEKEncrypted should be false for Plain Store")
+	}
+	if len(desc.DEK) != 32 {
+		t.Errorf("plaintext DEK length: got %d, want 32", len(desc.DEK))
+	}
+	if desc.KDFParams != nil {
+		t.Error("KDFParams should be nil for Plain Store")
+	}
+}
+
+// TestInitStore_NonPlainCryptoWithoutPassphrase verifies the
+// "worst of both worlds" guard: encrypted manifests + plaintext
+// DEK is refused at InitStore.
+func TestInitStore_NonPlainCryptoWithoutPassphrase(t *testing.T) {
+	for _, mc := range []domain.ManifestCrypto{
+		domain.ManifestCryptoMetadataOnly,
+		domain.ManifestCryptoEnvelope,
+	} {
+		t.Run(string(mc), func(t *testing.T) {
+			drv := driverfx.LocalFS(t)
+			cfg := domain.StoreConfig{ManifestCrypto: mc}
+			_, _, err := core.InitStore(context.Background(), drv,
+				core.WithConfig(cfg),
+				core.WithStoreIndex(indexfx.Memory(t)),
+				core.WithHashRegistry(storefx.Hashes()),
+			)
+			if !errors.Is(err, errs.ErrPassphraseRequired) {
+				t.Fatalf("expected ErrPassphraseRequired, got %v", err)
+			}
+		})
+	}
+}
+
+// TestInitStore_PassphraseProviderError surfaces the provider's
+// error wrapped with ErrPassphraseProvider.
+func TestInitStore_PassphraseProviderError(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	sentinel := errors.New("user cancelled")
+	failing := func(_ context.Context, _ core.PassphraseHint) ([]byte, error) {
+		return nil, sentinel
+	}
+	_, _, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(failing),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if !errors.Is(err, errs.ErrPassphraseProvider) {
+		t.Fatalf("expected ErrPassphraseProvider, got %v", err)
+	}
+}
+
+// TestInitStore_HintCarriesInitReason locks in the contract that
+// InitStore calls the provider with Reason="init" and a fresh
+// StoreID. Future PassphraseProviders may dispatch on Reason.
+func TestInitStore_HintCarriesInitReason(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	var seenHint core.PassphraseHint
+	provider := func(_ context.Context, h core.PassphraseHint) ([]byte, error) {
+		seenHint = h
+		return []byte("pw"), nil
+	}
+	_, _, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(provider),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seenHint.Reason != "init" {
+		t.Errorf("Reason: got %q, want %q", seenHint.Reason, "init")
+	}
+	if seenHint.StoreID == "" {
+		t.Error("StoreID should be non-empty in hint")
+	}
+}
+
+// TestInitStore_KDFParamsOverride verifies that
+// StoreConfig.KDFParams (cost knobs) end up in the on-disk
+// descriptor.
+func TestInitStore_KDFParamsOverride(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	cost := &domain.KDFParams{Time: 2, Memory: 32 * 1024, Threads: 2}
+	cfg := domain.StoreConfig{KDFParams: cost}
+	_, _, err := core.InitStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithPassphrase(staticPassphraseProvider("pw")),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	desc, _ := descriptor.Read(context.Background(), drv)
+	if desc.KDFParams.Time != 2 {
+		t.Errorf("Time: got %d, want 2", desc.KDFParams.Time)
+	}
+	if desc.KDFParams.Memory != 32*1024 {
+		t.Errorf("Memory: got %d, want %d", desc.KDFParams.Memory, 32*1024)
+	}
+	if desc.KDFParams.Threads != 2 {
+		t.Errorf("Threads: got %d, want 2", desc.KDFParams.Threads)
+	}
+}
+
+// TestInitStore_WritesL1Replica verifies that Persist writes both
+// L0 and L1, not just L0. Reading from BackupPath through
+// ReadReplica is the simplest check.
+func TestInitStore_WritesL1Replica(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	if _, _, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(staticPassphraseProvider("pw")),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	d, status, err := descriptor.ReadReplica(context.Background(), drv, descriptor.BackupPath)
+	if err != nil {
+		t.Fatalf("ReadReplica L1: %v", err)
+	}
+	if status != descriptor.ReplicaValid {
+		t.Errorf("L1 status: got %v, want ReplicaValid", status)
+	}
+	if !d.DEKEncrypted {
+		t.Error("L1 DEKEncrypted should mirror L0")
 	}
 }

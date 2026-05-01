@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
+	"github.com/rkurbatov/scrinium/core/internal/recoverykit"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
 	"github.com/rkurbatov/scrinium/errs"
@@ -149,10 +151,10 @@ func WithCapabilityToken(token []byte) StoreOption {
 //     present and WithForceReinit is NOT set, return
 //     errs.ErrStoreAlreadyExists.
 //  2. With WithForceReinit, wipe the structural state — the
-//     descriptor, and (in M1.4) the manifests/ directory.
-//     Existing blobs/ are NOT removed unless WithPurgeOnReinit
-//     is also set; this lets a user start a fresh Store on top
-//     of orphan blobs and let GC reclaim them.
+//     descriptor and the manifests/ directory. Existing blobs/
+//     are NOT removed unless WithPurgeOnReinit is also set;
+//     this lets a user start a fresh Store on top of orphan
+//     blobs and let GC reclaim them.
 //  3. Generate a fresh StoreID. Apply config defaults. Validate
 //     immutable parameters.
 //  4. Validate that a StoreIndex was provided via WithStoreIndex.
@@ -160,12 +162,31 @@ func WithCapabilityToken(token []byte) StoreOption {
 //     concrete implementation (sqlite.NewStore, in-memory, etc.)
 //     and passes it as a dependency. This keeps core free of any
 //     import dependency on index/* packages (DAG: core ← index).
-//  5. Write store.json atomically through the Driver.
-//  6. Construct the *store object in StateUnlocked and return.
+//  5. Generate a 32-byte DEK from crypto/rand. The DEK is
+//     generated unconditionally per §3.1; encryption can be
+//     turned on later through SetPassphrase without re-keying.
+//  6. If WithPassphrase is configured, derive a KEK through
+//     Argon2id and wrap the DEK with AES-256-GCM. The wrapped
+//     DEK plus its KDFParams land in the descriptor.
+//     Otherwise the DEK is stored in the descriptor in
+//     plaintext — semantically honest: no passphrase, no
+//     protection.
+//  7. Write store.json (both replicas) and the L2 cache.
+//  8. Construct the *store object in StateUnlocked and return.
+//     For encrypted Stores, also return the Recovery Kit
+//     bytes — the host MUST persist them before reporting
+//     success to the user.
 //
-// Recovery Kit on M1.4: returned as nil because ManifestCrypto
-// defaults to Plain; the Recovery Kit is a meaningful artefact
-// only for encrypted Stores, which arrive in M2.
+// Recovery Kit:
+//   - nil for Plain-DEK Stores (no encryption to recover).
+//   - non-nil text bytes per §10.3 for encrypted Stores.
+//
+// Refusal cases:
+//   - ManifestCrypto != Plain without WithPassphrase →
+//     errs.ErrPassphraseRequired. An unprotected DEK plus
+//     encrypted manifests is the worst-of-both-worlds shape:
+//     anyone who reads store.json gets the keys to all the
+//     manifests for free.
 func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, []byte, error) {
 	if drv == nil {
 		return nil, nil, errors.New("core.InitStore: nil driver")
@@ -233,7 +254,19 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 			"core.InitStore: WithStoreIndex is required (see DI Example)")
 	}
 
-	// --- Generate identity, write descriptor ---
+	// --- Refuse encrypted-manifest configs without a passphrase ---
+	//
+	// MetadataOnly and Envelope only make sense alongside a
+	// wrapped DEK: encrypting manifests against a plaintext key
+	// stored in store.json provides no protection, just
+	// operational pain. Caught here at InitStore so the user
+	// sees the conflict before any disk I/O.
+	if cfg.ManifestCrypto != domain.ManifestCryptoPlain && o.passphrase == nil {
+		return nil, nil, fmt.Errorf("core.InitStore: %w: ManifestCrypto=%q requires WithPassphrase",
+			errs.ErrPassphraseRequired, cfg.ManifestCrypto)
+	}
+
+	// --- Generate identity ---
 
 	storeID, err := generateUUID()
 	if err != nil {
@@ -242,17 +275,82 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		return nil, nil, err
 	}
 
+	// --- DEK lifecycle ---
+	//
+	// DEK is generated for every Store regardless of crypto
+	// configuration (§3.1). When WithPassphrase is set the DEK
+	// is wrapped with the resulting KEK; otherwise it lives in
+	// the descriptor in plaintext.
+	//
+	// In both branches dek is the in-memory unwrapped value, kept
+	// alive on *store after construction so subsequent writes
+	// have it without re-fetching from descriptor.
+
+	dek, err := generateDEK()
+	if err != nil {
+		return nil, nil, fmt.Errorf("core.InitStore: %w", err)
+	}
+
 	desc := &descriptor.Descriptor{
 		StoreID:       storeID,
 		SchemaVersion: descriptor.CurrentSchemaVersion,
 		Sequence:      1,
-		// Plain Store on M1.4 — DEK is empty, KDFParams absent.
-		// M2 fills these for encrypted Stores.
-		DEK:          nil,
-		DEKEncrypted: false,
 	}
+
+	var kit []byte
+	if o.passphrase != nil {
+		// Encrypted DEK path. Caller will receive the Recovery
+		// Kit and is responsible for persisting it before
+		// considering the Store usable.
+		passphrase, perr := callProvider(ctx, o.passphrase, PassphraseHint{
+			StoreID: storeID,
+			Reason:  "init",
+		})
+		if perr != nil {
+			return nil, nil, fmt.Errorf("core.InitStore: %w", perr)
+		}
+
+		// cfg.KDFParams is the client-side cost override; nil
+		// means "use kdf.Default()". wrapDEK handles the zero
+		// value; we don't need to dereference here.
+		var cost domain.KDFParams
+		if cfg.KDFParams != nil {
+			cost = *cfg.KDFParams
+		}
+		wrapped, kdfParams, werr := wrapDEK(dek, passphrase, cost)
+		zeroBytes(passphrase)
+		if werr != nil {
+			zeroBytes(dek)
+			return nil, nil, fmt.Errorf("core.InitStore: wrap DEK: %w", werr)
+		}
+
+		desc.DEK = wrapped
+		desc.DEKEncrypted = true
+		desc.KDFParams = &kdfParams
+
+		// Build the Recovery Kit before any disk I/O so a kit-
+		// generation failure refuses to create the Store.
+		k, kerr := buildRecoveryKit(desc, wrapped)
+		if kerr != nil {
+			zeroBytes(dek)
+			return nil, nil, fmt.Errorf("core.InitStore: build recovery kit: %w", kerr)
+		}
+		kit = k
+	} else {
+		// Plaintext DEK path. The descriptor carries the raw key.
+		// Validate enforces "DEKEncrypted=false ⇒ KDFParams
+		// absent"; we don't fight that rule.
+		desc.DEK = dek
+		desc.DEKEncrypted = false
+	}
+
 	if err := descriptor.Persist(ctx, drv, desc); err != nil {
+		zeroBytes(dek)
 		return nil, nil, fmt.Errorf("core.InitStore: write descriptor: %w", err)
+	}
+	if err := saveDescriptorCache(idx, desc); err != nil {
+		zeroBytes(dek)
+		return nil, nil, fmt.Errorf("core.InitStore: save L2 cache: %w", err)
 	}
 
 	// --- Persist the active StoreConfig as system.config ---
@@ -270,14 +368,12 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Construct *store ---
 
-	s, err := buildStore(ctx, o, drv, idx, cfg, storeID)
+	s, err := buildStore(ctx, o, drv, idx, cfg, desc, dek)
 	if err != nil {
+		zeroBytes(dek)
 		return nil, nil, fmt.Errorf("core.InitStore: %w", err)
 	}
-
-	// Recovery Kit is nil for Plain manifests in M1.4. M2 will
-	// generate one for encrypted Stores.
-	return s, nil, nil
+	return s, kit, nil
 }
 
 // OpenStore opens an existing Store at the Location served by drv.
@@ -395,12 +491,37 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	}
 
 	// --- Construct *store ---
-
-	s, err := buildStore(ctx, o, drv, idx, active, desc.StoreID)
+	//
+	// M2.2 Plain path: descriptor carries plaintext DEK; we hand
+	// it straight to buildStore. Encrypted-DEK Stores arrive in
+	// 1.2b.4.4 (Reconcile + auto-unlock). Until then the
+	// "encrypted" branch above refuses to open them.
+	s, err := buildStore(ctx, o, drv, idx, active, desc, desc.DEK)
 	if err != nil {
 		return nil, fmt.Errorf("core.OpenStore: %w", err)
 	}
 	return s, nil
+}
+
+// buildRecoveryKit assembles the kit text for a freshly-encrypted
+// descriptor. Called at InitStore (and later RotateKEK /
+// SetPassphrase) before disk I/O — a kit-build failure aborts
+// the Store creation rather than producing a Store the host
+// cannot recover.
+func buildRecoveryKit(desc *descriptor.Descriptor, wrappedDEK []byte) ([]byte, error) {
+	if desc.KDFParams == nil {
+		return nil, errors.New("buildRecoveryKit: descriptor missing KDFParams")
+	}
+	return recoverykit.Encode(recoverykit.Kit{
+		StoreID:      desc.StoreID,
+		CreatedAt:    time.Now().UTC(),
+		Algorithm:    desc.KDFParams.Algorithm,
+		Salt:         desc.KDFParams.Salt,
+		Time:         desc.KDFParams.Time,
+		Memory:       desc.KDFParams.Memory,
+		Threads:      desc.KDFParams.Threads,
+		EncryptedDEK: wrappedDEK,
+	})
 }
 
 // buildStore is the common tail shared by InitStore and OpenStore.
@@ -425,19 +546,23 @@ func buildStore(
 	drv driver.Driver,
 	idx StoreIndex,
 	cfg domain.StoreConfig,
-	storeID string,
+	desc *descriptor.Descriptor,
+	dek []byte,
 ) (*store, error) {
 	s := &store{
-		storeID:         storeID,
-		drv:             drv,
-		index:           idx,
-		pub:             o.publisher,
-		activeConfig:    cfg,
-		state:           domain.StateBootstrapping,
-		hashes:          o.hashRegistry,
-		transformers:    o.readRegistry,
-		keyResolver:     o.keyResolver,
-		capabilityToken: o.capabilityToken,
+		storeID:            desc.StoreID,
+		drv:                drv,
+		index:              idx,
+		pub:                o.publisher,
+		activeConfig:       cfg,
+		state:              domain.StateBootstrapping,
+		hashes:             o.hashRegistry,
+		transformers:       o.readRegistry,
+		keyResolver:        o.keyResolver,
+		capabilityToken:    o.capabilityToken,
+		desc:               desc,
+		dek:                dek,
+		passphraseProvider: o.passphrase,
 	}
 
 	// Bootstrap recovery: Orphan Scan per docs §10.2. On a freshly
