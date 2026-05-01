@@ -293,6 +293,10 @@ func (s *store) RotateKEK(ctx context.Context) error {
 	return errors.New("core.Store.RotateKEK: not implemented")
 }
 
+func (s *store) SetPassphrase(ctx context.Context) error {
+	return errors.New("core.Store.SetPassphrase: not implemented")
+}
+
 func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {
 	return errors.New("core.Store.UpdateConfig: not implemented")
 }

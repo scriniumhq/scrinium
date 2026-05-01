@@ -84,10 +84,28 @@ type AdminStore interface {
 	ExportRecoveryKit(ctx context.Context) ([]byte, error)
 
 	// RotateKEK re-encrypts the DEK with a new KEK. The data on disk
-	// is not rewritten. After RotateKEK the previous Recovery Kit is
-	// invalid; the host is required to obtain a new one through
-	// ExportRecoveryKit.
+	// is not rewritten. The PassphraseProvider configured on the
+	// Store is called twice — once for the current passphrase
+	// (NeedNew=false), once for the replacement (NeedNew=true) —
+	// both with Reason="kek_rotation".
+	//
+	// After RotateKEK the previous Recovery Kit is invalid; the
+	// host is required to obtain a new one through ExportRecoveryKit
+	// and persist it before reporting success to the user.
 	RotateKEK(ctx context.Context) error
+
+	// SetPassphrase enables encryption on a Store that was
+	// initialised with a plaintext DEK. It calls the configured
+	// PassphraseProvider once with Reason="set_passphrase" to obtain
+	// the new passphrase, derives a KEK, wraps the existing DEK,
+	// and persists the descriptor. The data on disk is not
+	// rewritten.
+	//
+	// Refuses with errs.ErrPassphraseAlreadySet when the DEK is
+	// already wrapped — use RotateKEK in that case. After
+	// SetPassphrase the host MUST persist the freshly-issued
+	// Recovery Kit through ExportRecoveryKit.
+	SetPassphrase(ctx context.Context) error
 
 	// SetMaintenanceMode transitions the Store into a maintenance
 	// mode. Used before running a Maintenance Agent.

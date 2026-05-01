@@ -14,12 +14,30 @@ import (
 )
 
 // PassphraseHint is the call context for a PassphraseProvider.
-// Reason takes the values "init", "unlock", or "kek_rotation"; with
-// Reason = "init", StoreID carries the freshly generated UUID of the
-// new Store.
+//
+// Reason takes one of:
+//
+//   - "init"             — InitStore is generating a fresh Store
+//     and needs the passphrase that will wrap
+//     the just-generated DEK. StoreID carries
+//     the freshly generated UUID.
+//   - "unlock"           — OpenStore (or Store.Unlock) needs the
+//     current passphrase to unwrap the DEK.
+//   - "set_passphrase"   — Store.SetPassphrase is wrapping a DEK
+//     that is currently in plaintext. The
+//     provider returns the NEW passphrase.
+//   - "kek_rotation"     — Store.RotateKEK is replacing the wrap.
+//     The provider is called TWICE: first with
+//     NeedNew=false to get the current
+//     passphrase, then NeedNew=true to get the
+//     replacement.
+//
+// NeedNew distinguishes the two halves of "kek_rotation". For all
+// other Reason values it is false.
 type PassphraseHint struct {
 	StoreID string
 	Reason  string
+	NeedNew bool
 }
 
 // PassphraseProvider returns a passphrase used to derive the KEK

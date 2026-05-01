@@ -282,6 +282,7 @@ func TestStore_PendingStubs(t *testing.T) {
 	// AdminStore: crypto-pipeline trio lands with M2.2 (KEK/KDF).
 	wantStub("Unlock", s.Unlock(ctx))
 	wantStub("RotateKEK", s.RotateKEK(ctx))
+	wantStub("SetPassphrase", s.SetPassphrase(ctx))
 	_, err = s.ExportRecoveryKit(ctx)
 	wantStub("ExportRecoveryKit", err)
 
