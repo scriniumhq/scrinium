@@ -15,7 +15,7 @@ import (
 )
 
 // Memory returns an in-memory sqlite-backed StoreIndex.
-func Memory(t *testing.T) core.StoreIndex {
+func Memory(t testing.TB) core.StoreIndex {
 	t.Helper()
 	idx, err := sqliteindex.NewStore(context.Background(), ":memory:")
 	if err != nil {
@@ -27,7 +27,7 @@ func Memory(t *testing.T) core.StoreIndex {
 
 // Disk returns a StoreIndex backed by a SQLite file at path.
 // Parent dir is created if missing.
-func Disk(t *testing.T, path string) core.StoreIndex {
+func Disk(t testing.TB, path string) core.StoreIndex {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("indexfx.Disk: mkdir: %v", err)
@@ -40,7 +40,7 @@ func Disk(t *testing.T, path string) core.StoreIndex {
 	return idx
 }
 
-func registerClose(t *testing.T, idx core.StoreIndex) {
+func registerClose(t testing.TB, idx core.StoreIndex) {
 	t.Helper()
 	if c, ok := idx.(interface{ Close() error }); ok {
 		t.Cleanup(func() { _ = c.Close() })

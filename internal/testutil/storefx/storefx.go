@@ -27,7 +27,7 @@ func Hashes() domain.HashRegistry {
 
 // Init: fresh Store on localfs + in-memory sqlite index + sha256.
 // Caller opts append to (and can override) defaults.
-func Init(t *testing.T, opts ...core.StoreOption) core.Store {
+func Init(t testing.TB, opts ...core.StoreOption) core.Store {
 	t.Helper()
 	all := append([]core.StoreOption{core.WithStoreIndex(indexfx.Memory(t))}, opts...)
 	s, _ := initStore(t, driverfx.LocalFS(t), all...)
@@ -35,7 +35,7 @@ func Init(t *testing.T, opts ...core.StoreOption) core.Store {
 }
 
 // InitWithRoot is Init plus the driver root for on-disk inspection.
-func InitWithRoot(t *testing.T, opts ...core.StoreOption) (core.Store, string) {
+func InitWithRoot(t testing.TB, opts ...core.StoreOption) (core.Store, string) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	all := append([]core.StoreOption{core.WithStoreIndex(indexfx.Memory(t))}, opts...)
@@ -45,13 +45,13 @@ func InitWithRoot(t *testing.T, opts ...core.StoreOption) (core.Store, string) {
 
 // InitOn wires Init around a caller-provided driver. Caller also
 // owns the index — pass core.WithStoreIndex explicitly.
-func InitOn(t *testing.T, drv driver.Driver, opts ...core.StoreOption) core.Store {
+func InitOn(t testing.TB, drv driver.Driver, opts ...core.StoreOption) core.Store {
 	t.Helper()
 	s, _ := initStore(t, drv, opts...)
 	return s
 }
 
-func initStore(t *testing.T, drv driver.Driver, opts ...core.StoreOption) (core.Store, []byte) {
+func initStore(t testing.TB, drv driver.Driver, opts ...core.StoreOption) (core.Store, []byte) {
 	t.Helper()
 	all := append([]core.StoreOption{core.WithHashRegistry(Hashes())}, opts...)
 	s, kit, err := core.InitStore(context.Background(), drv, all...)
