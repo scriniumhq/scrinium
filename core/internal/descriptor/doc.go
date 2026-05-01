@@ -11,6 +11,7 @@
 // format is engine-private and may evolve through migrations behind
 // schema_version.
 //
-// DAG: descriptor depends only on driver.Driver and stdlib; no
-// imports from core, domain, or any consumer package.
+// DAG: descriptor depends on driver.Driver, errs (sentinel
+// errors), and stdlib. No imports from core, domain, or any
+// consumer package.
 package descriptor

@@ -34,3 +34,15 @@ var ErrKeyNotFound = errors.New("scrinium: key not found")
 // ErrDecryptionFailed — the key was found but decryption failed
 // (wrong key, corrupted bytes, authentication-tag failure).
 var ErrDecryptionFailed = errors.New("scrinium: decryption failed")
+
+// ErrDescriptorSplitBrain — L0 and L1 are both valid, hold
+// different content, and carry the same Sequence number. The
+// engine cannot pick a winner without external input: a higher
+// Sequence on either side would have made it the canonical
+// version, but identical sequences mean two writers produced
+// divergent descriptors with no causal order.
+//
+// Recovery is manual: the operator inspects both replicas and
+// either picks one explicitly (overwriting both) or falls back
+// to the Recovery Kit through RebuildIndexAgent.
+var ErrDescriptorSplitBrain = errors.New("scrinium: descriptor split-brain (L0 and L1 diverged at the same sequence)")

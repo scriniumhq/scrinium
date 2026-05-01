@@ -1,7 +1,6 @@
 package descriptor_test
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
@@ -104,34 +103,8 @@ func FuzzUnmarshal(f *testing.F) {
 		if err != nil {
 			t.Fatalf("re-unmarshal failed: d=%+v reBytes=%s err=%v", d, reBytes, err)
 		}
-		if !descriptorEquivalent(d, d2) {
+		if !descriptor.Equal(d, d2) {
 			t.Errorf("round-trip changed the descriptor:\n  d1=%+v\n  d2=%+v", d, d2)
 		}
 	})
-}
-
-func descriptorEquivalent(a, b *descriptor.Descriptor) bool {
-	if a.StoreID != b.StoreID ||
-		a.SchemaVersion != b.SchemaVersion ||
-		a.Sequence != b.Sequence ||
-		a.DEKEncrypted != b.DEKEncrypted {
-		return false
-	}
-	if !bytes.Equal(a.DEK, b.DEK) {
-		return false
-	}
-	switch {
-	case a.KDFParams == nil && b.KDFParams == nil:
-		return true
-	case a.KDFParams == nil || b.KDFParams == nil:
-		return false
-	}
-	ka, kb := a.KDFParams, b.KDFParams
-	if ka.Algorithm != kb.Algorithm ||
-		ka.Time != kb.Time ||
-		ka.Memory != kb.Memory ||
-		ka.Threads != kb.Threads {
-		return false
-	}
-	return bytes.Equal(ka.Salt, kb.Salt)
 }

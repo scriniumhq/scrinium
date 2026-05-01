@@ -117,11 +117,34 @@ func Read(ctx context.Context, drv driver.Driver) (*Descriptor, error) {
 }
 
 // Write serialises and stores the descriptor through a Driver.
-// Driver.Put is atomic (temp + rename).
+// Driver.Put is atomic (temp + rename). Writes only L0 (Path) —
+// callers wanting the L0+L1 invariant must use WriteBoth.
 func Write(ctx context.Context, drv driver.Driver, d *Descriptor) error {
 	data, err := Marshal(d)
 	if err != nil {
 		return err
 	}
 	return drv.Put(ctx, Path, bytes.NewReader(data))
+}
+
+// WriteBoth serialises d once and writes the result to both L0
+// (Path) and L1 (BackupPath). Each Put is atomic; the pair is
+// not — a crash between them leaves L1 stale and L0 fresh, which
+// Reconcile heals on the next OpenStore.
+//
+// Per §10.1.5 the on-disk invariant after a successful WriteBoth
+// is "L0 ⇄ L1, byte-identical". Reconcile is the recovery path
+// for any other observed state.
+func WriteBoth(ctx context.Context, drv driver.Driver, d *Descriptor) error {
+	data, err := Marshal(d)
+	if err != nil {
+		return err
+	}
+	if err := drv.Put(ctx, Path, bytes.NewReader(data)); err != nil {
+		return fmt.Errorf("descriptor.WriteBoth: L0: %w", err)
+	}
+	if err := drv.Put(ctx, BackupPath, bytes.NewReader(data)); err != nil {
+		return fmt.Errorf("descriptor.WriteBoth: L1: %w", err)
+	}
+	return nil
 }

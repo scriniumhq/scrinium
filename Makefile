@@ -29,6 +29,11 @@ GOTESTSUM := $(shell command -v gotestsum 2> /dev/null)
 RACE ?= 0
 RACE_FLAG := $(if $(filter 1,$(RACE)),-race,)
 
+# Default fuzz duration for `make fuzz`. Override with T=2m or T=1h
+# for longer hunts. The smoke target ignores this — it only runs
+# the seed corpus, which takes seconds.
+FUZZTIME ?= 30s
+
 # Default target.
 .DEFAULT_GOAL := help
 
@@ -45,11 +50,17 @@ help:
 	@echo "  fmt-check   — fail if any file needs gofmt"
 	@echo "  vet         — go vet ./..."
 	@echo "  tidy        — go mod tidy && go mod verify"
-	@echo "  ci          — fmt-check + vet + test"
-	@echo "  clean       — remove build artefacts"
+	@echo "  fuzz-smoke  — seed-corpus pass over every Fuzz* (CI-fast)"
+	@echo "  fuzz        — active fuzzing of one target;"
+	@echo "                P=<pkg> F=<FuzzName> [T=<duration>]"
+	@echo "  fuzz-list   — list every Fuzz* in the tree with its package"
+	@echo "  fuzz-clean  — remove generated fuzz corpora (testdata/fuzz/)"
+	@echo "  ci          — fmt-check + vet + test + fuzz-smoke"
+	@echo "  clean       — remove build artefacts (also runs fuzz-clean)"
 	@echo ""
 	@echo "Variables:"
 	@echo "  RACE=1      — enable race detector (default 0)"
+	@echo "  FUZZTIME=2m — duration for active fuzz (default 30s)"
 
 # --- Build ---
 
@@ -139,6 +150,90 @@ else
 	SCRINIUM_SMOKE=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./core/
 endif
 
+# --- Fuzzing ---
+#
+# Two distinct flows:
+#
+# 1. fuzz-smoke — `go test -run=^Fuzz` runs every Fuzz* function
+#    against its seed corpus only, no mutation. Takes seconds and
+#    catches the most common regression: a Fuzz* that no longer
+#    compiles, or a seed that newly panics after a refactor.
+#    Wired into `make ci` so a broken fuzz target fails the same
+#    check that runs unit tests.
+#
+# 2. fuzz — active fuzzing of ONE target for FUZZTIME (default
+#    30s). `go test -fuzz=...` accepts one regex per invocation;
+#    we expose this as `make fuzz P=<pkg> F=<FuzzName>`.
+#    Discovered crashes land in the package's
+#    testdata/fuzz/<FuzzName>/ directory; commit them as
+#    permanent regression seeds.
+
+.PHONY: fuzz-smoke
+fuzz-smoke:
+ifdef GOTESTSUM
+	$(GOTESTSUM) --format pkgname -- -run=^Fuzz $(RACE_FLAG) ./...
+else
+	$(GO) test -run=^Fuzz $(RACE_FLAG) ./...
+endif
+
+# Active fuzz. Usage:
+#   make fuzz P=core/internal/descriptor F=FuzzUnmarshal
+#   make fuzz P=internal/manifestcodec F=FuzzDecodeFile T=2m
+.PHONY: fuzz
+fuzz:
+ifndef P
+	@echo "Usage: make fuzz P=<package-path> F=<FuzzName> [T=<duration>]"
+	@echo ""
+	@$(MAKE) --no-print-directory fuzz-list
+	@exit 1
+endif
+ifndef F
+	@echo "Usage: make fuzz P=$(P) F=<FuzzName> [T=<duration>]"
+	@echo ""
+	@echo "Fuzz targets in ./$(P):"
+	@grep -hoE '^func (Fuzz[A-Za-z0-9_]+)' ./$(P)/*_test.go 2>/dev/null \
+	    | awk '{print "  "$$2}' | sort -u
+	@exit 1
+endif
+	$(GO) test -run=^$$ -fuzz=^$(F)$$ -fuzztime=$(FUZZTIME) ./$(P)/...
+
+# Inventory of every Fuzz* across the tree, with the package it
+# lives in. `git grep` keeps the listing fast; falls back to grep
+# if the working tree is not a git checkout.
+.PHONY: fuzz-list
+fuzz-list:
+	@echo "Fuzz targets:"
+	@if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
+	    git grep -hnE '^func (Fuzz[A-Za-z0-9_]+)' -- '*_test.go' \
+	        | awk -F: '{ \
+	              file=$$1; \
+	              sub(/\/[^\/]+$$/, "", file); \
+	              match($$0, /Fuzz[A-Za-z0-9_]+/); \
+	              name=substr($$0, RSTART, RLENGTH); \
+	              print "  P="file" F="name; \
+	          }' | sort -u; \
+	else \
+	    grep -rhnE '^func (Fuzz[A-Za-z0-9_]+)' --include='*_test.go' . \
+	        | awk -F: '{ \
+	              file=$$1; sub(/^\.\//, "", file); \
+	              sub(/\/[^\/]+$$/, "", file); \
+	              match($$0, /Fuzz[A-Za-z0-9_]+/); \
+	              name=substr($$0, RSTART, RLENGTH); \
+	              print "  P="file" F="name; \
+	          }' | sort -u; \
+	fi
+
+# Wipe generated fuzz corpora. testdata/fuzz/ accumulates between
+# active runs; trim it before commits to keep `git status` clean.
+# Manually-curated regression seeds (committed under
+# testdata/fuzz/<Name>/) are NOT touched — only files that match
+# Go's auto-generated naming.
+.PHONY: fuzz-clean
+fuzz-clean:
+	@find . -type d -name fuzz -path '*/testdata/*' | while read d; do \
+	    find "$$d" -mindepth 2 -type f ! -name 'README*' -print -delete 2>/dev/null; \
+	done
+
 # --- Quality gates ---
 
 .PHONY: fmt
@@ -164,11 +259,11 @@ tidy:
 	$(GO) mod verify
 
 .PHONY: ci
-ci: fmt-check vet test
+ci: fmt-check vet test fuzz-smoke
 
 # --- Housekeeping ---
 
 .PHONY: clean
-clean:
+clean: fuzz-clean
 	$(GO) clean ./...
 	rm -f *.test *.out
