@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/rkurbatov/scrinium/core/internal/descriptor"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
 	"github.com/rkurbatov/scrinium/errs"
@@ -51,6 +52,30 @@ type store struct {
 	// treats the token as opt-in metadata: presence does not yet
 	// restrict, absence does not yet block.
 	capabilityToken []byte
+
+	// Crypto state. cryptoMu guards the trio (descriptor, dek,
+	// passphraseProvider) because Unlock / SetPassphrase /
+	// RotateKEK rewrite them together.
+	//
+	// descriptor holds the current on-disk descriptor, kept in
+	// memory after bootstrap so RotateKEK and SetPassphrase can
+	// produce a successor (Sequence + 1, fresh KDFParams) without
+	// re-reading from the Driver.
+	//
+	// dek is the unwrapped data-encryption key. nil for Plain
+	// Stores and for encrypted Stores in StateLocked. Populated
+	// at successful Unlock; cleared (zeroBytes + nil) when the
+	// state machine returns to Locked.
+	//
+	// passphraseProvider is captured from WithPassphrase at
+	// construction. Stays for the Store's lifetime so subsequent
+	// AdminStore operations (RotateKEK after a sleep, etc.) can
+	// re-prompt without the host application threading the
+	// provider through every call.
+	cryptoMu           sync.Mutex
+	desc               *descriptor.Descriptor
+	dek                []byte
+	passphraseProvider PassphraseProvider
 }
 
 // State returns the current state of the Store. Cheap and
