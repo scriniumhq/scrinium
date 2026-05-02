@@ -68,7 +68,7 @@ type GCAgent interface {
 // StoreConfig (GCLeasePolicy, TombstoneGracePeriod, DeletionPolicy)
 // and DataStore for WalkSystem (lease coordination).
 //
-// Implementation lands in M3.2.
+// TODO(M3.2): two-phase GC with tombstone reaping.
 func NewGCAgent(
 	store core.Store,
 	bus event.EventBus,

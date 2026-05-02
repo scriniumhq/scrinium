@@ -118,7 +118,7 @@ type RebuildIndexAgent interface {
 // reaches the Driver and StoreIndex from inside the Store via
 // core.Store.
 //
-// Implementation lands in M3.4.
+// TODO(M3.4): rebuild StoreIndex from manifests / Recovery Kit.
 func NewRebuildIndexAgent(
 	store core.Store,
 	bus event.EventBus,

@@ -60,8 +60,8 @@ type Ejector interface {
 	Eject(ctx context.Context, id domain.ArtifactID, targetPath string) error
 }
 
-// NewEjector creates an Ejector instance. Implementation lands in
-// M6.3.
+// NewEjector creates an Ejector instance.
+// TODO(M6.3): host-driven artifact ejection.
 func NewEjector(
 	source core.DataStore,
 	bus event.EventBus,

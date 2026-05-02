@@ -33,7 +33,7 @@ type OrphanReport struct {
 //  1. system.state/staging/* — every file. Staging is per-Put,
 //     per-process; anything that survived a restart is by
 //     construction garbage from a crashed prior write. Closes the
-//     M1.4 Tier 1 "partial blob write" scenario.
+//     "partial blob write" Tier 1 scenario.
 //
 //  2. blobs/<x>/<y>/<ref> — files whose blob_ref does not resolve
 //     through StoreIndex.Resolve. Closes the crash window between

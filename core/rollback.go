@@ -72,8 +72,8 @@ func (s *store) RollbackSession(ctx context.Context, sessionID string) error {
 		m, err := s.loadManifest(ctx, id)
 		if err != nil {
 			// Index row exists but the manifest cannot be
-			// loaded — inconsistent state. RebuildIndexAgent
-			// (M3.4) is the recovery path.
+			// loaded — inconsistent state.
+			// (TODO M3.4: RebuildIndexAgent) is the recovery path.
 			return fmt.Errorf("core.RollbackSession: load %q: %w", id, err)
 		}
 		if !m.RetentionUntil.IsZero() && m.RetentionUntil.After(now) {

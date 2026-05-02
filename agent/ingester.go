@@ -64,7 +64,7 @@ type Ingester interface {
 }
 
 // NewIngester creates an Ingester instance. User-managed: started
-// by the host application explicitly. Implementation lands in M6.3.
+// by the host application explicitly. TODO(M6.3): fsnotify-driven ingestion.
 //
 // Returns errs.ErrIngesterNoState when cfg.Mode is Watch and no
 // StateFile is set.

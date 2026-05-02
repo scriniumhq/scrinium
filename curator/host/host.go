@@ -15,5 +15,5 @@
 // for HostStorageStats and the surrounding wiring: contracts go
 // up the DAG, implementation goes down.
 //
-// Implementation lands in M4.2.
+// TODO(M4.2): HostStorage transit and drain to remote.
 package host

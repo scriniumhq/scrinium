@@ -27,8 +27,8 @@ import (
 // is rewritten or removed within a single Put call.
 const stagingPrefix = "system.state/staging"
 
-// Put records an artifact in the Store. M1.4 implements two
-// blob-placement paths:
+// Put records an artifact in the Store. Two blob-placement paths
+// are supported:
 //
 //	Target: payload streams to a staging file, content is hashed
 //	on the fly, dedup is checked, the staging file is renamed to
@@ -71,20 +71,19 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		return "", fmt.Errorf("core.Put: %w", err)
 	}
 
-	// M1.4 perimeter: bail out on the surfaces that are stubbed.
+	// Reject configurations whose support is not yet wired.
 	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
-		return "", fmt.Errorf("core.Put: BlobType %q deferred to M3", opts.BlobType)
+		return "", fmt.Errorf("core.Put: BlobType %q not supported (TODO M3)", opts.BlobType)
 	}
 	if cfg.BlobStorage == domain.BlobStorageExternalRef {
-		return "", errors.New("core.Put: BlobStorage: ExternalRef deferred to a later milestone")
+		return "", errors.New("core.Put: BlobStorage: ExternalRef not yet supported")
 	}
 	if cfg.ManifestStorage != domain.ManifestStorageRemote && cfg.ManifestStorage != "" {
 		// Local and Replicated require HostStorage as the transit
 		// buffer (see 2. Internals/01 Topology and 4. API
-		// Reference/05 Configuration §5). HostStorage lands in
-		// M4.2 alongside Curator — until then only Remote (the
-		// default) is meaningful.
-		return "", fmt.Errorf("core.Put: ManifestStorage %q requires HostStorage (lands in M4.2)",
+		// Reference/05 Configuration §5). Until HostStorage is
+		// wired (TODO M4.2), only Remote (the default) works.
+		return "", fmt.Errorf("core.Put: ManifestStorage %q requires HostStorage (TODO M4.2)",
 			cfg.ManifestStorage)
 	}
 
@@ -408,7 +407,7 @@ func (s *store) publish(typ string, payload any) {
 // makeStagingPath returns a fresh, unique path under
 // system.state/staging/. Uniqueness is provided by the UUID v4
 // helper (the same generator we use for StoreID). A future
-// improvement (multi-host) is to mix in a host_id; M3.1 territory.
+// improvement (multi-host) is to mix in a host_id (TODO M3.1).
 func (s *store) makeStagingPath() (string, error) {
 	id, err := generateUUID()
 	if err != nil {

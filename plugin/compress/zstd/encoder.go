@@ -12,15 +12,15 @@ import (
 
 // encoder is the per-operation Encoder for zstd.
 //
-// Implementation note (M2.1).
-// The Bypass heuristics described in docs §7.1 (entropy sampling
-// on a leading window, microsize bypass) are deferred — we ship a
-// straightforward streaming implementation that compresses every
-// frame at the configured level. Random-bytes inputs end up
-// slightly larger than their plaintext, never wrong. The Bypass
-// optimisation is tracked in the backlog under "M2-extra: zstd
-// encoder Bypass heuristics"; bringing it back will swap this
-// file without touching the factory or the Decoder.
+// Implementation note: Bypass heuristics described in docs §7.1
+// (entropy sampling on a leading window, microsize bypass) are
+// deferred — this is a straightforward streaming implementation
+// that compresses every frame at the configured level. Random-
+// bytes inputs end up slightly larger than their plaintext, never
+// wrong. The Bypass optimisation is tracked in the backlog under
+// "M2-extra: zstd encoder Bypass heuristics"; bringing it back
+// will swap this file without touching the factory or the
+// Decoder.
 type encoder struct {
 	opts Options
 
@@ -76,8 +76,8 @@ func (e *encoder) Transform(r io.Reader) io.Reader {
 }
 
 // Result returns the recorded metrics. Called by the runner after
-// EOF on the wrapped reader. Entropy is always 0 in this M2.1
-// build (Bypass heuristics deferred — see type comment).
+// EOF on the wrapped reader. Entropy is always 0 (Bypass
+// heuristics deferred — see type comment).
 func (e *encoder) Result() core.TransformResult {
 	return core.TransformResult{
 		OutputSize: e.outputSize.Load(),

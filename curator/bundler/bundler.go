@@ -8,8 +8,8 @@
 // Packing is transparent to the client: Put returns a regular
 // ArtifactID, and Get knows how to range-read out of the pack.
 //
-// Implementation lands in M4.4. In M0 — the WrapperFactory contract
-// and the configuration type.
+// TODO(M4.4): blob bundling for many-small-files workloads.
+// In M0 — the WrapperFactory contract
 package bundler
 
 import (
@@ -58,7 +58,7 @@ type Wrapper interface {
 // WithStore/WithBackup. It requires HostStorage in Curator: the
 // factory's Wrap returns an error if deps.HostStorage == nil.
 //
-// Implementation lands in M4.4.
+// TODO(M4.4): bundling read path.
 func New(cfg BundlerConfig) curator.WrapperFactory {
 	return &factory{cfg: cfg}
 }

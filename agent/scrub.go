@@ -60,7 +60,7 @@ type ScrubAgent interface {
 // for normal operation under Curator: Curator creates instances on
 // its own.
 //
-// Implementation lands in M3.3.
+// TODO(M3.3): blob verification with high-water-mark cursor.
 func NewScrubAgent(
 	store core.Store,
 	bus event.EventBus,
@@ -121,7 +121,7 @@ type SnapshotAgent interface {
 }
 
 // NewSnapshotAgent creates a Snapshot Agent instance.
-// Implementation lands in M3.3.
+// TODO(M3.3): blob verification with high-water-mark cursor.
 func NewSnapshotAgent(
 	store core.Store,
 	bus event.EventBus,

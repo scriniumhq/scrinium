@@ -13,10 +13,10 @@ import (
 )
 
 // Delete logically removes an artifact from the Store. It does
-// not free physical bytes — that is GC Agent territory (M3,
+// not free physical bytes — that is GC Agent territory (TODO M3,
 // docs/2. Internals/05 §5.3). The flow is laid out in §2.2.
 //
-// M1.4 perimeter:
+// Currently supported:
 //   - BlobManifest only (TOC deferred to M5: requires reading the
 //     TOC blob to gather chunk refs).
 //   - Inline blobs are removed by deleting the manifest row
@@ -37,7 +37,7 @@ import (
 //  6. EventArtifactDeleted — only after everything succeeded.
 //
 // Crash between (4) and (5) leaves an on-disk manifest with no
-// index row. RebuildIndexAgent (M3) is the recovery path.
+// index row. RebuildIndexAgent (TODO M3.4) is the recovery path.
 func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -81,7 +81,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 
 	// Collect blobRefs to decrement. Inline = empty list (no row
 	// in `blobs`). Target = the one BlobRef. ExternalRef would
-	// also be empty, but Put rejects it in M1.4, so a manifest of
+	// also be empty, but Put rejects it today, so a manifest of
 	// that layout cannot exist on disk yet — treat it as the
 	// future-compatible empty list rather than special-casing.
 	var blobRefs []string

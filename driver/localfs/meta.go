@@ -19,8 +19,8 @@ const tombstoneSuffix = ".tombstone"
 
 // tempPrefix marks files created by createTempFile during an
 // in-flight Put or Clone. They are filtered out of List, Stat, and
-// iteration; Recover() in M3.4 prunes leftovers from a crashed
-// process.
+// iteration; the driver Recover() hook (TODO M3.4) prunes
+// leftovers from a crashed process.
 const tempPrefix = "."
 
 // Stat returns metadata about a path. A missing file returns the

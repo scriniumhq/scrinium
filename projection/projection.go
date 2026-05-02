@@ -210,7 +210,7 @@ type Mount interface {
 }
 
 // NewProjection creates a Projection on top of the source.
-// Implementation lands in M6.1.
+// TODO(M6.1): typed projection over WalkSystem.
 func NewProjection(source ProjectionSource) (Projection, error) {
 	return nil, errors.New("projection.NewProjection: not implemented")
 }

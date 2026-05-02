@@ -2,7 +2,7 @@
 // according to docs/2. Internals/07 §7.1 (file header) and §7.5
 // (deterministic body encoding).
 //
-// File layout for the formats this package handles in M1.4:
+// File layout for the formats this package handles:
 //
 //	[0..3]   magic: \x00SC1 (JSON)
 //	[4]      crypto flag: 0x00 (Plain)

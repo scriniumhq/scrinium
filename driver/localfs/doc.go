@@ -25,7 +25,7 @@
 //     sectors.
 //   - CapWatch: declared because fsnotify-based observation works on
 //     the local filesystem. The Driver interface itself does not
-//     expose Watch — the Ingester (M6.3) consumes fsnotify directly,
+//     expose Watch — the Ingester (TODO M6.3) consumes fsnotify directly,
 //     guided by this flag.
 //
 // Not declared:

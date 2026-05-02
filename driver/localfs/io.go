@@ -93,8 +93,8 @@ func (d *Driver) Put(ctx context.Context, path string, r io.Reader) error {
 // responsible for closing/removing. Format:
 // ".<basename>.tmp.<8 random hex bytes>".
 //
-// The ".tmp." suffix is recognised by Recover() in M3.4 to prune
-// orphan temp files from a crashed process.
+// The ".tmp." suffix is recognised by RebuildIndexAgent (TODO M3.4)
+// to prune orphan temp files from a crashed process.
 func (d *Driver) createTempFile(dir, base string) (*os.File, error) {
 	var nonce [8]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
