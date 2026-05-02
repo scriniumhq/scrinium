@@ -522,19 +522,6 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		}
 	}
 
-	// --- Refuse manifest-encryption modes still pending M2.3 ---
-	//
-	// MetadataOnly and Envelope require the AEAD-on-manifests
-	// pipeline that lands with the next milestone. The DEK
-	// machinery itself (this pack) is independent: a Store can
-	// have a wrapped DEK and still write Plain manifests, which
-	// is a perfectly working configuration.
-	if active.ManifestCrypto != domain.ManifestCryptoPlain {
-		return nil, fmt.Errorf(
-			"core.OpenStore: ManifestCrypto=%q is not yet implemented (lands in M2.3)",
-			active.ManifestCrypto)
-	}
-
 	// --- Branch on DEK protection state ---
 
 	if !desc.DEKEncrypted {

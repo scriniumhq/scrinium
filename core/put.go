@@ -205,9 +205,35 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		RetentionUntil: opts.RetentionUntil,
 		Metadata:       a.Metadata,
 	}
+	// Snapshot crypto state for non-Plain manifest encryption.
+	// Held briefly under cryptoMu, then released so a parallel
+	// Unlock/RotateKEK is not blocked by a long-running Put.
+	// dek is copied; keyResolver is an immutable interface so a
+	// reference is enough.
+	var dekSnapshot []byte
+	var keyID string
+	if cfg.ManifestCrypto != "" && cfg.ManifestCrypto != domain.ManifestCryptoPlain {
+		s.cryptoMu.Lock()
+		if len(s.dek) == 0 {
+			s.cryptoMu.Unlock()
+			return "", fmt.Errorf("%w: ManifestCrypto=%q requires Unlock",
+				errs.ErrLocked, cfg.ManifestCrypto)
+		}
+		if s.keyResolver == nil {
+			s.cryptoMu.Unlock()
+			return "", fmt.Errorf("core.Put: ManifestCrypto=%q requires WithKeyResolver or default-resolver promotion",
+				cfg.ManifestCrypto)
+		}
+		dekSnapshot = append([]byte{}, s.dek...)
+		keyID = s.keyResolver.DefaultKeyID()
+		s.cryptoMu.Unlock()
+		defer zeroBytes(dekSnapshot)
+	}
+
 	artifactID, manifestBytes, manifest, err := manifestcodec.ComputeArtifactID(
 		manifest, hashAlgo, s.hashes,
 		cfg.ManifestEncoding, cfg.ManifestCrypto,
+		dekSnapshot, keyID,
 	)
 	if err != nil {
 		// On encoding/crypto deferral the blob (if any) is already

@@ -7,6 +7,8 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"io"
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
@@ -47,4 +49,21 @@ func StoreKeyResolver(s Store) KeyResolver {
 	concrete.cryptoMu.Lock()
 	defer concrete.cryptoMu.Unlock()
 	return concrete.keyResolver
+}
+
+// ReadDriverFile reads a file from the Store's underlying Driver.
+// Tests use this to inspect raw on-disk manifest bytes —
+// in particular to verify that MetadataOnly leaves system fields
+// in plaintext while Envelope hides them.
+func ReadDriverFile(s Store, path string) ([]byte, error) {
+	concrete, ok := s.(*store)
+	if !ok {
+		return nil, fmt.Errorf("ReadDriverFile: not a *store")
+	}
+	rc, err := concrete.drv.Get(context.Background(), path)
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	return io.ReadAll(rc)
 }

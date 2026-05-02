@@ -534,42 +534,48 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 
 // --- OpenStore: non-Plain ManifestCrypto pending M2.3 ---
 
-func TestOpenStore_NonPlainManifestCryptoNotYetSupported(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	idx := indexfx.Memory(t)
+// TestOpenStore_NonPlainManifestCryptoOpens verifies that
+// OpenStore accepts MetadataOnly and Envelope configurations.
+// The body-encryption path itself is exercised by Put/Get
+// integration tests; this test only checks that OpenStore no
+// longer refuses such configurations.
+//
+// Note: ManifestStorage Local/Replicated lands in M4.2 alongside
+// HostStorage; here we use Remote (the default) so the test
+// stays scoped to ManifestCrypto.
+func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
+	for _, crypto := range []domain.ManifestCrypto{
+		domain.ManifestCryptoMetadataOnly,
+		domain.ManifestCryptoEnvelope,
+	} {
+		t.Run(string(crypto), func(t *testing.T) {
+			drv := driverfx.LocalFS(t)
+			idx := indexfx.Memory(t)
+			cfg := domain.StoreConfig{ManifestCrypto: crypto}
 
-	// Init normally — system.config will hold Plain.
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+			if _, _, err := core.InitStore(context.Background(), drv,
+				core.WithConfig(cfg),
+				core.WithPassphrase(staticPassphraseProvider("pw")),
+				core.WithStoreIndex(idx),
+				core.WithHashRegistry(storefx.Hashes()),
+			); err != nil {
+				t.Fatalf("InitStore: %v", err)
+			}
 
-	// Overwrite system.config with a MetadataOnly variant. The
-	// pointer is bumped to the new ArtifactID atomically.
-	// WriteSystemConfig is a test-only export of the package-private
-	// writer (see core/export_test.go).
-	bad := domain.StoreConfig{
-		PathTopology:     domain.PathTopologySharded,
-		ContentHasher:    domain.HashSHA256,
-		ManifestEncoding: domain.ManifestEncodingJSON,
-		ManifestStorage:  domain.ManifestStorageLocal,
-		ManifestCrypto:   domain.ManifestCryptoMetadataOnly,
-	}
-	if _, err := core.WriteSystemConfig(context.Background(), drv, idx, storefx.Hashes(), bad); err != nil {
-		t.Fatalf("WriteSystemConfig: %v", err)
-	}
-
-	_, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
-	if err == nil {
-		t.Fatal("expected non-Plain ManifestCrypto to be rejected pending M2.3")
-	}
-	if !strings.Contains(err.Error(), "M2.3") {
-		t.Errorf("error should reference M2.3: %v", err)
+			s, err := core.OpenStore(context.Background(), drv,
+				core.WithConfig(cfg),
+				core.WithPassphrase(staticPassphraseProvider("pw")),
+				core.WithAutoUnlock(),
+				core.WithStoreIndex(idx),
+				core.WithHashRegistry(storefx.Hashes()),
+			)
+			if err != nil {
+				t.Fatalf("OpenStore: %v", err)
+			}
+			if s.State() != domain.StateUnlocked {
+				t.Errorf("State: got %v, want Unlocked", s.State())
+			}
+		})
 	}
 }
 

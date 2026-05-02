@@ -549,6 +549,12 @@ func tryDecrypt(ciphertext []byte, candidates [][]byte, aad []byte) ([]byte, err
 // manifest with the populated ArtifactID — callers pass them
 // straight to driver.Put.
 //
+// Encoding dispatches on crypto:
+//   - Plain: EncodeFile (dek, keyID ignored).
+//   - MetadataOnly / Envelope: EncodeFileEncrypted with the
+//     supplied dek and keyID. Empty dek with non-Plain crypto
+//     is rejected.
+//
 // Why the loop: ArtifactID = hash(file bytes), and the bytes
 // include the manifest body (which does NOT contain ArtifactID
 // itself — that field is on the in-memory struct, never on disk).
@@ -561,11 +567,22 @@ func ComputeArtifactID(
 	registry domain.HashRegistry,
 	encoding domain.ManifestEncoding,
 	crypto domain.ManifestCrypto,
+	dek []byte,
+	keyID string,
 ) (domain.ArtifactID, []byte, domain.Manifest, error) {
-	bytesEncoded, err := EncodeFile(m, encoding, crypto)
+	var bytesEncoded []byte
+	var err error
+
+	switch {
+	case crypto == "" || crypto == domain.ManifestCryptoPlain:
+		bytesEncoded, err = EncodeFile(m, encoding, crypto)
+	default:
+		bytesEncoded, err = EncodeFileEncrypted(m, encoding, crypto, dek, keyID)
+	}
 	if err != nil {
 		return "", nil, domain.Manifest{}, err
 	}
+
 	h, err := registry.NewHasher(hashAlgo)
 	if err != nil {
 		return "", nil, domain.Manifest{}, fmt.Errorf("manifestcodec: hasher: %w", err)

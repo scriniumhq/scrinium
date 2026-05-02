@@ -257,7 +257,7 @@ func TestComputeArtifactID_AssignsAndStable(t *testing.T) {
 	src := sampleManifest()
 
 	id, bs, withID, err := manifestcodec.ComputeArtifactID(src, "sha256", registry,
-		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatalf("ComputeArtifactID: %v", err)
 	}
@@ -282,9 +282,9 @@ func TestComputeArtifactID_DifferentManifestsDifferentIDs(t *testing.T) {
 	b := sampleManifest()
 	b.Namespace = "different"
 	idA, _, _, _ := manifestcodec.ComputeArtifactID(a, "sha256", registry,
-		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
 	idB, _, _, _ := manifestcodec.ComputeArtifactID(b, "sha256", registry,
-		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
 	if idA == idB {
 		t.Errorf("different manifests produced same ArtifactID: %q", idA)
 	}
@@ -294,7 +294,7 @@ func TestVerifyArtifactID_DetectsTampering(t *testing.T) {
 	registry := newHashRegistry()
 	id, bs, _, err := manifestcodec.ComputeArtifactID(sampleManifest(),
 		"sha256", registry,
-		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
