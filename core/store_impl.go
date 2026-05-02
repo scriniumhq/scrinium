@@ -114,22 +114,8 @@ func (s *store) SetPassphrase(ctx context.Context) error {
 	return s.setPassphraseImpl(ctx)
 }
 
-func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {
-	// Tracking: M3.x configuration-history work. Until then the
-	// only way to change StoreConfig is to InitStore a new Store —
-	// the immutable parameters are fixed at creation, the mutable
-	// ones cannot be reassigned through the public API.
-	return fmt.Errorf("%w: core.Store.UpdateConfig is deferred to M3.x", errs.ErrNotImplemented)
-}
-
 func (s *store) Config() domain.StoreConfig {
 	return s.snapshotConfig()
-}
-
-func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
-	// Tracking: M3.x configuration-history work; lands together
-	// with UpdateConfig as the read-side counterpart.
-	return nil, fmt.Errorf("%w: core.Store.ConfigHistory is deferred to M3.x", errs.ErrNotImplemented)
 }
 
 // --- DataStore: stubs implemented in M1.4 ---

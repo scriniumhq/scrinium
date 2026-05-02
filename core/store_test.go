@@ -278,10 +278,4 @@ func TestStore_PendingStubs(t *testing.T) {
 	// (chunker.Wrapper) and lands in M5.2.
 	_, err := s.PutBlob(ctx, strings.NewReader("x"), domain.BlobTypeChunk)
 	wantStub("PutBlob", err)
-
-	// AdminStore: mutable-config surface lands with the
-	// config-pointer artifact wiring (M2.x).
-	wantStub("UpdateConfig", s.UpdateConfig(ctx, domain.StoreConfig{}))
-	_, err = s.ConfigHistory(ctx)
-	wantStub("ConfigHistory", err)
 }
