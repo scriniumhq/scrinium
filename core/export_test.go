@@ -6,6 +6,7 @@ package core
 // extend this file with their own write/read helper aliases.
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -66,4 +67,16 @@ func ReadDriverFile(s Store, path string) ([]byte, error) {
 	}
 	defer rc.Close()
 	return io.ReadAll(rc)
+}
+
+// WriteDriverFile writes raw bytes to the Store's Driver, used
+// by tests that need to inject tampered manifest contents to
+// verify integrity-check paths. Bypasses Put — caller is
+// responsible for the resulting on-disk consistency.
+func WriteDriverFile(s Store, path string, data []byte) error {
+	concrete, ok := s.(*store)
+	if !ok {
+		return fmt.Errorf("WriteDriverFile: not a *store")
+	}
+	return concrete.drv.Put(context.Background(), path, bytes.NewReader(data))
 }
