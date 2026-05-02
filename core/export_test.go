@@ -34,3 +34,17 @@ func ReadSystemConfig(
 ) (domain.StoreConfig, error) {
 	return readSystemConfig(ctx, drv, hashes)
 }
+
+// StoreKeyResolver exposes the internal keyResolver field for
+// tests so they can assert that promoteKeyResolverIfDefault
+// did or did not run. Returns nil for non-*store implementers
+// (e.g. test mocks) so the helper degrades cleanly.
+func StoreKeyResolver(s Store) KeyResolver {
+	concrete, ok := s.(*store)
+	if !ok {
+		return nil
+	}
+	concrete.cryptoMu.Lock()
+	defer concrete.cryptoMu.Unlock()
+	return concrete.keyResolver
+}

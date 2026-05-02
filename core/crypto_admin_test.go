@@ -529,3 +529,113 @@ func TestExportRecoveryKit_RegeneratesAfterRotation(t *testing.T) {
 		t.Error("post-rotation kit must reflect new wrapped DEK")
 	}
 }
+
+// --- KeyResolver promotion ---
+
+func TestKeyResolverPromotion_OnUnlock(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+	if _, _, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(staticPP("pw")),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
+		t.Fatal(err)
+	}
+	// Open without AutoUnlock — Locked, no DEK yet.
+	s, err := core.OpenStore(context.Background(), drv,
+		core.WithPassphrase(staticPP("pw")),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if core.StoreKeyResolver(s) != nil {
+		t.Error("Locked Store should have no KeyResolver yet")
+	}
+	if err := s.Unlock(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if core.StoreKeyResolver(s) == nil {
+		t.Error("Unlock should populate the default KeyResolver")
+	}
+}
+
+func TestKeyResolverPromotion_OnAutoUnlock(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+	if _, _, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(staticPP("pw")),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
+		t.Fatal(err)
+	}
+	s, err := core.OpenStore(context.Background(), drv,
+		core.WithPassphrase(staticPP("pw")),
+		core.WithAutoUnlock(),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if core.StoreKeyResolver(s) == nil {
+		t.Error("AutoUnlock should populate default KeyResolver")
+	}
+}
+
+func TestKeyResolverPromotion_RespectsCustomResolver(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+	if _, _, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(staticPP("pw")),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	customDEK := bytes.Repeat([]byte{0xAB}, 32)
+	custom := core.NewStaticKeyResolver(customDEK)
+
+	s, err := core.OpenStore(context.Background(), drv,
+		core.WithPassphrase(staticPP("pw")),
+		core.WithAutoUnlock(),
+		core.WithKeyResolver(custom),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := core.StoreKeyResolver(s)
+	if got == nil {
+		t.Fatal("KeyResolver should not be nil")
+	}
+	// The custom resolver MUST have survived AutoUnlock — verify
+	// by querying it (it returns customDEK, not s.dek).
+	keys, err := got.GetKeys("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 1 || !bytes.Equal(keys[0], customDEK) {
+		t.Error("AutoUnlock overwrote the caller's custom KeyResolver")
+	}
+}
+
+func TestKeyResolverPromotion_OnInitStore(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	s, _, err := core.InitStore(context.Background(), drv,
+		core.WithPassphrase(staticPP("pw")),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if core.StoreKeyResolver(s) == nil {
+		t.Error("InitStore on encrypted Store should populate default KeyResolver")
+	}
+}

@@ -374,6 +374,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		zeroBytes(dek)
 		return nil, nil, fmt.Errorf("core.InitStore: %w", err)
 	}
+	s.promoteKeyResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		zeroBytes(dek)
 		return nil, nil, fmt.Errorf("core.InitStore: %w", err)
@@ -543,6 +544,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		if err != nil {
 			return nil, fmt.Errorf("core.OpenStore: %w", err)
 		}
+		s.promoteKeyResolverIfDefault()
 		if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 			return nil, fmt.Errorf("core.OpenStore: %w", err)
 		}
@@ -597,6 +599,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		zeroBytes(dek)
 		return nil, fmt.Errorf("core.OpenStore: %w", err)
 	}
+	s.promoteKeyResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		return nil, fmt.Errorf("core.OpenStore: %w", err)
 	}

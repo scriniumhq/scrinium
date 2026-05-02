@@ -160,3 +160,23 @@ func zeroBytes(b []byte) {
 		b[i] = 0
 	}
 }
+
+// promoteKeyResolverIfDefault installs a default StaticKeyResolver
+// over s.dek, ONLY when the caller did not pass their own
+// WithKeyResolver. Idempotent: a second call (after re-Unlock,
+// say) overwrites the resolver only if it's still nil.
+//
+// The discipline is "do not surprise the caller": if they took
+// the trouble to construct a custom resolver (multi-tenant,
+// HSM-backed, etc.), the engine respects it and does not overwrite.
+//
+// Caller must hold s.cryptoMu.
+func (s *store) promoteKeyResolverIfDefault() {
+	if s.keyResolver != nil {
+		return
+	}
+	if len(s.dek) == 0 {
+		return
+	}
+	s.keyResolver = NewStaticKeyResolver(s.dek)
+}

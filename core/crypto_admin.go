@@ -83,6 +83,7 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 	}
 
 	s.dek = dek
+	s.promoteKeyResolverIfDefault()
 
 	// Bootstrap-into-Unlocked: same path as the AutoUnlock leg
 	// of OpenStore. State first goes to Bootstrapping inside
