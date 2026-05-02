@@ -125,6 +125,14 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 	if err := s.checkWritable(); err != nil {
 		return err
 	}
+	// SetPassphrase rewrites the descriptor (Sequence+1) into both
+	// replicas. In Degraded the replicas are already out of sync —
+	// piling another write on top is unsafe until Auto-Heal reaches
+	// Unlocked. Refuse explicitly; checkWritable does not catch this
+	// because Degraded is "API available, but consensus pending".
+	if state := s.State(); state == domain.StateDegraded {
+		return fmt.Errorf("core.SetPassphrase: state %v rejects write; wait for Auto-Heal", state)
+	}
 	if s.desc == nil {
 		return fmt.Errorf("%w: descriptor not loaded", errs.ErrStoreCorrupted)
 	}
@@ -196,6 +204,14 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	if err := s.checkWritable(); err != nil {
 		return err
 	}
+	// RotateKEK rewrites the descriptor (Sequence+1) into both
+	// replicas. In Degraded the replicas are already out of sync —
+	// piling another write on top is unsafe until Auto-Heal reaches
+	// Unlocked. Refuse explicitly; checkWritable does not catch this
+	// because Degraded is "API available, but consensus pending".
+	if state := s.State(); state == domain.StateDegraded {
+		return fmt.Errorf("core.RotateKEK: state %v rejects write; wait for Auto-Heal", state)
+	}
 	if s.desc == nil {
 		return fmt.Errorf("%w: descriptor not loaded", errs.ErrStoreCorrupted)
 	}
@@ -209,11 +225,13 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	}
 
 	// First half: prove possession of the current passphrase
-	// by unwrapping the DEK and matching it against s.dek.
+	// by unwrapping the DEK and matching it against s.dek. The
+	// "unlock" reason mirrors Store.Unlock — host implementations
+	// that retrieve passphrases from a keychain key off Reason and
+	// expect the same lookup as a regular unlock.
 	currentPass, err := callProvider(ctx, s.passphraseProvider, PassphraseHint{
 		StoreID: s.storeID,
-		Reason:  "kek_rotation",
-		NeedNew: false,
+		Reason:  "unlock",
 	})
 	if err != nil {
 		return fmt.Errorf("core.RotateKEK: current passphrase: %w", err)
@@ -240,11 +258,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	newPass, err := callProvider(ctx, s.passphraseProvider, PassphraseHint{
 		StoreID: s.storeID,
 		Reason:  "kek_rotation",
-		NeedNew: true,
 	})
-	if err != nil {
-		return fmt.Errorf("core.RotateKEK: new passphrase: %w", err)
-	}
 
 	cost := domain.KDFParams{
 		Time:    s.desc.KDFParams.Time,

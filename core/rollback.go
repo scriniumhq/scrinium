@@ -40,10 +40,7 @@ import (
 // tags, not transactions). The next RollbackSession call observes
 // only the surviving artifacts and proceeds normally.
 func (s *store) RollbackSession(ctx context.Context, sessionID string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := s.checkWritable(); err != nil {
+	if err := s.enterWrite(ctx); err != nil {
 		return err
 	}
 	if sessionID == "" {

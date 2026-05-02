@@ -179,43 +179,16 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	var kit []byte
 	if o.passphrase != nil {
-		// Encrypted DEK path. Caller will receive the Recovery
-		// Kit and is responsible for persisting it before
-		// considering the Store usable.
-		passphrase, perr := callProvider(ctx, o.passphrase, PassphraseHint{
-			StoreID: storeID,
-			Reason:  "init",
-		})
-		if perr != nil {
-			return nil, nil, wrap("", perr)
-		}
-
-		// cfg.KDFParams is the client-side cost override; nil
-		// means "use kdf.Default()". wrapDEK handles the zero
-		// value; we don't need to dereference here.
-		var cost domain.KDFParams
-		if cfg.KDFParams != nil {
-			cost = *cfg.KDFParams
-		}
-		wrapped, kdfParams, werr := wrapDEK(dek, passphrase, cost)
-		zeroBytes(passphrase)
-		if werr != nil {
+		wrapped, kdfParams, kitBytes, ierr := initEncryptedDEK(
+			ctx, storeID, dek, o.passphrase, cfg.KDFParams)
+		if ierr != nil {
 			zeroBytes(dek)
-			return nil, nil, wrap("wrap DEK", werr)
+			return nil, nil, wrap("", ierr)
 		}
-
 		desc.DEK = wrapped
 		desc.DEKEncrypted = true
 		desc.KDFParams = &kdfParams
-
-		// Build the Recovery Kit before any disk I/O so a kit-
-		// generation failure refuses to create the Store.
-		k, kerr := buildRecoveryKit(desc, wrapped)
-		if kerr != nil {
-			zeroBytes(dek)
-			return nil, nil, wrap("build recovery kit", kerr)
-		}
-		kit = k
+		kit = kitBytes
 	} else {
 		// Plaintext DEK path. The descriptor carries the raw key.
 		// Validate enforces "DEKEncrypted=false ⇒ KDFParams

@@ -18,8 +18,8 @@ func StaticPP(pass string) core.PassphraseProvider {
 
 // RecordingPP returns the configured passphrase but records every
 // PassphraseHint it sees into log. Use when the test asserts on
-// Reason / NeedNew / StoreID values that the engine threads through
-// the provider call.
+// Reason / StoreID values that the engine threads through the
+// provider call.
 //
 // log is appended to, not reset — pass a fresh slice per test.
 func RecordingPP(pass string, log *[]core.PassphraseHint) core.PassphraseProvider {

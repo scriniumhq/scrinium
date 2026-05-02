@@ -86,8 +86,8 @@ type AdminStore interface {
 	// RotateKEK re-encrypts the DEK with a new KEK. The data on disk
 	// is not rewritten. The PassphraseProvider configured on the
 	// Store is called twice — once for the current passphrase
-	// (NeedNew=false), once for the replacement (NeedNew=true) —
-	// both with Reason="kek_rotation".
+	// (Reason="unlock", same as Store.Unlock) and once for the
+	// replacement (Reason="kek_rotation").
 	//
 	// After RotateKEK the previous Recovery Kit is invalid; the
 	// host is required to obtain a new one through ExportRecoveryKit
@@ -113,6 +113,12 @@ type AdminStore interface {
 
 	// UpdateConfig updates the mutable parameters of StoreConfig.
 	// Immutable parameters cannot be changed — errs.ErrConfigMismatch.
+	//
+	// Not yet wired: returns errs.ErrNotImplemented in M2. The
+	// implementation lands with the configuration-history work in
+	// M3.x — by then a new system.config artifact is written, the
+	// pointer in system.config/current is bumped atomically, and
+	// the active config in memory swaps without restart.
 	UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error
 
 	// Config returns a snapshot of the active StoreConfig — the

@@ -5,10 +5,6 @@ package manifestcodec
 // DecodeFileEncrypted are the public entry points; the
 // encode/decode helpers per-mode and the multi-DEK fallback
 // in tryDecrypt live below them.
-//
-// KeyProvider is the narrow interface DecodeFileEncrypted
-// needs from a key-resolution layer; production code passes
-// a *core.KeyResolver.
 
 import (
 	"encoding/base64"
@@ -19,18 +15,6 @@ import (
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/manifestcrypto"
 )
-
-// KeyProvider is the minimum slice of core.KeyResolver that
-// DecodeFileEncrypted needs. Defining it locally lets manifestcodec
-// stay independent of core (the package DAG is core ←
-// manifestcodec, not the other way).
-//
-// Production callers pass a *core.KeyResolver, which satisfies
-// this interface implicitly. Tests can substitute a hand-rolled
-// resolver.
-type KeyProvider interface {
-	GetKeys(keyID string) ([][]byte, error)
-}
 
 func EncodeFileEncrypted(
 	m domain.Manifest,

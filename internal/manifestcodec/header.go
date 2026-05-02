@@ -85,11 +85,11 @@ func writeHeader(h fileHeader) ([]byte, error) {
 
 	// Encrypted modes: KeyID length byte plus KeyID bytes.
 	if len(h.KeyID) > domain.MaxKeyIDLength {
-		return nil, fmt.Errorf("manifestcodec: KeyID too long (%d bytes, max %d)",
-			len(h.KeyID), domain.MaxKeyIDLength)
+		return nil, fmt.Errorf("%w: KeyID is %d bytes, limit is %d",
+			errs.ErrInvalidConfig, len(h.KeyID), domain.MaxKeyIDLength)
 	}
 	if !utf8.ValidString(h.KeyID) {
-		return nil, fmt.Errorf("manifestcodec: KeyID not valid UTF-8")
+		return nil, fmt.Errorf("%w: KeyID is not valid UTF-8", errs.ErrInvalidConfig)
 	}
 
 	out := make([]byte, 0, 6+len(h.KeyID))

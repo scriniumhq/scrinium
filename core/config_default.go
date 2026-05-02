@@ -126,5 +126,21 @@ func validateImmutableConfig(cfg domain.StoreConfig) error {
 	if cfg.TombstoneGracePeriod > 0 && cfg.TombstoneGracePeriod < domain.MinTombstoneGracePeriod {
 		return errs.ErrInvalidTombstoneGracePeriod
 	}
+
+	// InlineBlobLimit upper bound: bigger inline blobs would push
+	// hot index pages out of SQLite's page cache. Zero means "feature
+	// off" — only positive values are constrained.
+	if cfg.InlineBlobLimit > 0 && cfg.InlineBlobLimit > domain.MaxInlineBlobLimit {
+		return fmt.Errorf("%w: InlineBlobLimit=%d exceeds %d",
+			errs.ErrInvalidConfig, cfg.InlineBlobLimit, domain.MaxInlineBlobLimit)
+	}
+
+	// RetentionPeriod lower bound: a shorter window than the GC
+	// cycle defeats the purpose. Zero means "feature off".
+	if cfg.RetentionPeriod > 0 && cfg.RetentionPeriod < domain.MinRetentionPeriod {
+		return fmt.Errorf("%w: RetentionPeriod=%v shorter than %v",
+			errs.ErrInvalidConfig, cfg.RetentionPeriod, domain.MinRetentionPeriod)
+	}
+
 	return nil
 }

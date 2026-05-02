@@ -227,7 +227,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		defer zeroBytes(dekSnapshot)
 	}
 
-	artifactID, manifestBytes, manifest, err := manifestcodec.ComputeArtifactID(
+	artifactID, manifestBytes, signedManifest, err := manifestcodec.ComputeArtifactID(
 		manifest, hashAlgo, s.hashes,
 		cfg.ManifestEncoding, cfg.ManifestCrypto,
 		dekSnapshot, keyID,
@@ -240,6 +240,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		// race against a parallel Put deduping on the same content.
 		return "", fmt.Errorf("core.Put: compute artifact id: %w", err)
 	}
+	manifest = signedManifest
 
 	// --- Phase 3: write the manifest file ---
 

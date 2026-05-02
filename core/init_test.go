@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
@@ -241,6 +242,95 @@ func TestInitStore_RejectsBinaryManifestEncoding(t *testing.T) {
 	)
 	if !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
+	}
+}
+
+// TestInitStore_RejectsInlineBlobLimitTooLarge verifies the upper
+// bound from docs/4 §5.6: InlineBlobLimit > 64 KiB pushes hot index
+// pages out of SQLite page cache. Zero is still accepted as the
+// "feature off" value.
+func TestInitStore_RejectsInlineBlobLimitTooLarge(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	cfg := domain.StoreConfig{InlineBlobLimit: domain.MaxInlineBlobLimit + 1}
+	_, _, err := core.InitStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if !errors.Is(err, errs.ErrInvalidConfig) {
+		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
+	}
+}
+
+// TestInitStore_AcceptsInlineBlobLimitAtBoundary covers the inclusive
+// end of the range: the documented limit itself is allowed.
+func TestInitStore_AcceptsInlineBlobLimitAtBoundary(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	cfg := domain.StoreConfig{InlineBlobLimit: domain.MaxInlineBlobLimit}
+	s, _, err := core.InitStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatalf("InlineBlobLimit at boundary should be accepted, got %v", err)
+	}
+	if s == nil {
+		t.Fatal("expected non-nil Store")
+	}
+}
+
+// TestInitStore_RejectsRetentionPeriodTooShort verifies the lower
+// bound from docs/4 §5.6: a non-zero RetentionPeriod under 1h is
+// pointless because the GC cycle outlives the retention window.
+// Zero is still accepted as the "feature off" value.
+func TestInitStore_RejectsRetentionPeriodTooShort(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	cfg := domain.StoreConfig{RetentionPeriod: 30 * time.Minute}
+	_, _, err := core.InitStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if !errors.Is(err, errs.ErrInvalidConfig) {
+		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
+	}
+}
+
+// TestInitStore_AcceptsRetentionPeriodAtBoundary covers the inclusive
+// start of the range: exactly 1h is allowed.
+func TestInitStore_AcceptsRetentionPeriodAtBoundary(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	cfg := domain.StoreConfig{RetentionPeriod: domain.MinRetentionPeriod}
+	s, _, err := core.InitStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatalf("RetentionPeriod at boundary should be accepted, got %v", err)
+	}
+	if s == nil {
+		t.Fatal("expected non-nil Store")
+	}
+}
+
+// TestInitStore_AcceptsRetentionPeriodZero confirms that the
+// "feature off" semantics survive: zero RetentionPeriod must not
+// trigger the >= MinRetentionPeriod check.
+func TestInitStore_AcceptsRetentionPeriodZero(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	cfg := domain.StoreConfig{RetentionPeriod: 0}
+	s, _, err := core.InitStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatalf("RetentionPeriod=0 should be accepted, got %v", err)
+	}
+	if s == nil {
+		t.Fatal("expected non-nil Store")
 	}
 }
 

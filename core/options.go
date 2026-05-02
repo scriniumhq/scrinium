@@ -10,27 +10,24 @@ import (
 //
 // Reason takes one of:
 //
-//   - "init"             — InitStore is generating a fresh Store
-//     and needs the passphrase that will wrap
-//     the just-generated DEK. StoreID carries
-//     the freshly generated UUID.
-//   - "unlock"           — OpenStore (or Store.Unlock) needs the
-//     current passphrase to unwrap the DEK.
-//   - "set_passphrase"   — Store.SetPassphrase is wrapping a DEK
-//     that is currently in plaintext. The
-//     provider returns the NEW passphrase.
-//   - "kek_rotation"     — Store.RotateKEK is replacing the wrap.
-//     The provider is called TWICE: first with
-//     NeedNew=false to get the current
-//     passphrase, then NeedNew=true to get the
-//     replacement.
-//
-// NeedNew distinguishes the two halves of "kek_rotation". For all
-// other Reason values it is false.
+//   - "init"           — InitStore is generating a fresh Store and
+//     needs the passphrase that will wrap the
+//     just-generated DEK. StoreID carries the
+//     freshly generated UUID.
+//   - "unlock"         — OpenStore, Store.Unlock, or the first half
+//     of Store.RotateKEK needs the current
+//     passphrase to unwrap the DEK. Hosts that
+//     cache passphrases in a keychain key off
+//     this Reason for both unlock paths.
+//   - "set_passphrase" — Store.SetPassphrase is wrapping a DEK that
+//     is currently in plaintext. The provider
+//     returns the NEW passphrase.
+//   - "kek_rotation"   — the second half of Store.RotateKEK; the
+//     provider returns the NEW passphrase that
+//     will wrap the existing DEK.
 type PassphraseHint struct {
 	StoreID string
 	Reason  string
-	NeedNew bool
 }
 
 // PassphraseProvider returns a passphrase used to derive the KEK

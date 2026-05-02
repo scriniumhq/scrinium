@@ -105,9 +105,6 @@ func TestUnlock_HintCarriesUnlockReason(t *testing.T) {
 	if hints[0].Reason != "unlock" {
 		t.Errorf("Reason: got %q, want unlock", hints[0].Reason)
 	}
-	if hints[0].NeedNew {
-		t.Error("NeedNew should be false for unlock")
-	}
 }
 
 // --- SetPassphrase ---
@@ -283,7 +280,7 @@ func TestRotateKEK_RejectsPlainStore(t *testing.T) {
 	}
 }
 
-func TestRotateKEK_HintReasonsAndNeedNew(t *testing.T) {
+func TestRotateKEK_HintReasons(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	storefx.InitEncryptedOn(t, drv, "pw")
 	var hints []core.PassphraseHint
@@ -303,11 +300,16 @@ func TestRotateKEK_HintReasonsAndNeedNew(t *testing.T) {
 	if len(hints) != 2 {
 		t.Fatalf("expected 2 provider calls, got %d", len(hints))
 	}
-	if hints[0].Reason != "kek_rotation" || hints[0].NeedNew {
-		t.Errorf("first hint: got %+v, want Reason=kek_rotation, NeedNew=false", hints[0])
+	// First call retrieves the current passphrase. Reason="unlock"
+	// matches the lookup hosts use during Store.Unlock — keychain
+	// integrations that key off Reason find the cached entry.
+	if hints[0].Reason != "unlock" {
+		t.Errorf("first hint: got %+v, want Reason=unlock", hints[0])
 	}
-	if hints[1].Reason != "kek_rotation" || !hints[1].NeedNew {
-		t.Errorf("second hint: got %+v, want Reason=kek_rotation, NeedNew=true", hints[1])
+	// Second call retrieves the new passphrase. Reason="kek_rotation"
+	// is unique to RotateKEK and signals "this is a rotation in progress".
+	if hints[1].Reason != "kek_rotation" {
+		t.Errorf("second hint: got %+v, want Reason=kek_rotation", hints[1])
 	}
 }
 

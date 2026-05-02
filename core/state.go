@@ -89,16 +89,23 @@ func (s *store) checkOperational() error {
 	mode := s.maintenance
 	s.stateMu.RUnlock()
 
-	switch state {
-	case domain.StateCorrupted:
+	// Priority order per docs/2. Internals/01 §1.4 "Check priority":
+	//   1. Corrupted   — API physically unreadable, overrides everything.
+	//   2. Offline     — explicit administrative block, overrides crypto.
+	//   3. Bootstrapping — initialisation in flight.
+	//   4. Locked      — passphrase required.
+	// ReadOnly + mutating-op is checked one layer up by checkWritable.
+	if state == domain.StateCorrupted {
 		return errs.ErrStoreCorrupted
-	case domain.StateLocked:
-		return errs.ErrLocked
-	case domain.StateBootstrapping:
-		return errs.ErrStoreNotReady
 	}
 	if mode == domain.MaintenanceModeOffline {
 		return errs.ErrStoreOffline
+	}
+	if state == domain.StateBootstrapping {
+		return errs.ErrStoreNotReady
+	}
+	if state == domain.StateLocked {
+		return errs.ErrLocked
 	}
 	return nil
 }

@@ -236,10 +236,3 @@ func parseRFC3339(s string) (time.Time, error) {
 	}
 	return time.Parse(time.RFC3339Nano, s)
 }
-
-// Compile guard: assert at least one expected non-trivial path of
-// our error mapping. The actual classification is exercised by
-// real tests; this just keeps the unused-import linter from
-// removing the dependency on errors.
-var _ = errors.Is
-var _ = fmt.Errorf

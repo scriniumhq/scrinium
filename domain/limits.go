@@ -9,9 +9,8 @@ import "time"
 //
 // Keep this file in sync with the spec table. Constants are
 // added here only after the corresponding check is wired up;
-// reserved limits (InlineBlobLimit, RetentionPeriod, TOC chunk
-// count) will land alongside their enforcement in later
-// milestones.
+// the TOC chunk count limit is reserved and will land with the
+// chunker.Wrapper milestone (M5).
 
 // MaxNamespaceLen is the maximum byte length of Namespace.
 // Returns errs.ErrNamespaceTooLong when exceeded.
@@ -49,3 +48,17 @@ const MaxManifestSize = 1024 * 1024
 // Returns errs.ErrInvalidTombstoneGracePeriod when violated.
 // A shorter period breaks the Revive flow across hosts.
 const MinTombstoneGracePeriod = time.Hour
+
+// MaxInlineBlobLimit is the maximum value StoreConfig.InlineBlobLimit
+// can take per docs/4 §5.6. 64 KiB. Bigger limits would push hot
+// index pages out of SQLite page cache because inline blobs live
+// inside the manifest row.
+// Returns errs.ErrInvalidConfig when exceeded.
+const MaxInlineBlobLimit = 64 * 1024
+
+// MinRetentionPeriod is the minimum non-zero RetentionPeriod per
+// docs/4 §5.6. 1 hour. A shorter period makes deferred deletion
+// pointless — by the time GC runs, the retention window has
+// already expired.
+// Returns errs.ErrInvalidConfig when violated.
+const MinRetentionPeriod = time.Hour

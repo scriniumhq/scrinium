@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/errs"
 )
 
@@ -180,12 +179,3 @@ func (i *Index) SetMeta(key string, value string) error {
 	}
 	return nil
 }
-
-// --- Compile-time interface guarantee ---
-//
-// With this pack the Index struct implements every method of
-// core.StoreIndex. The assertion lives at the bottom of the
-// package so any future drift (a method renamed in core, a
-// signature change) breaks the build immediately rather than at
-// the first runtime call.
-var _ core.StoreIndex = (*Index)(nil)

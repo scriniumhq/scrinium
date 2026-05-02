@@ -22,6 +22,26 @@ import (
 // not block administrative state transitions. AdminStore methods
 // that mutate state (Unlock, SetMaintenanceMode) take the write
 // lock for the duration of the transition.
+//
+// Lock ordering. When more than one of the three mutexes is taken
+// in the same call path, they MUST be acquired in this order:
+//
+//	cryptoMu  →  stateMu  →  cfgMu
+//
+// Reverse acquisition (e.g. cfgMu → cryptoMu) is forbidden because
+// it deadlocks against the forward path. snapshotConfig and
+// maintenanceMode helpers take their lock in isolation and release
+// it before returning, so callers free to acquire one of the other
+// two afterwards — what is not allowed is holding cfgMu (or stateMu)
+// and reaching for cryptoMu inside that scope.
+//
+// Current obeyors of the order:
+//   - unlockEncrypted, setPassphraseImpl, rotateKEKImpl: cryptoMu
+//     held for the operation, stateMu taken briefly inside for
+//     the transition.
+//   - Put: snapshotConfig (cfgMu) at the top, released; cryptoMu
+//     taken later in Phase 2 — sequential, not nested.
+//   - Get / loadManifest: cryptoMu only.
 type store struct {
 	// Identity and dependencies.
 	storeID string
@@ -95,7 +115,11 @@ func (s *store) SetPassphrase(ctx context.Context) error {
 }
 
 func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {
-	return fmt.Errorf("%w: core.Store.UpdateConfig", errs.ErrNotImplemented)
+	// Tracking: M3.x configuration-history work. Until then the
+	// only way to change StoreConfig is to InitStore a new Store —
+	// the immutable parameters are fixed at creation, the mutable
+	// ones cannot be reassigned through the public API.
+	return fmt.Errorf("%w: core.Store.UpdateConfig is deferred to M3.x", errs.ErrNotImplemented)
 }
 
 func (s *store) Config() domain.StoreConfig {
@@ -103,13 +127,30 @@ func (s *store) Config() domain.StoreConfig {
 }
 
 func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
-	return nil, fmt.Errorf("%w: core.Store.ConfigHistory", errs.ErrNotImplemented)
+	// Tracking: M3.x configuration-history work; lands together
+	// with UpdateConfig as the read-side counterpart.
+	return nil, fmt.Errorf("%w: core.Store.ConfigHistory is deferred to M3.x", errs.ErrNotImplemented)
 }
 
 // --- DataStore: stubs implemented in M1.4 ---
 
 func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error) {
-	return "", fmt.Errorf("%w: core.Store.PutBlob", errs.ErrNotImplemented)
+	// PutBlob is a level-3 decorator entry point used by
+	// chunker.Wrapper (M5.2) to write anonymous chunks without
+	// producing a manifest. Two pending changes converge here:
+	//
+	//   1. The implementation lands with chunker.Wrapper in M5.2.
+	//   2. The method itself is moving off DataStore onto a
+	//      separate BlobStore interface at the start of M5 — see
+	//      docs 7. Planning/backlog.md "ADR-TBD: Вынос PutBlob в
+	//      отдельный интерфейс BlobStore". Application code will
+	//      no longer see PutBlob in DataStore autocomplete.
+	//
+	// Until then the stub here keeps the current DataStore
+	// contract honest: callers who reach for PutBlob today get a
+	// clear "not implemented" rather than silent success.
+	return "", fmt.Errorf("%w: core.Store.PutBlob is deferred to M5 (chunker.Wrapper); the method itself moves to BlobStore at M5 start (backlog ADR-TBD)",
+		errs.ErrNotImplemented)
 }
 
 // Compile-time interface conformance.

@@ -1,7 +1,6 @@
 package curator
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/rkurbatov/scrinium/agent"
@@ -132,6 +131,3 @@ func WithSnapshotConfig(cfg agent.SnapshotConfig) CuratorOption {
 func New(opts ...CuratorOption) (Curator, error) {
 	return nil, fmt.Errorf("%w: curator.New", errs.ErrNotImplemented)
 }
-
-// Compile-time sanity: context is imported and used.
-var _ context.Context = context.Background()

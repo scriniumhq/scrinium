@@ -1,7 +1,6 @@
 package sqlite
 
 import (
-	"errors"
 	"strings"
 	"time"
 
@@ -60,8 +59,13 @@ type busyError struct {
 
 func (e *busyError) Error() string { return errs.ErrLeaseHeld.Error() + ": " + e.cause.Error() }
 func (e *busyError) Unwrap() error { return e.cause }
+
+// Is reports whether target is the ErrLeaseHeld sentinel. Direct
+// comparison rather than errors.Is recursion: by contract target
+// is the leaf sentinel the caller is matching against, and the
+// outer errors.Is call already walked the tree before invoking us.
 func (e *busyError) Is(target error) bool {
-	return errors.Is(target, errs.ErrLeaseHeld)
+	return target == errs.ErrLeaseHeld
 }
 
 // emitContention publishes index.contention_error if a contention

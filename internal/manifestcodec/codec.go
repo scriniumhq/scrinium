@@ -40,6 +40,18 @@ import (
 	"github.com/rkurbatov/scrinium/errs"
 )
 
+// KeyProvider is the minimum slice of core.KeyResolver that
+// DecodeFileEncrypted needs. Defining it locally lets manifestcodec
+// stay independent of core (the package DAG is core ←
+// manifestcodec, not the other way).
+//
+// Production callers pass a *core.KeyResolver, which satisfies
+// this interface implicitly. Tests can substitute a hand-rolled
+// resolver.
+type KeyProvider interface {
+	GetKeys(keyID string) ([][]byte, error)
+}
+
 // EncodeFile produces the full file bytes (header + body) for a
 // manifest in JSON Plain format.
 //
