@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/core/internal/manifestcrypto"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/manifestcrypto"
 )
 
 // freshDEK returns a 32-byte DEK from crypto/rand. Each test
