@@ -150,6 +150,20 @@ else
 	SCRINIUM_SMOKE=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./core/
 endif
 
+# Encrypted smoke: round-trip on a Store with Envelope manifests.
+# Smaller default N than `make smoke` (10k vs 100k) — encrypted
+# Put adds AES-GCM overhead per manifest, so the run-time-per-
+# artifact is meaningfully higher; 10k is enough to demonstrate
+# stability without dragging the local feedback loop. Override
+# with N=... for stress runs.
+.PHONY: smoke-encrypted
+smoke-encrypted:
+ifdef N
+	SCRINIUM_SMOKE_ENCRYPTED=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./core/
+else
+	SCRINIUM_SMOKE_ENCRYPTED=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./core/
+endif
+
 # --- Fuzzing ---
 #
 # Two distinct flows:
