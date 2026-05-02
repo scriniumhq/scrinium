@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -92,6 +91,12 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 		return nil, fmt.Errorf("core.ConfigHistory: %w", err)
 	}
 
+	// WalkSystem yields manifest rows from the index — namespace,
+	// CreatedAt, ArtifactID — but NOT the inline payload (which
+	// lives only in the manifest file on disk; the index has no
+	// column for it). Each entry therefore needs a second hop:
+	// load the manifest file for its ArtifactID and unmarshal the
+	// embedded StoreConfig payload.
 	type entry struct {
 		id        domain.ArtifactID
 		cfg       domain.StoreConfig
@@ -99,11 +104,8 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 	}
 	var entries []entry
 	walkErr := s.WalkSystem(ctx, domain.NamespaceSystemConfig, func(m domain.Manifest) error {
-		if m.LayoutHeader.BlobStorage != domain.LayoutInline {
-			return nil
-		}
-		var cfg domain.StoreConfig
-		if err := json.Unmarshal(m.InlineBlob, &cfg); err != nil {
+		cfg, err := loadSystemConfigByID(ctx, s.drv, s.hashes, m.ArtifactID)
+		if err != nil {
 			return fmt.Errorf("decode %s: %w", m.ArtifactID, err)
 		}
 		entries = append(entries, entry{

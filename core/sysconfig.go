@@ -73,7 +73,20 @@ func readSystemConfig(
 	if err != nil {
 		return domain.StoreConfig{}, err
 	}
+	return loadSystemConfigByID(ctx, drv, hashes, id)
+}
 
+// loadSystemConfigByID reads the system.config artifact by its
+// ArtifactID and returns the decoded StoreConfig. Bypasses the
+// system.config/current pointer — used by ConfigHistory, which
+// has the IDs from WalkSystem already, and reused by the active
+// reader on top of readSystemConfigPointer.
+func loadSystemConfigByID(
+	ctx context.Context,
+	drv driver.Driver,
+	hashes domain.HashRegistry,
+	id domain.ArtifactID,
+) (domain.StoreConfig, error) {
 	manifestPath, err := blobpath.ManifestPath(id)
 	if err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("%w: %v", errs.ErrCorruptedConfigPointer, err)
