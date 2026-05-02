@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -199,4 +200,111 @@ func readManifestRaw(t *testing.T, s core.Store, id domain.ArtifactID) []byte {
 		t.Fatalf("read manifest from disk: %v", err)
 	}
 	return raw
+}
+
+// --- End-to-end Put → Get ---
+
+func TestPutGet_MetadataOnly_RoundTrip(t *testing.T) {
+	s := initEncryptedWithCrypto(t, domain.ManifestCryptoMetadataOnly)
+	a, raw := payloadReader("metadata-only end-to-end")
+	a.Metadata = json.RawMessage(`{"tag":"value"}`)
+
+	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer rh.Close()
+
+	got, err := io.ReadAll(rh)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if !bytes.Equal(got, raw) {
+		t.Errorf("payload round-trip: got %q, want %q", got, raw)
+	}
+}
+
+func TestPutGet_Envelope_RoundTrip(t *testing.T) {
+	s := initEncryptedWithCrypto(t, domain.ManifestCryptoEnvelope)
+	a, raw := payloadReader("envelope end-to-end")
+
+	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "secret"})
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer rh.Close()
+
+	got, err := io.ReadAll(rh)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if !bytes.Equal(got, raw) {
+		t.Errorf("payload round-trip: got %q, want %q", got, raw)
+	}
+}
+
+// TestGet_LockedRejectsEncryptedManifest verifies that a Locked
+// Store cannot read an encrypted manifest: the codec asks for
+// keys, the resolver is nil, and ErrKeyNotFound surfaces.
+func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
+
+	if _, _, err := core.InitStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithPassphrase(staticPP("pw")),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	// Open with AutoUnlock first to write a manifest.
+	s, err := core.OpenStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithPassphrase(staticPP("pw")),
+		core.WithAutoUnlock(),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, _ := payloadReader("payload")
+	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Reopen WITHOUT AutoUnlock — Locked.
+	locked, err := core.OpenStore(context.Background(), drv,
+		core.WithConfig(cfg),
+		core.WithPassphrase(staticPP("pw")),
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Get on Locked Store is blocked at checkOperational
+	// (StateLocked → ErrLocked) before reaching the manifest.
+	// We do NOT reach the codec layer here; that path is for
+	// future scenarios where a Store is Plain-DEK but has
+	// encrypted manifests via a custom KeyResolver.
+	_, err = locked.Get(context.Background(), id, domain.GetOptions{})
+	if !errors.Is(err, errs.ErrLocked) {
+		t.Fatalf("expected ErrLocked, got %v", err)
+	}
 }

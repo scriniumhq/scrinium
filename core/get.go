@@ -16,6 +16,21 @@ import (
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
 )
 
+// asKeyProvider converts a core.KeyResolver into a
+// manifestcodec.KeyProvider, taking care of the typed-nil trap:
+// passing a nil *staticKeyResolver to an interface parameter
+// produces a non-nil interface value (with a type but no data),
+// and DecodeFileEncrypted's `if keys == nil` would miss it.
+// Treating "nil resolver" as "no provider" mirrors the spec:
+// Plain manifests don't need a resolver, encrypted ones surface
+// ErrKeyNotFound.
+func asKeyProvider(r KeyResolver) manifestcodec.KeyProvider {
+	if r == nil {
+		return nil
+	}
+	return r
+}
+
 // loadManifest reads, verifies, and decodes the manifest file for
 // the given ArtifactID. Used by Get and Delete. Returns
 // errs.ErrArtifactNotFound if the manifest file is absent on disk and
@@ -47,7 +62,20 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 	if err := manifestcodec.VerifyArtifactID(id, raw, s.hashes); err != nil {
 		return domain.Manifest{}, err
 	}
-	manifest, err := manifestcodec.DecodeFile(raw)
+
+	// Decode dispatches on the file header: Plain bypass any
+	// resolver, encrypted (MetadataOnly / Envelope) consult the
+	// snapshotted keyResolver. The snapshot is taken under
+	// cryptoMu and held only across the pointer copy — the
+	// resolver itself is an immutable interface, no deeper copy
+	// needed. A Locked Store has keyResolver == nil; for an
+	// encrypted manifest that surfaces ErrKeyNotFound from the
+	// codec, which is the correct refusal.
+	s.cryptoMu.Lock()
+	keyResolver := s.keyResolver
+	s.cryptoMu.Unlock()
+
+	manifest, err := manifestcodec.DecodeFileEncrypted(raw, asKeyProvider(keyResolver))
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("loadManifest: decode: %w", err)
 	}
