@@ -2,15 +2,20 @@
 // according to docs/2. Internals/07 §7.1 (file header) and §7.5
 // (deterministic body encoding).
 //
-// File layout for the formats this package handles:
+// File layout per §7.1:
 //
-//	[0..3]   magic: \x00SC1 (JSON)
-//	[4]      crypto flag: 0x00 (Plain)
-//	[5..]    body (deterministic JSON)
+//	[0..3]      magic: \x00SC1 (JSON), \x00SC2 (Binary, deferred)
+//	[4]         crypto flag: 0x00 Plain, 0x01 MetadataOnly, 0x02 Envelope
+//	if crypto != 0x00:
+//	  [5]       KeyID length L (0..255)
+//	  [6..6+L]  KeyID bytes (UTF-8; absent when L == 0)
+//	[...]       body
 //
-// MetadataOnly and Envelope crypto flags, plus the binary (\x00SC2,
-// MsgPack) magic, are deferred to M2 and return ErrUnsupportedCrypto
-// / ErrUnsupportedEncoding from this package.
+// Currently:
+//   - JSON Plain is fully supported.
+//   - JSON MetadataOnly and Envelope: header is parsed and
+//     written, body encryption arrives in M2.3.2/M2.3.3.
+//   - Binary (\x00SC2, MsgPack) returns ErrUnsupportedEncoding.
 //
 // ArtifactID is the hash of the *entire file bytes*, header
 // included. The package exposes Encode/Decode that work on the
@@ -30,6 +35,7 @@ import (
 	"hash"
 	"sort"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
@@ -58,6 +64,176 @@ const SchemaVersion = 1
 // errs.ErrUnsupportedCrypto) live in the errs package — see
 // errs/forward_compat.go.
 
+// fileHeader describes the parsed/produced header fields of a
+// manifest file. The struct is internal to this package; callers
+// pass equivalent information through EncodeFile arguments and
+// receive it back from DecodeFile via the populated Manifest.
+type fileHeader struct {
+	Encoding domain.ManifestEncoding
+	Crypto   domain.ManifestCrypto
+	KeyID    string
+}
+
+// writeHeader serialises h to its on-disk representation per §7.1.
+//
+// Layout:
+//   - 4 bytes magic
+//   - 1 byte crypto flag
+//   - if crypto != Plain:
+//     1 byte KeyID length L (0..255)
+//     L bytes KeyID
+//
+// Returns ErrUnsupportedEncoding for unknown encodings,
+// ErrUnsupportedCrypto for unknown crypto modes, and a wrapped
+// error when the KeyID exceeds MaxKeyIDLength bytes.
+func writeHeader(h fileHeader) ([]byte, error) {
+	magic, err := encodingMagic(h.Encoding)
+	if err != nil {
+		return nil, err
+	}
+	flag, err := cryptoFlag(h.Crypto)
+	if err != nil {
+		return nil, err
+	}
+
+	// Plain: no KeyID at all, regardless of what the caller put
+	// into h.KeyID. The §7.1 layout for Plain is fixed at 5 bytes
+	// — silently ignoring a misplaced KeyID would be the wrong
+	// kind of forgiving.
+	if flag == cryptoPlain {
+		if h.KeyID != "" {
+			return nil, fmt.Errorf("manifestcodec: KeyID set under Plain crypto")
+		}
+		out := make([]byte, 0, 5)
+		out = append(out, magic...)
+		out = append(out, flag)
+		return out, nil
+	}
+
+	// Encrypted modes: KeyID length byte plus KeyID bytes.
+	if len(h.KeyID) > domain.MaxKeyIDLength {
+		return nil, fmt.Errorf("manifestcodec: KeyID too long (%d bytes, max %d)",
+			len(h.KeyID), domain.MaxKeyIDLength)
+	}
+	if !utf8.ValidString(h.KeyID) {
+		return nil, fmt.Errorf("manifestcodec: KeyID not valid UTF-8")
+	}
+
+	out := make([]byte, 0, 6+len(h.KeyID))
+	out = append(out, magic...)
+	out = append(out, flag)
+	out = append(out, byte(len(h.KeyID)))
+	out = append(out, []byte(h.KeyID)...)
+	return out, nil
+}
+
+// readHeader parses the leading bytes of a manifest file. Returns
+// the parsed header and the offset where the body begins.
+//
+// Errors:
+//   - ErrUnsupportedEncoding when magic is the binary variant
+//     (\x00SC2) — we do not support it yet but the constant is
+//     reserved.
+//   - ErrUnsupportedCrypto when the crypto flag is outside the
+//     three known values (0x00, 0x01, 0x02).
+//   - A plain parse error for missing-magic, truncated-header,
+//     or invalid-UTF-8 KeyID conditions. These are not
+//     ErrCorruptedManifest because that sentinel is reserved
+//     for ArtifactID-mismatch (a stronger statement); the
+//     caller decides how to surface a header-level malformation.
+func readHeader(data []byte) (fileHeader, int, error) {
+	if len(data) < 5 {
+		return fileHeader{}, 0, fmt.Errorf("manifestcodec: file too short (%d bytes)", len(data))
+	}
+
+	enc, err := magicEncoding(data[:4])
+	if err != nil {
+		return fileHeader{}, 0, err
+	}
+
+	crypto, err := cryptoFromFlag(data[4])
+	if err != nil {
+		return fileHeader{}, 0, err
+	}
+
+	if crypto == domain.ManifestCryptoPlain {
+		return fileHeader{Encoding: enc, Crypto: crypto}, 5, nil
+	}
+
+	// Encrypted: read KeyID length and KeyID bytes.
+	if len(data) < 6 {
+		return fileHeader{}, 0, fmt.Errorf("manifestcodec: file truncated before KeyID length")
+	}
+	keyIDLen := int(data[5])
+	headerEnd := 6 + keyIDLen
+	if len(data) < headerEnd {
+		return fileHeader{}, 0, fmt.Errorf("manifestcodec: file truncated inside KeyID (need %d bytes, have %d)",
+			headerEnd, len(data))
+	}
+
+	keyID := string(data[6:headerEnd])
+	if !utf8.ValidString(keyID) {
+		return fileHeader{}, 0, fmt.Errorf("manifestcodec: KeyID is not valid UTF-8")
+	}
+
+	return fileHeader{Encoding: enc, Crypto: crypto, KeyID: keyID}, headerEnd, nil
+}
+
+// encodingMagic returns the 4-byte magic for the given encoding.
+// Empty encoding maps to JSON (the default).
+func encodingMagic(enc domain.ManifestEncoding) ([]byte, error) {
+	switch enc {
+	case "", domain.ManifestEncodingJSON:
+		return magicJSON, nil
+	case domain.ManifestEncodingBinary:
+		return nil, errs.ErrUnsupportedEncoding
+	default:
+		return nil, errs.ErrUnsupportedEncoding
+	}
+}
+
+// magicEncoding is the inverse of encodingMagic: matches the four
+// leading bytes against known magics.
+func magicEncoding(magic []byte) (domain.ManifestEncoding, error) {
+	switch {
+	case bytes.Equal(magic, magicJSON):
+		return domain.ManifestEncodingJSON, nil
+	case bytes.Equal(magic, magicBinary):
+		return "", errs.ErrUnsupportedEncoding
+	default:
+		return "", fmt.Errorf("manifestcodec: unknown magic %x", magic)
+	}
+}
+
+// cryptoFlag maps a domain ManifestCrypto value to its on-disk
+// byte. Unknown values surface ErrUnsupportedCrypto.
+func cryptoFlag(c domain.ManifestCrypto) (byte, error) {
+	switch c {
+	case "", domain.ManifestCryptoPlain:
+		return cryptoPlain, nil
+	case domain.ManifestCryptoMetadataOnly:
+		return cryptoMetadataOnly, nil
+	case domain.ManifestCryptoEnvelope:
+		return cryptoEnvelope, nil
+	default:
+		return 0, errs.ErrUnsupportedCrypto
+	}
+}
+
+// cryptoFromFlag is the inverse of cryptoFlag.
+func cryptoFromFlag(flag byte) (domain.ManifestCrypto, error) {
+	switch flag {
+	case cryptoPlain:
+		return domain.ManifestCryptoPlain, nil
+	case cryptoMetadataOnly:
+		return domain.ManifestCryptoMetadataOnly, nil
+	case cryptoEnvelope:
+		return domain.ManifestCryptoEnvelope, nil
+	default:
+		return "", errs.ErrUnsupportedCrypto
+	}
+}
+
 // EncodeFile produces the full file bytes (header + body) for a
 // manifest in JSON Plain format.
 //
@@ -73,11 +249,21 @@ const SchemaVersion = 1
 // re-encoding after ID assignment, and for round-trip verification
 // in Verify.
 func EncodeFile(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.ManifestCrypto) ([]byte, error) {
-	if encoding != domain.ManifestEncodingJSON && encoding != "" {
-		return nil, errs.ErrUnsupportedEncoding
-	}
-	if crypto != domain.ManifestCryptoPlain && crypto != "" {
+	// Header-only: M2.3.1 produces the §7.1 header for any
+	// crypto mode but still emits the body as plain JSON. Real
+	// body encryption arrives in M2.3.3 through a separate
+	// signature (EncodeFileEncrypted). Until then, MetadataOnly
+	// and Envelope produce headers that announce encryption but
+	// carry plaintext bodies — useful only for header-level tests.
+	// Public callers that pass non-Plain crypto here get
+	// ErrUnsupportedCrypto, preserving the M1.4 behaviour.
+	if crypto != "" && crypto != domain.ManifestCryptoPlain {
 		return nil, errs.ErrUnsupportedCrypto
+	}
+
+	header, err := writeHeader(fileHeader{Encoding: encoding, Crypto: crypto})
+	if err != nil {
+		return nil, err
 	}
 
 	body, err := marshalBodyJSON(m)
@@ -85,9 +271,8 @@ func EncodeFile(m domain.Manifest, encoding domain.ManifestEncoding, crypto doma
 		return nil, err
 	}
 
-	out := make([]byte, 0, len(magicJSON)+1+len(body))
-	out = append(out, magicJSON...)
-	out = append(out, cryptoPlain)
+	out := make([]byte, 0, len(header)+len(body))
+	out = append(out, header...)
 	out = append(out, body...)
 	if len(out) > domain.MaxManifestSize {
 		return nil, errs.ErrManifestTooLarge
@@ -105,24 +290,19 @@ func EncodeFile(m domain.Manifest, encoding domain.ManifestEncoding, crypto doma
 // errs.ErrUnsupportedEncoding; an unknown magic returns a parse
 // error. Crypto flag != Plain returns errs.ErrUnsupportedCrypto.
 func DecodeFile(data []byte) (domain.Manifest, error) {
-	if len(data) < 5 {
-		return domain.Manifest{}, fmt.Errorf("manifestcodec: file too short (%d bytes)", len(data))
-	}
-	switch {
-	case bytes.HasPrefix(data, magicJSON):
-		// OK
-	case bytes.HasPrefix(data, magicBinary):
-		return domain.Manifest{}, errs.ErrUnsupportedEncoding
-	default:
-		return domain.Manifest{}, fmt.Errorf("manifestcodec: unknown magic %x", data[:4])
+	header, bodyOffset, err := readHeader(data)
+	if err != nil {
+		return domain.Manifest{}, err
 	}
 
-	flag := data[4]
-	if flag != cryptoPlain {
+	// M2.3.1 reads any header but only knows how to interpret a
+	// plain body. Encrypted bodies are forwarded to a different
+	// entry point (DecodeFileEncrypted) that lands with M2.3.3.
+	if header.Crypto != domain.ManifestCryptoPlain {
 		return domain.Manifest{}, errs.ErrUnsupportedCrypto
 	}
 
-	return unmarshalBodyJSON(data[5:])
+	return unmarshalBodyJSON(data[bodyOffset:])
 }
 
 // ComputeArtifactID encodes a manifest, hashes the resulting bytes

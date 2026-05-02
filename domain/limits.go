@@ -9,9 +9,9 @@ import "time"
 //
 // Keep this file in sync with the spec table. Constants are
 // added here only after the corresponding check is wired up;
-// reserved limits (KeyID, InlineBlobLimit, RetentionPeriod,
-// TOC chunk count) will land alongside their enforcement in
-// later milestones.
+// reserved limits (InlineBlobLimit, RetentionPeriod, TOC chunk
+// count) will land alongside their enforcement in later
+// milestones.
 
 // MaxNamespaceLen is the maximum byte length of Namespace.
 // Returns errs.ErrNamespaceTooLong when exceeded.
@@ -22,6 +22,14 @@ const MaxNamespaceLen = 255
 // Returns errs.ErrSessionIDTooLong when exceeded.
 // Standard FS/DB name limit.
 const MaxSessionIDLen = 255
+
+// MaxKeyIDLength is the upper bound on KeyID byte length in the
+// manifest file header per §7.1. The KeyID-length byte is one
+// octet, so the KeyID itself can be at most 255 bytes; producers
+// that hit the limit must shorten the identifier or prefix-hash
+// it externally. Returns a wrapped error from manifestcodec when
+// exceeded.
+const MaxKeyIDLength = 255
 
 // MaxMetadataSize is the maximum byte size of the Manifest
 // Metadata block. 64 KiB.

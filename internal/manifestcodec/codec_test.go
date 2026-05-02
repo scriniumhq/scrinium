@@ -219,7 +219,11 @@ func TestDecodeFile_RejectsBinaryMagic(t *testing.T) {
 }
 
 func TestDecodeFile_RejectsEnvelopeFlag(t *testing.T) {
-	bad := []byte{0x00, 'S', 'C', '1', 0x02, '{', '}'}
+	// Well-formed Envelope header (default-key, no KeyID) followed
+	// by bytes that would be the encrypted body. M2.3.1 parses the
+	// header and refuses any non-Plain crypto at the body decode
+	// step, before touching the body.
+	bad := []byte{0x00, 'S', 'C', '1', 0x02, 0x00, '{', '}'}
 	_, err := manifestcodec.DecodeFile(bad)
 	if !errors.Is(err, errs.ErrUnsupportedCrypto) {
 		t.Fatalf("expected errs.ErrUnsupportedCrypto, got %v", err)
