@@ -39,10 +39,7 @@ import (
 // Crash between (4) and (5) leaves an on-disk manifest with no
 // index row. RebuildIndexAgent (TODO M3.4) is the recovery path.
 func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := s.checkWritable(); err != nil {
+	if err := s.enterWrite(ctx); err != nil {
 		return err
 	}
 
@@ -52,17 +49,8 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	}
 
 	// Type dispatch.
-	switch manifest.Type {
-	case domain.ManifestTypeBlob:
-		// continue below
-	case domain.ManifestTypeTOC:
-		return fmt.Errorf("core.Delete: ManifestTypeTOC deferred to M5")
-	case domain.ManifestTypePack:
-		// Pack manifests are engine-internal; clients cannot see
-		// them, so deletion is reported as "no such artifact".
-		return errs.ErrArtifactNotFound
-	default:
-		return fmt.Errorf("core.Delete: unknown manifest type %q", manifest.Type)
+	if err := dispatchManifestType(manifest, "core.Delete"); err != nil {
+		return err
 	}
 
 	// Retention precedes policy: §2.2 explicitly orders these.
@@ -86,14 +74,14 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	// future-compatible empty list rather than special-casing.
 	var blobRefs []string
 	switch manifest.LayoutHeader.BlobStorage {
-	case "Inline":
+	case domain.LayoutInline:
 		// no blobs row — leave blobRefs empty
-	case "Target":
+	case domain.LayoutTarget:
 		if manifest.BlobRef == "" {
 			return fmt.Errorf("core.Delete: Target manifest %q has empty BlobRef", id)
 		}
 		blobRefs = []string{string(manifest.BlobRef)}
-	case "ExternalRef":
+	case domain.LayoutExternalRef:
 		// no blobs row by design (§2.2)
 	default:
 		return fmt.Errorf("core.Delete: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)

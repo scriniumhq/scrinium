@@ -104,12 +104,7 @@ func TestInitStore_RequiresStoreIndex(t *testing.T) {
 
 func TestInitStore_AlreadyExists(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatalf("first InitStore: %v", err)
-	}
+	storefx.InitPlainOn(t, drv)
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithStoreIndex(indexfx.Memory(t)),
 		core.WithHashRegistry(storefx.Hashes()),
@@ -121,12 +116,7 @@ func TestInitStore_AlreadyExists(t *testing.T) {
 
 func TestInitStore_ForceReinit(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatalf("first InitStore: %v", err)
-	}
+	storefx.InitPlainOn(t, drv)
 	desc1, _ := descriptor.Read(context.Background(), drv)
 	id1 := desc1.StoreID
 
@@ -318,10 +308,7 @@ func TestOpenStore_NilDriver(t *testing.T) {
 
 func TestOpenStore_FreshLocation_NotFound(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	_, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	_, err := storefx.TryOpenOn(t, drv)
 	if !errors.Is(err, errs.ErrStoreNotFound) {
 		t.Fatalf("expected errs.ErrStoreNotFound, got %v", err)
 	}
@@ -333,10 +320,7 @@ func TestOpenStore_CorruptedDescriptor(t *testing.T) {
 		strings.NewReader(`{not json`)); err != nil {
 		t.Fatal(err)
 	}
-	_, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	_, err := storefx.TryOpenOn(t, drv)
 	if !errors.Is(err, errs.ErrStoreCorrupted) {
 		t.Fatalf("expected errs.ErrStoreCorrupted, got %v", err)
 	}
@@ -345,12 +329,7 @@ func TestOpenStore_CorruptedDescriptor(t *testing.T) {
 func TestOpenStore_RequiresStoreIndex(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	// Init first so the descriptor is in place.
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 	_, err := core.OpenStore(context.Background(), drv)
 	if err == nil {
 		t.Fatal("expected error when WithStoreIndex is not provided")
@@ -380,10 +359,7 @@ func TestOpenStore_NoConfig_Succeeds(t *testing.T) {
 	}
 
 	// Open without WithConfig — legitimate diagnostic-style open.
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	s, err := storefx.TryOpenOn(t, drv)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -555,7 +531,7 @@ func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
 
 			if _, _, err := core.InitStore(context.Background(), drv,
 				core.WithConfig(cfg),
-				core.WithPassphrase(staticPassphraseProvider("pw")),
+				core.WithPassphrase(storefx.StaticPP("pw")),
 				core.WithStoreIndex(idx),
 				core.WithHashRegistry(storefx.Hashes()),
 			); err != nil {
@@ -564,7 +540,7 @@ func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
 
 			s, err := core.OpenStore(context.Background(), drv,
 				core.WithConfig(cfg),
-				core.WithPassphrase(staticPassphraseProvider("pw")),
+				core.WithPassphrase(storefx.StaticPP("pw")),
 				core.WithAutoUnlock(),
 				core.WithStoreIndex(idx),
 				core.WithHashRegistry(storefx.Hashes()),
@@ -597,10 +573,7 @@ func TestOpenStore_RestoresImmutableConfigFromSystemConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	s, err := storefx.TryOpenOn(t, drv)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -612,20 +585,11 @@ func TestOpenStore_RestoresImmutableConfigFromSystemConfig(t *testing.T) {
 
 // --- Encrypted Store init (M2.2) ---
 
-// staticPassphraseProvider returns a fixed passphrase regardless
-// of hint. Used in tests to keep the surface narrow; real callers
-// would prompt the user.
-func staticPassphraseProvider(pass string) core.PassphraseProvider {
-	return func(_ context.Context, _ core.PassphraseHint) ([]byte, error) {
-		return []byte(pass), nil
-	}
-}
-
 func TestInitStore_WithPassphrase_ReturnsRecoveryKit(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 
 	s, kit, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPassphraseProvider("hunter2")),
+		core.WithPassphrase(storefx.StaticPP("hunter2")),
 		core.WithStoreIndex(indexfx.Memory(t)),
 		core.WithHashRegistry(storefx.Hashes()),
 	)
@@ -642,13 +606,7 @@ func TestInitStore_WithPassphrase_ReturnsRecoveryKit(t *testing.T) {
 
 func TestInitStore_WithPassphrase_DescriptorIsEncrypted(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPassphraseProvider("hunter2")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitEncryptedOn(t, drv, "hunter2")
 
 	desc, err := descriptor.Read(context.Background(), drv)
 	if err != nil {
@@ -674,7 +632,7 @@ func TestInitStore_WithPassphrase_DescriptorIsEncrypted(t *testing.T) {
 func TestInitStore_WithPassphrase_RecoveryKitIsValid(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	_, kit, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPassphraseProvider("hunter2")),
+		core.WithPassphrase(storefx.StaticPP("hunter2")),
 		core.WithStoreIndex(indexfx.Memory(t)),
 		core.WithHashRegistry(storefx.Hashes()),
 	)
@@ -705,7 +663,7 @@ func TestInitStore_WithPassphrase_RecoveryKitIsValid(t *testing.T) {
 func TestInitStore_WithPassphrase_KitMatchesDescriptor(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	_, kit, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPassphraseProvider("hunter2")),
+		core.WithPassphrase(storefx.StaticPP("hunter2")),
 		core.WithStoreIndex(indexfx.Memory(t)),
 		core.WithHashRegistry(storefx.Hashes()),
 	)
@@ -739,12 +697,7 @@ func TestInitStore_WithPassphrase_KitMatchesDescriptor(t *testing.T) {
 // existing DEK, no key generation needed.
 func TestInitStore_PlainGeneratesPlaintextDEK(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 
 	desc, _ := descriptor.Read(context.Background(), drv)
 	if desc.DEKEncrypted {
@@ -834,7 +787,7 @@ func TestInitStore_KDFParamsOverride(t *testing.T) {
 	cfg := domain.StoreConfig{KDFParams: cost}
 	_, _, err := core.InitStore(context.Background(), drv,
 		core.WithConfig(cfg),
-		core.WithPassphrase(staticPassphraseProvider("pw")),
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithStoreIndex(indexfx.Memory(t)),
 		core.WithHashRegistry(storefx.Hashes()),
 	)
@@ -859,13 +812,7 @@ func TestInitStore_KDFParamsOverride(t *testing.T) {
 // ReadReplica is the simplest check.
 func TestInitStore_WritesL1Replica(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPassphraseProvider("pw")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitEncryptedOn(t, drv, "pw")
 
 	d, status, err := descriptor.ReadReplica(context.Background(), drv, descriptor.BackupPath)
 	if err != nil {

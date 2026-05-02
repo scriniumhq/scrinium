@@ -111,3 +111,25 @@ func TestNewStore_FutureSchemaRejected(t *testing.T) {
 		t.Fatalf("expected errs.ErrIndexSchemaMismatch, got %v", err)
 	}
 }
+
+// TestClose_Idempotent locks in the StoreIndex contract that
+// Close is safe to call repeatedly: database/sql.DB.Close itself
+// errors on the second call, so the implementation funnels through
+// sync.Once. A regression here would surface as a flaky cleanup
+// failure under t.Cleanup-driven double-close.
+func TestClose_Idempotent(t *testing.T) {
+	idx, err := NewStore(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	if err := idx.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	if err := idx.Close(); err != nil {
+		t.Errorf("second Close: %v", err)
+	}
+	// Third Close, just to be loud about it.
+	if err := idx.Close(); err != nil {
+		t.Errorf("third Close: %v", err)
+	}
+}

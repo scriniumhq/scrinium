@@ -67,7 +67,7 @@ func (i *Index) ListByNamespace(
 	var rows *sql.Rows
 	var err error
 	switch ns {
-	case "*":
+	case domain.NamespaceWildcard:
 		rows, err = i.db.QueryContext(ctx, queryAny, string(domain.ManifestTypePack))
 	case "":
 		rows, err = i.db.QueryContext(ctx, queryDefault, string(domain.ManifestTypePack))
@@ -131,23 +131,7 @@ func (i *Index) ListOrphanBlobs(
 		return classifyError(err)
 	}
 	defer rows.Close()
-
-	for rows.Next() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		var ref string
-		if err := rows.Scan(&ref); err != nil {
-			return err
-		}
-		if cbErr := cb(ref); cbErr != nil {
-			if errors.Is(cbErr, errs.ErrStopWalk) {
-				return nil
-			}
-			return cbErr
-		}
-	}
-	return classifyError(rows.Err())
+	return iterateBlobRefRows(ctx, rows, cb)
 }
 
 // ListUnverified iterates over blobs whose last_verified_at is
@@ -175,23 +159,7 @@ func (i *Index) ListUnverified(ctx context.Context, before time.Time, cb func(bl
 		return classifyError(err)
 	}
 	defer rows.Close()
-
-	for rows.Next() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		var ref string
-		if err := rows.Scan(&ref); err != nil {
-			return err
-		}
-		if cbErr := cb(ref); cbErr != nil {
-			if errors.Is(cbErr, errs.ErrStopWalk) {
-				return nil
-			}
-			return cbErr
-		}
-	}
-	return classifyError(rows.Err())
+	return iterateBlobRefRows(ctx, rows, cb)
 }
 
 // iterateManifestRows is the shared cursor loop for callbacks that
@@ -212,6 +180,34 @@ func iterateManifestRows(
 			return fmt.Errorf("sqlite: scan manifest: %w", err)
 		}
 		if cbErr := cb(m); cbErr != nil {
+			if errors.Is(cbErr, errs.ErrStopWalk) {
+				return nil
+			}
+			return cbErr
+		}
+	}
+	return classifyError(rows.Err())
+}
+
+// iterateBlobRefRows is the shared cursor loop for callbacks that
+// take a single blob_ref string. ListOrphanBlobs and ListUnverified
+// share this; M3.4 (RebuildIndexAgent) and any future "list blobs
+// by predicate" method drop in here too — the differentiation is
+// in the SELECT, not in the iteration.
+func iterateBlobRefRows(
+	ctx context.Context,
+	rows *sql.Rows,
+	cb func(blobRef string) error,
+) error {
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var ref string
+		if err := rows.Scan(&ref); err != nil {
+			return err
+		}
+		if cbErr := cb(ref); cbErr != nil {
 			if errors.Is(cbErr, errs.ErrStopWalk) {
 				return nil
 			}

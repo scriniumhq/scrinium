@@ -42,7 +42,5 @@ func Disk(t testing.TB, path string) core.StoreIndex {
 
 func registerClose(t testing.TB, idx core.StoreIndex) {
 	t.Helper()
-	if c, ok := idx.(interface{ Close() error }); ok {
-		t.Cleanup(func() { _ = c.Close() })
-	}
+	t.Cleanup(func() { _ = idx.Close() })
 }

@@ -2,10 +2,8 @@ package core
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
@@ -78,232 +76,6 @@ type store struct {
 	passphraseProvider PassphraseProvider
 }
 
-// State returns the current state of the Store. Cheap and
-// lock-free for readers (RWMutex read).
-func (s *store) State() domain.StoreState {
-	s.stateMu.RLock()
-	defer s.stateMu.RUnlock()
-	return s.state
-}
-
-// Capabilities returns the underlying Driver's capability mask.
-// Stable for the lifetime of the Store; not cached because the
-// Driver is the source of truth and a future Driver may want to
-// change its mask after a runtime probe.
-func (s *store) Capabilities() driver.CapabilityMask {
-	return s.drv.Capabilities()
-}
-
-// SetMaintenanceMode transitions the Store into the requested
-// maintenance regime. Allowed transitions in M1.4 are: any → any.
-//
-// A transition into MaintenanceModeOffline blocks all subsequent
-// operations except SetMaintenanceMode itself (back to None or
-// ReadOnly) — that escape hatch is what the Offline doc-comment
-// promises. We do not enforce it through a state-machine matrix
-// here; the priority-of-checks in operation entry points covers
-// it (each method checks errs.ErrStoreOffline at its boundary).
-//
-// The transition is idempotent: setting the current mode again is
-// a no-op success.
-func (s *store) SetMaintenanceMode(ctx context.Context, mode domain.MaintenanceMode) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	switch mode {
-	case domain.MaintenanceModeNone, domain.MaintenanceModeReadOnly, domain.MaintenanceModeOffline:
-		// OK
-	default:
-		return fmt.Errorf("core.SetMaintenanceMode: invalid mode %d", mode)
-	}
-
-	s.stateMu.Lock()
-	s.maintenance = mode
-	s.stateMu.Unlock()
-
-	// EventMaintenanceModeChanged is not in core/events.go yet;
-	// when it lands (M3 alongside the GC / Scrub coordination
-	// work) we will emit here. Logging-only would create surprise
-	// state for the host; deliberate silence is the safer default.
-	return nil
-}
-
-// maintenanceMode reads the current maintenance mode under the
-// state lock. Used internally by methods that need to honour it
-// (Walk, WalkSystem do not — they are read-only — but Capacity
-// does, etc.).
-func (s *store) maintenanceMode() domain.MaintenanceMode {
-	s.stateMu.RLock()
-	defer s.stateMu.RUnlock()
-	return s.maintenance
-}
-
-// Capacity returns aggregated storage info. Best-effort in M1.4:
-//
-//   - ArtifactCount: count of user-visible manifests, sourced from
-//     the index walked with the "*" wildcard. system.* namespaces
-//     are excluded — Capacity reports what users see through Walk,
-//     not the raw on-disk manifest count.
-//   - BlobCount: physical count of files under "blobs/" via the
-//     Driver. Inline manifests carry no separate blob file and so
-//     do not appear here.
-//   - TotalBytes / UsedBytes / AvailableBytes are -1 (sentinel
-//     "unavailable"). Driver does not expose disk-free; precise
-//     byte accounting requires a full scan we do not want to do
-//     on Capacity. Real numbers arrive in M2 once StoreIndex
-//     grows a sized-summary method.
-//
-// The method honours ctx cancellation between the two operations.
-// Offline Stores reject Capacity (operators can still inspect
-// through State / Capabilities).
-func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
-	if err := ctx.Err(); err != nil {
-		return domain.StorageInfo{}, err
-	}
-	if s.maintenanceMode() == domain.MaintenanceModeOffline {
-		return domain.StorageInfo{}, errs.ErrStoreOffline
-	}
-
-	out := domain.StorageInfo{
-		TotalBytes:     -1,
-		UsedBytes:      -1,
-		AvailableBytes: -1,
-	}
-
-	// ArtifactCount: count of user-visible manifests. Walks the
-	// index with the "*" wildcard, which already excludes system.*
-	// namespaces (see index/sqlite ListByNamespace queryAny), so
-	// system.config and the future system.state writers do not
-	// inflate user-facing storage stats.
-	var artifactCount int64
-	if err := s.index.ListByNamespace(ctx, "*", func(domain.Manifest) error {
-		artifactCount++
-		return nil
-	}); err != nil {
-		return domain.StorageInfo{}, fmt.Errorf("core.Capacity: count manifests: %w", err)
-	}
-	out.ArtifactCount = artifactCount
-
-	if err := ctx.Err(); err != nil {
-		return domain.StorageInfo{}, err
-	}
-
-	// BlobCount: physical blobs/ count. Inline manifests (system.*
-	// artifacts in M1.4) carry no separate blob file, so they do
-	// not contribute here.
-	blobs, err := s.drv.CountObjects(ctx, "blobs")
-	if err != nil {
-		return domain.StorageInfo{}, fmt.Errorf("core.Capacity: count blobs: %w", err)
-	}
-	out.BlobCount = blobs
-
-	return out, nil
-}
-
-// Walk iterates over user manifests. See docs/4. API Reference/04
-// §4.1 for the contract; this implementation enforces the
-// namespace-syntax rules (reject system.* prefix, length limit)
-// and delegates to the StoreIndex for the actual iteration.
-//
-// Pack manifests are excluded by the index (they live in
-// packed_blobs, never in manifests). System namespaces are
-// excluded by both the index ("*" wildcard skips system.*) and by
-// us at the API surface (an explicit "system.foo" gets
-// errs.ErrReservedNamespace before the index sees it).
-func (s *store) Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := s.checkOperational(); err != nil {
-		return err
-	}
-	if err := validateUserNamespace(namespace); err != nil {
-		return err
-	}
-	return s.index.ListByNamespace(ctx, namespace, cb)
-}
-
-// WalkSystem iterates over manifests inside one of the four
-// reserved system namespaces. See docs/4. API Reference/04 §4.2.
-// Allowed namespaces: system.transit, system.manifests,
-// system.state, system.config.
-//
-// Capability-token enforcement is opt-in by docs and TBD by
-// implementation; M1.4 honours the namespace-syntax rules but
-// does not yet block calls based on token contents. Tracking:
-// 4. API Reference/01 §1.3.1 (WithCapabilityToken) and the
-// related authorisation work in M2.
-func (s *store) WalkSystem(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := s.checkOperational(); err != nil {
-		return err
-	}
-	if !isSystemNamespace(namespace) {
-		return errs.ErrReservedNamespace
-	}
-	return s.index.ListByNamespace(ctx, namespace, cb)
-}
-
-// checkOperational returns the first sentinel that blocks read or
-// write according to the priority-of-checks order documented in
-// 2. Internals/01 Topology §1.4. M1.4 does not implement the
-// Bootstrapping / Locked / Corrupted transitions yet (they arrive
-// with the crypto pipeline in M2 and the descriptor consensus in
-// M2.2), so this method handles Offline and ReadOnly only — for
-// Capacity-style cheap reads. Mutating-only checks (ReadOnly
-// blocks Put/Delete) live with those methods when they land in
-// M1.4.
-func (s *store) checkOperational() error {
-	s.stateMu.RLock()
-	state := s.state
-	mode := s.maintenance
-	s.stateMu.RUnlock()
-
-	switch state {
-	case domain.StateCorrupted:
-		return errs.ErrStoreCorrupted
-	case domain.StateLocked:
-		return errs.ErrLocked
-	case domain.StateBootstrapping:
-		return errs.ErrStoreNotReady
-	}
-	if mode == domain.MaintenanceModeOffline {
-		return errs.ErrStoreOffline
-	}
-	return nil
-}
-
-// validateUserNamespace enforces the contract of Walk's namespace
-// argument. See docs §4.1.
-func validateUserNamespace(ns string) error {
-	if len(ns) > 255 {
-		return errs.ErrNamespaceTooLong
-	}
-	// "*" and "" are valid (wildcard / default namespace). Any
-	// "system." prefix is reserved.
-	if strings.HasPrefix(ns, "system.") {
-		return errs.ErrReservedNamespace
-	}
-	return nil
-}
-
-// isSystemNamespace reports whether the given string is one of the
-// four reserved system namespace names. Wildcard ("*") and empty
-// ("") are deliberately excluded — see docs §4.2 for the
-// rationale.
-func isSystemNamespace(ns string) bool {
-	switch ns {
-	case "system.transit",
-		"system.manifests",
-		"system.state",
-		"system.config":
-		return true
-	}
-	return false
-}
-
 // AdminStore crypto methods — bodies live in core/crypto_admin.go.
 
 func (s *store) Unlock(ctx context.Context) error {
@@ -323,7 +95,7 @@ func (s *store) SetPassphrase(ctx context.Context) error {
 }
 
 func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {
-	return errors.New("core.Store.UpdateConfig: not implemented")
+	return fmt.Errorf("%w: core.Store.UpdateConfig", errs.ErrNotImplemented)
 }
 
 func (s *store) Config() domain.StoreConfig {
@@ -331,13 +103,13 @@ func (s *store) Config() domain.StoreConfig {
 }
 
 func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
-	return nil, errors.New("core.Store.ConfigHistory: not implemented")
+	return nil, fmt.Errorf("%w: core.Store.ConfigHistory", errs.ErrNotImplemented)
 }
 
 // --- DataStore: stubs implemented in M1.4 ---
 
 func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error) {
-	return "", errors.New("core.Store.PutBlob: not implemented")
+	return "", fmt.Errorf("%w: core.Store.PutBlob", errs.ErrNotImplemented)
 }
 
 // Compile-time interface conformance.

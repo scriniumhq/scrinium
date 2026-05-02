@@ -13,39 +13,24 @@ import (
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
-	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
 	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// initEncryptedWithCrypto opens an encrypted Store with the
-// requested ManifestCrypto. The Store is fully unlocked and
-// ready to Put.
+// initEncryptedWithCrypto bootstraps an encrypted Store with the
+// requested ManifestCrypto and reopens it with AutoUnlock so
+// the returned Store is ready to Put. The same WithConfig is
+// passed to Init and Open — otherwise OpenStore reports a config
+// mismatch against the persisted system.config artifact.
 func initEncryptedWithCrypto(t *testing.T, crypto domain.ManifestCrypto) core.Store {
 	t.Helper()
-	drv := driverfx.LocalFS(t)
-	idx := indexfx.Memory(t)
 	cfg := domain.StoreConfig{ManifestCrypto: crypto}
-
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
+	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
+	return r.Open(t,
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
+		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	return s
 }
 
 // payloadReader is a minimal helper for Put: returns a byte
@@ -104,31 +89,16 @@ func TestPut_Envelope_Succeeds(t *testing.T) {
 // --- Put on encrypted Store while Locked ---
 
 func TestPut_EncryptedManifestRejectedWhenLocked(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	idx := indexfx.Memory(t)
 	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
-
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 	// Open WITHOUT AutoUnlock: Store is in StateLocked.
-	s, err := core.OpenStore(context.Background(), drv,
+	s := r.Open(t,
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	a, _ := payloadReader("payload")
-	_, err = s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	_, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
 	if !errors.Is(err, errs.ErrLocked) {
 		t.Fatalf("expected ErrLocked on Put while Locked, got %v", err)
 	}
@@ -258,30 +228,15 @@ func TestPutGet_Envelope_RoundTrip(t *testing.T) {
 // Store cannot read an encrypted manifest: the codec asks for
 // keys, the resolver is nil, and ErrKeyNotFound surfaces.
 func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	idx := indexfx.Memory(t)
 	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
-
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 
 	// Open with AutoUnlock first to write a manifest.
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
+	s := r.Open(t,
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
+		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	a, _ := payloadReader("payload")
 	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
 	if err != nil {
@@ -289,15 +244,10 @@ func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
 	}
 
 	// Reopen WITHOUT AutoUnlock — Locked.
-	locked, err := core.OpenStore(context.Background(), drv,
+	locked := r.Open(t,
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Get on Locked Store is blocked at checkOperational
 	// (StateLocked → ErrLocked) before reaching the manifest.
@@ -323,29 +273,15 @@ func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
 // delete in order, observe that the blob survives until the
 // last referrer.
 func TestPutEnvelope_BlobDedupAcrossManifests(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	root := drv.Root()
-	idx := indexfx.Memory(t)
 	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
+	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
+	root := r.Root()
 
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
+	s := r.Open(t,
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
+		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	const samePayload = "envelope dedup payload"
 	ids := make([]domain.ArtifactID, 0, 3)
@@ -369,8 +305,8 @@ func TestPutEnvelope_BlobDedupAcrossManifests(t *testing.T) {
 	}
 
 	// (b) Exactly one blob file on disk — blob-level dedup.
-	blobCount := countBlobFiles(t, root)
-	if blobCount != 1 {
+	disk := storefx.OnDiskAt(root)
+	if blobCount := disk.BlobCount(); blobCount != 1 {
 		t.Errorf("after 3 Puts of the same payload, blobs/ should have 1 file, got %d", blobCount)
 	}
 
@@ -381,7 +317,7 @@ func TestPutEnvelope_BlobDedupAcrossManifests(t *testing.T) {
 	if err := s.Delete(context.Background(), ids[1]); err != nil {
 		t.Fatalf("Delete[1]: %v", err)
 	}
-	if blobCount := countBlobFiles(t, root); blobCount != 1 {
+	if blobCount := disk.BlobCount(); blobCount != 1 {
 		t.Errorf("blob should survive while one referrer remains, got %d files", blobCount)
 	}
 	// The third manifest is still readable — proves the blob
@@ -409,7 +345,7 @@ func TestPutEnvelope_BlobDedupAcrossManifests(t *testing.T) {
 			t.Errorf("Get(ids[%d]) after final Delete: expected ErrArtifactNotFound, got %v", i, err)
 		}
 	}
-	if blobCount := countBlobFiles(t, root); blobCount != 1 {
+	if blobCount := disk.BlobCount(); blobCount != 1 {
 		t.Errorf("blob should remain on disk after last Delete (GC reaps it later), got %d files",
 			blobCount)
 	}
@@ -442,18 +378,8 @@ func (r *fixedKeyIDResolver) DefaultKeyID() string { return r.keyID }
 // stops earlier — at VerifyArtifactID — and confirms the
 // stronger "ArtifactID locks the file as a whole" invariant.
 func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	idx := indexfx.Memory(t)
 	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
-
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 
 	// AutoUnlock so the engine has a DEK; then we override the
 	// auto-promoted resolver with one whose DefaultKeyID is
@@ -461,16 +387,11 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	// tamper with. The DEK has to match what the engine
 	// unwrapped — we read it indirectly through the resolver
 	// the auto-promotion installed.
-	autoOpened, err := core.OpenStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
+	autoOpened := r.Open(t,
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
+		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	auto := core.StoreKeyResolver(autoOpened)
 	keys, err := auto.GetKeys("")
 	if err != nil || len(keys) == 0 {
@@ -480,12 +401,15 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 
 	// Reopen with a custom resolver that uses the same DEK but
 	// publishes "tenant-X" as DefaultKeyID, so Put writes that
-	// KeyID into the file header.
+	// KeyID into the file header. A FRESH index is required so
+	// the engine treats this as a separate session — the auto-
+	// promoted resolver from the previous Open would otherwise
+	// take precedence.
 	fresh := indexfx.Memory(t)
 	custom := &fixedKeyIDResolver{keyID: "tenant-X", dek: dek}
-	s, err := core.OpenStore(context.Background(), drv,
+	s, err := core.OpenStore(context.Background(), r.Driver(),
 		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
 		core.WithKeyResolver(custom),
 		core.WithStoreIndex(fresh),
@@ -571,30 +495,15 @@ func (alwaysFailingResolver) DefaultKeyID() string { return "" }
 // GetKeys call. Walk must still succeed and return the expected
 // row count.
 func TestWalk_EnvelopeStoreWalksWithoutDecryption(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	idx := indexfx.Memory(t)
 	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
-
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 
 	// Phase 1: Put with the auto-promoted resolver.
-	s1, err := core.OpenStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
+	s1 := r.Open(t,
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
+		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	const n = 5
 	for i := 0; i < n; i++ {
 		a, _ := payloadReader(fmt.Sprintf("envelope payload %d", i))
@@ -605,23 +514,20 @@ func TestWalk_EnvelopeStoreWalksWithoutDecryption(t *testing.T) {
 	}
 
 	// Phase 2: reopen with a resolver that errors on every call,
-	// reusing the same Driver and a FRESH index.
+	// reusing the same Driver and the SAME idx (Reopener carries
+	// both).
 	//
 	// Note on cold-start: a freshly reopened Store with an empty
 	// index would normally trip the Orphan Scan into deleting
 	// all manifests (known gap, backlog §3.1). For this test we
-	// reuse the original idx so the manifests stay in place.
-	s2, err := core.OpenStore(context.Background(), drv,
-		core.WithConfig(cfg),
-		core.WithPassphrase(staticPP("pw")),
+	// reuse the original idx so the manifests stay in place —
+	// that is exactly what r.Open guarantees.
+	s2 := r.Open(t,
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
 		core.WithKeyResolver(alwaysFailingResolver{}),
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
+		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatalf("reopen: %v", err)
-	}
 
 	// Walk must succeed without ever consulting the resolver.
 	count := 0

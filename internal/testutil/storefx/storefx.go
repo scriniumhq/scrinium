@@ -51,6 +51,61 @@ func InitOn(t testing.TB, drv driver.Driver, opts ...core.StoreOption) core.Stor
 	return s
 }
 
+// InitEncryptedOn bootstraps an encrypted Store on a caller-provided
+// driver. A fresh in-memory index is wired up internally, then
+// discarded — the caller's intent with this helper is to seed an
+// on-disk Location and immediately exercise OpenStore against it
+// (e.g. to verify the full bootstrap path on a deliberately
+// damaged Location). For tests that want to keep using the same
+// (drv, idx) pair across init+reopen, see InitEncrypted +
+// Reopener.Open.
+func InitEncryptedOn(t testing.TB, drv driver.Driver, pass string, extra ...core.StoreOption) {
+	t.Helper()
+	opts := append([]core.StoreOption{
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithPassphrase(StaticPP(pass)),
+	}, extra...)
+	if _, _, err := core.InitStore(context.Background(), drv, append([]core.StoreOption{core.WithHashRegistry(Hashes())}, opts...)...); err != nil {
+		t.Fatalf("storefx.InitEncryptedOn: %v", err)
+	}
+}
+
+// InitPlainOn is the Plain-DEK counterpart of InitEncryptedOn:
+// bootstrap on a caller-supplied driver with a discarded index, no
+// passphrase. Use to seed a Location for subsequent OpenStore
+// scenarios that do not need a Reopener.
+func InitPlainOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) {
+	t.Helper()
+	opts := append([]core.StoreOption{core.WithStoreIndex(indexfx.Memory(t))}, extra...)
+	if _, _, err := core.InitStore(context.Background(), drv, append([]core.StoreOption{core.WithHashRegistry(Hashes())}, opts...)...); err != nil {
+		t.Fatalf("storefx.InitPlainOn: %v", err)
+	}
+}
+
+// TryOpenOn calls core.OpenStore on a caller-supplied driver with
+// a fresh in-memory index and the standard test hash registry.
+// Returns the (Store, error) pair so the caller can assert on the
+// failure mode itself — fatal-on-failure callers should use OpenOn.
+func TryOpenOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) (core.Store, error) {
+	t.Helper()
+	opts := append([]core.StoreOption{
+		core.WithStoreIndex(indexfx.Memory(t)),
+		core.WithHashRegistry(Hashes()),
+	}, extra...)
+	return core.OpenStore(context.Background(), drv, opts...)
+}
+
+// OpenOn is the fatal variant of TryOpenOn: it calls t.Fatalf when
+// OpenStore returns an error and returns just the Store on success.
+func OpenOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) core.Store {
+	t.Helper()
+	s, err := TryOpenOn(t, drv, extra...)
+	if err != nil {
+		t.Fatalf("storefx.OpenOn: %v", err)
+	}
+	return s
+}
+
 func initStore(t testing.TB, drv driver.Driver, opts ...core.StoreOption) (core.Store, []byte) {
 	t.Helper()
 	all := append([]core.StoreOption{core.WithHashRegistry(Hashes())}, opts...)
@@ -61,19 +116,53 @@ func initStore(t testing.TB, drv driver.Driver, opts ...core.StoreOption) (core.
 	return s, kit
 }
 
+// InitPlain bootstraps a fresh Plain Store and returns a Reopener
+// bound to the same (drv, idx) so the test can reopen the Location
+// later. Use whenever the test exercises a reopen-flow; for
+// single-Init tests, plain Init/InitWithRoot remain shorter.
+func InitPlain(t testing.TB, extra ...core.StoreOption) (core.Store, *Reopener) {
+	t.Helper()
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+	opts := append([]core.StoreOption{core.WithStoreIndex(idx)}, extra...)
+	s, _ := initStore(t, drv, opts...)
+	return s, &Reopener{drv: drv, idx: idx}
+}
+
+// InitEncrypted bootstraps a fresh encrypted Store with the given
+// passphrase and returns a Reopener. The Store is fully Unlocked
+// after Init (per the Plain-DEK→Encrypted transition described in
+// core/lifecycle.go's InitStore).
+//
+// extra options are appended to the engine's defaults; pass
+// core.WithKDFParams or core.WithConfig as needed.
+func InitEncrypted(t testing.TB, pass string, extra ...core.StoreOption) (core.Store, *Reopener) {
+	t.Helper()
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+	opts := append([]core.StoreOption{
+		core.WithStoreIndex(idx),
+		core.WithPassphrase(StaticPP(pass)),
+	}, extra...)
+	s, _ := initStore(t, drv, opts...)
+	return s, &Reopener{drv: drv, idx: idx}
+}
+
+// InitEncryptedLocked bootstraps an encrypted Store and reopens it
+// WITHOUT AutoUnlock so the returned Store is in StateLocked. The
+// PassphraseProvider configured on the second open uses the same
+// passphrase — tests that need a different provider can replace it
+// via Reopener.Open with WithPassphrase override.
+func InitEncryptedLocked(t testing.TB, pass string, extra ...core.StoreOption) (core.Store, *Reopener) {
+	t.Helper()
+	_, r := InitEncrypted(t, pass, extra...)
+	s := r.Open(t,
+		core.WithPassphrase(StaticPP(pass)),
+	)
+	return s, r
+}
+
 // Payload wraps a string as a domain.Artifact body.
 func Payload(content string) domain.Artifact {
 	return domain.Artifact{Payload: strings.NewReader(content)}
-}
-
-// Close releases a caller-owned StoreIndex. The interface does not
-// declare Close — caller-owned by DI contract — but every concrete
-// implementation has it (sqlite, postgres, in-memory). Type-asserts
-// for the method, no-op if absent so callers can be unconditional.
-func Close(idx core.StoreIndex) error {
-	c, ok := idx.(interface{ Close() error })
-	if !ok {
-		return nil
-	}
-	return c.Close()
 }

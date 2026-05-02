@@ -115,4 +115,32 @@ type StoreIndex interface {
 
 	GetMeta(key string) (string, error)
 	SetMeta(key string, value string) error
+
+	// Lifecycle.
+
+	// Close releases resources held by the index — database
+	// connections, file handles, internal goroutines. The host
+	// application owns the StoreIndex's lifetime (DI contract: see
+	// core.WithStoreIndex doc) and must call Close after the Store
+	// has been shut down.
+	//
+	// Idempotent: a second Close on an already-closed index returns
+	// nil. Operations on a closed index return an implementation-
+	// defined error; do not call Close while reads are in flight.
+	Close() error
+}
+
+// metaStore is the narrow slice of StoreIndex used by every helper
+// that touches the store_meta key/value table — descriptor cache
+// (descriptor_cache.go), and at later milestones the lease subsystem
+// (M3.1), the scrub cursor (M3.3), and the rebuild-state recorder
+// (M3.4).
+//
+// Centralising the abstraction here means every consumer accepts
+// the same minimal surface; passing a full *sqlite.Index would
+// over-couple. *Index satisfies metaStore implicitly, as does any
+// test double.
+type metaStore interface {
+	GetMeta(key string) (string, error)
+	SetMeta(key, value string) error
 }

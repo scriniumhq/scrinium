@@ -22,16 +22,6 @@ const (
 	metaKeyDescriptorChecksum = "descriptor_checksum"
 )
 
-// metaStore is the narrow slice of StoreIndex needed to operate
-// on the descriptor cache: two methods over the store_meta
-// key/value table. Declared locally so descriptor_cache stays
-// independent of the full StoreIndex contract — *sqlite.Index
-// satisfies metaStore implicitly, as does any test double.
-type metaStore interface {
-	GetMeta(key string) (string, error)
-	SetMeta(key, value string) error
-}
-
 // DescriptorCache is the L2 cached projection of the on-disk
 // descriptor. The three fields are written together by
 // saveDescriptorCache; corruption (partial write, manual edit)

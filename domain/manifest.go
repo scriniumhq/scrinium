@@ -31,6 +31,20 @@ type LayoutHeader struct {
 	BlobStorage string
 }
 
+// Layout* are the canonical values for LayoutHeader.BlobStorage.
+// Distinct from BlobStorage* (which is the StoreConfig-time policy):
+// the configuration says "InlineFallback", but the resolved layout
+// for any specific manifest is either LayoutInline (the payload fit
+// the inline limit) or LayoutTarget (it overflowed).
+//
+// Production code must compare against these constants, not the
+// equivalent string literals.
+const (
+	LayoutInline      = "Inline"
+	LayoutTarget      = "Target"
+	LayoutExternalRef = "ExternalRef"
+)
+
 // PipelineStage is a single transformation stage in the Pipeline.
 type PipelineStage struct {
 	Algorithm string

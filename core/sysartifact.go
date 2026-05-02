@@ -53,25 +53,19 @@ func writeInlineSystemArtifact(
 		BlobRef:      domain.BlobRef(contentHash),
 		OriginalSize: int64(len(payload)),
 		InlineBlob:   payload,
-		LayoutHeader: domain.LayoutHeader{BlobStorage: "Inline"},
+		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutInline},
 		CreatedAt:    time.Now().UTC(),
 	}
 
-	// 3. Encode and hash to get the ArtifactID.
-	fileBytes, err := manifestcodec.EncodeFile(manifest,
-		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	// 3. Encode and hash to get the ArtifactID. ComputeArtifactID
+	//    folds the encode+hash+assign cycle into one call.
+	id, fileBytes, manifest, err := manifestcodec.ComputeArtifactID(
+		manifest, hashAlgo, hashes,
+		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain,
+		nil, "")
 	if err != nil {
-		return "", fmt.Errorf("system artifact: encode: %w", err)
+		return "", fmt.Errorf("system artifact: compute id: %w", err)
 	}
-	idHasher, err := hashes.NewHasher(hashAlgo)
-	if err != nil {
-		return "", fmt.Errorf("system artifact: id hasher: %w", err)
-	}
-	if _, err := idHasher.Write(fileBytes); err != nil {
-		return "", fmt.Errorf("system artifact: hash manifest: %w", err)
-	}
-	id := domain.ArtifactID(hashes.Format(hashAlgo, idHasher.Sum(nil)))
-	manifest.ArtifactID = id
 
 	// 4. Persist the manifest file. drv.Put is atomic.
 	manifestPath, err := blobpath.ManifestPath(id)

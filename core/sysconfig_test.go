@@ -28,7 +28,7 @@ func mustWriteSysConfig(t *testing.T) (string, domain.StoreConfig, domain.Artifa
 		t.Fatalf("localfs.New: %v", err)
 	}
 	idx := indexfx.Memory(t)
-	t.Cleanup(func() { _ = storefx.Close(idx) })
+	t.Cleanup(func() { _ = idx.Close() })
 
 	cfg := domain.StoreConfig{
 		PathTopology:     domain.PathTopologyFlat,

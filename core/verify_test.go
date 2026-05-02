@@ -226,7 +226,7 @@ func TestVerify_EncryptedManifest_Succeeds(t *testing.T) {
 
 			if _, _, err := core.InitStore(context.Background(), drv,
 				core.WithConfig(cfg),
-				core.WithPassphrase(staticPassphraseProvider("pw")),
+				core.WithPassphrase(storefx.StaticPP("pw")),
 				core.WithStoreIndex(idx),
 				core.WithHashRegistry(storefx.Hashes()),
 			); err != nil {
@@ -234,7 +234,7 @@ func TestVerify_EncryptedManifest_Succeeds(t *testing.T) {
 			}
 			s, err := core.OpenStore(context.Background(), drv,
 				core.WithConfig(cfg),
-				core.WithPassphrase(staticPassphraseProvider("pw")),
+				core.WithPassphrase(storefx.StaticPP("pw")),
 				core.WithAutoUnlock(),
 				core.WithStoreIndex(idx),
 				core.WithHashRegistry(storefx.Hashes()),

@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +12,6 @@ import (
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
-	"github.com/rkurbatov/scrinium/internal/manifestcodec"
 	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
 	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
@@ -44,23 +41,14 @@ func TestPut_FreshBlob_WritesArtifacts(t *testing.T) {
 	}
 
 	// Manifest file is on disk under manifests/.
-	idStr := string(id)
-	hex := strings.TrimPrefix(idStr, "sha256-")
-	manifestPath := filepath.Join(root, "manifests", hex[:2], hex[2:4], idStr)
-	if _, err := os.Stat(manifestPath); err != nil {
-		t.Errorf("manifest not on disk at %s: %v", manifestPath, err)
+	disk := storefx.OnDiskAt(root)
+	if !disk.ManifestExists(id) {
+		t.Errorf("manifest not on disk at %s", disk.ManifestPath(id))
 	}
 
 	// At least one blob file under blobs/.
-	var blobCount int
-	_ = filepath.Walk(filepath.Join(root, "blobs"), func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() {
-			blobCount++
-		}
-		return nil
-	})
-	if blobCount != 1 {
-		t.Errorf("blobs on disk: got %d, want 1", blobCount)
+	if n := disk.BlobCount(); n != 1 {
+		t.Errorf("blobs on disk: got %d, want 1", n)
 	}
 
 	// Capacity reflects the new artifacts.
@@ -124,21 +112,14 @@ func TestPut_DeduplicatesIdenticalContent(t *testing.T) {
 
 	// But there must be only ONE blob on disk: dedup picked the
 	// existing one and dropped the staging file.
-	var blobCount int
-	_ = filepath.Walk(filepath.Join(root, "blobs"), func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() {
-			blobCount++
-		}
-		return nil
-	})
-	if blobCount != 1 {
-		t.Errorf("expected dedup to leave 1 blob, got %d", blobCount)
+	disk := storefx.OnDiskAt(root)
+	if n := disk.BlobCount(); n != 1 {
+		t.Errorf("expected dedup to leave 1 blob, got %d", n)
 	}
 
 	// And no leftover staging files.
-	stagingDir := filepath.Join(root, "system.state", "staging")
-	if entries, err := os.ReadDir(stagingDir); err == nil && len(entries) > 0 {
-		t.Errorf("staging directory not cleaned: %d entries", len(entries))
+	if files := disk.StagingFiles(); len(files) > 0 {
+		t.Errorf("staging directory not cleaned: %d entries", len(files))
 	}
 }
 
@@ -413,58 +394,11 @@ func TestPut_EmptyPayload(t *testing.T) {
 // cheaply.
 func newInlineStore(t *testing.T, limit int64) (core.Store, string) {
 	t.Helper()
-	drv := driverfx.LocalFS(t)
-	root := drv.Root()
 	cfg := domain.StoreConfig{
 		BlobStorage:     domain.BlobStorageInlineFallback,
 		InlineBlobLimit: limit,
 	}
-	s, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-		core.WithConfig(cfg),
-	)
-	if err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
-	return s, root
-}
-
-// countBlobFiles walks <root>/blobs and returns how many regular
-// files live there. Used to assert that inline puts produce zero
-// blob files.
-func countBlobFiles(t *testing.T, root string) int {
-	t.Helper()
-	var n int
-	_ = filepath.Walk(filepath.Join(root, "blobs"),
-		func(path string, info os.FileInfo, err error) error {
-			if err == nil && !info.IsDir() {
-				n++
-			}
-			return nil
-		})
-	return n
-}
-
-// readManifestFromDisk loads the manifest file written by Put and
-// decodes it. Used to inspect fields that Walk cannot return —
-// LayoutHeader, InlineBlob, Pipeline, Metadata — because the index
-// is a routing layer, not a source of truth for manifest content
-// (docs/2. Internals/09 §9.1.2).
-func readManifestFromDisk(t *testing.T, root string, id domain.ArtifactID) domain.Manifest {
-	t.Helper()
-	idStr := string(id)
-	hex := strings.TrimPrefix(idStr, "sha256-")
-	path := filepath.Join(root, "manifests", hex[:2], hex[2:4], idStr)
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read manifest %s: %v", path, err)
-	}
-	m, err := manifestcodec.DecodeFile(raw)
-	if err != nil {
-		t.Fatalf("decode manifest %s: %v", path, err)
-	}
-	return m
+	return storefx.InitWithRoot(t, core.WithConfig(cfg))
 }
 
 func TestPut_Inline_BelowLimit_NoBlobFile(t *testing.T) {
@@ -481,7 +415,7 @@ func TestPut_Inline_BelowLimit_NoBlobFile(t *testing.T) {
 	}
 
 	// No blob file produced — bytes live inside the manifest.
-	if got := countBlobFiles(t, root); got != 0 {
+	if got := storefx.OnDiskAt(root).BlobCount(); got != 0 {
 		t.Errorf("blob files: got %d, want 0 (inline)", got)
 	}
 
@@ -501,15 +435,15 @@ func TestPut_Inline_BelowLimit_NoBlobFile(t *testing.T) {
 	// file, not in the index (§9.1.2 — Inline manifests have
 	// blob_ref=NULL, so the JOIN that recovers OriginalSize for
 	// Target manifests yields nothing here). Read the file directly.
-	disk := readManifestFromDisk(t, root, id)
-	if disk.LayoutHeader.BlobStorage != "Inline" {
-		t.Errorf("LayoutHeader: got %q, want Inline", disk.LayoutHeader.BlobStorage)
+	m := storefx.OnDiskAt(root).ReadManifest(t, id)
+	if m.LayoutHeader.BlobStorage != domain.LayoutInline {
+		t.Errorf("LayoutHeader: got %q, want Inline", m.LayoutHeader.BlobStorage)
 	}
-	if disk.OriginalSize != int64(len("small")) {
-		t.Errorf("OriginalSize: got %d, want %d", disk.OriginalSize, len("small"))
+	if m.OriginalSize != int64(len("small")) {
+		t.Errorf("OriginalSize: got %d, want %d", m.OriginalSize, len("small"))
 	}
-	if string(disk.InlineBlob) != "small" {
-		t.Errorf("InlineBlob: got %q, want %q", disk.InlineBlob, "small")
+	if string(m.InlineBlob) != "small" {
+		t.Errorf("InlineBlob: got %q, want %q", m.InlineBlob, "small")
 	}
 }
 
@@ -527,16 +461,16 @@ func TestPut_Inline_ExactlyAtLimit_StaysInline(t *testing.T) {
 	if id == "" {
 		t.Fatal("empty id")
 	}
-	if got := countBlobFiles(t, root); got != 0 {
+	if got := storefx.OnDiskAt(root).BlobCount(); got != 0 {
 		t.Errorf("blob files: got %d, want 0 (inline at limit)", got)
 	}
 
-	disk := readManifestFromDisk(t, root, id)
-	if disk.LayoutHeader.BlobStorage != "Inline" {
-		t.Errorf("LayoutHeader: got %q, want Inline", disk.LayoutHeader.BlobStorage)
+	m := storefx.OnDiskAt(root).ReadManifest(t, id)
+	if m.LayoutHeader.BlobStorage != domain.LayoutInline {
+		t.Errorf("LayoutHeader: got %q, want Inline", m.LayoutHeader.BlobStorage)
 	}
-	if disk.OriginalSize != limit {
-		t.Errorf("OriginalSize: got %d, want %d", disk.OriginalSize, limit)
+	if m.OriginalSize != limit {
+		t.Errorf("OriginalSize: got %d, want %d", m.OriginalSize, limit)
 	}
 }
 
@@ -554,16 +488,16 @@ func TestPut_Inline_OverLimit_FallsBackToTarget(t *testing.T) {
 	if id == "" {
 		t.Fatal("empty id")
 	}
-	if got := countBlobFiles(t, root); got != 1 {
+	if got := storefx.OnDiskAt(root).BlobCount(); got != 1 {
 		t.Errorf("blob files: got %d, want 1 (target fallback)", got)
 	}
 
-	disk := readManifestFromDisk(t, root, id)
-	if disk.LayoutHeader.BlobStorage != "Target" {
-		t.Errorf("LayoutHeader: got %q, want Target", disk.LayoutHeader.BlobStorage)
+	m := storefx.OnDiskAt(root).ReadManifest(t, id)
+	if m.LayoutHeader.BlobStorage != domain.LayoutTarget {
+		t.Errorf("LayoutHeader: got %q, want Target", m.LayoutHeader.BlobStorage)
 	}
-	if disk.OriginalSize != limit+1 {
-		t.Errorf("OriginalSize: got %d, want %d", disk.OriginalSize, limit+1)
+	if m.OriginalSize != limit+1 {
+		t.Errorf("OriginalSize: got %d, want %d", m.OriginalSize, limit+1)
 	}
 }
 
@@ -584,7 +518,7 @@ func TestPut_Inline_NoDedupForInline(t *testing.T) {
 		}
 	}
 
-	if got := countBlobFiles(t, root); got != 0 {
+	if got := storefx.OnDiskAt(root).BlobCount(); got != 0 {
 		t.Errorf("blob files after 2 inline Puts: got %d, want 0", got)
 	}
 
@@ -616,16 +550,16 @@ func TestPut_Inline_EmptyPayload(t *testing.T) {
 		t.Fatal("empty id")
 	}
 	// Empty payload fits inline trivially.
-	if got := countBlobFiles(t, root); got != 0 {
+	if got := storefx.OnDiskAt(root).BlobCount(); got != 0 {
 		t.Errorf("blob files: got %d, want 0", got)
 	}
 
-	disk := readManifestFromDisk(t, root, id)
-	if disk.OriginalSize != 0 {
-		t.Errorf("OriginalSize: got %d, want 0", disk.OriginalSize)
+	m := storefx.OnDiskAt(root).ReadManifest(t, id)
+	if m.OriginalSize != 0 {
+		t.Errorf("OriginalSize: got %d, want 0", m.OriginalSize)
 	}
-	if disk.LayoutHeader.BlobStorage != "Inline" {
-		t.Errorf("expected Inline for empty payload, got %q", disk.LayoutHeader.BlobStorage)
+	if m.LayoutHeader.BlobStorage != domain.LayoutInline {
+		t.Errorf("expected Inline for empty payload, got %q", m.LayoutHeader.BlobStorage)
 	}
 }
 
@@ -642,13 +576,13 @@ func TestPut_Inline_DisabledByZeroLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	if got := countBlobFiles(t, root); got != 1 {
+	if got := storefx.OnDiskAt(root).BlobCount(); got != 1 {
 		t.Errorf("blob files: got %d, want 1 (limit=0 disables inline)", got)
 	}
 
-	disk := readManifestFromDisk(t, root, id)
-	if disk.LayoutHeader.BlobStorage != "Target" {
-		t.Errorf("LayoutHeader: got %q, want Target", disk.LayoutHeader.BlobStorage)
+	m := storefx.OnDiskAt(root).ReadManifest(t, id)
+	if m.LayoutHeader.BlobStorage != domain.LayoutTarget {
+		t.Errorf("LayoutHeader: got %q, want Target", m.LayoutHeader.BlobStorage)
 	}
 }
 
@@ -666,15 +600,11 @@ func TestPut_Pipeline_ZstdRoundTrip(t *testing.T) {
 
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	store, _, err := core.InitStore(context.Background(), drv,
+	store := storefx.InitOn(t, drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
 		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
 
 	original := bytes.Repeat([]byte("scrinium "), 4096)
 	id, err := store.Put(context.Background(),
@@ -731,15 +661,11 @@ func TestPut_Pipeline_AESGCMRoundTrip(t *testing.T) {
 
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	store, _, err := core.InitStore(context.Background(), drv,
+	store := storefx.InitOn(t, drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
 		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
 
 	original := []byte("Hello, ciphertext on disk")
 	id, err := store.Put(context.Background(),
@@ -788,15 +714,11 @@ func TestPut_Pipeline_ZstdThenAESGCM(t *testing.T) {
 
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	store, _, err := core.InitStore(context.Background(), drv,
+	store := storefx.InitOn(t, drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
 		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
 
 	original := bytes.Repeat([]byte("compress then encrypt "), 1024)
 	id, err := store.Put(context.Background(),
@@ -835,17 +757,13 @@ func TestPut_Pipeline_MissingAlgorithm(t *testing.T) {
 
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	store, _, err := core.InitStore(context.Background(), drv,
+	store := storefx.InitOn(t, drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(storefx.Hashes()),
 		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)
-	if err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
 
-	_, err = store.Put(context.Background(),
+	_, err := store.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
 		domain.PutOptions{Namespace: "ns"})
 	if !errors.Is(err, errs.ErrUnsupportedAlgorithm) {

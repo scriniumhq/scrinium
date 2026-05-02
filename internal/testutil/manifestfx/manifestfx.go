@@ -27,7 +27,7 @@ func Sample() domain.Manifest {
 		ContentHash:  domain.ContentHash(contentHashAaa),
 		OriginalSize: 4096,
 		BlobRef:      domain.BlobRef(blobRefBbb),
-		LayoutHeader: domain.LayoutHeader{BlobStorage: "Target"},
+		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
 	}
 }
 

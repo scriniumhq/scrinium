@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
@@ -77,5 +77,5 @@ func NewIngester(
 	if cfg.Mode == IngestModeWatch && cfg.StateFile == "" {
 		return nil, errs.ErrIngesterNoState
 	}
-	return nil, errors.New("agent.NewIngester: not implemented")
+	return nil, fmt.Errorf("%w: agent.NewIngester", errs.ErrNotImplemented)
 }

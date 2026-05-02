@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -31,12 +29,11 @@ func TestDelete_TargetRemovesManifestAndDecrementsRefCount(t *testing.T) {
 		t.Fatalf("Delete: %v", err)
 	}
 
+	disk := storefx.OnDiskAt(root)
+
 	// Manifest file gone from disk.
-	idStr := string(id)
-	hex := strings.TrimPrefix(idStr, "sha256-")
-	manifestPath := filepath.Join(root, "manifests", hex[:2], hex[2:4], idStr)
-	if _, err := os.Stat(manifestPath); !os.IsNotExist(err) {
-		t.Errorf("manifest file should be gone, stat err=%v", err)
+	if disk.ManifestExists(id) {
+		t.Errorf("manifest file should be gone")
 	}
 
 	// Walk no longer sees it.
@@ -54,16 +51,9 @@ func TestDelete_TargetRemovesManifestAndDecrementsRefCount(t *testing.T) {
 		t.Errorf("Get after delete: expected errs.ErrArtifactNotFound, got %v", err)
 	}
 
-	// Blob file is still on disk — physical removal is GC territory (M3).
-	var blobCount int
-	_ = filepath.Walk(filepath.Join(root, "blobs"), func(_ string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() {
-			blobCount++
-		}
-		return nil
-	})
-	if blobCount != 1 {
-		t.Errorf("blob file should remain after Delete (physical GC is M3): got %d", blobCount)
+	// Blob file is still on disk — physical removal is GC territory.
+	if n := disk.BlobCount(); n != 1 {
+		t.Errorf("blob file should remain after Delete (physical GC deferred): got %d", n)
 	}
 }
 
@@ -78,11 +68,8 @@ func TestDelete_InlineRemovesManifestRow(t *testing.T) {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	idStr := string(id)
-	hex := strings.TrimPrefix(idStr, "sha256-")
-	manifestPath := filepath.Join(root, "manifests", hex[:2], hex[2:4], idStr)
-	if _, err := os.Stat(manifestPath); !os.IsNotExist(err) {
-		t.Errorf("inline manifest file should be gone, stat err=%v", err)
+	if storefx.OnDiskAt(root).ManifestExists(id) {
+		t.Errorf("inline manifest file should be gone")
 	}
 
 	// Walk sees nothing — this is the assertion that catches the
@@ -138,15 +125,8 @@ func TestDelete_SharedBlobKeepsRefCount(t *testing.T) {
 	}
 
 	// Blob file still there.
-	var blobCount int
-	_ = filepath.Walk(filepath.Join(root, "blobs"), func(_ string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() {
-			blobCount++
-		}
-		return nil
-	})
-	if blobCount != 1 {
-		t.Errorf("blob file count after deleting one of two referrers: got %d, want 1", blobCount)
+	if n := storefx.OnDiskAt(root).BlobCount(); n != 1 {
+		t.Errorf("blob file count after deleting one of two referrers: got %d, want 1", n)
 	}
 }
 

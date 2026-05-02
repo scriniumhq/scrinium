@@ -30,10 +30,7 @@ import (
 // compression, AES-GCM plugin from M2.1) require inverse-decoder
 // verification and are tracked in the backlog.
 func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if err := s.checkOperational(); err != nil {
+	if err := s.enterRead(ctx); err != nil {
 		return err
 	}
 	if id == "" {
@@ -45,16 +42,8 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 		return err
 	}
 
-	switch manifest.Type {
-	case domain.ManifestTypeBlob:
-		// continue
-	case domain.ManifestTypeTOC:
-		return fmt.Errorf("core.Verify: ManifestTypeTOC deferred to M5")
-	case domain.ManifestTypePack:
-		// Engine-internal — invisible to clients (mirrors Get).
-		return errs.ErrArtifactNotFound
-	default:
-		return fmt.Errorf("core.Verify: unknown manifest type %q", manifest.Type)
+	if err := dispatchManifestType(manifest, "core.Verify"); err != nil {
+		return err
 	}
 
 	if len(manifest.Pipeline) > 0 {
@@ -92,12 +81,12 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 	}
 
 	switch m.LayoutHeader.BlobStorage {
-	case "Inline":
+	case domain.LayoutInline:
 		if _, err := hasher.Write(m.InlineBlob); err != nil {
 			return fmt.Errorf("core.Verify: hash inline: %w", err)
 		}
 
-	case "Target":
+	case domain.LayoutTarget:
 		// PhysicalAddress is sourced from the index — see the
 		// layout invariant in Internals/01. The read-path follows
 		// what the index recorded at IndexManifest time, not what
@@ -119,8 +108,8 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 			return fmt.Errorf("core.Verify: hash blob: %w", copyErr)
 		}
 
-	case "ExternalRef":
-		return fmt.Errorf("core.Verify: BlobStorage: ExternalRef deferred to a later milestone")
+	case domain.LayoutExternalRef:
+		return fmt.Errorf("%w: core.Verify on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
 
 	default:
 		return fmt.Errorf("core.Verify: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)

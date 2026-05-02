@@ -15,10 +15,11 @@
 package chunker
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/curator"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // ChunkerConfig holds the slicing parameters. The algorithm
@@ -56,5 +57,5 @@ type factory struct {
 }
 
 func (f *factory) Wrap(store core.DataStore, deps curator.WrapperDeps) (core.DataStore, error) {
-	return nil, errors.New("chunker.Wrap: not implemented")
+	return nil, fmt.Errorf("%w: chunker.Wrap", errs.ErrNotImplemented)
 }

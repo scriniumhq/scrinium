@@ -2,11 +2,12 @@ package curator
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/rkurbatov/scrinium/agent"
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/driver"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
 )
 
@@ -129,7 +130,7 @@ func WithSnapshotConfig(cfg agent.SnapshotConfig) CuratorOption {
 //
 // Implementation lands in M4.
 func New(opts ...CuratorOption) (Curator, error) {
-	return nil, errors.New("curator.New: not implemented")
+	return nil, fmt.Errorf("%w: curator.New", errs.ErrNotImplemented)
 }
 
 // Compile-time sanity: context is imported and used.

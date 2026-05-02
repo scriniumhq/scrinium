@@ -275,3 +275,37 @@ func TestDecode_RejectsEmptyInput(t *testing.T) {
 		t.Fatalf("expected ErrRecoveryKitCorrupted, got %v", err)
 	}
 }
+
+// TestDecode_RejectsMalformedWithoutPanic guards against the
+// shadowed-checksumIdx footgun in the previous Decode: a malformed
+// input without a "\n[CHECKSUM]\n" sentinel must surface as
+// ErrRecoveryKitCorrupted rather than panicking on a body slice
+// computed from a -1 index. The current Decode is linear; this
+// test locks the contract so a future "simplification" cannot
+// reintroduce the old shadow-based recovery branch by accident.
+func TestDecode_RejectsMalformedWithoutPanic(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []byte
+	}{
+		{"only_header", []byte(recoverykit.Header + "\n")},
+		{"header_and_store_section_without_checksum",
+			[]byte(recoverykit.Header + "\n\n[STORE]\nStoreID = abc\n")},
+		{"random_text_no_sentinel",
+			[]byte("not a recovery kit at all\nrandom lines\n")},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("Decode panicked on %q: %v", tc.name, r)
+				}
+			}()
+			_, err := recoverykit.Decode(tc.in)
+			if !errors.Is(err, errs.ErrRecoveryKitCorrupted) {
+				t.Fatalf("Decode(%q): err = %v, want errs.ErrRecoveryKitCorrupted",
+					tc.name, err)
+			}
+		})
+	}
+}

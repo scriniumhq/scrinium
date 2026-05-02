@@ -149,6 +149,29 @@ func bumpRefCount(ctx context.Context, tx *sql.Tx, blobRef string) error {
 	return nil
 }
 
+// registerBlob is the upsert+bump pair every blob-bearing manifest
+// path (Blob, TOC, Pack-chunks) needs at index time. The two SQL
+// operations are idempotent individually and idempotent as a pair:
+// re-running on a partially-applied transaction is safe. Pack
+// manifest registration in indexPackManifest deliberately does NOT
+// go through here — it upserts the pack-blob row but never bumps
+// its ref_count, since the bump happens once per packed-blob entry
+// rather than once per pack file (see manifest.go indexPackManifest
+// for the rationale).
+func registerBlob(
+	ctx context.Context,
+	tx *sql.Tx,
+	blobRef string,
+	contentHash domain.ContentHash,
+	originalSize int64,
+	addr domain.PhysicalAddress,
+) error {
+	if err := upsertBlob(ctx, tx, blobRef, contentHash, originalSize, addr); err != nil {
+		return err
+	}
+	return bumpRefCount(ctx, tx, blobRef)
+}
+
 // insertManifestRow writes a row into the manifests table.
 // Idempotency: ON CONFLICT(artifact_id) DO NOTHING. The same
 // artifact registered twice (after a crash, for instance) is a
@@ -167,7 +190,7 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	// uses the absence of a JOIN partner as the "this is inline,
 	// read the file for content" signal.
 	var blobRefArg any
-	if m.LayoutHeader.BlobStorage == "Inline" {
+	if m.LayoutHeader.BlobStorage == domain.LayoutInline {
 		blobRefArg = nil
 	} else {
 		blobRefArg = string(m.BlobRef)
@@ -241,16 +264,13 @@ func indexBlobManifest(
 	// emptiness of BlobRef because §7.2 mandates that BlobRef be
 	// populated even on inline manifests (it carries the hash of
 	// the embedded bytes).
-	if m.LayoutHeader.BlobStorage == "Inline" {
+	if m.LayoutHeader.BlobStorage == domain.LayoutInline {
 		return insertManifestRow(ctx, tx, m)
 	}
 	if m.BlobRef == "" {
 		return fmt.Errorf("sqlite: blob manifest %q has empty BlobRef", m.ArtifactID)
 	}
-	if err := upsertBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, addr); err != nil {
-		return err
-	}
-	if err := bumpRefCount(ctx, tx, string(m.BlobRef)); err != nil {
+	if err := registerBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, addr); err != nil {
 		return err
 	}
 	if err := insertManifestRow(ctx, tx, m); err != nil {
@@ -270,10 +290,7 @@ func indexTOCManifest(
 		return fmt.Errorf("sqlite: TOC manifest %q has empty BlobRef", m.ArtifactID)
 	}
 	// Step 1: register the TOC blob itself.
-	if err := upsertBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, addr); err != nil {
-		return err
-	}
-	if err := bumpRefCount(ctx, tx, string(m.BlobRef)); err != nil {
+	if err := registerBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, addr); err != nil {
 		return err
 	}
 

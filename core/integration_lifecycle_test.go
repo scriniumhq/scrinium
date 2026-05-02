@@ -151,7 +151,7 @@ func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
 	if err := idx1.IndexManifest(manifest, addr, nil, nil); err != nil {
 		t.Fatalf("seed index: %v", err)
 	}
-	if err := storefx.Close(idx1); err != nil {
+	if err := idx1.Close(); err != nil {
 		t.Fatalf("close index (phase 3): %v", err)
 	}
 
@@ -201,7 +201,7 @@ func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
 			gotAddr.Path, "blobs/aa/bb/blob-test")
 	}
 
-	if err := storefx.Close(idx2); err != nil {
+	if err := idx2.Close(); err != nil {
 		t.Fatalf("close index (phase 4): %v", err)
 	}
 
@@ -214,7 +214,7 @@ func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sqlite.NewStore (phase 5): %v", err)
 	}
-	defer storefx.Close(idx3)
+	defer idx3.Close()
 
 	conflict := domain.StoreConfig{
 		PathTopology: domain.PathTopologySharded, // active is Flat

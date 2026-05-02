@@ -1,11 +1,12 @@
 package maintenance
 
 import (
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/curator"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
 )
 
@@ -124,5 +125,5 @@ func NewRebuildIndexAgent(
 	bus event.EventBus,
 	cfg RebuildConfig,
 ) (RebuildIndexAgent, error) {
-	return nil, errors.New("maintenance.NewRebuildIndexAgent: not implemented")
+	return nil, fmt.Errorf("%w: maintenance.NewRebuildIndexAgent", errs.ErrNotImplemented)
 }

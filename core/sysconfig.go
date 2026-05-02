@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	sysConfigNamespace   = "system.config"
-	sysConfigPointer     = "system.config/current"
+	sysConfigNamespace   = domain.NamespaceSystemConfig
+	sysConfigPointer     = domain.NamespaceSystemConfig + "/current"
 	sysConfigSessionID   = "init"
 	maxConfigPointerSize = 256 // sanity cap for "<algo>-<hex>\n"
 )
@@ -98,7 +98,7 @@ func readSystemConfig(
 	if err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("system config: decode: %w", err)
 	}
-	if manifest.LayoutHeader.BlobStorage != "Inline" {
+	if manifest.LayoutHeader.BlobStorage != domain.LayoutInline {
 		return domain.StoreConfig{}, fmt.Errorf(
 			"system config: expected Inline layout, got %q",
 			manifest.LayoutHeader.BlobStorage)

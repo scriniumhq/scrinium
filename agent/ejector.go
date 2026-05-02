@@ -2,10 +2,11 @@ package agent
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
 )
 
@@ -67,5 +68,5 @@ func NewEjector(
 	bus event.EventBus,
 	cfg EjectorConfig,
 ) (Ejector, error) {
-	return nil, errors.New("agent.NewEjector: not implemented")
+	return nil, fmt.Errorf("%w: agent.NewEjector", errs.ErrNotImplemented)
 }

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -135,7 +134,7 @@ func TestGet_ManifestAvailableBeforeRead(t *testing.T) {
 	if m.SessionID != "sess-x" {
 		t.Errorf("SessionID: got %q, want %q", m.SessionID, "sess-x")
 	}
-	if m.LayoutHeader.BlobStorage != "Target" {
+	if m.LayoutHeader.BlobStorage != domain.LayoutTarget {
 		t.Errorf("LayoutHeader: got %q, want Target", m.LayoutHeader.BlobStorage)
 	}
 }
@@ -223,9 +222,7 @@ func TestGet_CorruptedManifest(t *testing.T) {
 
 	// Locate and flip a byte inside the manifest body (past the
 	// 5-byte header). Past the body starts at offset 5.
-	idStr := string(id)
-	hex := strings.TrimPrefix(idStr, "sha256-")
-	path := filepath.Join(root, "manifests", hex[:2], hex[2:4], idStr)
+	path := storefx.OnDiskAt(root).ManifestPath(id)
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
@@ -256,12 +253,9 @@ func TestGet_CorruptedBlob(t *testing.T) {
 	// Wipe every regular file under blobs/. The Get call itself
 	// only reads the manifest, so it should still succeed; the
 	// failure surfaces on the first Read.
-	_ = filepath.Walk(filepath.Join(root, "blobs"), func(path string, info os.FileInfo, err error) error {
-		if err == nil && !info.IsDir() {
-			_ = os.Remove(path)
-		}
-		return nil
-	})
+	for _, p := range storefx.OnDiskAt(root).BlobFiles() {
+		_ = os.Remove(p)
+	}
 
 	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {

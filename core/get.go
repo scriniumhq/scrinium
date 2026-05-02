@@ -94,10 +94,7 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 // MetadataOnly/Envelope crypto are deferred to later milestones
 // and return explicit errors when reached.
 func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (ReadHandle, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if err := s.checkOperational(); err != nil {
+	if err := s.enterRead(ctx); err != nil {
 		return nil, err
 	}
 	if id == "" {
@@ -110,23 +107,13 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 	}
 
 	// 4. Type dispatch.
-	switch manifest.Type {
-	case domain.ManifestTypeBlob:
-		// continue below
-	case domain.ManifestTypeTOC:
-		return nil, fmt.Errorf("core.Get: ManifestTypeTOC deferred to M5")
-	case domain.ManifestTypePack:
-		// §3.1: pack manifests are engine-internal, invisible to
-		// clients. We collapse them into "not found" so client
-		// code does not have to special-case them.
-		return nil, errs.ErrArtifactNotFound
-	default:
-		return nil, fmt.Errorf("core.Get: unknown manifest type %q", manifest.Type)
+	if err := dispatchManifestType(manifest, "core.Get"); err != nil {
+		return nil, err
 	}
 
 	// 5. Layout dispatch (BlobManifest only).
 	switch manifest.LayoutHeader.BlobStorage {
-	case "Inline":
+	case domain.LayoutInline:
 		// Bytes already in memory inside the manifest. No driver
 		// call; the handle is a thin wrapper around bytes.Reader.
 		return &inlineReadHandle{
@@ -134,7 +121,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 			reader:   bytes.NewReader(manifest.InlineBlob),
 		}, nil
 
-	case "Target":
+	case domain.LayoutTarget:
 		// PhysicalAddress is sourced from the index — the
 		// authoritative cache populated at IndexManifest time.
 		// Read-path does not recompute the path from the current
@@ -157,8 +144,8 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 			store:    s,
 		}, nil
 
-	case "ExternalRef":
-		return nil, fmt.Errorf("core.Get: BlobStorage: ExternalRef deferred to a later milestone")
+	case domain.LayoutExternalRef:
+		return nil, fmt.Errorf("%w: core.Get on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
 
 	default:
 		return nil, fmt.Errorf("core.Get: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)

@@ -2,10 +2,11 @@ package agent
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
 )
 
@@ -66,7 +67,7 @@ func NewScrubAgent(
 	bus event.EventBus,
 	cfg ScrubConfig,
 ) (ScrubAgent, error) {
-	return nil, errors.New("agent.NewScrubAgent: not implemented")
+	return nil, fmt.Errorf("%w: agent.NewScrubAgent", errs.ErrNotImplemented)
 }
 
 // --- Snapshot Agent ---
@@ -127,5 +128,5 @@ func NewSnapshotAgent(
 	bus event.EventBus,
 	cfg SnapshotConfig,
 ) (SnapshotAgent, error) {
-	return nil, errors.New("agent.NewSnapshotAgent: not implemented")
+	return nil, fmt.Errorf("%w: agent.NewSnapshotAgent", errs.ErrNotImplemented)
 }

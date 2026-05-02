@@ -67,7 +67,7 @@ func recoverOrphans(ctx context.Context, drv driver.Driver, idx StoreIndex) (Orp
 	// 1. Sweep system.state/staging/. Unconditional removal: any
 	// file here is from a crashed prior process. Per-file Remove
 	// errors do not stop the sweep.
-	if err := drv.ListObjectsWithModTime(ctx, "system.state/staging", time.Time{},
+	if err := drv.ListObjectsWithModTime(ctx, stagingPrefix, time.Time{},
 		func(om driver.ObjectMeta) error {
 			if err := ctx.Err(); err != nil {
 				return err

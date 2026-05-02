@@ -26,11 +26,7 @@ func TestConformance(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewStore(:memory:): %v", err)
 			}
-			t.Cleanup(func() {
-				if c, ok := idx.(interface{ Close() error }); ok {
-					_ = c.Close()
-				}
-			})
+			t.Cleanup(func() { _ = idx.Close() })
 			return idx
 		},
 	})

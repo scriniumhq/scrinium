@@ -30,6 +30,12 @@ type Index struct {
 	// also keep a small mutex around publication because some
 	// emitters (asynchronous buses) might race with Close.
 	pubMu sync.RWMutex
+
+	// closeOnce makes Close idempotent — the StoreIndex contract
+	// requires a second Close to be a no-op success, while
+	// database/sql.DB.Close returns an error when called twice.
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // Compile-time interface conformance. Catches signature drift
@@ -221,10 +227,15 @@ func applyPragmas(ctx context.Context, db *sql.DB, path string, o options) error
 	return nil
 }
 
-// Close releases the underlying database/sql handle. Safe to call
-// once; calling it twice returns the underlying sql.DB.Close error.
+// Close releases the underlying database/sql handle. Idempotent:
+// the StoreIndex contract requires repeat Close calls to succeed,
+// while database/sql.DB.Close itself errors on the second call —
+// sync.Once captures the first outcome and returns it forever.
 func (i *Index) Close() error {
-	return i.db.Close()
+	i.closeOnce.Do(func() {
+		i.closeErr = i.db.Close()
+	})
+	return i.closeErr
 }
 
 // SchemaVersion returns the version currently recorded on disk.

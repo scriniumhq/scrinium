@@ -16,81 +16,10 @@ import (
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
-// --- Test helpers ---
-
-// rotatingProvider returns a different passphrase per call,
-// driven by a slice of values. Used to script provider behaviour
-// across two-call methods (RotateKEK).
-func rotatingProvider(values ...string) core.PassphraseProvider {
-	i := 0
-	return func(_ context.Context, _ core.PassphraseHint) ([]byte, error) {
-		if i >= len(values) {
-			return nil, errors.New("rotatingProvider: ran out of values")
-		}
-		v := values[i]
-		i++
-		return []byte(v), nil
-	}
-}
-
-// hintCapturingProvider returns the configured passphrase but
-// records every PassphraseHint it sees. Used to verify Reason /
-// NeedNew on the wire.
-func hintCapturingProvider(pass string, log *[]core.PassphraseHint) core.PassphraseProvider {
-	return func(_ context.Context, h core.PassphraseHint) ([]byte, error) {
-		*log = append(*log, h)
-		return []byte(pass), nil
-	}
-}
-
-// initEncryptedAndOpenLocked: bootstrap an encrypted Store, then
-// reopen it WITHOUT auto-unlock so the returned Store is in
-// StateLocked. The provider is captured on the second open so
-// subsequent Unlock calls can use it.
-func initEncryptedAndOpenLocked(t *testing.T, pass string) (core.Store, core.PassphraseProvider) {
-	t.Helper()
-	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP(pass)),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
-	provider := staticPP(pass)
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(provider),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	if s.State() != domain.StateLocked {
-		t.Fatalf("setup: expected StateLocked, got %v", s.State())
-	}
-	return s, provider
-}
-
-// initPlain returns a brand-new Plain Store (Unlocked) on a
-// fresh Driver.
-func initPlain(t *testing.T) core.Store {
-	t.Helper()
-	drv := driverfx.LocalFS(t)
-	s, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
-	if err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
-	return s
-}
-
 // --- Unlock ---
 
 func TestUnlock_LockedStoreSucceeds(t *testing.T) {
-	s, _ := initEncryptedAndOpenLocked(t, "hunter2")
+	s, _ := storefx.InitEncryptedLocked(t, "hunter2")
 
 	if err := s.Unlock(context.Background()); err != nil {
 		t.Fatalf("Unlock: %v", err)
@@ -101,7 +30,7 @@ func TestUnlock_LockedStoreSucceeds(t *testing.T) {
 }
 
 func TestUnlock_AlreadyUnlockedIsNoOp(t *testing.T) {
-	s := initPlain(t)
+	s, _ := storefx.InitPlain(t)
 	// Call Unlock on an Unlocked Plain Store. Must succeed
 	// without prompting the (nil) provider.
 	if err := s.Unlock(context.Background()); err != nil {
@@ -113,7 +42,7 @@ func TestUnlock_AlreadyUnlockedIsNoOp(t *testing.T) {
 }
 
 func TestUnlock_DoubleCallIsIdempotent(t *testing.T) {
-	s, _ := initEncryptedAndOpenLocked(t, "pw")
+	s, _ := storefx.InitEncryptedLocked(t, "pw")
 	if err := s.Unlock(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -124,17 +53,9 @@ func TestUnlock_DoubleCallIsIdempotent(t *testing.T) {
 
 func TestUnlock_WrongPassphrase(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("right")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("wrong")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
+	storefx.InitEncryptedOn(t, drv, "right")
+	s, err := storefx.TryOpenOn(t, drv,
+		core.WithPassphrase(storefx.StaticPP("wrong")),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -152,19 +73,10 @@ func TestUnlock_WrongPassphrase(t *testing.T) {
 
 func TestUnlock_NoProvider(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitEncryptedOn(t, drv, "pw")
 	// Open without provider — Store goes to Locked, but Unlock
 	// has nothing to call.
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	s, err := storefx.TryOpenOn(t, drv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,18 +88,10 @@ func TestUnlock_NoProvider(t *testing.T) {
 
 func TestUnlock_HintCarriesUnlockReason(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitEncryptedOn(t, drv, "pw")
 	var hints []core.PassphraseHint
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(hintCapturingProvider("pw", &hints)),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
+	s, err := storefx.TryOpenOn(t, drv,
+		core.WithPassphrase(storefx.RecordingPP("pw", &hints)),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -220,7 +124,7 @@ func TestSetPassphrase_PlainStoreBecomesEncrypted(t *testing.T) {
 	// Reopen with the SAME idx so Orphan Scan finds known
 	// manifests and leaves them in place.
 	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("new-pw")),
+		core.WithPassphrase(storefx.StaticPP("new-pw")),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
 	)
@@ -246,7 +150,7 @@ func TestSetPassphrase_PlainStoreBecomesEncrypted(t *testing.T) {
 
 	// Reopen with the new passphrase must succeed. Same idx.
 	if _, err = core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("new-pw")),
+		core.WithPassphrase(storefx.StaticPP("new-pw")),
 		core.WithAutoUnlock(),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
@@ -256,7 +160,7 @@ func TestSetPassphrase_PlainStoreBecomesEncrypted(t *testing.T) {
 }
 
 func TestSetPassphrase_RejectsAlreadyEncrypted(t *testing.T) {
-	s, _ := initEncryptedAndOpenLocked(t, "pw")
+	s, _ := storefx.InitEncryptedLocked(t, "pw")
 	if err := s.Unlock(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +171,7 @@ func TestSetPassphrase_RejectsAlreadyEncrypted(t *testing.T) {
 }
 
 func TestSetPassphrase_NoProvider(t *testing.T) {
-	s := initPlain(t)
+	s, _ := storefx.InitPlain(t)
 	err := s.SetPassphrase(context.Background())
 	if !errors.Is(err, errs.ErrPassphraseRequired) {
 		t.Fatalf("expected ErrPassphraseRequired, got %v", err)
@@ -276,17 +180,10 @@ func TestSetPassphrase_NoProvider(t *testing.T) {
 
 func TestSetPassphrase_HintReason(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 	var hints []core.PassphraseHint
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(hintCapturingProvider("new-pw", &hints)),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
+	s, err := storefx.TryOpenOn(t, drv,
+		core.WithPassphrase(storefx.RecordingPP("new-pw", &hints)),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -308,7 +205,7 @@ func TestRotateKEK_RotatesPassphrase(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
 	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("old-pw")),
+		core.WithPassphrase(storefx.StaticPP("old-pw")),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
@@ -319,7 +216,7 @@ func TestRotateKEK_RotatesPassphrase(t *testing.T) {
 	//   2. RotateKEK current-pass verify — "old-pw" again.
 	//   3. RotateKEK new-pass — supplies "new-pw".
 	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(rotatingProvider("old-pw", "old-pw", "new-pw")),
+		core.WithPassphrase(storefx.ScriptedPP("old-pw", "old-pw", "new-pw")),
 		core.WithAutoUnlock(),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
@@ -339,7 +236,7 @@ func TestRotateKEK_RotatesPassphrase(t *testing.T) {
 	// Reopen with old passphrase must fail; with new must succeed.
 	// Same idx so Orphan Scan keeps the system.config manifest.
 	_, err = core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("old-pw")),
+		core.WithPassphrase(storefx.StaticPP("old-pw")),
 		core.WithAutoUnlock(),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
@@ -349,7 +246,7 @@ func TestRotateKEK_RotatesPassphrase(t *testing.T) {
 	}
 
 	if _, err = core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("new-pw")),
+		core.WithPassphrase(storefx.StaticPP("new-pw")),
 		core.WithAutoUnlock(),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
@@ -360,20 +257,12 @@ func TestRotateKEK_RotatesPassphrase(t *testing.T) {
 
 func TestRotateKEK_WrongCurrentPassphrase(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("right")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitEncryptedOn(t, drv, "right")
 	// Provider returns "wrong" first (current verify fails),
 	// then "new" (never reached).
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(rotatingProvider("right", "wrong", "new")),
+	s, err := storefx.TryOpenOn(t, drv,
+		core.WithPassphrase(storefx.ScriptedPP("right", "wrong", "new")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -387,7 +276,7 @@ func TestRotateKEK_WrongCurrentPassphrase(t *testing.T) {
 }
 
 func TestRotateKEK_RejectsPlainStore(t *testing.T) {
-	s := initPlain(t)
+	s, _ := storefx.InitPlain(t)
 	err := s.RotateKEK(context.Background())
 	if !errors.Is(err, errs.ErrPassphraseRequired) {
 		t.Fatalf("expected ErrPassphraseRequired (use SetPassphrase), got %v", err)
@@ -396,19 +285,11 @@ func TestRotateKEK_RejectsPlainStore(t *testing.T) {
 
 func TestRotateKEK_HintReasonsAndNeedNew(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitEncryptedOn(t, drv, "pw")
 	var hints []core.PassphraseHint
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(hintCapturingProvider("pw", &hints)),
+	s, err := storefx.TryOpenOn(t, drv,
+		core.WithPassphrase(storefx.RecordingPP("pw", &hints)),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -434,18 +315,10 @@ func TestRotateKEK_HintReasonsAndNeedNew(t *testing.T) {
 
 func TestExportRecoveryKit_EncryptedStoreReturnsKit(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
+	storefx.InitEncryptedOn(t, drv, "pw")
+	s, err := storefx.TryOpenOn(t, drv,
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -472,7 +345,7 @@ func TestExportRecoveryKit_EncryptedStoreReturnsKit(t *testing.T) {
 }
 
 func TestExportRecoveryKit_PlainStoreRejected(t *testing.T) {
-	s := initPlain(t)
+	s, _ := storefx.InitPlain(t)
 	_, err := s.ExportRecoveryKit(context.Background())
 	if !errors.Is(err, errs.ErrPassphraseRequired) {
 		t.Fatalf("expected ErrPassphraseRequired, got %v", err)
@@ -480,7 +353,7 @@ func TestExportRecoveryKit_PlainStoreRejected(t *testing.T) {
 }
 
 func TestExportRecoveryKit_LockedStoreRejected(t *testing.T) {
-	s, _ := initEncryptedAndOpenLocked(t, "pw")
+	s, _ := storefx.InitEncryptedLocked(t, "pw")
 	_, err := s.ExportRecoveryKit(context.Background())
 	if err == nil {
 		t.Fatal("expected error on Locked Store")
@@ -489,18 +362,10 @@ func TestExportRecoveryKit_LockedStoreRejected(t *testing.T) {
 
 func TestExportRecoveryKit_RegeneratesAfterRotation(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("old")),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(rotatingProvider("old", "old", "new")),
+	storefx.InitEncryptedOn(t, drv, "old")
+	s, err := storefx.TryOpenOn(t, drv,
+		core.WithPassphrase(storefx.ScriptedPP("old", "old", "new")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -536,7 +401,7 @@ func TestKeyResolverPromotion_OnUnlock(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
 	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
@@ -544,7 +409,7 @@ func TestKeyResolverPromotion_OnUnlock(t *testing.T) {
 	}
 	// Open without AutoUnlock — Locked, no DEK yet.
 	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
 	)
@@ -566,14 +431,14 @@ func TestKeyResolverPromotion_OnAutoUnlock(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
 	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
 	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
@@ -590,7 +455,7 @@ func TestKeyResolverPromotion_RespectsCustomResolver(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
 	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
@@ -601,7 +466,7 @@ func TestKeyResolverPromotion_RespectsCustomResolver(t *testing.T) {
 	custom := core.NewStaticKeyResolver(customDEK)
 
 	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithAutoUnlock(),
 		core.WithKeyResolver(custom),
 		core.WithStoreIndex(idx),
@@ -628,7 +493,7 @@ func TestKeyResolverPromotion_RespectsCustomResolver(t *testing.T) {
 func TestKeyResolverPromotion_OnInitStore(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	s, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("pw")),
+		core.WithPassphrase(storefx.StaticPP("pw")),
 		core.WithStoreIndex(indexfx.Memory(t)),
 		core.WithHashRegistry(storefx.Hashes()),
 	)

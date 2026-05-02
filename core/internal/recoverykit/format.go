@@ -96,22 +96,25 @@ func Encode(k Kit) ([]byte, error) {
 // carries a concrete reason for diagnostic logging; callers
 // should branch on errs.ErrRecoveryKitCorrupted.
 func Decode(data []byte) (Kit, error) {
-	checksumIdx := bytes.Index(data, []byte("\n[CHECKSUM]\n"))
-	if checksumIdx < 0 {
-		// Edge case: kit ends without a trailing newline before
-		// [CHECKSUM]; tolerate by also looking for the section
-		// header at any line boundary.
-		checksumIdx := bytes.Index(data, []byte("\n[CHECKSUM]\n"))
-		if checksumIdx <= 0 {
-			return Kit{}, fmt.Errorf("%w: missing [CHECKSUM] section",
-				errs.ErrRecoveryKitCorrupted)
-		}
-	} else {
-		checksumIdx++ // include the leading newline in the body
+	// Locate the [CHECKSUM] section. Encode always emits "\n[CHECKSUM]\n";
+	// a kit that doesn't carry it is malformed regardless of how it was
+	// produced. Strict format > best-effort tolerance — a manually edited
+	// kit whose checksum line floated to a non-canonical position can
+	// still parse against the wrong body slice and "verify" with a
+	// wrong-but-internally-consistent hash.
+	sep := []byte("\n[CHECKSUM]\n")
+	sepIdx := bytes.Index(data, sep)
+	if sepIdx < 0 {
+		return Kit{}, fmt.Errorf("%w: missing [CHECKSUM] section",
+			errs.ErrRecoveryKitCorrupted)
 	}
 
-	body := data[:checksumIdx]
-	tail := data[checksumIdx:]
+	// bodyEnd includes the trailing newline so the checksum hashes the
+	// exact bytes Encode produced (Encode appends a newline after every
+	// section before [CHECKSUM]).
+	bodyEnd := sepIdx + 1
+	body := data[:bodyEnd]
+	tail := data[bodyEnd:]
 
 	// Verify checksum FIRST — if the body has been tampered with,
 	// any structural parsing of it produces nonsense, so refuse

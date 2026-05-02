@@ -14,11 +14,12 @@ package bundler
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/curator"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // BundlerConfig holds the batch-sealing parameters. Triggers are
@@ -68,5 +69,5 @@ type factory struct {
 }
 
 func (f *factory) Wrap(store core.DataStore, deps curator.WrapperDeps) (core.DataStore, error) {
-	return nil, errors.New("bundler.Wrap: not implemented")
+	return nil, fmt.Errorf("%w: bundler.Wrap", errs.ErrNotImplemented)
 }

@@ -69,7 +69,7 @@ func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	// helpers in tests rarely set LayoutHeader, so the common
 	// path is non-NULL — but we honour the invariant either way.
 	var blobRefArg any
-	if m.LayoutHeader.BlobStorage == "Inline" {
+	if m.LayoutHeader.BlobStorage == domain.LayoutInline {
 		blobRefArg = nil
 	} else {
 		blobRefArg = string(m.BlobRef)

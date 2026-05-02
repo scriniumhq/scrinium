@@ -9,44 +9,16 @@ import (
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
 	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/driver"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
-	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
-
-// staticPP is a one-line PassphraseProvider for tests. Echoes
-// the same string regardless of hint.
-func staticPP(pass string) core.PassphraseProvider {
-	return func(_ context.Context, _ core.PassphraseHint) ([]byte, error) {
-		return []byte(pass), nil
-	}
-}
-
-// initEncryptedAt creates an encrypted Store on the supplied
-// driver and returns it for follow-up OpenStore. Splitting the
-// driver creation from InitStore lets callers retain a handle
-// to the same Location across multiple OpenStore calls.
-func initEncryptedAt(t *testing.T, drv driver.Driver, pass string) {
-	t.Helper()
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithPassphrase(staticPP(pass)),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatalf("InitStore: %v", err)
-	}
-}
 
 // --- ErrStoreNotFound at fresh Location ---
 
 func TestOpenStore_FreshLocationReturnsNotFound(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	_, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	_, err := storefx.TryOpenOn(t, drv)
 	if !errors.Is(err, errs.ErrStoreNotFound) {
 		t.Fatalf("expected ErrStoreNotFound, got %v", err)
 	}
@@ -56,22 +28,14 @@ func TestOpenStore_FreshLocationReturnsNotFound(t *testing.T) {
 
 func TestOpenStore_HealsAbsentL0FromL1(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 	// Wipe L0 to simulate a write that completed L1 but not L0.
 	if err := drv.Remove(context.Background(), descriptor.Path); err != nil {
 		t.Fatalf("setup remove L0: %v", err)
 	}
 
 	// OpenStore must succeed (L1 has the canonical descriptor).
-	_, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	_, err := storefx.TryOpenOn(t, drv)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -86,22 +50,12 @@ func TestOpenStore_HealsAbsentL0FromL1(t *testing.T) {
 
 func TestOpenStore_HealsAbsentL1FromL0(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 	if err := drv.Remove(context.Background(), descriptor.BackupPath); err != nil {
 		t.Fatalf("setup remove L1: %v", err)
 	}
 
-	if _, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
+	_ = storefx.OpenOn(t, drv)
 
 	if _, status, err := descriptor.ReadReplica(context.Background(), drv, descriptor.BackupPath); err != nil || status != descriptor.ReplicaValid {
 		t.Errorf("L1 should be healed: status=%v, err=%v", status, err)
@@ -112,19 +66,11 @@ func TestOpenStore_HealsAbsentL1FromL0(t *testing.T) {
 
 func TestOpenStore_BothReplicasAbsentReturnsNotFound(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 	_ = drv.Remove(context.Background(), descriptor.Path)
 	_ = drv.Remove(context.Background(), descriptor.BackupPath)
 
-	_, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	_, err := storefx.TryOpenOn(t, drv)
 	if !errors.Is(err, errs.ErrStoreNotFound) {
 		t.Fatalf("expected ErrStoreNotFound, got %v", err)
 	}
@@ -134,12 +80,7 @@ func TestOpenStore_BothReplicasAbsentReturnsNotFound(t *testing.T) {
 
 func TestOpenStore_BothReplicasCorruptedReturnsCorrupted(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 	// Replace both replicas with garbage that fails Unmarshal.
 	if err := drv.Put(context.Background(), descriptor.Path, bytes.NewReader([]byte("not json"))); err != nil {
 		t.Fatal(err)
@@ -148,10 +89,7 @@ func TestOpenStore_BothReplicasCorruptedReturnsCorrupted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	_, err := storefx.TryOpenOn(t, drv)
 	if !errors.Is(err, errs.ErrStoreCorrupted) {
 		t.Fatalf("expected ErrStoreCorrupted, got %v", err)
 	}
@@ -161,12 +99,7 @@ func TestOpenStore_BothReplicasCorruptedReturnsCorrupted(t *testing.T) {
 
 func TestOpenStore_SplitBrainRejected(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 	// Read L0, fabricate a divergent L1 with the same Sequence
 	// but a different StoreID.
 	d0, _, err := descriptor.ReadReplica(context.Background(), drv, descriptor.Path)
@@ -179,10 +112,7 @@ func TestOpenStore_SplitBrainRejected(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	_, err = storefx.TryOpenOn(t, drv)
 	if !errors.Is(err, errs.ErrDescriptorSplitBrain) {
 		t.Fatalf("expected ErrDescriptorSplitBrain, got %v", err)
 	}
@@ -192,12 +122,9 @@ func TestOpenStore_SplitBrainRejected(t *testing.T) {
 
 func TestOpenStore_EncryptedWithoutAutoUnlockGoesLocked(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	initEncryptedAt(t, drv, "hunter2")
+	storefx.InitEncryptedOn(t, drv, "hunter2")
 
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	s, err := storefx.TryOpenOn(t, drv)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -210,13 +137,11 @@ func TestOpenStore_EncryptedWithoutAutoUnlockGoesLocked(t *testing.T) {
 
 func TestOpenStore_EncryptedWithAutoUnlockGoesUnlocked(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	initEncryptedAt(t, drv, "hunter2")
+	storefx.InitEncryptedOn(t, drv, "hunter2")
 
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("hunter2")),
+	s, err := storefx.TryOpenOn(t, drv,
+		core.WithPassphrase(storefx.StaticPP("hunter2")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
@@ -230,12 +155,10 @@ func TestOpenStore_EncryptedWithAutoUnlockGoesUnlocked(t *testing.T) {
 
 func TestOpenStore_AutoUnlockRequiresPassphrase(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	initEncryptedAt(t, drv, "hunter2")
+	storefx.InitEncryptedOn(t, drv, "hunter2")
 
-	_, err := core.OpenStore(context.Background(), drv,
+	_, err := storefx.TryOpenOn(t, drv,
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrPassphraseRequired) {
 		t.Fatalf("expected ErrPassphraseRequired, got %v", err)
@@ -246,13 +169,11 @@ func TestOpenStore_AutoUnlockRequiresPassphrase(t *testing.T) {
 
 func TestOpenStore_AutoUnlockWrongPassphrase(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	initEncryptedAt(t, drv, "right")
+	storefx.InitEncryptedOn(t, drv, "right")
 
-	_, err := core.OpenStore(context.Background(), drv,
-		core.WithPassphrase(staticPP("wrong")),
+	_, err := storefx.TryOpenOn(t, drv,
+		core.WithPassphrase(storefx.StaticPP("wrong")),
 		core.WithAutoUnlock(),
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("expected ErrDecryptionFailed, got %v", err)
@@ -263,17 +184,9 @@ func TestOpenStore_AutoUnlockWrongPassphrase(t *testing.T) {
 
 func TestOpenStore_PlainStoreRoundTrip(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 
-	s, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	)
+	s, err := storefx.TryOpenOn(t, drv)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -291,19 +204,11 @@ func TestOpenStore_PlainStoreRoundTrip(t *testing.T) {
 // test just ensures the refresh path doesn't crash.
 func TestOpenStore_RefreshesL2CacheOnFirstOpen(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := core.InitStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
-		t.Fatal(err)
-	}
+	storefx.InitPlainOn(t, drv)
 
 	// Fresh in-memory index — no L2 cache yet. OpenStore must
 	// build it.
-	if _, err := core.OpenStore(context.Background(), drv,
-		core.WithStoreIndex(indexfx.Memory(t)),
-		core.WithHashRegistry(storefx.Hashes()),
-	); err != nil {
+	if _, err := storefx.TryOpenOn(t, drv); err != nil {
 		t.Fatalf("OpenStore (no cache): %v", err)
 	}
 }

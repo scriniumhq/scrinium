@@ -2,13 +2,14 @@ package projection
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"io"
 	"iter"
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
 )
 
 // NodeSeq is a sequence of nodes with an optional error attached
@@ -212,7 +213,7 @@ type Mount interface {
 // NewProjection creates a Projection on top of the source.
 // TODO(M6.1): typed projection over WalkSystem.
 func NewProjection(source ProjectionSource) (Projection, error) {
-	return nil, errors.New("projection.NewProjection: not implemented")
+	return nil, fmt.Errorf("%w: projection.NewProjection", errs.ErrNotImplemented)
 }
 
 // --- Events ---

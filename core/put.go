@@ -25,7 +25,7 @@ import (
 // dangling staging files as orphans and prune them. We do not
 // need a HostStorage transit buffer for this: every staging blob
 // is rewritten or removed within a single Put call.
-const stagingPrefix = "system.state/staging"
+const stagingPrefix = domain.NamespaceSystemState + "/staging"
 
 // Put records an artifact in the Store. Two blob-placement paths
 // are supported:
@@ -49,10 +49,7 @@ const stagingPrefix = "system.state/staging"
 // Pack volumes are deferred to later milestones. Reaching a code
 // path that needs them returns an explicit error.
 func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error) {
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	if err := s.checkWritable(); err != nil {
+	if err := s.enterWrite(ctx); err != nil {
 		return "", err
 	}
 	if err := validatePutInputs(a, opts); err != nil {
@@ -186,9 +183,9 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	// inline ones (where it equals the ContentHash of the
 	// embedded bytes).
 
-	layout := "Target"
+	layout := domain.LayoutTarget
 	if inlineBytes != nil {
-		layout = "Inline"
+		layout = domain.LayoutInline
 	}
 	createdAt := time.Now().UTC()
 	manifest := domain.Manifest{
@@ -398,6 +395,30 @@ func (s *store) checkWritable() error {
 	return nil
 }
 
+// enterRead is the canonical entry-preamble for read-path methods
+// (Get, Verify, Walk, Capacity). Combines context cancellation with
+// the priority-of-checks gate so each method's body opens with
+// `if err := s.enterRead(ctx); err != nil { return ..., err }`
+// instead of the same six-line boilerplate.
+func (s *store) enterRead(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.checkOperational()
+}
+
+// enterWrite is the write-path counterpart: ctx + checkWritable
+// (which itself adds the ReadOnly guard on top of checkOperational).
+// Used by Put and Delete; mutating admin methods that need their
+// own crypto-state checks (Unlock, RotateKEK) do not go through
+// here.
+func (s *store) enterWrite(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.checkWritable()
+}
+
 // validatePutInputs covers the cheap, side-effect-free checks that
 // must reject before any I/O. Order matches the priority of
 // docs/2. Internals/01 §1.4.
@@ -409,7 +430,7 @@ func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	if len(opts.Namespace) > domain.MaxNamespaceLen {
 		return errs.ErrNamespaceTooLong
 	}
-	if strings.HasPrefix(opts.Namespace, "system.") || opts.Namespace == "*" {
+	if strings.HasPrefix(opts.Namespace, domain.NamespaceSystemPrefix) || opts.Namespace == domain.NamespaceWildcard {
 		return errs.ErrReservedNamespace
 	}
 	if len(opts.SessionID) > domain.MaxSessionIDLen {

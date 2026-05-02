@@ -2,10 +2,11 @@ package agent
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
 )
 
@@ -74,5 +75,5 @@ func NewGCAgent(
 	bus event.EventBus,
 	cfg GCConfig,
 ) (GCAgent, error) {
-	return nil, errors.New("agent.NewGCAgent: not implemented")
+	return nil, fmt.Errorf("%w: agent.NewGCAgent", errs.ErrNotImplemented)
 }
