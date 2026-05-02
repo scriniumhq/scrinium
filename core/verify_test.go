@@ -12,6 +12,8 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
+	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
 )
 
@@ -208,4 +210,48 @@ func readBlobRef(t *testing.T, s core.Store, id domain.ArtifactID) domain.BlobRe
 	}
 	defer rh.Close()
 	return rh.Manifest().BlobRef
+}
+
+// --- M2.3: encrypted manifest is transparent to Verify ---
+
+func TestVerify_EncryptedManifest_Succeeds(t *testing.T) {
+	for _, crypto := range []domain.ManifestCrypto{
+		domain.ManifestCryptoMetadataOnly,
+		domain.ManifestCryptoEnvelope,
+	} {
+		t.Run(string(crypto), func(t *testing.T) {
+			drv := driverfx.LocalFS(t)
+			idx := indexfx.Memory(t)
+			cfg := domain.StoreConfig{ManifestCrypto: crypto}
+
+			if _, _, err := core.InitStore(context.Background(), drv,
+				core.WithConfig(cfg),
+				core.WithPassphrase(staticPassphraseProvider("pw")),
+				core.WithStoreIndex(idx),
+				core.WithHashRegistry(storefx.Hashes()),
+			); err != nil {
+				t.Fatalf("InitStore: %v", err)
+			}
+			s, err := core.OpenStore(context.Background(), drv,
+				core.WithConfig(cfg),
+				core.WithPassphrase(staticPassphraseProvider("pw")),
+				core.WithAutoUnlock(),
+				core.WithStoreIndex(idx),
+				core.WithHashRegistry(storefx.Hashes()),
+			)
+			if err != nil {
+				t.Fatalf("OpenStore: %v", err)
+			}
+
+			id, err := s.Put(context.Background(),
+				payload("verify encrypted"),
+				domain.PutOptions{Namespace: "v"})
+			if err != nil {
+				t.Fatalf("Put: %v", err)
+			}
+			if err := s.Verify(context.Background(), id); err != nil {
+				t.Fatalf("Verify: %v", err)
+			}
+		})
+	}
 }
