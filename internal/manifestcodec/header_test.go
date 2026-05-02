@@ -3,6 +3,7 @@ package manifestcodec_test
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -320,4 +321,86 @@ func TestCryptoFromFlag_AllValues(t *testing.T) {
 	if _, err := manifestcodec.CryptoFromFlag(0x99); !errors.Is(err, errs.ErrUnsupportedCrypto) {
 		t.Errorf("unknown flag should give ErrUnsupportedCrypto, got %v", err)
 	}
+}
+
+// --- Fuzz: header round-trip ---
+
+func FuzzWriteReadHeader(f *testing.F) {
+	// Seed corpus: a few interesting cases.
+	f.Add(uint8(0), uint8(0), "")                       // Plain
+	f.Add(uint8(0), uint8(1), "tenant-a")               // MetadataOnly + KeyID
+	f.Add(uint8(0), uint8(2), "")                       // Envelope default key
+	f.Add(uint8(0), uint8(2), strings.Repeat("k", 255)) // Envelope max KeyID
+
+	f.Fuzz(func(t *testing.T, encMagicVariant, cryptoVariant uint8, keyID string) {
+		// Map random uint8s to legal enum values; out-of-range
+		// inputs should also be tested as "expected error" cases.
+		var encoding domain.ManifestEncoding
+		switch encMagicVariant % 2 {
+		case 0:
+			encoding = domain.ManifestEncodingJSON
+		case 1:
+			encoding = domain.ManifestEncodingJSON // also test default
+		}
+
+		var crypto domain.ManifestCrypto
+		switch cryptoVariant {
+		case 0:
+			crypto = domain.ManifestCryptoPlain
+		case 1:
+			crypto = domain.ManifestCryptoMetadataOnly
+		case 2:
+			crypto = domain.ManifestCryptoEnvelope
+		default:
+			// Out-of-range — writeHeader should refuse.
+			_, err := manifestcodec.WriteHeader(manifestcodec.FileHeader{
+				Encoding: encoding,
+				Crypto:   domain.ManifestCrypto(fmt.Sprintf("crypto-%d", cryptoVariant)),
+				KeyID:    keyID,
+			})
+			if err == nil {
+				t.Fatal("invalid crypto must error")
+			}
+			return
+		}
+
+		// Plain rejects KeyID — only test KeyID under encrypted modes.
+		if crypto == domain.ManifestCryptoPlain {
+			keyID = ""
+		}
+
+		src := manifestcodec.FileHeader{
+			Encoding: encoding,
+			Crypto:   crypto,
+			KeyID:    keyID,
+		}
+		raw, err := manifestcodec.WriteHeader(src)
+		if err != nil {
+			// Expected for KeyID > 255 or invalid UTF-8.
+			return
+		}
+
+		got, _, err := manifestcodec.ReadHeader(raw)
+		if err != nil {
+			t.Fatalf("ReadHeader on round-trip output: %v\nbytes: %x", err, raw)
+		}
+		if got != src {
+			t.Errorf("round-trip mismatch:\n got %+v\nwant %+v", got, src)
+		}
+	})
+}
+
+// --- Fuzz: random bytes must not panic readHeader ---
+
+func FuzzReadHeader_NoPanic(f *testing.F) {
+	// Seed with valid headers and short fragments.
+	f.Add([]byte{})
+	f.Add([]byte{0x00})
+	f.Add([]byte{0x00, 'S', 'C', '1', 0x00})
+	f.Add([]byte{0x00, 'S', 'C', '1', 0x02, 0x05, 'a', 'b', 'c'})
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// Must either parse cleanly or return an error — never panic.
+		_, _, _ = manifestcodec.ReadHeader(data)
+	})
 }

@@ -218,3 +218,33 @@ func TestSeal_OutputLayout(t *testing.T) {
 		t.Errorf("layout: got len=%d, want %d", len(got), 12+5+16)
 	}
 }
+
+// --- Fuzz: AEAD round-trip ---
+
+func FuzzSealOpen_RoundTrip(f *testing.F) {
+	// Seeds: simple cases, edges.
+	f.Add([]byte("hello"), []byte("aad"))
+	f.Add([]byte{}, []byte{})
+	f.Add(bytes.Repeat([]byte{0xFF}, 1024), []byte("header"))
+
+	f.Fuzz(func(t *testing.T, plaintext, aad []byte) {
+		// Fixed DEK for the fuzzer — no need to also fuzz the
+		// key, AES-GCM correctness is established stdlib.
+		dek := make([]byte, manifestcrypto.DEKLen)
+		for i := range dek {
+			dek[i] = byte(i)
+		}
+
+		ciphertext, err := manifestcrypto.Seal(plaintext, dek, aad)
+		if err != nil {
+			t.Fatalf("Seal: %v", err)
+		}
+		got, err := manifestcrypto.Open(ciphertext, dek, aad)
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		if !bytes.Equal(got, plaintext) {
+			t.Errorf("round-trip mismatch:\n got %x\nwant %x", got, plaintext)
+		}
+	})
+}
