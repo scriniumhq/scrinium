@@ -260,7 +260,6 @@ func TestOpen_ReadOnly(t *testing.T) {
 }
 
 func TestOpen_WriteModeNotImplemented(t *testing.T) {
-	// Stage 4a: write modes return ErrNotImplemented.
 	src := projectionfx.New()
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("x"))
@@ -274,12 +273,16 @@ func TestOpen_WriteModeNotImplemented(t *testing.T) {
 	for _, mode := range []projection.OpenMode{
 		projection.OpenWriteOnly,
 		projection.OpenReadWrite,
-		projection.OpenAppend,
 	} {
 		_, err := o.Open(context.Background(), "a.txt", mode)
 		if !errors.Is(err, errs.ErrNotImplemented) {
 			t.Errorf("mode %v: expected ErrNotImplemented, got %v", mode, err)
 		}
+	}
+
+	_, err := o.Open(context.Background(), "a.txt", projection.OpenAppend)
+	if !errors.Is(err, errs.ErrEditingDisabled) {
+		t.Errorf("OpenAppend without AllowAppend: expected ErrEditingDisabled, got %v", err)
 	}
 }
 

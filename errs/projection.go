@@ -49,3 +49,12 @@ var ErrEditingDisabled = errors.New("scrinium: projection editing disabled")
 // ErrScratchQuota — FSOps.Create/Write would exceed the configured
 // scratch quota. Translated to ENOSPC at the FUSE layer.
 var ErrScratchQuota = errors.New("scrinium: projection scratch quota exceeded")
+
+// ErrPathExists — Create/Mkdir at a path that is already taken
+// (real artifact or pending directory). Translates to EEXIST at
+// the FUSE layer.
+var ErrPathExists = errors.New("scrinium: projection path already exists")
+
+// ErrNotEmpty — Rmdir on a directory that has children. Translates
+// to ENOTEMPTY at the FUSE layer.
+var ErrNotEmpty = errors.New("scrinium: projection directory not empty")

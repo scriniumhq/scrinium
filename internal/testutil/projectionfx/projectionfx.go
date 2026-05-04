@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"sync"
+	"time"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
@@ -30,8 +33,13 @@ type FakeSource struct {
 	manifests []domain.Manifest
 	payloads  map[domain.ArtifactID][]byte
 
-	walkErr error
-	getErr  error
+	walkErr   error
+	getErr    error
+	putErr    error
+	deleteErr error
+
+	// putCounter generates unique synthetic ArtifactIDs for Put.
+	putCounter uint64
 }
 
 // New returns an empty FakeSource ready to use as
@@ -123,6 +131,110 @@ func (f *FakeSource) Get(
 		return nil, errs.ErrArtifactNotFound
 	}
 	return NewReadHandle(payload, WithManifest(manifest)), nil
+}
+
+// Put consumes the artifact payload, generates a synthetic
+// ArtifactID, and stores both the manifest and the bytes. The
+// returned ID embeds an incrementing counter so multiple Puts in
+// the same test produce distinct IDs without colliding.
+//
+// The synthetic ContentHash is derived from the counter as well,
+// keeping every artifact's hash distinct (the dedup-on-content
+// behaviour of the real Store is irrelevant here — tests that
+// need it construct manifests by hand and use Add).
+func (f *FakeSource) Put(
+	ctx context.Context,
+	a domain.Artifact,
+	opts domain.PutOptions,
+) (domain.ArtifactID, error) {
+	f.mu.Lock()
+	if f.putErr != nil {
+		err := f.putErr
+		f.mu.Unlock()
+		return "", err
+	}
+	f.putCounter++
+	counter := f.putCounter
+	f.mu.Unlock()
+
+	// Drain the payload into bytes — tests can re-serve it via Get.
+	var payload []byte
+	if a.Payload != nil {
+		buf, err := io.ReadAll(a.Payload)
+		if err != nil {
+			return "", fmt.Errorf("projectionfx.FakeSource.Put: read payload: %w", err)
+		}
+		payload = buf
+	}
+
+	id := domain.ArtifactID(fmt.Sprintf("sha256-%064x", counter))
+	hash := domain.ContentHash(fmt.Sprintf("sha256-%064x", counter+0x10000))
+
+	m := domain.Manifest{
+		ArtifactID:   id,
+		Type:         domain.ManifestTypeBlob,
+		Namespace:    opts.Namespace,
+		SessionID:    opts.SessionID,
+		CreatedAt:    time.Now().UTC(),
+		ContentHash:  hash,
+		BlobRef:      domain.BlobRef(hash),
+		OriginalSize: int64(len(payload)),
+		Metadata:     a.Metadata,
+	}
+
+	f.mu.Lock()
+	f.manifests = append(f.manifests, m)
+	f.payloads[id] = payload
+	f.mu.Unlock()
+
+	return id, nil
+}
+
+// Delete drops the artifact (manifest + payload) from the store.
+// Idempotent: deleting an unknown id is a no-op (matches
+// core.Store semantics).
+func (f *FakeSource) Delete(ctx context.Context, id domain.ArtifactID) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	for i, m := range f.manifests {
+		if m.ArtifactID == id {
+			f.manifests = append(f.manifests[:i], f.manifests[i+1:]...)
+			break
+		}
+	}
+	delete(f.payloads, id)
+	return nil
+}
+
+// SetPutErr installs an error returned by every subsequent Put
+// call. nil clears.
+func (f *FakeSource) SetPutErr(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.putErr = err
+}
+
+// SetDeleteErr installs an error returned by every subsequent
+// Delete call. nil clears.
+func (f *FakeSource) SetDeleteErr(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleteErr = err
+}
+
+// Manifests returns a snapshot of every manifest currently held by
+// the source. Useful for assertions that count or scan recently
+// stored artifacts.
+func (f *FakeSource) Manifests() []domain.Manifest {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	out := make([]domain.Manifest, len(f.manifests))
+	copy(out, f.manifests)
+	return out
 }
 
 // --- FakeReadHandle ---
