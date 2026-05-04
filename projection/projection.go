@@ -75,18 +75,24 @@ type PathResolver func(m domain.Manifest) (path string, ok bool)
 
 // --- Node and facets ---
 
-// FilesystemFacet is the POSIX-shaped view of a Node — what FUSE
-// and WebDAV ultimately serve. Always populated, including for
-// virtual directories synthesised from grouping.
+// FilesystemFacet is the minimal POSIX-shaped view of a Node:
+// what every consumer of the View needs regardless of schema.
+// Always populated, including for virtual directories
+// synthesised from grouping.
+//
+// POSIX attributes (mode, uid, gid) are NOT in this facet:
+// they belong to the filesystem schema (fsmeta.FileSystem) and
+// are materialised by FSOps when the consumer crosses the
+// transport boundary (FUSE/WebDAV). Storing them here would
+// commit View to a single schema and pre-empt the consumer's
+// policy. Email- or other non-POSIX projections reuse Node
+// without paying for unused POSIX fields.
 type FilesystemFacet struct {
 	Name    string
 	Path    string
 	IsDir   bool
 	Size    int64
 	ModTime time.Time
-	Mode    uint32
-	UID     uint32
-	GID     uint32
 }
 
 // ArtifactFacet carries the CAS metadata of a concrete artifact.

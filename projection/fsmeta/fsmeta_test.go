@@ -9,7 +9,6 @@ import (
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
-	"github.com/rkurbatov/scrinium/projection"
 	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
@@ -399,11 +398,4 @@ func TestResolver_SwallowsDecodeErrors(t *testing.T) {
 	if ok {
 		t.Errorf("expected ok=false for invalid path, got path=%q", path)
 	}
-}
-
-func TestResolver_CompileTime_PathResolverShape(t *testing.T) {
-	// Compile-time check: Resolver must have the exact shape of
-	// projection.PathResolver. If signature drifts, this fails to
-	// compile.
-	var _ projection.PathResolver = fsmeta.Resolver
 }

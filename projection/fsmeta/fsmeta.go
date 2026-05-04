@@ -19,7 +19,6 @@ import (
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
-	"github.com/rkurbatov/scrinium/projection"
 )
 
 // Marker identifies the schema and version. Decode rejects any
@@ -275,8 +274,3 @@ func ValidatePathWithReserved(p, reserved string) error {
 	}
 	return nil
 }
-
-// Compile-time guard: keep the projection package referenced so the
-// import survives refactors. Resolver's signature is the contract
-// we are committing to.
-var _ projection.PathResolver = Resolver

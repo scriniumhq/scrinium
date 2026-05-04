@@ -418,6 +418,18 @@ func (v *View) removeLoser(path string, id domain.ArtifactID) {
 	}
 }
 
+// --- Public accessors ---
+
+// RootView returns the configured root tree. It is informational
+// metadata: the View itself does not hide other trees, but
+// transports (FUSE, FSOps) read this to decide which tree to
+// surface in the mount root and which to relegate to the service
+// directory.
+//
+// Stable for the lifetime of the View — the option is set at
+// NewView time and never mutated.
+func (v *View) RootView() RootView { return v.opts.rootView }
+
 // --- Read methods (one set per tree) ---
 
 func (v *View) GetByPath(path string) (Node, error)      { return v.getInTree(v.byPath, path) }
@@ -726,6 +738,14 @@ func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 // insertFile creates a file node (or updates an existing one) at
 // path in tree, ensuring all parent directories exist as virtual
 // nodes.
+//
+// FilesystemFacet carries only the schema-agnostic fields: Name,
+// Path, Size, ModTime, IsDir. POSIX attributes (mode/uid/gid)
+// live in fsmeta.FileSystem inside Manifest.Metadata and are
+// materialised by FSOps at the transport boundary.
+//
+// ModTime here is seeded from m.CreatedAt as a baseline; FSOps
+// overrides with fsmeta.ModTime when non-zero.
 func (v *View) insertFile(tree map[string]*viewNode, path string, m domain.Manifest) {
 	v.ensureDirs(tree, parentPath(path))
 	name := lastSegment(path)
@@ -736,7 +756,6 @@ func (v *View) insertFile(tree map[string]*viewNode, path string, m domain.Manif
 			IsDir:   false,
 			Size:    m.OriginalSize,
 			ModTime: m.CreatedAt,
-			Mode:    0o644,
 		},
 		artifact: artifactFacetFrom(m),
 	}
@@ -800,14 +819,15 @@ func (v *View) ensureDirs(tree map[string]*viewNode, path string) {
 	}
 }
 
-// newDirNode creates an empty virtual-directory node.
+// newDirNode creates an empty virtual-directory node. POSIX
+// mode/uid/gid live in FSOps defaults — virtual directories
+// have no metadata of their own.
 func newDirNode(name, path string, modTime time.Time) *viewNode {
 	return &viewNode{
 		fs: FilesystemFacet{
 			Name:    name,
 			Path:    path,
 			IsDir:   true,
-			Mode:    0o755,
 			ModTime: modTime,
 		},
 	}
