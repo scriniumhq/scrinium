@@ -259,7 +259,10 @@ func TestOpen_ReadOnly(t *testing.T) {
 	}
 }
 
-func TestOpen_WriteModeNotImplemented(t *testing.T) {
+func TestOpen_WriteModesRejectedWithoutPolicy(t *testing.T) {
+	// With editing=off (default), every write-side Open mode is
+	// refused with ErrEditingDisabled. AllowAppend, AllowSetattr,
+	// AllowTruncate are all required by their own paths.
 	src := projectionfx.New()
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("x"))
@@ -273,16 +276,12 @@ func TestOpen_WriteModeNotImplemented(t *testing.T) {
 	for _, mode := range []projection.OpenMode{
 		projection.OpenWriteOnly,
 		projection.OpenReadWrite,
+		projection.OpenAppend,
 	} {
 		_, err := o.Open(context.Background(), "a.txt", mode)
-		if !errors.Is(err, errs.ErrNotImplemented) {
-			t.Errorf("mode %v: expected ErrNotImplemented, got %v", mode, err)
+		if !errors.Is(err, errs.ErrEditingDisabled) {
+			t.Errorf("mode %v: expected ErrEditingDisabled, got %v", mode, err)
 		}
-	}
-
-	_, err := o.Open(context.Background(), "a.txt", projection.OpenAppend)
-	if !errors.Is(err, errs.ErrEditingDisabled) {
-		t.Errorf("OpenAppend without AllowAppend: expected ErrEditingDisabled, got %v", err)
 	}
 }
 

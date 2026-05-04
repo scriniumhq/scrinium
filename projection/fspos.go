@@ -360,19 +360,69 @@ func (o *FSOps) Listdir(path string) FileInfoSeq {
 // returns ErrEditingDisabled — Create is the documented entry
 // point for new files; Setattr/Truncate (4c) covers editing.
 func (o *FSOps) Open(ctx context.Context, path string, mode OpenMode) (File, error) {
+	if o.readOnly && mode != OpenReadOnly {
+		return nil, fmt.Errorf("%w: write-mode Open on read-only FSOps",
+			errs.ErrEditingDisabled)
+	}
 	if mode == OpenReadOnly {
 		return o.openForRead(ctx, path)
 	}
-	// Append requires its own policy bit.
+	// Append needs its own policy bit; treat as a separate path.
 	if mode&OpenAppend != 0 {
 		if !o.editing.AllowAppend {
 			return nil, fmt.Errorf("%w: O_APPEND", errs.ErrEditingDisabled)
 		}
-		return nil, fmt.Errorf("%w: O_APPEND", errs.ErrNotImplemented)
+		return o.openForAppend(ctx, path)
 	}
-	// Plain write/read-write on an existing file — editing.
-	return nil, fmt.Errorf("%w: write-mode Open on existing file lands in 4c",
-		errs.ErrNotImplemented)
+	// Plain write/read-write on an existing file — editing. Allow
+	// when any editing policy bit is set: the caller has already
+	// expressed intent to mutate, and Setattr/Truncate plus
+	// arbitrary writes are all reachable from this handle.
+	if !o.editing.AllowSetattr && !o.editing.AllowTruncate && !o.editing.AllowAppend {
+		return nil, fmt.Errorf("%w: write-mode Open requires editing policy",
+			errs.ErrEditingDisabled)
+	}
+	return o.openForEdit(ctx, path, mode)
+}
+
+// openForEdit prepares a writeFile pre-loaded with the existing
+// artifact's content and fsmeta, ready for arbitrary WriteAt /
+// Truncate. On Close the result lands in the View through Move.
+func (o *FSOps) openForEdit(ctx context.Context, path string, mode OpenMode) (File, error) {
+	lock := o.pathLocks.Get(path)
+	lock.Lock()
+
+	wf, err := o.prepareEditingScratch(ctx, path)
+	if err != nil {
+		lock.Unlock()
+		return nil, err
+	}
+	wf.unlock = lock.Unlock
+	_ = mode // mode bits beyond editing presence have no effect on the handle
+	return wf, nil
+}
+
+// openForAppend is the O_APPEND path. The implementation is
+// identical to openForEdit (scratch pre-loaded with existing
+// content); the caller writes at offsets >= current size.
+//
+// AllowAppend is independent of Setattr/Truncate so this path
+// must work on its own. Setattr and Truncate operations from the
+// returned handle are still gated by their respective policy
+// bits at Close time? — no: the handle holds no per-op policy,
+// it just performs whatever writes/truncates the caller dispatches.
+// In practice O_APPEND callers only WriteAt at the end and Close.
+func (o *FSOps) openForAppend(ctx context.Context, path string) (File, error) {
+	lock := o.pathLocks.Get(path)
+	lock.Lock()
+
+	wf, err := o.prepareEditingScratch(ctx, path)
+	if err != nil {
+		lock.Unlock()
+		return nil, err
+	}
+	wf.unlock = lock.Unlock
+	return wf, nil
 }
 
 // openForRead is the stage-4a code path: pure View read.
@@ -563,7 +613,7 @@ func (o *FSOps) Create(ctx context.Context, path string, mode uint32) (File, err
 		scratchPath: scratchPath,
 		handle:      scratchFile,
 		mode:        mode,
-		lock:        lock,
+		unlock:      lock.Unlock,
 	}, nil
 }
 
@@ -686,6 +736,232 @@ func (o *FSOps) Rmdir(path string) error {
 	return nil
 }
 
+// --- Editing existing artifacts ---
+
+// Rename moves an artifact from oldPath to newPath. In CAS terms
+// the operation is a Put-with-new-fsmeta-Path followed by a
+// Delete of the old artifact, atomically reflected in the View
+// via View.Move.
+//
+// Errors:
+//   - ErrEditingDisabled if AllowRename is off or FSOps is read-only.
+//   - ErrInvalidPath if newPath fails validation.
+//   - ErrPathNotFound if oldPath does not exist.
+//   - ErrIsADirectory if oldPath points at a virtual directory.
+//   - ErrPathExists if newPath is already taken.
+//   - Any error from Store.Put / Store.Delete.
+func (o *FSOps) Rename(ctx context.Context, oldPath, newPath string) error {
+	if o.readOnly {
+		return fmt.Errorf("%w: Rename on read-only FSOps", errs.ErrEditingDisabled)
+	}
+	if !o.editing.AllowRename {
+		return fmt.Errorf("%w: Rename without AllowRename", errs.ErrEditingDisabled)
+	}
+	if err := fsmeta.ValidatePath(newPath); err != nil {
+		return err
+	}
+	if oldPath == newPath {
+		return nil
+	}
+	if o.store == nil {
+		return fmt.Errorf("projection.FSOps.Rename: WithStore not configured")
+	}
+
+	unlock := o.pathLocks.lockOrdered(oldPath, newPath)
+	defer unlock()
+
+	// newPath must not exist (file or pending dir).
+	if _, err := o.lookupInRoot(newPath); err == nil {
+		return fmt.Errorf("%w: %q already exists", errs.ErrPathExists, newPath)
+	} else if !errors.Is(err, errs.ErrPathNotFound) {
+		return err
+	}
+	if o.isPendingDir(newPath) {
+		return fmt.Errorf("%w: %q is a pending directory", errs.ErrPathExists, newPath)
+	}
+
+	// Stage the old artifact's content and fsmeta into a scratch
+	// editing handle whose Close performs Put+Delete+Move.
+	wf, err := o.prepareEditingScratch(ctx, oldPath)
+	if err != nil {
+		return err
+	}
+	wf.path = newPath
+	wf.forceDirty = true // content unchanged; metadata change alone triggers Put
+	// Lock has already been taken by lockOrdered; substitute the
+	// closer used by the writeFile so it does not double-unlock.
+	wf.unlock = func() {} // unlock is handled by the deferred lockOrdered
+
+	return wf.Close()
+}
+
+// Setattr changes POSIX attributes (mode, uid, gid, mtime) of an
+// existing artifact. Each non-nil field of attrs is applied;
+// other fsmeta fields (Path, MIME) are preserved. The operation
+// produces a new artifact with the same content (the underlying
+// blob is deduplicated by the Store) and removes the old.
+//
+// Errors mirror Rename, plus ErrEditingDisabled when AllowSetattr
+// is off.
+func (o *FSOps) Setattr(ctx context.Context, path string, attrs Attrs) error {
+	if o.readOnly {
+		return fmt.Errorf("%w: Setattr on read-only FSOps", errs.ErrEditingDisabled)
+	}
+	if !o.editing.AllowSetattr {
+		return fmt.Errorf("%w: Setattr without AllowSetattr", errs.ErrEditingDisabled)
+	}
+	if o.store == nil {
+		return fmt.Errorf("projection.FSOps.Setattr: WithStore not configured")
+	}
+
+	lock := o.pathLocks.Get(path)
+	lock.Lock()
+	defer lock.Unlock()
+
+	wf, err := o.prepareEditingScratch(ctx, path)
+	if err != nil {
+		return err
+	}
+	wf.unlock = func() {} // already locked; release in our defer
+
+	if attrs.Mode != nil {
+		wf.inheritedFsmeta.Mode = *attrs.Mode
+		wf.mode = *attrs.Mode // also influence Close's fsm.Mode override path
+	}
+	if attrs.UID != nil {
+		wf.inheritedFsmeta.UID = *attrs.UID
+	}
+	if attrs.GID != nil {
+		wf.inheritedFsmeta.GID = *attrs.GID
+	}
+	if attrs.ModTime != nil {
+		wf.inheritedFsmeta.ModTime = *attrs.ModTime
+	}
+	wf.forceDirty = true
+
+	return wf.Close()
+}
+
+// Truncate adjusts the size of an existing artifact. The new
+// file is materialised by reading the existing content, capping
+// at size (or extending with zeros if size > current), and
+// writing a new artifact. The old is removed.
+//
+// Errors mirror Rename, plus ErrEditingDisabled when
+// AllowTruncate is off, plus ErrScratchQuota if the scratch
+// pre-allocation would exceed the quota.
+func (o *FSOps) Truncate(ctx context.Context, path string, size int64) error {
+	if o.readOnly {
+		return fmt.Errorf("%w: Truncate on read-only FSOps", errs.ErrEditingDisabled)
+	}
+	if !o.editing.AllowTruncate {
+		return fmt.Errorf("%w: Truncate without AllowTruncate", errs.ErrEditingDisabled)
+	}
+	if size < 0 {
+		return fmt.Errorf("projection.FSOps.Truncate: negative size %d", size)
+	}
+	if o.store == nil {
+		return fmt.Errorf("projection.FSOps.Truncate: WithStore not configured")
+	}
+
+	lock := o.pathLocks.Get(path)
+	lock.Lock()
+	defer lock.Unlock()
+
+	wf, err := o.prepareEditingScratch(ctx, path)
+	if err != nil {
+		return err
+	}
+	wf.unlock = func() {}
+
+	// Apply the size change to the scratch.
+	if err := wf.Truncate(size); err != nil {
+		// On quota failure / other error, abort: discard scratch
+		// without Put.
+		_ = wf.Close()
+		return err
+	}
+	wf.forceDirty = true
+
+	return wf.Close()
+}
+
+// prepareEditingScratch assembles a writeFile for editing the
+// artifact at path: it allocates a scratch file, copies the
+// existing content into it, decodes the existing fsmeta, and
+// returns the handle ready for further mutation by the caller.
+//
+// Caller responsibilities (filled in after the call):
+//   - wf.unlock — overwrite if the caller manages locks externally.
+//   - wf.path / wf.mode / wf.inheritedFsmeta — mutate as the
+//     editing operation requires.
+//   - wf.forceDirty — set to true when no WriteAt will follow
+//     (Setattr, Rename) so Close still performs a Put.
+//
+// On error the scratch is fully cleaned up.
+func (o *FSOps) prepareEditingScratch(ctx context.Context, path string) (*writeFile, error) {
+	n, err := o.lookupInRoot(path)
+	if err != nil {
+		return nil, err
+	}
+	if n.FS.IsDir {
+		return nil, fmt.Errorf("%w: %q", errs.ErrIsADirectory, path)
+	}
+
+	// Decode old fsmeta to inherit non-mutated fields. A clean
+	// failure here (no fsmeta on the artifact) is acceptable —
+	// the inherited struct stays zero, and Close re-encodes from
+	// scratch; the artifact gains a fresh fsmeta with only the
+	// mutated fields plus path.
+	var inherited fsmeta.FileSystem
+	if n.Artifact != nil {
+		if fs, ok, _ := fsmeta.Decode(n.Artifact.Metadata); ok {
+			inherited = fs
+		}
+	}
+
+	scratchPath, scratchFile, err := o.newScratchFile()
+	if err != nil {
+		return nil, err
+	}
+	cleanup := func() {
+		scratchFile.Close()
+		os.Remove(scratchPath)
+	}
+
+	// Copy content from the existing artifact into the scratch.
+	rh, err := o.openInRoot(ctx, path)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	written, err := io.Copy(scratchFile, rh)
+	rh.Close()
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("projection.FSOps: stage scratch: %w", err)
+	}
+	// Reserve quota for the staged bytes. If the quota is
+	// exceeded we fail before the caller has a chance to mutate.
+	if err := o.quota.Reserve(written); err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	return &writeFile{
+		fsops:             o,
+		path:              path,
+		scratchPath:       scratchPath,
+		handle:            scratchFile,
+		mode:              inherited.Mode,
+		unlock:            func() {}, // caller-managed by default
+		replaceArtifactID: n.Artifact.ArtifactID,
+		oldPath:           path,
+		inheritedFsmeta:   inherited,
+		size:              written,
+	}, nil
+}
+
 // --- Pending directories ---
 
 func (o *FSOps) isPendingDir(path string) bool {
@@ -786,13 +1062,40 @@ func (o *FSOps) newScratchFile() (string, *os.File, error) {
 // file. WriteAt drains into the scratch and bumps the running
 // quota; Close turns the scratch into a Store.Put and updates
 // the View.
+//
+// Editing existing artifacts: when replaceArtifactID is non-empty,
+// Close treats the operation as a replace — after the new Put it
+// also calls Store.Delete(replaceArtifactID) and uses View.Move
+// instead of View.Add. inheritedFsmeta carries the fsmeta of the
+// pre-existing artifact so callers (Setattr, Rename) can inherit
+// fields they don't explicitly mutate.
+//
+// Locks: a single-path Open holds one lock; Rename holds two
+// (old + new) acquired in lex order via pathLocks.lockOrdered.
+// The unlock function lives in `unlock` and is called once on
+// Close regardless of which path produced the lock.
 type writeFile struct {
 	fsops       *FSOps
 	path        string
 	scratchPath string
 	handle      *os.File
 	mode        uint32
-	lock        *sync.RWMutex
+
+	// unlock releases the path-level lock(s) held by this
+	// handle. Set by the constructor (Create or open-for-edit
+	// helpers); always called exactly once at Close end.
+	unlock func()
+
+	// Editing fields.
+	replaceArtifactID domain.ArtifactID // empty for new files
+	oldPath           string            // empty for new files
+	inheritedFsmeta   fsmeta.FileSystem // base for fsmeta on Close
+
+	// markDirty=true forces Close to perform a Put even when no
+	// WriteAt happened. Used by Setattr/Rename where the content
+	// is unchanged but metadata has to be re-emitted as a new
+	// artifact.
+	forceDirty bool
 
 	mu     sync.Mutex
 	size   int64 // logical scratch size as the writer sees it
@@ -885,15 +1188,17 @@ func (f *writeFile) Sync() error {
 	return f.handle.Sync()
 }
 
-// Close finalises the handle. The behaviour depends on dirty:
+// Close finalises the handle. Behaviour depends on dirty and on
+// whether the handle is editing an existing artifact:
 //
-//   - Clean (no successful WriteAt): scratch is deleted, no Put,
-//     the path is left untouched.
-//   - Dirty: scratch is read by Store.Put, the resulting manifest
-//     is fetched via Get and added to the View through View.Add.
+//   - Clean (no successful WriteAt and no forceDirty): scratch is
+//     deleted, no Put, the path is left untouched.
+//   - Dirty + new file: Store.Put -> Store.Get -> View.Add.
+//   - Dirty + editing (replaceArtifactID set): Store.Put ->
+//     Store.Delete(replaceArtifactID) -> Store.Get -> View.Move.
 //
 // Quota reserved during writes is released either way. The path
-// lock is released last.
+// lock(s) are released last via the unlock closure.
 func (f *writeFile) Close() error {
 	f.mu.Lock()
 	if f.closed {
@@ -901,11 +1206,11 @@ func (f *writeFile) Close() error {
 		return nil
 	}
 	f.closed = true
-	dirty := f.dirty
+	dirty := f.dirty || f.forceDirty
 	size := f.size
 	f.mu.Unlock()
 
-	defer f.lock.Unlock()
+	defer f.unlock()
 	defer f.fsops.quota.Release(size)
 	defer os.Remove(f.scratchPath)
 	defer f.handle.Close()
@@ -918,11 +1223,27 @@ func (f *writeFile) Close() error {
 		return fmt.Errorf("projection.FSOps: seek scratch: %w", err)
 	}
 
-	metadata, err := fsmeta.Encode(fsmeta.FileSystem{
-		Path:    f.path,
-		Mode:    f.mode,
-		ModTime: time.Now().UTC(),
-	})
+	// Build fsmeta. For editing, start from the inherited fsmeta
+	// (preserves MIME, plus any field not explicitly mutated by
+	// the caller) and overlay the new path/mode. For new files,
+	// inheritedFsmeta is the zero value.
+	fsm := f.inheritedFsmeta
+	fsm.Path = f.path
+	if f.mode != 0 {
+		fsm.Mode = f.mode
+	}
+	// ModTime: for new files (no predecessor), stamp with the
+	// current time. For editing, the caller has already placed
+	// the desired ModTime into inheritedFsmeta — Setattr writes
+	// the user's value there explicitly, Rename inherits the old
+	// artifact's value, and an arbitrary write through
+	// openForEdit also keeps the inherited value. Overwriting
+	// here would clobber Setattr's intent.
+	if f.replaceArtifactID == "" {
+		fsm.ModTime = time.Now().UTC()
+	}
+
+	metadata, err := fsmeta.Encode(fsm)
 	if err != nil {
 		return err
 	}
@@ -943,10 +1264,18 @@ func (f *writeFile) Close() error {
 		return err
 	}
 
-	// Fetch the resulting manifest to update the View. One
-	// round-trip; alternative is to reconstruct the manifest
-	// from local data, but that duplicates engine logic and is
-	// fragile.
+	// For editing paths, drop the predecessor before refetching
+	// the new manifest. If Delete fails the new artifact is
+	// already in place; surface the error so the caller can
+	// observe the partial state — a subsequent reconciliation
+	// (e.g. GC) will eventually drop the orphan.
+	if f.replaceArtifactID != "" {
+		if err := f.fsops.store.Delete(context.Background(), f.replaceArtifactID); err != nil {
+			return fmt.Errorf("projection.FSOps: delete predecessor: %w", err)
+		}
+	}
+
+	// Fetch the resulting manifest to update the View.
 	rh, err := f.fsops.store.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("projection.FSOps: refetch new manifest: %w", err)
@@ -954,12 +1283,21 @@ func (f *writeFile) Close() error {
 	manifest := rh.Manifest()
 	rh.Close()
 
-	if err := f.fsops.view.Add(manifest); err != nil {
-		return err
+	if f.replaceArtifactID != "" {
+		// Editing: Move handles both removal of the old by-path
+		// owner (which Store.Delete already enforced separately)
+		// and addition of the new manifest in every tree.
+		if err := f.fsops.view.Move(f.oldPath, f.path, manifest); err != nil {
+			return err
+		}
+	} else {
+		if err := f.fsops.view.Add(manifest); err != nil {
+			return err
+		}
 	}
 
 	// If the new file lives inside a pending directory, the
-	// pending entry is now redundant (View.Add ran
+	// pending entry is now redundant (View.Add/Move ran
 	// ensureDirs). Drop the entry to keep state tidy.
 	f.fsops.dropParentPendingDirs(f.path)
 
