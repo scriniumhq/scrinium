@@ -1,73 +1,109 @@
+// Package projection builds virtual filesystem-like views over the
+// flat content-addressed store. The package is the seam at which
+// transport-specific daemons (cmd/scrinium-fuse, cmd/scrinium-webdav)
+// plug in: projection itself does no syscalls and no networking.
+//
+// Architecture: View is the in-memory tree (read side) populated by
+// backfill from a ProjectionSource. FSOps adds the write side —
+// create/unlink/rename/setattr — and is the place where scratch
+// buffering, path-level locks and editing policies live. Together
+// they cover ~80% of what FUSE and WebDAV daemons need; the
+// transport layer is a thin dispatcher.
+//
+// Schemas describing how artifacts map to filesystem paths live in
+// subpackages (projection/fsmeta is the standard one). They are
+// pluggable through the PathResolver function passed to NewView.
+//
+// Specification: docs/3 §5 Projection API, docs/4 §13 Projection,
+// docs/4 §14 FUSE Mount.
 package projection
 
 import (
 	"context"
-	"fmt"
-	"io"
+	"encoding/json"
 	"iter"
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/event"
 )
 
-// NodeSeq is a sequence of nodes with an optional error attached
-// to each position.
-type NodeSeq = iter.Seq2[Node, error]
-
-// SourceKind is the type of the Projection's data source. It
-// determines whether StorageFacet is present in a Node.
-type SourceKind uint8
-
-const (
-	// SourceKindStore — a single core.DataStore. StorageFacet is
-	// always nil.
-	SourceKindStore SourceKind = iota
-
-	// SourceKindCurator — a Curator with access to MultistoreIndex.
-	// StorageFacet is populated when needed.
-	SourceKindCurator
-)
+// --- Source ---
 
 // ProjectionSource is the minimal contract for an artifact source
-// supplying a Projection. It does not depend on curator: it is
-// satisfied by both core.DataStore and curator.Curator. Extended
-// abilities (StorageFacet) are detected via a type assertion to
-// *curator.Curator on the Projection side — a deliberate decision
-// that avoids leaking curator dependencies down the DAG.
+// supplying a View. Satisfied by core.DataStore and curator.Curator
+// without additional code. Extended abilities (StorageFacet
+// population) are detected on the View side via a type assertion
+// when needed — keeps curator out of projection's import graph.
 type ProjectionSource interface {
 	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
 	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (core.ReadHandle, error)
 }
 
-// PathResolver extracts the virtual path from a manifest. It
-// returns a path in the "a/b/c.txt" style or an empty string if
-// no path is defined (the artifact will appear only under
-// by-artifact/).
-type PathResolver func(m domain.Manifest) string
+// SourceKind labels the type of source backing a View. Governs
+// whether StorageFacet is meaningful for a Node.
+type SourceKind string
+
+const (
+	// SourceKindStore — a single core.DataStore. StorageFacet is
+	// always nil.
+	SourceKindStore SourceKind = "store"
+
+	// SourceKindCurator — a Curator with MultistoreIndex.
+	// StorageFacet is populated.
+	SourceKindCurator SourceKind = "curator"
+)
+
+// --- PathResolver ---
+
+// PathResolver extracts a virtual path from a manifest. Implementing
+// it is how a host plugs a metadata schema into the projection.
+//
+// Returns:
+//   - (path, true) when the artifact carries a recognised schema
+//     and a valid path.
+//   - ("", false) when the artifact is opaque to this resolver.
+//
+// Pure: the same Manifest must always produce the same result —
+// the View caches the decision and any non-determinism shows up as
+// stale-tree bugs.
+//
+// Standard implementation for the filesystem schema is
+// projection/fsmeta.Resolver.
+type PathResolver func(m domain.Manifest) (path string, ok bool)
 
 // --- Node and facets ---
 
-// FilesystemFacet is the part of every Node that is always filled.
+// FilesystemFacet is the POSIX-shaped view of a Node — what FUSE
+// and WebDAV ultimately serve. Always populated, including for
+// virtual directories synthesised from grouping.
 type FilesystemFacet struct {
-	Path     string
-	IsDir    bool
-	Size     int64
-	ModTime  time.Time
-	Children []string
+	Name    string
+	Path    string
+	IsDir   bool
+	Size    int64
+	ModTime time.Time
+	Mode    uint32
+	UID     uint32
+	GID     uint32
 }
 
-// ArtifactFacet holds the data of a concrete artifact. Filled for
-// file nodes; nil for directories.
+// ArtifactFacet carries the CAS metadata of a concrete artifact.
+// Populated for file nodes; nil for virtual directories.
 type ArtifactFacet struct {
-	ArtifactID domain.ArtifactID
-	Manifest   domain.Manifest
+	ArtifactID  domain.ArtifactID
+	ContentHash domain.ContentHash
+	BlobRef     domain.BlobRef
+	Namespace   string
+	SessionID   string
+	CreatedAt   time.Time
+	Type        domain.ManifestType
+	Metadata    json.RawMessage
 }
 
-// StorageFacet holds placement data within the Curator stack.
-// Filled only when SourceKind == Curator. nil when SourceKind ==
-// Store.
+// StorageFacet carries placement data within a Curator stack.
+// Populated only when SourceKind == Curator.
 type StorageFacet struct {
 	StoreID   domain.StoreID
 	Workspace domain.Workspace
@@ -75,169 +111,142 @@ type StorageFacet struct {
 	RefCount  int
 }
 
-// Node is a node in the View tree. FilesystemFacet is always
-// populated; ArtifactFacet is populated for files; StorageFacet
-// only for a Curator source.
+// Node is one entry in the View. FS is always populated; Artifact
+// for files; Storage only on a Curator source.
 type Node struct {
-	Filesystem FilesystemFacet
-	Artifact   *ArtifactFacet
-	Storage    *StorageFacet
+	FS       FilesystemFacet
+	Artifact *ArtifactFacet
+	Storage  *StorageFacet
 }
 
-// --- View ---
+// NodeSeq is a sequence of nodes with an optional error per
+// position (the standard iter.Seq2 pattern for fallible streams).
+type NodeSeq = iter.Seq2[Node, error]
 
-// ViewMode is the way the View's contents are computed.
-type ViewMode string
+// --- View configuration ---
+
+// RootView selects which logical tree appears at the root of the
+// View. The chosen tree does not duplicate into the service
+// directory of a FUSE mount.
+type RootView string
 
 const (
-	// ViewModeSnapshot — an in-memory snapshot at CreateView time.
-	// Subsequent changes in the source are not reflected. Cheap
-	// and deterministic.
-	ViewModeSnapshot ViewMode = "Snapshot"
-
-	// ViewModeLive — reactive updates driven by events. Backlog:
-	// implementation lands in v1.x.
-	ViewModeLive ViewMode = "Live"
+	RootByPath      RootView = "by-path" // default
+	RootBySession   RootView = "by-session"
+	RootByNamespace RootView = "by-namespace"
+	RootByDate      RootView = "by-date"
+	RootByArtifact  RootView = "by-artifact"
 )
 
-// ViewOption is an option for the View constructor.
+// PathFallback governs how artifacts without a resolver path are
+// surfaced.
+type PathFallback string
+
+const (
+	// FallbackOrphaned (default) — no by-path entry. Artifacts
+	// remain reachable through by-artifact and the orphaned/
+	// service tree.
+	FallbackOrphaned PathFallback = "orphaned"
+
+	// FallbackSynthetic — artifacts get a synthetic path derived
+	// from namespace + session + short ArtifactID. Mixes real and
+	// synthetic paths in by-path; for debugging on noisy stores.
+	FallbackSynthetic PathFallback = "synthetic"
+)
+
+// ViewFilter restricts which manifests are admitted into the View
+// during backfill. All non-zero conditions combine by AND.
+type ViewFilter struct {
+	Namespace string
+	SessionID string
+	Prefix    string
+}
+
+// ViewOption is the option type passed to NewView.
 type ViewOption func(*viewOptions)
 
 type viewOptions struct {
-	mode      ViewMode
-	resolver  PathResolver
-	namespace string
-	filter    ViewFilter
+	resolver PathResolver
+	rootView RootView
+	fallback PathFallback
+	filter   ViewFilter
+	bus      event.EventBus
 }
 
-// WithViewMode switches the View computation mode.
-func WithViewMode(mode ViewMode) ViewOption {
-	return func(o *viewOptions) { o.mode = mode }
+// WithPathResolver registers the path-extraction function. Without
+// it the by-path tree contains only artifacts produced by the
+// fallback (when FallbackSynthetic) or is empty.
+func WithPathResolver(r PathResolver) ViewOption {
+	return func(o *viewOptions) { o.resolver = r }
 }
 
-// WithPathResolver provides the path-extraction function. Without
-// it the by-path/ tree stays empty; artifacts remain reachable
-// only through by-artifact/.
-func WithPathResolver(fn PathResolver) ViewOption {
-	return func(o *viewOptions) { o.resolver = fn }
+// WithRootView selects the tree that occupies the View root. The
+// default is RootByPath. The choice is informational for the View
+// itself; transports (FUSE) react to it by hiding the same tree
+// from the service directory.
+func WithRootView(rv RootView) ViewOption {
+	return func(o *viewOptions) { o.rootView = rv }
 }
 
-// WithNamespace restricts the View to a single namespace. The
-// default is every user namespace (system.* is always excluded).
-func WithNamespace(ns string) ViewOption {
-	return func(o *viewOptions) { o.namespace = ns }
+// WithFallback governs how artifacts without a resolver path are
+// represented. Default: FallbackOrphaned.
+func WithFallback(fb PathFallback) ViewOption {
+	return func(o *viewOptions) { o.fallback = fb }
 }
 
-// WithFilter provides a manifest-filter predicate.
-func WithFilter(filter ViewFilter) ViewOption {
-	return func(o *viewOptions) { o.filter = filter }
+// WithFilter restricts the View to a subset of the source. Use for
+// namespace-scoped or session-scoped views.
+func WithFilter(f ViewFilter) ViewOption {
+	return func(o *viewOptions) { o.filter = f }
 }
 
-// ViewFilter is the manifest-inclusion predicate for a View.
-// true means include.
-type ViewFilter func(m domain.Manifest) bool
-
-// View is an open representation. Every method is safe for
-// concurrent reads. After Close every call returns ErrViewClosed.
-type View interface {
-	// Get returns the Node at a virtual path.
-	Get(path string) (Node, error)
-
-	// List returns the immediate children of a directory.
-	List(path string) NodeSeq
-
-	// Walk recursively iterates the subtree under prefix.
-	Walk(prefix string) NodeSeq
-
-	// Open opens the artifact data stream at the virtual path.
-	Open(ctx context.Context, path string) (io.ReadCloser, error)
-
-	// Stats returns aggregated metrics of the View.
-	Stats() ViewStats
-
-	// Close releases the View's resources.
-	Close() error
+// WithEventBus wires an event bus that receives EventViewRebuilt
+// after backfill and EventPathCollision on each by-path
+// collision. nil bus (the default when this option is not used)
+// silently drops events.
+func WithEventBus(bus event.EventBus) ViewOption {
+	return func(o *viewOptions) { o.bus = bus }
 }
 
-// ViewStats are the aggregates of the built View.
+// ViewStats holds the aggregate counters of a View. Populated
+// during backfill and updated by Add/Remove/Move calls.
 type ViewStats struct {
-	NodesTotal       int64
-	FilesTotal       int64
-	DirectoriesTotal int64
-	BytesTotal       int64
-	CollisionsCount  int64
-	BuildDuration    time.Duration
-}
-
-// --- Mounts (FUSE, WebDAV) ---
-
-// MountFUSEConfig configures a FUSE mount.
-type MountFUSEConfig struct {
-	MountPoint string
-	ReadOnly   bool
-}
-
-// MountWebDAVConfig configures the WebDAV server.
-type MountWebDAVConfig struct {
-	Addr     string
-	ReadOnly bool
-}
-
-// --- Projection facade ---
-
-// Projection is the main entry point. It creates Views, mounts
-// them, and supports background operations.
-type Projection interface {
-	// CreateView creates a View on top of the source.
-	CreateView(ctx context.Context, opts ...ViewOption) (View, error)
-
-	// MountFUSE mounts a View through FUSE. Available only with
-	// the `fuse` build tag. Without it returns ErrFUSENotSupported.
-	MountFUSE(ctx context.Context, view View, cfg MountFUSEConfig) (Mount, error)
-
-	// MountWebDAV runs a WebDAV server on top of a View. Available
-	// with the `webdav` build tag. Without it returns
-	// ErrWebDAVNotSupported.
-	MountWebDAV(ctx context.Context, view View, cfg MountWebDAVConfig) (Mount, error)
-
-	// Close stops every active mount and releases resources.
-	Close(ctx context.Context) error
-}
-
-// Mount is an active mount point. Returned by
-// MountFUSE/MountWebDAV.
-type Mount interface {
-	Unmount(ctx context.Context) error
-}
-
-// NewProjection creates a Projection on top of the source.
-// TODO(M6.1): typed projection over WalkSystem.
-func NewProjection(source ProjectionSource) (Projection, error) {
-	return nil, fmt.Errorf("%w: projection.NewProjection", errs.ErrNotImplemented)
+	TotalNodes     int64
+	TotalBytes     int64
+	SessionCount   int64
+	NamespaceCount int64
+	OrphanedCount  int64
+	CollisionCount int64
+	ByStore        map[string]int64
+	TransitCount   int64
 }
 
 // --- Events ---
 
 const (
+	// EventPathCollision is emitted when two artifacts compete for
+	// the same by-path entry; the loser stays accessible through
+	// by-artifact.
 	EventPathCollision = "projection.path_collision"
-	EventViewRebuilt   = "projection.view_rebuilt"
+
+	// EventViewRebuilt is emitted after a successful backfill.
+	EventViewRebuilt = "projection.view_rebuilt"
 )
 
-// PathCollisionPayload is the payload of EventPathCollision.
-// Emitted on a path-collision resolution: the winner stays in
-// by-path/, the loser remains reachable only through by-artifact/.
+// PathCollisionPayload carries the resolution data of a path
+// collision. Winner is the artifact now holding the path; Loser
+// is the artifact that lost it (still reachable through
+// by-artifact).
 type PathCollisionPayload struct {
-	Path       string
-	WinnerID   domain.ArtifactID
-	LoserID    domain.ArtifactID
-	Resolution string
+	Path   string
+	Winner domain.ArtifactID
+	Loser  domain.ArtifactID
 }
 
-// ViewRebuiltPayload is the payload of EventViewRebuilt. Emitted
-// on a full View rebuild (Live mode, M6+).
+// ViewRebuiltPayload carries timing and counts of a backfill
+// completion. NodeCount is the total number of nodes across every
+// tree (one file artifact may appear under several trees).
 type ViewRebuiltPayload struct {
-	ViewID    string
-	Trigger   string
-	NodeCount int64
 	Duration  time.Duration
+	NodeCount int64
 }

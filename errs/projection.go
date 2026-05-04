@@ -29,3 +29,23 @@ var ErrFUSENotSupported = errors.New("scrinium: FUSE not supported in this build
 // ErrWebDAVNotSupported — MountWebDAV called without the `webdav`
 // build tag.
 var ErrWebDAVNotSupported = errors.New("scrinium: WebDAV not supported in this build")
+
+// ErrSourceUnavailable — the projection source returned a transient
+// error during backfill or a runtime call. The original error is
+// available via errors.Unwrap.
+var ErrSourceUnavailable = errors.New("scrinium: projection source unavailable")
+
+// ErrArtifactUnreadable — the artifact is physically present but
+// cannot be read in the current state (Store Locked, Corrupted,
+// pipeline misconfiguration). Original error via errors.Unwrap.
+var ErrArtifactUnreadable = errors.New("scrinium: projection artifact unreadable")
+
+// ErrEditingDisabled — an editing operation (rename, setattr,
+// truncate, append) was attempted while the corresponding policy
+// bit is off, or any mutation was attempted on a read-only FSOps.
+// Transports translate to EROFS (FUSE) or 403 (WebDAV).
+var ErrEditingDisabled = errors.New("scrinium: projection editing disabled")
+
+// ErrScratchQuota — FSOps.Create/Write would exceed the configured
+// scratch quota. Translated to ENOSPC at the FUSE layer.
+var ErrScratchQuota = errors.New("scrinium: projection scratch quota exceeded")
