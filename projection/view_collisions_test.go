@@ -2,77 +2,32 @@ package projection_test
 
 import (
 	"context"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/event"
+	"github.com/rkurbatov/scrinium/internal/testutil/eventfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/projectionfx"
 	"github.com/rkurbatov/scrinium/projection"
 	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
-// --- Shared helpers (used by view_collisions_test.go and
-//      view_mutations_test.go) ---
-
-// makeManifestWithMeta extends makeManifest from view_test.go
-// with fsmeta-encoded metadata for the given path. Use to
-// populate by-path.
-func makeManifestWithMeta(id, ns, sid, path string, size int64, createdAt time.Time) domain.Manifest {
-	m := makeManifest(id, ns, sid, size, createdAt)
-	if path != "" {
-		raw, err := fsmeta.Encode(fsmeta.FileSystem{Path: path})
-		if err != nil {
-			panic("makeManifestWithMeta: " + err.Error())
-		}
-		m.Metadata = raw
-	}
+// withCreatedAt builds a manifest at a specific time. fsmeta path
+// applied. Local helper because the time override pattern is
+// only needed in collision tests; TestByPath_HappyPath calls it
+// without overriding time.
+func withCreatedAt(id, path string, createdAt time.Time) domain.Manifest {
+	m := projectionfx.ManifestWithFsmetaPath(id, path)
+	m.CreatedAt = createdAt
 	return m
 }
-
-// recordingBus collects published events for assertion. Implements
-// event.EventBus.
-type recordingBus struct {
-	mu     sync.Mutex
-	events []event.Event
-}
-
-func newRecordingBus() *recordingBus {
-	return &recordingBus{}
-}
-
-func (b *recordingBus) Publish(e event.Event) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.events = append(b.events, e)
-}
-
-func (b *recordingBus) Subscribe(fn func(event.Event)) {
-	// Not needed in tests; required by the interface.
-}
-
-// byType returns events filtered by Type, in publish order.
-func (b *recordingBus) byType(t string) []event.Event {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	var out []event.Event
-	for _, e := range b.events {
-		if e.Type == t {
-			out = append(out, e)
-		}
-	}
-	return out
-}
-
-var _ event.EventBus = (*recordingBus)(nil)
 
 // --- by-path: happy path and orphaned ---
 
 func TestByPath_HappyPath(t *testing.T) {
-	src := newFakeSource()
-	src.add(
-		makeManifestWithMeta("sha256-aabbccdd", "files", "s1",
-			"photos/2024/sunrise.jpg", 100, time.Now().UTC()),
+	src := projectionfx.New()
+	src.Add(
+		projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/2024/sunrise.jpg"),
 		nil,
 	)
 
@@ -101,12 +56,8 @@ func TestByPath_HappyPath(t *testing.T) {
 }
 
 func TestByPath_VirtualDirsExist(t *testing.T) {
-	src := newFakeSource()
-	src.add(
-		makeManifestWithMeta("sha256-aabbccdd", "f", "s",
-			"photos/2024/img.jpg", 100, time.Now().UTC()),
-		nil,
-	)
+	src := projectionfx.New()
+	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/2024/img.jpg"), nil)
 	v, _ := projection.NewView(context.Background(), src,
 		projection.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
@@ -125,8 +76,8 @@ func TestByPath_VirtualDirsExist(t *testing.T) {
 
 func TestByPath_OrphanedNotPresent(t *testing.T) {
 	// Artifact without metadata → orphaned, NOT in by-path.
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 
 	v, _ := projection.NewView(context.Background(), src,
 		projection.WithPathResolver(fsmeta.Resolver))
@@ -152,16 +103,13 @@ func TestByPath_OrphanedNotPresent(t *testing.T) {
 // --- by-path: synthetic fallback ---
 
 func TestByPath_SyntheticFallback(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "photos", "s12345", 100, time.Now().UTC()), nil)
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "photos", "s12345", 100, time.Now().UTC()), nil)
 
 	v, _ := projection.NewView(context.Background(), src,
 		projection.WithFallback(projection.FallbackSynthetic))
 	defer v.Close()
 
-	// Synthetic path: <ns>/<sid-shard>/<id-short>.bin where
-	// sid-shard = "s1/23/s12345" for "s12345"
-	// id-short = full hash when ≤ 16 chars: "aabbccdd"
 	expected := "photos/s1/23/s12345/aabbccdd.bin"
 	if _, err := v.GetByPath(expected); err != nil {
 		t.Fatalf("GetByPath(%q): %v", expected, err)
@@ -172,8 +120,8 @@ func TestByPath_SyntheticFallback(t *testing.T) {
 }
 
 func TestByPath_SyntheticAnonymous(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "", "", 100, time.Now().UTC()), nil)
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "", "", 100, time.Now().UTC()), nil)
 
 	v, _ := projection.NewView(context.Background(), src,
 		projection.WithFallback(projection.FallbackSynthetic))
@@ -188,16 +136,14 @@ func TestByPath_SyntheticAnonymous(t *testing.T) {
 // --- by-path: collisions ---
 
 func TestByPath_CollisionFresherWins(t *testing.T) {
-	src := newFakeSource()
+	src := projectionfx.New()
 	older := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	newer := older.Add(time.Hour)
 
-	src.add(makeManifestWithMeta("sha256-aaaa1111", "f", "s",
-		"shared/path.txt", 100, older), nil)
-	src.add(makeManifestWithMeta("sha256-bbbb2222", "f", "s",
-		"shared/path.txt", 200, newer), nil)
+	src.Add(withCreatedAt("sha256-aaaa1111", "shared/path.txt", older), nil)
+	src.Add(withCreatedAt("sha256-bbbb2222", "shared/path.txt", newer), nil)
 
-	bus := newRecordingBus()
+	bus := eventfx.New()
 	v, _ := projection.NewView(context.Background(), src,
 		projection.WithPathResolver(fsmeta.Resolver),
 		projection.WithEventBus(bus))
@@ -222,7 +168,7 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 		t.Errorf("winner must be in by-artifact: %v", err)
 	}
 
-	collisions := bus.byType(projection.EventPathCollision)
+	collisions := bus.ByType(projection.EventPathCollision)
 	if len(collisions) != 1 {
 		t.Errorf("collision events: got %d, want 1", len(collisions))
 	} else {
@@ -241,12 +187,10 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 
 func TestByPath_CollisionEqualCreatedAt(t *testing.T) {
 	// Tie-breaker: lex-larger ArtifactID wins.
-	src := newFakeSource()
+	src := projectionfx.New()
 	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	src.add(makeManifestWithMeta("sha256-aaaa1111", "f", "s",
-		"shared", 100, t0), nil)
-	src.add(makeManifestWithMeta("sha256-bbbb2222", "f", "s",
-		"shared", 200, t0), nil)
+	src.Add(withCreatedAt("sha256-aaaa1111", "shared", t0), nil)
+	src.Add(withCreatedAt("sha256-bbbb2222", "shared", t0), nil)
 
 	v, _ := projection.NewView(context.Background(), src,
 		projection.WithPathResolver(fsmeta.Resolver))
@@ -259,17 +203,14 @@ func TestByPath_CollisionEqualCreatedAt(t *testing.T) {
 }
 
 func TestByPath_OrderedArrival(t *testing.T) {
-	// Newer first, older second — newer (already there) keeps,
-	// older joins losers. Verifies Add is symmetric to backfill
-	// order.
-	src := newFakeSource()
+	// Newer first, older second — newer keeps, older joins
+	// losers. Verifies Add is symmetric to backfill order.
+	src := projectionfx.New()
 	older := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	newer := older.Add(time.Hour)
 
-	src.add(makeManifestWithMeta("sha256-bbbb2222", "f", "s",
-		"shared", 200, newer), nil)
-	src.add(makeManifestWithMeta("sha256-aaaa1111", "f", "s",
-		"shared", 100, older), nil)
+	src.Add(withCreatedAt("sha256-bbbb2222", "shared", newer), nil)
+	src.Add(withCreatedAt("sha256-aaaa1111", "shared", older), nil)
 
 	v, _ := projection.NewView(context.Background(), src,
 		projection.WithPathResolver(fsmeta.Resolver))

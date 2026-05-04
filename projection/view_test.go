@@ -1,148 +1,58 @@
 package projection_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/testutil/manifestfx"
+	"github.com/rkurbatov/scrinium/internal/testutil/projectionfx"
 	"github.com/rkurbatov/scrinium/projection"
 )
 
-// --- fakeSource ---
-
-// fakeSource is an in-memory ProjectionSource for unit tests. It
-// holds a slice of manifests and a parallel map of payload bytes
-// keyed by ArtifactID. Walk delivers manifests in insertion order;
-// Get returns a ReadHandle over the bytes registered for the id.
-//
-// Errors can be injected per-call via walkErr / getErr.
-type fakeSource struct {
-	manifests []domain.Manifest
-	payloads  map[domain.ArtifactID][]byte
-
-	walkErr error
-	getErr  error
-}
-
-func newFakeSource() *fakeSource {
-	return &fakeSource{
-		payloads: make(map[domain.ArtifactID][]byte),
-	}
-}
-
-func (f *fakeSource) add(m domain.Manifest, payload []byte) {
-	f.manifests = append(f.manifests, m)
-	if payload != nil {
-		f.payloads[m.ArtifactID] = payload
-	}
-}
-
-func (f *fakeSource) Walk(
-	ctx context.Context,
-	namespace string,
-	cb func(domain.Manifest) error,
-) error {
-	if f.walkErr != nil {
-		return f.walkErr
-	}
-	for _, m := range f.manifests {
-		if namespace != "*" && m.Namespace != namespace {
-			continue
-		}
-		if err := cb(m); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (f *fakeSource) Get(
-	ctx context.Context,
-	id domain.ArtifactID,
-	opts domain.GetOptions,
-) (core.ReadHandle, error) {
-	if f.getErr != nil {
-		return nil, f.getErr
-	}
-	payload, ok := f.payloads[id]
-	if !ok {
-		return nil, errs.ErrArtifactNotFound
-	}
-	// Find manifest for this id.
-	var manifest domain.Manifest
-	for _, m := range f.manifests {
-		if m.ArtifactID == id {
-			manifest = m
-			break
-		}
-	}
-	return &fakeReadHandle{
-		buf:      bytes.NewReader(payload),
-		manifest: manifest,
-	}, nil
-}
-
-// fakeReadHandle is a minimal core.ReadHandle backed by a bytes
-// buffer. Random access is supported.
-type fakeReadHandle struct {
-	buf      *bytes.Reader
-	manifest domain.Manifest
-	closed   bool
-}
-
-func (h *fakeReadHandle) Read(p []byte) (int, error) {
-	if h.closed {
-		return 0, errors.New("fakeReadHandle: closed")
-	}
-	return h.buf.Read(p)
-}
-
-func (h *fakeReadHandle) ReadAt(p []byte, off int64) (int, error) {
-	if h.closed {
-		return 0, errors.New("fakeReadHandle: closed")
-	}
-	return h.buf.ReadAt(p, off)
-}
-
-func (h *fakeReadHandle) ReadAtCtx(ctx context.Context, p []byte, off int64) (int, error) {
-	return h.ReadAt(p, off)
-}
-
-func (h *fakeReadHandle) SupportsRandomAccess() bool { return true }
-
-func (h *fakeReadHandle) Manifest() domain.Manifest { return h.manifest }
-
-func (h *fakeReadHandle) Close() error {
-	h.closed = true
-	return nil
-}
-
-var _ core.ReadHandle = (*fakeReadHandle)(nil)
-
-// --- helpers ---
-
+// makeManifest is a thin wrapper around manifestfx.Blob that
+// overrides the fields a typical projection test cares about.
+// Local to this file because the override pattern is small and
+// every other call-site has its own preferences.
 func makeManifest(id, ns, sid string, size int64, createdAt time.Time) domain.Manifest {
-	return domain.Manifest{
-		ArtifactID:   domain.ArtifactID(id),
-		Type:         domain.ManifestTypeBlob,
-		Namespace:    ns,
-		SessionID:    sid,
-		CreatedAt:    createdAt,
-		ContentHash:  domain.ContentHash(id),
-		OriginalSize: size,
+	m := manifestfx.Blob(id, "sha256-"+repeatChar('b', 64))
+	m.Namespace = ns
+	m.SessionID = sid
+	m.OriginalSize = size
+	m.CreatedAt = createdAt
+	return m
+}
+
+// repeatChar is a tiny helper because strings.Repeat is overkill
+// for a single use.
+func repeatChar(b byte, n int) string {
+	out := make([]byte, n)
+	for i := range out {
+		out[i] = b
 	}
+	return string(out)
+}
+
+// makeShortID creates a fake but unique ArtifactID for tests
+// that need many distinct IDs without caring about content.
+func makeShortID(i int) string {
+	const hex = "0123456789abcdef"
+	const algo = "sha256-"
+	b := make([]byte, 64)
+	for j := range b {
+		b[j] = hex[(i+j)%16]
+	}
+	return algo + string(b)
 }
 
 // --- NewView ---
 
 func TestNewView_Empty(t *testing.T) {
-	src := newFakeSource()
+	src := projectionfx.New()
 	v, err := projection.NewView(context.Background(), src)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
@@ -164,8 +74,8 @@ func TestNewView_NilSource(t *testing.T) {
 }
 
 func TestNewView_SourceWalkError(t *testing.T) {
-	src := newFakeSource()
-	src.walkErr = errors.New("source kaboom")
+	src := projectionfx.New()
+	src.SetWalkErr(errors.New("source kaboom"))
 	_, err := projection.NewView(context.Background(), src)
 	if err == nil {
 		t.Fatal("expected error")
@@ -178,10 +88,10 @@ func TestNewView_SourceWalkError(t *testing.T) {
 // --- Backfill ---
 
 func TestNewView_PopulatesByArtifact(t *testing.T) {
-	src := newFakeSource()
+	src := projectionfx.New()
 	now := time.Now().UTC()
-	src.add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, now), []byte("hello"))
-	src.add(makeManifest("sha256-eeffgghh", "files", "sess1", 200, now), []byte("world"))
+	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, now), []byte("hello"))
+	src.Add(makeManifest("sha256-eeffgghh", "files", "sess1", 200, now), []byte("world"))
 
 	v, err := projection.NewView(context.Background(), src)
 	if err != nil {
@@ -199,16 +109,15 @@ func TestNewView_PopulatesByArtifact(t *testing.T) {
 
 // --- Get ---
 
-func TestGet_File(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
+func TestGetByArtifact_File(t *testing.T) {
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	// by-artifact path: aa/bb/sha256-aabbccdd
 	node, err := v.GetByArtifact("aa/bb/sha256-aabbccdd")
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("GetByArtifact: %v", err)
 	}
 	if node.FS.IsDir {
 		t.Errorf("expected file, got dir")
@@ -221,16 +130,15 @@ func TestGet_File(t *testing.T) {
 	}
 }
 
-func TestGet_VirtualDirectory(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
+func TestGetByArtifact_VirtualDirectory(t *testing.T) {
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	// "aa" is a virtual directory created by sharding.
 	node, err := v.GetByArtifact("aa")
 	if err != nil {
-		t.Fatalf("Get: %v", err)
+		t.Fatalf("GetByArtifact: %v", err)
 	}
 	if !node.FS.IsDir {
 		t.Errorf("expected dir, got file")
@@ -240,23 +148,23 @@ func TestGet_VirtualDirectory(t *testing.T) {
 	}
 }
 
-func TestGet_Root(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
+func TestGetByArtifact_Root(t *testing.T) {
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
 	node, err := v.GetByArtifact("")
 	if err != nil {
-		t.Fatalf("Get root: %v", err)
+		t.Fatalf("GetByArtifact root: %v", err)
 	}
 	if !node.FS.IsDir {
 		t.Errorf("root should be dir")
 	}
 }
 
-func TestGet_NotFound(t *testing.T) {
-	src := newFakeSource()
+func TestGetByArtifact_NotFound(t *testing.T) {
+	src := projectionfx.New()
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
@@ -266,8 +174,8 @@ func TestGet_NotFound(t *testing.T) {
 	}
 }
 
-func TestGet_Closed(t *testing.T) {
-	src := newFakeSource()
+func TestGetByArtifact_Closed(t *testing.T) {
+	src := projectionfx.New()
 	v, _ := projection.NewView(context.Background(), src)
 	v.Close()
 
@@ -279,10 +187,10 @@ func TestGet_Closed(t *testing.T) {
 
 // --- List ---
 
-func TestList_RootListsShards(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
-	src.add(makeManifest("sha256-ccddeeff", "f", "s", 100, time.Now().UTC()), nil)
+func TestListByArtifact_RootListsShards(t *testing.T) {
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-ccddeeff", "f", "s", 100, time.Now().UTC()), nil)
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
@@ -301,9 +209,9 @@ func TestList_RootListsShards(t *testing.T) {
 	}
 }
 
-func TestList_FileReturnsErrNotADirectory(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+func TestListByArtifact_FileReturnsErrNotADirectory(t *testing.T) {
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
@@ -316,8 +224,8 @@ func TestList_FileReturnsErrNotADirectory(t *testing.T) {
 	t.Fatal("expected at least one yield with error")
 }
 
-func TestList_NonexistentReturnsErrPathNotFound(t *testing.T) {
-	src := newFakeSource()
+func TestListByArtifact_NonexistentReturnsErrPathNotFound(t *testing.T) {
+	src := projectionfx.New()
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
@@ -332,10 +240,10 @@ func TestList_NonexistentReturnsErrPathNotFound(t *testing.T) {
 
 // --- Walk ---
 
-func TestWalk_AllNodes(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
-	src.add(makeManifest("sha256-aaccddee", "f", "s", 100, time.Now().UTC()), nil)
+func TestWalkByArtifact_AllNodes(t *testing.T) {
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aaccddee", "f", "s", 100, time.Now().UTC()), nil)
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
@@ -353,11 +261,11 @@ func TestWalk_AllNodes(t *testing.T) {
 	}
 }
 
-func TestWalk_StopEarly(t *testing.T) {
-	src := newFakeSource()
+func TestWalkByArtifact_StopEarly(t *testing.T) {
+	src := projectionfx.New()
 	for i := 0; i < 10; i++ {
 		id := makeShortID(i)
-		src.add(makeManifest(id, "f", "s", 100, time.Now().UTC()), nil)
+		src.Add(makeManifest(id, "f", "s", 100, time.Now().UTC()), nil)
 	}
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
@@ -379,15 +287,15 @@ func TestWalk_StopEarly(t *testing.T) {
 
 // --- Open ---
 
-func TestOpen_File(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "f", "s", 5, time.Now().UTC()), []byte("hello"))
+func TestOpenByArtifact_File(t *testing.T) {
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 5, time.Now().UTC()), []byte("hello"))
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
 	rh, err := v.OpenByArtifact(context.Background(), "aa/bb/sha256-aabbccdd", domain.GetOptions{})
 	if err != nil {
-		t.Fatalf("Open: %v", err)
+		t.Fatalf("OpenByArtifact: %v", err)
 	}
 	defer rh.Close()
 
@@ -400,9 +308,9 @@ func TestOpen_File(t *testing.T) {
 	}
 }
 
-func TestOpen_Directory(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+func TestOpenByArtifact_Directory(t *testing.T) {
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
@@ -412,8 +320,8 @@ func TestOpen_Directory(t *testing.T) {
 	}
 }
 
-func TestOpen_NotFound(t *testing.T) {
-	src := newFakeSource()
+func TestOpenByArtifact_NotFound(t *testing.T) {
+	src := projectionfx.New()
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
@@ -423,17 +331,16 @@ func TestOpen_NotFound(t *testing.T) {
 	}
 }
 
-func TestOpen_SourceArtifactNotFound(t *testing.T) {
-	// View has the path (was indexed), but source returns
-	// ErrArtifactNotFound — race with concurrent deletion.
-	// Mapping should yield ErrPathNotFound on the projection side.
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+func TestOpenByArtifact_SourceArtifactNotFound(t *testing.T) {
+	// View has the path, but source returns ErrArtifactNotFound —
+	// race with concurrent deletion. Mapping yields
+	// ErrPathNotFound on the projection side.
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	// Replace getErr on the source to simulate the race.
-	src.getErr = errs.ErrArtifactNotFound
+	src.SetGetErr(errs.ErrArtifactNotFound)
 
 	_, err := v.OpenByArtifact(context.Background(), "aa/bb/sha256-aabbccdd", domain.GetOptions{})
 	if !errors.Is(err, errs.ErrPathNotFound) {
@@ -441,13 +348,13 @@ func TestOpen_SourceArtifactNotFound(t *testing.T) {
 	}
 }
 
-func TestOpen_SourceLocked(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+func TestOpenByArtifact_SourceLocked(t *testing.T) {
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	src.getErr = errs.ErrLocked
+	src.SetGetErr(errs.ErrLocked)
 
 	_, err := v.OpenByArtifact(context.Background(), "aa/bb/sha256-aabbccdd", domain.GetOptions{})
 	if !errors.Is(err, errs.ErrArtifactUnreadable) {
@@ -461,9 +368,9 @@ func TestOpen_SourceLocked(t *testing.T) {
 // --- Filter ---
 
 func TestNewView_FilterByNamespace(t *testing.T) {
-	src := newFakeSource()
-	src.add(makeManifest("sha256-aabbccdd", "photos", "s", 100, time.Now().UTC()), nil)
-	src.add(makeManifest("sha256-eeffaabb", "docs", "s", 100, time.Now().UTC()), nil)
+	src := projectionfx.New()
+	src.Add(makeManifest("sha256-aabbccdd", "photos", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-eeffaabb", "docs", "s", 100, time.Now().UTC()), nil)
 
 	v, err := projection.NewView(
 		context.Background(),
@@ -478,18 +385,4 @@ func TestNewView_FilterByNamespace(t *testing.T) {
 	if got := v.Stats.TotalNodes; got != 1 {
 		t.Errorf("TotalNodes: got %d, want 1", got)
 	}
-}
-
-// --- Helper ---
-
-// makeShortID creates a fake but unique ArtifactID for tests
-// that need many distinct IDs.
-func makeShortID(i int) string {
-	const hex = "0123456789abcdef"
-	const algo = "sha256-"
-	b := make([]byte, 64)
-	for j := range b {
-		b[j] = hex[(i+j)%16]
-	}
-	return algo + string(b)
 }
