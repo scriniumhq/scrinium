@@ -78,11 +78,10 @@ func TestNewStore_Reopen(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	idx2Iface, err := NewStore(context.Background(), path)
+	idx2, err := NewStore(context.Background(), path)
 	if err != nil {
 		t.Fatalf("reopen: %v", err)
 	}
-	idx2 := idx2Iface.(*Index) // SchemaVersion is a sqlite-package detail
 	defer idx2.Close()
 	v2, _ := idx2.SchemaVersion(context.Background())
 	if v1 != v2 {

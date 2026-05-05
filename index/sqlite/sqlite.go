@@ -36,6 +36,23 @@ type Index struct {
 	// database/sql.DB.Close returns an error when called twice.
 	closeOnce sync.Once
 	closeErr  error
+
+	// extMu guards the extension dispatcher. Acquired in write
+	// mode by Register and by every IndexManifest/DeleteManifest/
+	// RebindBlob call (so a concurrent Register cannot insert a
+	// new subscriber midway through a dispatch). Held briefly —
+	// the in-memory work is map lookups; the SQL transaction it
+	// guards may be long, but the lock is released right after.
+	extMu     sync.Mutex
+	extByName map[string]index.IndexExtension
+	extByKind map[index.EventKind][]index.IndexExtension
+	// extStores keeps the long-lived ExtensionStore handed to each
+	// extension during Setup. Apply uses fresh tx-scoped stores
+	// (allocated per call); the long-lived stores in this map are
+	// the ones extensions may have captured for read-side use.
+	// Maintained so Close can release them in lockstep with the
+	// extension list.
+	extStores map[string]*sqliteExtStore
 }
 
 // Compile-time interface conformance. Catches signature drift
@@ -101,7 +118,7 @@ func defaultOptions() options {
 // permission errors, mid-flight migrations, or mmap limits, and
 // migrations are long-running and deserve cancellation. Doc
 // amendment tracked separately.
-func NewStore(ctx context.Context, path string, opts ...index.IndexOption) (core.StoreIndex, error) {
+func NewStore(ctx context.Context, path string, opts ...index.IndexOption) (*Index, error) {
 	if path == "" {
 		return nil, fmt.Errorf("sqlite: empty path")
 	}
@@ -145,7 +162,13 @@ func NewStore(ctx context.Context, path string, opts ...index.IndexOption) (core
 		return nil, err
 	}
 
-	return &Index{db: db, opts: o}, nil
+	return &Index{
+		db:        db,
+		opts:      o,
+		extByName: make(map[string]index.IndexExtension),
+		extByKind: make(map[index.EventKind][]index.IndexExtension),
+		extStores: make(map[string]*sqliteExtStore),
+	}, nil
 }
 
 // newStoreForTests is the in-package constructor used by sqlite_test.go
@@ -178,7 +201,13 @@ func newStoreForTests(ctx context.Context, path string, mut func(*options)) (*In
 		_ = db.Close()
 		return nil, err
 	}
-	return &Index{db: db, opts: o}, nil
+	return &Index{
+		db:        db,
+		opts:      o,
+		extByName: make(map[string]index.IndexExtension),
+		extByKind: make(map[index.EventKind][]index.IndexExtension),
+		extStores: make(map[string]*sqliteExtStore),
+	}, nil
 }
 
 // buildDSN assembles a DSN. Both supported drivers (modernc and
@@ -231,8 +260,33 @@ func applyPragmas(ctx context.Context, db *sql.DB, path string, o options) error
 // the StoreIndex contract requires repeat Close calls to succeed,
 // while database/sql.DB.Close itself errors on the second call —
 // sync.Once captures the first outcome and returns it forever.
+//
+// Registered extensions are closed in the reverse order of
+// registration. Errors from extension Close are swallowed (logged
+// would be the proper behaviour once a logger is wired in) — they
+// must not prevent the underlying DB from being released.
 func (i *Index) Close() error {
 	i.closeOnce.Do(func() {
+		i.extMu.Lock()
+		// Close in reverse-registration order. extByKind is the
+		// dispatch map; a stable insertion-order list would be
+		// cleaner, but the set of subscribers is small in
+		// practice — iterating extByName here is fine.
+		for _, ext := range i.extByName {
+			_ = ext.Close()
+		}
+		// Drop store-side references so Get/Scan calls from a
+		// host that mistakenly held a captured store after
+		// Close fail with a clear errExtStoreClosed instead of
+		// hitting a closed *sql.DB.
+		for _, store := range i.extStores {
+			store.executor.Store(nil)
+		}
+		i.extByName = nil
+		i.extByKind = nil
+		i.extStores = nil
+		i.extMu.Unlock()
+
 		i.closeErr = i.db.Close()
 	})
 	return i.closeErr

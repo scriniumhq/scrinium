@@ -3,7 +3,7 @@ package sqlite
 // CurrentSchemaVersion is the schema version this build of the
 // package writes and expects to read. Bumped whenever a migration
 // is added to migrations[].
-const CurrentSchemaVersion = 1
+const CurrentSchemaVersion = 2
 
 // migrations is the ordered list of forward-only schema migrations.
 // Each migration is applied inside its own transaction; if any step
@@ -18,6 +18,11 @@ var migrations = []migration{
 		Description: "initial schema: blobs, manifests, packed_blobs, " +
 			"store_meta",
 		Statements: []string{schemaV1},
+	},
+	{
+		Version:     2,
+		Description: "index extensions: ext_meta, ext_data",
+		Statements:  []string{schemaV2},
 	},
 }
 
@@ -132,4 +137,35 @@ CREATE TABLE schema_version (
     version    INTEGER PRIMARY KEY,
     applied_at TEXT    NOT NULL
 );
+`
+
+// schemaV2 introduces the index-extensions surface. Two tables:
+//
+//   - ext_meta:  per-extension state. Stores schema_version
+//     persisted from the last successful Setup so
+//     later registrations can migrate forward.
+//   - ext_data:  the universal K/V store extensions write into.
+//     Composite PK (extension, table_name, key) gives
+//     each extension a private namespace plus
+//     per-table grouping inside that namespace.
+//
+// The single shared ext_data was chosen over generated per-extension
+// tables — see 4. API Reference/16 §16.6.1 for the trade-off
+// discussion. WITHOUT ROWID keeps the composite PK row-aligned;
+// SQLite stores entries in PK order, which is precisely what range
+// scans (DeletePrefix, Scan with prefix) want.
+const schemaV2 = `
+CREATE TABLE ext_meta (
+    extension      TEXT    PRIMARY KEY,
+    schema_version INTEGER NOT NULL,
+    registered_at  TEXT    NOT NULL
+) WITHOUT ROWID;
+
+CREATE TABLE ext_data (
+    extension  TEXT NOT NULL,
+    table_name TEXT NOT NULL,
+    key        TEXT NOT NULL,
+    value      BLOB NOT NULL,
+    PRIMARY KEY (extension, table_name, key)
+) WITHOUT ROWID;
 `

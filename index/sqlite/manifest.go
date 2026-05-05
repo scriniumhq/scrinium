@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/index"
 )
 
 // IndexManifest registers an artifact in the index. Branches on
@@ -79,6 +80,19 @@ func (i *Index) indexManifestTx(
 		}
 	default:
 		return fmt.Errorf("sqlite: unknown manifest type: %q", m.Type)
+	}
+
+	// Dispatch to subscribed extensions BEFORE commit. An error
+	// from any extension rolls back the entire transaction —
+	// strict-consistency guarantee per ADR-49. Pack manifests
+	// are an internal type (not surfaced through Walk) so we
+	// skip dispatch for them; extensions index user-visible
+	// artifacts only.
+	if m.Type != domain.ManifestTypePack {
+		args := index.EventArgs{Manifest: m, ArtifactID: m.ArtifactID}
+		if err := i.dispatchExtensions(ctx, tx, index.EventKindManifestIndexed, args); err != nil {
+			return err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -482,6 +496,17 @@ func (i *Index) deleteManifestTx(
 		return err
 	}
 
+	// Dispatch to extensions before commit. EventArgs carries
+	// the actual blob refs we read from manifest_blobs (the
+	// authoritative set), not whatever the caller passed in.
+	args := index.EventArgs{
+		ArtifactID: artifactID,
+		BlobRefs:   actual,
+	}
+	if err := i.dispatchExtensions(ctx, tx, index.EventKindManifestDeleted, args); err != nil {
+		return err
+	}
+
 	if err := tx.Commit(); err != nil {
 		return err
 	}
@@ -532,10 +557,29 @@ func (i *Index) ManifestExists(id domain.ArtifactID) (bool, error) {
 // counters are untouched. Idempotent: a missing blob_ref is a
 // no-op (returns nil) — the same Drain may be retried after a crash
 // once the rebind has already committed.
+//
+// Wrapped in a tx so subscribed extensions can react atomically
+// with the main update. A missing blob_ref still completes
+// successfully (no rows affected → no event dispatched, since
+// extensions saw nothing change).
 func (i *Index) RebindBlob(ctx context.Context, blobRef string, newAddr domain.PhysicalAddress) error {
 	const op = "RebindBlob"
 	start := time.Now()
 	defer func() { i.emitLatency(op, time.Since(start)) }()
+
+	tx, err := i.db.BeginTx(ctx, nil)
+	if err != nil {
+		if isBusyError(err) {
+			i.emitContention(op, time.Since(start))
+		}
+		return classifyError(err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
 	const stmt = `
 		UPDATE blobs SET
@@ -545,7 +589,7 @@ func (i *Index) RebindBlob(ctx context.Context, blobRef string, newAddr domain.P
 			pack_offset        = ?,
 			pack_size          = ?
 		WHERE blob_ref = ?`
-	res, err := i.db.ExecContext(ctx, stmt,
+	res, err := tx.ExecContext(ctx, stmt,
 		int(newAddr.Workspace),
 		newAddr.Path,
 		newAddr.PackRef,
@@ -559,14 +603,21 @@ func (i *Index) RebindBlob(ctx context.Context, blobRef string, newAddr domain.P
 		}
 		return classifyError(err)
 	}
-	// We do not check RowsAffected — a missing row is a legitimate
-	// idempotent no-op.
-	_ = res
+	rowsAffected, _ := res.RowsAffected()
 
-	// Defensive: surface a hidden error class that some drivers
-	// fold into ExecContext.
-	if errors.Is(err, sql.ErrConnDone) {
-		return fmt.Errorf("sqlite: RebindBlob: connection done")
+	// Only dispatch if a row was actually rebound. A no-op (idempotent
+	// retry on already-rebound blob) doesn't surface an event —
+	// extensions saw the rebind once already.
+	if rowsAffected > 0 {
+		args := index.EventArgs{BlobRefs: []string{blobRef}}
+		if err := i.dispatchExtensions(ctx, tx, index.EventKindBlobRebound, args); err != nil {
+			return err
+		}
 	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	committed = true
 	return nil
 }
