@@ -187,6 +187,33 @@ func (v *View) backfill(ctx context.Context) error {
 		if !v.passesFilter(m) {
 			return nil
 		}
+		// Walk-style sources (core.Store-backed) usually return
+		// a stripped manifest from the index — Metadata, layout,
+		// inline blob, etc. are absent (the index is the cheap
+		// routing layer, not the source of truth for manifest
+		// content). Resolvers like fsmeta need Metadata to
+		// produce a path. We fetch the full manifest via
+		// Source.Get so the resolver sees the real bytes.
+		//
+		// FakeSource and similar in-memory test stubs already
+		// return complete manifests; doing a Get on top is a
+		// cheap no-op for them.
+		if rh, err := v.source.Get(ctx, m.ArtifactID, domain.GetOptions{}); err == nil {
+			full := rh.Manifest()
+			rh.Close()
+			// Preserve any fields Walk had set that Get's
+			// manifest may lack (rare in practice — Get is the
+			// authoritative source — but cheap to be safe).
+			if len(full.Metadata) > 0 {
+				m.Metadata = full.Metadata
+			}
+			if full.ContentHash != "" {
+				m.ContentHash = full.ContentHash
+			}
+			if full.OriginalSize != 0 {
+				m.OriginalSize = full.OriginalSize
+			}
+		}
 		v.indexArtifact(m, true /*duringBackfill*/)
 		return nil
 	}

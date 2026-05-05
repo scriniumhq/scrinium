@@ -125,7 +125,7 @@ func runMount(args []string) int {
 
 	// Build the routing config snapshot once: the dispatcher does
 	// not need any of the other Config fields.
-	routingCfg := RoutingConfig{
+	routingCfg := projection.RoutingConfig{
 		ServicePrefix:   cfg.ServicePrefix,
 		RootView:        cfg.RootView,
 		ShowStats:       cfg.ShowStats,

@@ -12,6 +12,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 
+	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/internal/testutil/projectionfx"
 	"github.com/rkurbatov/scrinium/projection"
@@ -19,12 +20,16 @@ import (
 )
 
 // newTestRoot builds a rootNode wired against an in-memory
-// FakeSource. No real mount, no kernel — pure Go calls. The
-// returned root is suitable for invoking Lookup/Readdir/Getattr
-// directly.
-func newTestRoot(t *testing.T) (*rootNode, *projectionfx.FakeSource) {
+// FakeSource. Tests pass any pre-populated manifests through
+// `manifests` because the View backfills synchronously at
+// construction time — adding to the source after NewView has no
+// effect on the View's trees.
+func newTestRoot(t *testing.T, manifests ...domain.Manifest) (*rootNode, *projectionfx.FakeSource) {
 	t.Helper()
 	src := projectionfx.New()
+	for _, m := range manifests {
+		src.Add(m, nil)
+	}
 	v, err := projection.NewView(context.Background(), src,
 		projection.WithPathResolver(fsmeta.Resolver))
 	if err != nil {
@@ -46,7 +51,7 @@ func newTestRoot(t *testing.T) (*rootNode, *projectionfx.FakeSource) {
 		view:  v,
 		fsops: o,
 		store: src,
-		routingCfg: RoutingConfig{
+		routingCfg: projection.RoutingConfig{
 			ServicePrefix:   "_scrinium",
 			RootView:        projection.RootByPath,
 			ShowStats:       true,
@@ -167,35 +172,12 @@ func TestRootNode_Getattr(t *testing.T) {
 
 // --- rootNode.Lookup ---
 
-func TestRootNode_Lookup_RegularPath(t *testing.T) {
-	root, src := newTestRoot(t)
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
-		"photos"), nil)
-
-	out := &fuse.EntryOut{}
-	inode, errno := root.Lookup(context.Background(), "photos", out)
-	if errno != 0 {
-		t.Fatalf("Lookup: %v", errno)
-	}
-	if inode == nil {
-		t.Fatal("nil inode")
-	}
-}
-
-func TestRootNode_Lookup_ServicePrefix(t *testing.T) {
-	root, _ := newTestRoot(t)
-	out := &fuse.EntryOut{}
-	inode, errno := root.Lookup(context.Background(), "_scrinium", out)
-	if errno != 0 {
-		t.Fatalf("Lookup: %v", errno)
-	}
-	if inode == nil {
-		t.Fatal("nil inode")
-	}
-	if out.Mode&fuse.S_IFDIR == 0 {
-		t.Error("_scrinium must be a directory")
-	}
-}
+// Lookup tests that need NewInode to succeed require a real
+// FUSE mount (the embedded fs.Inode of rootNode acquires its
+// rawBridge only when fs.Mount runs). Those go in
+// mount_root_test.go (5c, integration). Here we exercise only
+// the negative path where Lookup can return without ever calling
+// NewInode.
 
 func TestRootNode_Lookup_Missing(t *testing.T) {
 	root, _ := newTestRoot(t)
@@ -209,9 +191,8 @@ func TestRootNode_Lookup_Missing(t *testing.T) {
 // --- rootNode.Readdir ---
 
 func TestRootNode_Readdir_IncludesServicePrefix(t *testing.T) {
-	root, src := newTestRoot(t)
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
-		"alpha"), nil)
+	root, _ := newTestRoot(t,
+		projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
 
 	stream, errno := root.Readdir(context.Background())
 	if errno != 0 {
