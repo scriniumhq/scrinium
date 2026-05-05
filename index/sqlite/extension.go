@@ -21,6 +21,35 @@ func (i *Index) Extensions() index.ExtensionRegistry {
 	return &extensionRegistry{idx: i}
 }
 
+// ListExtensions returns the names of all currently registered
+// extensions, plus their persisted schema versions. Names appear
+// in unspecified order — callers wanting deterministic listings
+// should sort the result. Useful for diagnostics and stats
+// endpoints; not part of any contract surface.
+//
+// Returns an empty slice (never nil) when no extensions are
+// registered.
+type ExtensionInfo struct {
+	Name          string
+	SchemaVersion int
+}
+
+func (i *Index) ListExtensions() []ExtensionInfo {
+	i.extMu.Lock()
+	defer i.extMu.Unlock()
+	if len(i.extByName) == 0 {
+		return []ExtensionInfo{}
+	}
+	out := make([]ExtensionInfo, 0, len(i.extByName))
+	for name, ext := range i.extByName {
+		out = append(out, ExtensionInfo{
+			Name:          name,
+			SchemaVersion: ext.SchemaVersion(),
+		})
+	}
+	return out
+}
+
 // extensionRegistry is the concrete implementation of
 // index.ExtensionRegistry for the sqlite backend. Holds a back-
 // reference to the index and runs Register inside the index's

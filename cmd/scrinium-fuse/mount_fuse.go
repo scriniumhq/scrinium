@@ -157,12 +157,43 @@ func runMount(args []string) int {
 		ShowRaw:         cfg.ShowRaw,
 	}
 
+	startedAt := time.Now().UTC()
+	statsProvider := func() []byte {
+		// Capacity is best-effort: failure → "n/a" fields
+		// rather than fail the whole stats read. Bound the
+		// call so a slow driver doesn't hang the user's
+		// `cat _scrinium/stats`.
+		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
+		defer capCancel()
+		var capPtr *domain.StorageInfo
+		if cap, err := store.Capacity(capCtx); err == nil {
+			capPtr = &cap
+		}
+		exts := make([]projection.ExtensionInfo, 0)
+		for _, e := range idx.ListExtensions() {
+			exts = append(exts, projection.ExtensionInfo{
+				Name:          e.Name,
+				SchemaVersion: e.SchemaVersion,
+			})
+		}
+		return projection.RenderStats(view, projection.DaemonInfo{
+			StartedAt:    startedAt,
+			MountSession: mountSession,
+			StorePath:    cfg.StorePath,
+			ReadOnly:     cfg.ReadOnly,
+			Namespace:    cfg.Namespace,
+			Capacity:     capPtr,
+			Extensions:   exts,
+		})
+	}
+
 	root := &rootNode{
-		view:       view,
-		fsops:      fsops,
-		store:      store,
-		routingCfg: routingCfg,
-		startedAt:  time.Now(),
+		view:          view,
+		fsops:         fsops,
+		store:         store,
+		routingCfg:    routingCfg,
+		startedAt:     startedAt,
+		statsProvider: statsProvider,
 	}
 
 	mountOpts := &fs.Options{

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -43,15 +42,29 @@ type webdavFS struct {
 	routingCfg projection.RoutingConfig
 	startedAt  time.Time
 	rejectJunk bool
+	// statsProvider, if non-nil, returns the bytes served at
+	// _scrinium/stats. Daemons inject one that bundles live
+	// capacity, extension list, and policy snippets in
+	// addition to the View counters. Falls back to a minimal
+	// View-only renderer when nil — keeps tests that never
+	// pass a provider working unchanged.
+	statsProvider func() []byte
 }
 
-func newWebdavFS(view *projection.View, fsops *projection.FSOps, cfg projection.RoutingConfig, rejectJunk bool) *webdavFS {
+func newWebdavFS(
+	view *projection.View,
+	fsops *projection.FSOps,
+	cfg projection.RoutingConfig,
+	rejectJunk bool,
+	statsProvider func() []byte,
+) *webdavFS {
 	return &webdavFS{
-		view:       view,
-		fsops:      fsops,
-		routingCfg: cfg,
-		startedAt:  time.Now().UTC(),
-		rejectJunk: rejectJunk,
+		view:          view,
+		fsops:         fsops,
+		routingCfg:    cfg,
+		startedAt:     time.Now().UTC(),
+		rejectJunk:    rejectJunk,
+		statsProvider: statsProvider,
 	}
 }
 
@@ -262,21 +275,18 @@ func (w *webdavFS) openRoot(
 	return wrapFile(f, subPath, fi), nil
 }
 
-// statsBody renders the current ViewStats. Mirrors the FUSE side
-// for parity.
+// statsBody returns the bytes served at _scrinium/stats. If the
+// daemon installed a statsProvider it owns the rendering
+// (typically via projection.RenderStats with full DaemonInfo);
+// otherwise we fall back to a minimal View-only render so tests
+// without a provider still see meaningful output.
 func (w *webdavFS) statsBody() []byte {
-	stats := w.view.Stats
-	var b strings.Builder
-	fmt.Fprintf(&b, "Scrinium projection stats\n")
-	fmt.Fprintf(&b, "Source:          %s\n", w.view.Source)
-	fmt.Fprintf(&b, "Started:         %s\n", w.startedAt.UTC().Format(time.RFC3339))
-	fmt.Fprintf(&b, "TotalNodes:      %d\n", stats.TotalNodes)
-	fmt.Fprintf(&b, "TotalBytes:      %d\n", stats.TotalBytes)
-	fmt.Fprintf(&b, "OrphanedCount:   %d\n", stats.OrphanedCount)
-	fmt.Fprintf(&b, "CollisionCount:  %d\n", stats.CollisionCount)
-	fmt.Fprintf(&b, "SessionCount:    %d\n", stats.SessionCount)
-	fmt.Fprintf(&b, "NamespaceCount:  %d\n", stats.NamespaceCount)
-	return []byte(b.String())
+	if w.statsProvider != nil {
+		return w.statsProvider()
+	}
+	return projection.RenderStats(w.view, projection.DaemonInfo{
+		StartedAt: w.startedAt,
+	})
 }
 
 // --- Helpers ---

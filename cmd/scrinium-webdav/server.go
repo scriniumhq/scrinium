@@ -141,7 +141,44 @@ func runServe(args []string) int {
 		ShowRaw:         cfg.ShowRaw,
 	}
 
-	wfs := newWebdavFS(view, fsops, routingCfg, !cfg.AllowOSJunk)
+	// statsProvider closes over the daemon's view of the
+	// world: capacity is queried live (every read), extensions
+	// are snapshotted on every read, the rest is the static
+	// daemon config. This is what the user sees when they
+	// open _scrinium/stats — see projection.RenderStats for
+	// the format.
+	startedAt := time.Now().UTC()
+	statsProvider := func() []byte {
+		// Capacity is best-effort: failure → render "n/a"
+		// fields rather than fail the whole stats read.
+		// Bound the call so a slow driver doesn't hang the
+		// stats endpoint.
+		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
+		defer capCancel()
+		var capPtr *domain.StorageInfo
+		if cap, err := store.Capacity(capCtx); err == nil {
+			capPtr = &cap
+		}
+		exts := make([]projection.ExtensionInfo, 0)
+		for _, e := range idx.ListExtensions() {
+			exts = append(exts, projection.ExtensionInfo{
+				Name:          e.Name,
+				SchemaVersion: e.SchemaVersion,
+			})
+		}
+		return projection.RenderStats(view, projection.DaemonInfo{
+			StartedAt:    startedAt,
+			MountSession: mountSession,
+			StorePath:    cfg.StorePath,
+			ReadOnly:     cfg.ReadOnly,
+			Editing:      cfg.Editing,
+			Namespace:    cfg.Namespace,
+			Capacity:     capPtr,
+			Extensions:   exts,
+		})
+	}
+
+	wfs := newWebdavFS(view, fsops, routingCfg, !cfg.AllowOSJunk, statsProvider)
 
 	rejectJunk := !cfg.AllowOSJunk
 	handler := &webdav.Handler{

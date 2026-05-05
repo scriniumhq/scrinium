@@ -50,7 +50,7 @@ func newTestFS(t *testing.T, manifests ...domain.Manifest) (*webdavFS, *projecti
 		ShowBySession:   true,
 		ShowByNamespace: true,
 		ShowRaw:         false,
-	}, true /* rejectJunk */), src
+	}, true /* rejectJunk */, nil /* statsProvider — fall back to View-only */), src
 }
 
 // --- cleanWebDAVPath ---
