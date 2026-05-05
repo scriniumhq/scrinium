@@ -20,6 +20,7 @@ import (
 	"github.com/rkurbatov/scrinium/driver/localfs"
 	"github.com/rkurbatov/scrinium/index/sqlite"
 	"github.com/rkurbatov/scrinium/projection"
+	"github.com/rkurbatov/scrinium/projection/fsindex"
 	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
@@ -61,6 +62,19 @@ func runServe(args []string) int {
 		fmt.Fprintf(os.Stderr, "scrinium-webdav: sqlite index: %v\n", err)
 		return 1
 	}
+
+	// Register the filesystem-projection index extension. fsindex
+	// persists each artifact's fsmeta payload alongside the main
+	// index in the same transaction, so View backfill can fetch
+	// metadata in bulk instead of round-tripping Source.Get for
+	// every manifest. Registration must happen before OpenStore
+	// so the very first IndexManifest dispatches into fsindex.
+	fsidx := fsindex.New()
+	if err := idx.Extensions().Register(ctx, fsidx); err != nil {
+		fmt.Fprintf(os.Stderr, "scrinium-webdav: register fsindex: %v\n", err)
+		return 1
+	}
+
 	store, err := core.OpenStore(ctx, drv,
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(defaultHashRegistry()),
@@ -72,6 +86,7 @@ func runServe(args []string) int {
 
 	view, err := projection.NewView(ctx, store,
 		projection.WithPathResolver(fsmeta.Resolver),
+		projection.WithFSIndex(fsidx),
 		projection.WithRootView(cfg.RootView),
 		projection.WithFallback(cfg.ByPathFallback),
 	)

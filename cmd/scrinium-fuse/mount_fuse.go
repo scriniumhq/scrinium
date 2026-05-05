@@ -4,7 +4,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"hash"
 	"hash/fnv"
 	"os"
 	"os/signal"
@@ -19,9 +21,11 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver/localfs"
 	"github.com/rkurbatov/scrinium/index/sqlite"
 	"github.com/rkurbatov/scrinium/projection"
+	"github.com/rkurbatov/scrinium/projection/fsindex"
 	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
@@ -66,7 +70,22 @@ func runMount(args []string) int {
 		return 1
 	}
 
-	store, err := core.OpenStore(ctx, drv, core.WithStoreIndex(idx))
+	// Register the filesystem-projection index extension. fsindex
+	// persists each artifact's fsmeta payload alongside the main
+	// index in the same transaction, so View backfill can fetch
+	// metadata in bulk instead of round-tripping Source.Get for
+	// every manifest. Registration must happen before OpenStore
+	// so the very first IndexManifest dispatches into fsindex.
+	fsidx := fsindex.New()
+	if err := idx.Extensions().Register(ctx, fsidx); err != nil {
+		fmt.Fprintf(os.Stderr, "scrinium-fuse: register fsindex: %v\n", err)
+		return 1
+	}
+
+	store, err := core.OpenStore(ctx, drv,
+		core.WithStoreIndex(idx),
+		core.WithHashRegistry(defaultHashRegistry()),
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-fuse: open store: %v\n", err)
 		return 1
@@ -77,6 +96,7 @@ func runMount(args []string) int {
 
 	view, err := projection.NewView(ctx, store,
 		projection.WithPathResolver(fsmeta.Resolver),
+		projection.WithFSIndex(fsidx),
 		projection.WithRootView(cfg.RootView),
 		projection.WithFallback(cfg.ByPathFallback),
 	)
@@ -231,4 +251,13 @@ func joinTreePath(parentSub, child string) string {
 // callers).
 func cleanName(s string) string {
 	return strings.Trim(s, "/")
+}
+
+// defaultHashRegistry returns a HashRegistry with the algorithms
+// the daemon needs to read a Scrinium store written by reference
+// hosts. Currently sha256 — the default content hasher in
+// core.InitStore for unsealed stores.
+func defaultHashRegistry() domain.HashRegistry {
+	return core.NewHashRegistry().
+		Register("sha256", func() hash.Hash { return sha256.New() })
 }

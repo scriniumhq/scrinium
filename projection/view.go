@@ -182,38 +182,28 @@ func (v *View) allTrees() []map[string]*viewNode {
 // backfill walks the source and classifies each manifest. The
 // caller holds no lock; backfill is single-threaded by virtue of
 // running before NewView returns.
+//
+// Two paths exist:
+//
+//   - Fast path (a MetadataSource is configured). Source.Walk
+//     gives us the stripped manifests; we top them up by calling
+//     metadataSource.Metadata(id) — an O(log N) lookup against a
+//     local index extension that persisted Metadata at write
+//     time. No round-trip to Source.Get per manifest.
+//
+//   - Slow path (no MetadataSource). We round-trip Source.Get
+//     for every manifest to recover Metadata. This is N+1 by
+//     construction; acceptable for tests with FakeSource (which
+//     keeps full manifests in memory anyway, so Get is cheap)
+//     and for backfills small enough that latency doesn't
+//     matter. Daemons with large stores configure
+//     WithMetadataSource (or WithFSIndex) to take the fast path.
 func (v *View) backfill(ctx context.Context) error {
 	cb := func(m domain.Manifest) error {
 		if !v.passesFilter(m) {
 			return nil
 		}
-		// Walk-style sources (core.Store-backed) usually return
-		// a stripped manifest from the index — Metadata, layout,
-		// inline blob, etc. are absent (the index is the cheap
-		// routing layer, not the source of truth for manifest
-		// content). Resolvers like fsmeta need Metadata to
-		// produce a path. We fetch the full manifest via
-		// Source.Get so the resolver sees the real bytes.
-		//
-		// FakeSource and similar in-memory test stubs already
-		// return complete manifests; doing a Get on top is a
-		// cheap no-op for them.
-		if rh, err := v.source.Get(ctx, m.ArtifactID, domain.GetOptions{}); err == nil {
-			full := rh.Manifest()
-			rh.Close()
-			// Preserve any fields Walk had set that Get's
-			// manifest may lack (rare in practice — Get is the
-			// authoritative source — but cheap to be safe).
-			if len(full.Metadata) > 0 {
-				m.Metadata = full.Metadata
-			}
-			if full.ContentHash != "" {
-				m.ContentHash = full.ContentHash
-			}
-			if full.OriginalSize != 0 {
-				m.OriginalSize = full.OriginalSize
-			}
-		}
+		v.populateMetadata(ctx, &m)
 		v.indexArtifact(m, true /*duringBackfill*/)
 		return nil
 	}
@@ -221,6 +211,57 @@ func (v *View) backfill(ctx context.Context) error {
 		return fmt.Errorf("%w: %w", errs.ErrSourceUnavailable, err)
 	}
 	return nil
+}
+
+// populateMetadata fills m.Metadata (and a couple of cheap
+// neighbouring fields) from the configured fast path or, failing
+// that, from Source.Get. Mutates m in place.
+//
+// Errors from either path are intentionally swallowed — backfill
+// must finish even if one manifest's metadata fetch fails (the
+// resolver will then treat it as orphaned, the standard
+// missing-path behaviour). A noisy "best effort" log line could
+// be added behind the bus once we wire it.
+func (v *View) populateMetadata(ctx context.Context, m *domain.Manifest) {
+	// Fast path: bulk MetadataSource lookup, no Source round-trip.
+	if v.opts.metadataSource != nil {
+		raw, ok, err := v.opts.metadataSource.Metadata(m.ArtifactID)
+		if err == nil && ok && len(raw) > 0 {
+			m.Metadata = raw
+			return
+		}
+		// Miss or error — fall through to Source.Get. A miss is
+		// legitimate (artifact written before the extension was
+		// registered, or extension doesn't index this schema);
+		// for those rare cases the slow path is correct.
+	}
+
+	// Slow path: round-trip Source.Get for the full manifest.
+	// Walk-style sources (core.Store-backed) usually return a
+	// stripped manifest from the index — Metadata, layout,
+	// inline blob, etc. are absent. Resolvers like fsmeta need
+	// Metadata to produce a path.
+	//
+	// FakeSource and similar in-memory test stubs already return
+	// complete manifests; doing a Get on top is a cheap no-op.
+	rh, err := v.source.Get(ctx, m.ArtifactID, domain.GetOptions{})
+	if err != nil {
+		return
+	}
+	full := rh.Manifest()
+	rh.Close()
+	// Preserve any fields Walk had set that Get's manifest may
+	// lack (rare in practice — Get is the authoritative source —
+	// but cheap to be safe).
+	if len(full.Metadata) > 0 {
+		m.Metadata = full.Metadata
+	}
+	if full.ContentHash != "" {
+		m.ContentHash = full.ContentHash
+	}
+	if full.OriginalSize != 0 {
+		m.OriginalSize = full.OriginalSize
+	}
 }
 
 // passesFilter checks the configured ViewFilter against a
