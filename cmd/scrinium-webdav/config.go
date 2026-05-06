@@ -66,6 +66,16 @@ type Config struct {
 	// AllowOSJunk disables the desktop-junk filter. Off by
 	// default — see junkfilter.go for the patterns rejected.
 	AllowOSJunk bool `yaml:"allowOsJunk"`
+
+	// BrowsePrefix is the URL prefix under which the daemon
+	// serves human-readable HTML directory listings. Default
+	// "/_browse"; empty disables the browser entirely.
+	//
+	// WebDAV stays on the root path regardless of this setting:
+	// the browser is a separate, secondary surface for ad-hoc
+	// inspection. Clients (Finder, rclone, Office) always
+	// connect to "/", get pure WebDAV.
+	BrowsePrefix string `yaml:"browsePrefix"`
 }
 
 // DefaultConfig returns a Config populated with the spec's
@@ -90,6 +100,7 @@ func DefaultConfig() Config {
 		DefaultMode:     0o644,
 		DefaultUID:      uint32(os.Getuid()),
 		DefaultGID:      uint32(os.Getgid()),
+		BrowsePrefix:    "/_browse",
 	}
 }
 
@@ -181,6 +192,8 @@ func bindFlags(fs *flag.FlagSet, cfg *Config) {
 	fs.BoolVar(&cfg.ReadOnly, "read-only", cfg.ReadOnly, "Serve read-only.")
 	fs.BoolVar(&cfg.AllowOSJunk, "allow-os-junk", cfg.AllowOSJunk,
 		"Permit clients to write OS-generated junk files (.DS_Store, Thumbs.db, AppleDouble ._*, etc).")
+	fs.StringVar(&cfg.BrowsePrefix, "browse-prefix", cfg.BrowsePrefix,
+		"URL prefix for HTML browser listings. Empty disables. Default \"/_browse\".")
 }
 
 // applyEnv overlays SCRINIUM_WEBDAV_* environment variables onto

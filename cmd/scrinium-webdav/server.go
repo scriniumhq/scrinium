@@ -199,9 +199,26 @@ func runServe(args []string) int {
 		},
 	}
 
+	// Build the top-level mux. WebDAV stays as the catch-all
+	// at "/", so clients (Finder, rclone, Office) connect to
+	// the daemon's root URL exactly as they would to a stock
+	// WebDAV server. The browser, when configured, is mounted
+	// under a separate prefix — a secondary surface for
+	// human inspection that doesn't perturb WebDAV traffic.
+	mux := http.NewServeMux()
+	if browser := newBrowserHandler(wfs, cfg); browser.prefix != "" {
+		// Register both "/_browse" and "/_browse/" so requests
+		// without the trailing slash are matched too. Go's
+		// ServeMux would otherwise 404 the bare prefix.
+		mux.Handle(browser.prefix, http.RedirectHandler(browser.prefix+"/", http.StatusMovedPermanently))
+		mux.Handle(browser.prefix+"/", browser)
+		fmt.Fprintf(os.Stderr, "Browser: %s\n", browser.prefix)
+	}
+	mux.Handle("/", handler)
+
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           handler,
+		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
