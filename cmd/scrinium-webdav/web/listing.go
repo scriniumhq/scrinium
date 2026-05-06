@@ -13,12 +13,15 @@ import (
 )
 
 // dirEntry is one row in the rendered listing. Computed up-front
-// so the template doesn't have to call helpers per row.
+// so the template doesn't have to call helpers per row. We keep
+// the original os.FileInfo so the artifact-id extractor (which
+// type-asserts the FileInfo) can run later.
 type dirEntry struct {
 	Name    string
 	IsDir   bool
 	Size    int64
 	ModTime time.Time
+	Info    os.FileInfo
 }
 
 // dirEntries enumerates a directory through the BackingFS.
@@ -40,6 +43,7 @@ func (h *Handler) dirEntries(ctx context.Context, dir string) ([]dirEntry, error
 			IsDir:   fi.IsDir(),
 			Size:    fi.Size(),
 			ModTime: fi.ModTime(),
+			Info:    fi,
 		})
 	}
 	// Stable order: directories first, then files, both sorted
@@ -73,11 +77,22 @@ type crumb struct {
 
 type listingRow struct {
 	Name     string
-	URL      string
+	URL      string // info-page link for files; subdir link for directories
 	IsDir    bool
 	IsSystem bool
 	SizeText string
 	TimeText string
+
+	// ViewURL is the inline-render endpoint, populated only
+	// when the file's MIME is in the conservative "browser
+	// will render this" whitelist. Empty otherwise — the
+	// template skips the [view] action when so.
+	ViewURL string
+
+	// DownloadURL is the attachment-disposition endpoint,
+	// populated for every file regardless of MIME. Empty for
+	// directories.
+	DownloadURL string
 }
 
 // serveListing renders a directory page.
@@ -124,16 +139,40 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 			IsSystem: h.isSystemPath(entryPath),
 			TimeText: e.ModTime.UTC().Format("2006-01-02 15:04"),
 		}
-		base := r.URL.Path
-		if !strings.HasSuffix(base, "/") {
-			base += "/"
-		}
-		row.URL = base + e.Name
 		if e.IsDir {
-			row.URL += "/"
+			// Directories: clicking the name navigates
+			// further down the tree, same as before.
+			base := r.URL.Path
+			if !strings.HasSuffix(base, "/") {
+				base += "/"
+			}
+			row.URL = base + e.Name + "/"
 			row.SizeText = "—"
 		} else {
+			// Files: clicking the name opens the artifact
+			// info page — the web surface is diagnostic, so
+			// "info" is the default action. Inline rendering
+			// and downloading are explicit alternatives
+			// reachable via the [view] / [dl] buttons.
 			row.SizeText = HumanSize(e.Size)
+			id := extractArtifactID(e.Info)
+			if id != "" {
+				row.URL = h.prefix + "/_artifact/" + string(id)
+				row.DownloadURL = h.prefix + "/_download/" + string(id)
+				// MIME source priority: fsmeta first, then
+				// the filename extension as fallback. Many
+				// artifacts are written without an explicit
+				// fsmeta MIME (the producer didn't bother)
+				// but the filename still gives us enough
+				// to advertise [view] for known types.
+				mimeType := inferMIME(e.Name, extractMIME(e.Info))
+				if isInlineable(mimeType) {
+					row.ViewURL = h.prefix + "/_view/" + string(id)
+				}
+			}
+			// Files without an ArtifactID (synthetic stats
+			// file, etc.) leave URL empty — the template
+			// renders the name as plain text.
 		}
 		data.Entries = append(data.Entries, row)
 	}

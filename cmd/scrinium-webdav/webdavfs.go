@@ -16,6 +16,7 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/projection"
+	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
 // POSIX flag bits used for OpenFile semantics. Aliased to
@@ -442,6 +443,17 @@ func (p projectionFileInfo) ModTime() time.Time { return p.fi.ModTime }
 func (p projectionFileInfo) IsDir() bool        { return p.fi.IsDir }
 func (p projectionFileInfo) Sys() any           { return nil }
 
+// ArtifactID surfaces the underlying artifact id when one is
+// known. Empty for virtual directories. Implements the
+// web.ArtifactInfo interface (web type-asserts to discover
+// info-link targets).
+func (p projectionFileInfo) ArtifactID() domain.ArtifactID { return p.fi.ArtifactID }
+
+// MIME surfaces the fsmeta-recorded MIME type. Implements the
+// web.MIMEInfo interface; web uses it to decide whether to
+// advertise an inline [view] link for the row.
+func (p projectionFileInfo) MIME() string { return p.fi.MIME }
+
 // projectionNodeInfo wraps a projection.Node as os.FileInfo for
 // the service-tree side. POSIX attributes are best-effort: the
 // service trees do not run through FSOps so fsmeta is not
@@ -465,6 +477,31 @@ func (p projectionNodeInfo) ModTime() time.Time {
 }
 func (p projectionNodeInfo) IsDir() bool { return p.node.FS.IsDir }
 func (p projectionNodeInfo) Sys() any    { return nil }
+
+// ArtifactID surfaces the underlying artifact id for service-
+// tree files (e.g. _scrinium/orphaned/.../<id>). Empty for
+// virtual directories along the service path.
+func (p projectionNodeInfo) ArtifactID() domain.ArtifactID {
+	if p.node.Artifact == nil {
+		return ""
+	}
+	return p.node.Artifact.ArtifactID
+}
+
+// MIME decodes the fsmeta payload of the underlying artifact and
+// returns its MIME field. Empty when the artifact has no fsmeta
+// (or any decode failure) — web uses that as the cue to omit the
+// [view] button.
+func (p projectionNodeInfo) MIME() string {
+	if p.node.Artifact == nil {
+		return ""
+	}
+	fs, ok, err := fsmeta.Decode(p.node.Artifact.Metadata)
+	if err != nil || !ok {
+		return ""
+	}
+	return fs.MIME
+}
 
 // synthDirInfo / synthFileInfo are quick os.FileInfo for
 // virtual directories (service prefix root) and virtual files

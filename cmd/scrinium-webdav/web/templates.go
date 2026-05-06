@@ -41,6 +41,11 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
   td.size, td.time { color: #666; font-variant-numeric: tabular-nums;
                      font-family: ui-monospace, monospace; font-size: 0.92em; }
   td.size { text-align: right; }
+  td.actions { width: 6em; text-align: right; white-space: nowrap; }
+  td.actions a { color: #888; text-decoration: none; font-size: 0.85em;
+                 padding: 0.1em 0.5em; border-radius: 3px;
+                 margin-left: 0.2em; }
+  td.actions a:hover { color: #06f; background: #ececec; }
   .icon-dir  { color: #999; margin-right: 0.5em; }
   .icon-file { color: #ccc; margin-right: 0.5em; }
   /* System entries (paths beginning with "_") are dimmed and
@@ -76,6 +81,7 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
       <th>Name</th>
       <th class="size">Size</th>
       <th class="time">Modified</th>
+      <th class="actions"></th>
     </tr>
   </thead>
   <tbody>
@@ -84,13 +90,15 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
       <td class="name"><span class="icon-dir">↑</span><a href="{{.Parent}}">..</a></td>
       <td class="size">—</td>
       <td class="time"></td>
+      <td class="actions"></td>
     </tr>
 {{- end}}
 {{- range .Entries}}
     <tr{{if .IsSystem}} class="system"{{end}}>
-      <td class="name">{{if .IsDir}}<span class="icon-dir">▸</span>{{else}}<span class="icon-file">·</span>{{end}}<a href="{{.URL}}">{{.Name}}{{if .IsDir}}/{{end}}</a>{{if .IsSystem}}<span class="badge">system</span>{{end}}</td>
+      <td class="name">{{if .IsDir}}<span class="icon-dir">▸</span>{{else}}<span class="icon-file">·</span>{{end}}{{if .URL}}<a href="{{.URL}}">{{.Name}}{{if .IsDir}}/{{end}}</a>{{else}}{{.Name}}{{end}}{{if .IsSystem}}<span class="badge">system</span>{{end}}</td>
       <td class="size">{{.SizeText}}</td>
       <td class="time">{{.TimeText}}</td>
+      <td class="actions">{{if .ViewURL}}<a href="{{.ViewURL}}" target="_blank" rel="noopener">view</a>{{end}}{{if .DownloadURL}}<a href="{{.DownloadURL}}">dl</a>{{end}}</td>
     </tr>
 {{- end}}
   </tbody>

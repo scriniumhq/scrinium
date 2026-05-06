@@ -209,7 +209,7 @@ func runServe(args []string) int {
 	mux := http.NewServeMux()
 	if cfg.BrowsePrefix != "" {
 		webHandler := web.NewHandler(
-			newWebBackingFS(wfs),
+			newWebBackingFS(wfs, store),
 			cleanWebDAVPath,
 			web.Config{
 				StorePath:     cfg.StorePath,
@@ -217,6 +217,12 @@ func runServe(args []string) int {
 				BrowsePrefix:  cfg.BrowsePrefix,
 			},
 		)
+		// Register schema decoders the daemon understands.
+		// Each domain has its own decoder; web stays
+		// schema-agnostic and only consumes whatever the
+		// host installs.
+		webHandler.RegisterDecoder(fsmetaDecoder{})
+
 		prefix := webHandler.Prefix()
 		// Register both "/_browse" and "/_browse/" so requests
 		// without the trailing slash are matched too. Go's

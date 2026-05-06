@@ -93,6 +93,21 @@ type FileInfo struct {
 	GID     uint32
 	ModTime time.Time
 	IsDir   bool
+
+	// ArtifactID is the underlying artifact's id when the
+	// FileInfo describes a file backed by a real artifact.
+	// Empty for virtual directories and synthetic entries
+	// that have no artifact identity. Surfaced by the web
+	// browser to build info-links into the artifact details
+	// page; ignored by FUSE/WebDAV which don't need it.
+	ArtifactID domain.ArtifactID
+
+	// MIME carries the MIME type recorded in fsmeta.MIME, if
+	// any. Empty when the artifact has no fsmeta payload or
+	// the payload didn't set a MIME. Surfaced by the web
+	// browser to decide whether a file is safe to advertise
+	// via an inline [view] link.
+	MIME string
 }
 
 // FileInfoSeq is a stream of FileInfo with optional error per
@@ -531,10 +546,12 @@ func (o *FSOps) fileInfoFromNode(n Node) FileInfo {
 	// For virtual directories, n.Artifact is nil — defaults are
 	// the only available source.
 	if n.Artifact != nil {
+		fi.ArtifactID = n.Artifact.ArtifactID
 		if fs, ok, err := fsmeta.Decode(n.Artifact.Metadata); err == nil && ok {
 			fi.Mode = fs.Mode
 			fi.UID = fs.UID
 			fi.GID = fs.GID
+			fi.MIME = fs.MIME
 			if !fs.ModTime.IsZero() {
 				fi.ModTime = fs.ModTime
 			}

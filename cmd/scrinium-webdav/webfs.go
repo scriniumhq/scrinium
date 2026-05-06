@@ -2,9 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
+	"io"
 	"os"
+	pathpkg "path"
 
 	"github.com/rkurbatov/scrinium/cmd/scrinium-webdav/web"
+	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
 // webBackingFS adapts the daemon's webdavFS to the web package's
@@ -14,11 +20,12 @@ import (
 // structural subtyping does the conversion automatically once
 // we say so explicitly.
 type webBackingFS struct {
-	wfs *webdavFS
+	wfs   *webdavFS
+	store core.Store
 }
 
-func newWebBackingFS(wfs *webdavFS) *webBackingFS {
-	return &webBackingFS{wfs: wfs}
+func newWebBackingFS(wfs *webdavFS, store core.Store) *webBackingFS {
+	return &webBackingFS{wfs: wfs, store: store}
 }
 
 func (b *webBackingFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
@@ -35,3 +42,101 @@ func (b *webBackingFS) OpenFile(ctx context.Context, name string, flag int, perm
 	// web.File requires is on f.
 	return f, nil
 }
+
+// LookupManifest fetches the full manifest for an artifact id
+// through the core.Store. We open and immediately close the
+// ReadHandle: web only needs the manifest, not the bytes.
+//
+// (zero, false, nil) for "not found"; the third return covers
+// driver/index errors. The handler page degrades gracefully
+// either way.
+func (b *webBackingFS) LookupManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, bool, error) {
+	rh, err := b.store.Get(ctx, id, domain.GetOptions{})
+	if err != nil {
+		// Distinguishing "not found" from infrastructure
+		// errors here is awkward — core.Store.Get wraps both
+		// in the same error type. Treat any error as
+		// "not found" for now; if we wire structured errors
+		// later, branch on errs.ErrArtifactNotFound.
+		return domain.Manifest{}, false, nil
+	}
+	defer rh.Close()
+	return rh.Manifest(), true, nil
+}
+
+// OpenArtifact opens an artifact's bytes by id, returning a
+// handle along with display name + MIME for the response
+// headers. The ReadHandle's body satisfies web.File via
+// readHandleAdapter — http.ServeContent uses Read+Seek, both
+// available.
+func (b *webBackingFS) OpenArtifact(ctx context.Context, id domain.ArtifactID) (web.File, web.ArtifactMeta, error) {
+	rh, err := b.store.Get(ctx, id, domain.GetOptions{})
+	if err != nil {
+		return nil, web.ArtifactMeta{}, err
+	}
+	m := rh.Manifest()
+
+	// Display name from fsmeta path; fallback handled by
+	// web.serveByID when we leave it empty.
+	name := ""
+	mimeType := ""
+	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
+		name = pathpkg.Base(fs.Path)
+		mimeType = fs.MIME
+	}
+
+	return &readHandleAdapter{rh: rh, size: m.OriginalSize}, web.ArtifactMeta{
+		Name:    name,
+		MIME:    mimeType,
+		ModTime: m.CreatedAt,
+	}, nil
+}
+
+// readHandleAdapter wraps a core.ReadHandle so it satisfies
+// web.File. ReadHandle provides Read/Close + ReadAt; we synthesise
+// Seek via the readSeeker helper so http.ServeContent's Range
+// support keeps working. Readdir/Stat are stubbed — web uses
+// neither for byte streaming.
+type readHandleAdapter struct {
+	rh   core.ReadHandle
+	pos  int64
+	size int64
+}
+
+func (a *readHandleAdapter) Read(p []byte) (int, error) {
+	if a.size > 0 && a.pos >= a.size {
+		return 0, io.EOF
+	}
+	n, err := a.rh.ReadAt(p, a.pos)
+	a.pos += int64(n)
+	return n, err
+}
+
+// Seek synthesises seekability over ReadHandle's ReaderAt. This
+// is what http.ServeContent expects; without it Range requests
+// fail with "seeker can't seek".
+func (a *readHandleAdapter) Seek(offset int64, whence int) (int64, error) {
+	var abs int64
+	switch whence {
+	case io.SeekStart:
+		abs = offset
+	case io.SeekCurrent:
+		abs = a.pos + offset
+	case io.SeekEnd:
+		abs = a.size + offset
+	default:
+		return 0, errors.New("readHandleAdapter.Seek: invalid whence")
+	}
+	if abs < 0 {
+		return 0, errors.New("readHandleAdapter.Seek: negative position")
+	}
+	a.pos = abs
+	return abs, nil
+}
+
+func (a *readHandleAdapter) Close() error {
+	return a.rh.Close()
+}
+
+func (a *readHandleAdapter) Readdir(int) ([]os.FileInfo, error) { return nil, nil }
+func (a *readHandleAdapter) Stat() (os.FileInfo, error)         { return nil, nil }
