@@ -747,9 +747,15 @@ const artifactPageHTML = `<!DOCTYPE html>
   header .brand { font-weight: 600; color: #06f; font-size: 1.1em; letter-spacing: 0.02em; }
   header .store { color: #888; font-size: 0.9em;
                   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  header .back  { margin-left: auto; font-size: 0.9em; }
+  header .back  { font-size: 0.9em; }
   header .back a { color: #06f; text-decoration: none; }
   header .back a:hover { text-decoration: underline; }
+  header .header-search { margin-left: auto; }
+  header .header-search input { padding: 0.3em 0.6em; font-size: 0.9em;
+                                  border: 1px solid #ddd; border-radius: 4px;
+                                  font-family: inherit; min-width: 220px; }
+  header .header-search input:focus { outline: none; border-color: #06f;
+                                        box-shadow: 0 0 0 2px rgba(0,102,255,0.15); }
   h2   { font-size: 0.9em; font-weight: 500; color: #888; margin: 1.8em 0 0.6em;
          text-transform: uppercase; letter-spacing: 0.06em; }
   table { border-collapse: collapse; width: 100%; max-width: 1100px;
@@ -815,7 +821,10 @@ const artifactPageHTML = `<!DOCTYPE html>
 <header>
   <span class="brand">Scrinium</span>
   <span class="store">{{.StorePath}}</span>
-  <span class="back"><a href="{{.BrowsePrefix}}/">← back to browse</a></span>
+  <form class="header-search" method="get" action="{{.BrowsePrefix}}/_search">
+    <input type="text" name="q" placeholder="search…">
+  </form>
+  <span class="back"><a href="{{.BrowsePrefix}}/">← browse</a></span>
 </header>
 
 <h2>Identity</h2>

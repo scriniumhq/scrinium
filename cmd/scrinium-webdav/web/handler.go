@@ -58,6 +58,25 @@ type BackingFS interface {
 	// Returns a fresh slice on every call; nil when no
 	// siblings exist.
 	LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]RelatedArtifact, error)
+
+	// Search returns artifacts whose path or namespace
+	// contains the query as a substring (case-insensitive),
+	// or whose id matches exactly. limit caps the response;
+	// a value of 0 means unlimited. Used by the /_search
+	// endpoint.
+	Search(ctx context.Context, query string, limit int) ([]SearchResult, error)
+}
+
+// SearchResult mirrors projection.SearchResult — kept here so
+// web stays a clean library hosts adapt to.
+type SearchResult struct {
+	ArtifactID  domain.ArtifactID
+	Path        string
+	Namespace   string
+	SessionID   string
+	CreatedAt   time.Time
+	MIME        string
+	MatchReason string // "path" | "namespace" | "id"
 }
 
 // RelatedArtifact mirrors projection.RelatedArtifact verbatim,
@@ -189,6 +208,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if rel == "_stats" || rel == "_stats/" {
 		h.serveStats(w, r)
+		return
+	}
+	if rel == "_search" || rel == "_search/" {
+		h.serveSearch(w, r)
 		return
 	}
 

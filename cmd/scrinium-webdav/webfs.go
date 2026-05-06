@@ -160,3 +160,23 @@ func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef
 	}
 	return out, nil
 }
+
+// Search proxies to the View's text search. Same linear-scan
+// caveats as LookupRelated; an actual search index is a backlog
+// item once the store grows beyond ~100K artifacts.
+func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]web.SearchResult, error) {
+	hits := b.wfs.view.Search(query, limit)
+	out := make([]web.SearchResult, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, web.SearchResult{
+			ArtifactID:  h.ArtifactID,
+			Path:        h.Path,
+			Namespace:   h.Namespace,
+			SessionID:   h.SessionID,
+			CreatedAt:   h.CreatedAt,
+			MIME:        h.MIME,
+			MatchReason: h.MatchReason,
+		})
+	}
+	return out, nil
+}

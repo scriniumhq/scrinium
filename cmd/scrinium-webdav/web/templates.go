@@ -25,6 +25,12 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
   header .brand { font-weight: 600; color: #06f; font-size: 1.1em; letter-spacing: 0.02em; }
   header .store { color: #888; font-size: 0.9em;
                   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  header .header-search { margin-left: auto; }
+  header .header-search input { padding: 0.3em 0.6em; font-size: 0.9em;
+                                  border: 1px solid #ddd; border-radius: 4px;
+                                  font-family: inherit; min-width: 220px; }
+  header .header-search input:focus { outline: none; border-color: #06f;
+                                        box-shadow: 0 0 0 2px rgba(0,102,255,0.15); }
   .crumbs { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
             font-size: 0.95em; margin-bottom: 1.2em; }
   .crumbs a { color: #06f; text-decoration: none; }
@@ -87,6 +93,9 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
 <header>
   <span class="brand">Scrinium</span>
   <span class="store">{{.StorePath}}</span>
+  <form class="header-search" method="get" action="{{.BrowsePrefix}}/_search">
+    <input type="text" name="q" placeholder="search…">
+  </form>
 </header>
 
 <div class="crumbs">

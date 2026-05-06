@@ -515,6 +515,95 @@ func (v *View) RootView() RootView { return v.opts.rootView }
 
 // --- Read methods (one set per tree) ---
 
+// SearchResult is one hit returned by View.Search. Carries
+// enough fields to render a result row without forcing the
+// caller to follow up with manifest lookups.
+type SearchResult struct {
+	ArtifactID  domain.ArtifactID
+	Path        string // by-path placement; empty if orphaned
+	Namespace   string
+	SessionID   string
+	CreatedAt   time.Time
+	MIME        string // from fsmeta when present
+	MatchReason string // "path" | "namespace" | "id"
+}
+
+// Search scans the View for artifacts matching the query.
+// Substring matching, case-insensitive, against:
+//
+//   - the artifact's by-path placement (covers fsmeta names);
+//   - the namespace field;
+//   - an exact ArtifactID match (so users can paste an id and
+//     jump straight to it).
+//
+// limit caps the result count; passing 0 disables the cap (use
+// only for diagnostic flows). Order matches the scan order over
+// the artifacts map — random-but-stable within a single View
+// state. Callers sort if they need a specific order.
+//
+// Implementation is the same linear scan as RelatedByBlobRef:
+// O(N) under RLock, fast for stores up to ~100K artifacts.
+// Beyond that, we'd want an actual search index — see backlog.
+func (v *View) Search(query string, limit int) []SearchResult {
+	if v.closed.Load() {
+		return nil
+	}
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return nil
+	}
+
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	var out []SearchResult
+	for id, rec := range v.artifacts {
+		// Exact id match — strongest signal, surface first.
+		if string(id) == query {
+			out = append(out, makeSearchResult(id, rec, "id"))
+			if limit > 0 && len(out) >= limit {
+				return out
+			}
+			continue
+		}
+
+		path := strings.ToLower(rec.pathByPath)
+		ns := strings.ToLower(rec.manifest.Namespace)
+
+		switch {
+		case path != "" && strings.Contains(path, q):
+			out = append(out, makeSearchResult(id, rec, "path"))
+		case ns != "" && strings.Contains(ns, q):
+			out = append(out, makeSearchResult(id, rec, "namespace"))
+		default:
+			continue
+		}
+		if limit > 0 && len(out) >= limit {
+			return out
+		}
+	}
+	return out
+}
+
+// makeSearchResult populates a SearchResult from an artifact
+// record. MIME is best-effort from fsmeta; absence falls back
+// to empty (the UI is responsible for any extension-based
+// inference it cares about).
+func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) SearchResult {
+	r := SearchResult{
+		ArtifactID:  id,
+		Path:        rec.pathByPath,
+		Namespace:   rec.manifest.Namespace,
+		SessionID:   rec.manifest.SessionID,
+		CreatedAt:   rec.manifest.CreatedAt,
+		MatchReason: reason,
+	}
+	if fs, ok, err := fsmeta.Decode(rec.manifest.Metadata); err == nil && ok {
+		r.MIME = fs.MIME
+	}
+	return r
+}
+
 func (v *View) GetByPath(path string) (Node, error)      { return v.getInTree(v.byPath, path) }
 func (v *View) GetBySession(path string) (Node, error)   { return v.getInTree(v.bySession, path) }
 func (v *View) GetByNamespace(path string) (Node, error) { return v.getInTree(v.byNamespace, path) }
