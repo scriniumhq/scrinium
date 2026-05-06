@@ -1,9 +1,12 @@
 package web
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"html/template"
 	"io"
@@ -79,11 +82,25 @@ func (h *Handler) serveArtifact(w http.ResponseWriter, r *http.Request, id domai
 		fmt.Fprintf(os.Stderr, "scrinium-web: artifact %q render: %v\n", id, renderErr)
 	}
 
-	// Hex preview is best-effort: if OpenArtifact fails
-	// (encrypted-locked store, missing blob, large external
-	// URI we don't traverse) we just leave the preview empty
-	// and the template skips the section.
-	data.HexPreview = h.tryHexPreview(r.Context(), id)
+	// Content preview: dispatched on MIME so JSON/XML/CSV/text
+	// get readable rendering and everything else falls back to
+	// hex. Best-effort throughout — failure leaves the
+	// section hidden.
+	body, kind, note, isTable := h.tryPreview(r.Context(), id, m)
+	data.PreviewKind = kind
+	data.PreviewNote = note
+	data.PreviewIsTable = isTable
+	// Open by default for previews where the content itself is
+	// the point. Hex stays collapsed: it's a diagnostic dump,
+	// not the natural way to look at a file.
+	data.PreviewOpen = kind != "" && !strings.HasPrefix(kind, "Hex")
+	if isTable {
+		// Table/image content is already-formatted HTML; mark
+		// it trusted for the template.
+		data.PreviewHTML = template.HTML(body)
+	} else {
+		data.Preview = body
+	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -92,31 +109,96 @@ func (h *Handler) serveArtifact(w http.ResponseWriter, r *http.Request, id domai
 	}
 }
 
-// hexPreviewBytes is the cap on how many bytes of the artifact
-// we include in the hex preview. 256 keeps the page small and
-// shows the magic header of any common file format — enough to
-// identify what's inside without making the page heavy for
-// gigabyte-sized blobs.
+// hexPreviewBytes is the cap on bytes shown in the hex preview.
+// 256 keeps the page small and shows the magic header of any
+// common file format — enough to identify what's inside without
+// making the page heavy for gigabyte-sized blobs.
 const hexPreviewBytes = 256
 
-// tryHexPreview opens the artifact, reads up to hexPreviewBytes,
-// and renders a hexdump-style string. Best-effort: returns ""
-// on any error (which the template treats as "no preview").
-func (h *Handler) tryHexPreview(ctx context.Context, id domain.ArtifactID) string {
+// textPreviewBytes is the cap for content-aware previews
+// (JSON / XML / CSV / plain text). Larger than hexPreviewBytes
+// because structured formats need enough bytes to surface a
+// useful chunk of the document; 64 KiB fits a sizable JSON
+// object or hundreds of CSV rows without bloating the page.
+const textPreviewBytes = 64 * 1024
+
+// tryPreview reads the artifact's first bytes and renders them
+// in a format suited to the MIME type:
+//
+//   - image/* (whitelist) → <img> pointing at /_view/<id>.
+//   - application/json → pretty-printed with 2-space indent.
+//   - application/xml or text/xml → indented XML.
+//   - text/csv → HTML table (first row as header).
+//   - text/plain or text/markdown → plain pre-formatted text.
+//   - everything else → hex dump (the fallback).
+//
+// Best-effort throughout: any read or parse error falls back to
+// hex preview. The artifact-page template skips the section
+// entirely when the returned string is empty.
+//
+// Returns (body, kindLabel, note, isTable). isTable means body
+// is already HTML and should be rendered verbatim; the other
+// kinds are plain text the template wraps in <pre>.
+func (h *Handler) tryPreview(ctx context.Context, id domain.ArtifactID, m domain.Manifest) (body, kind, note string, isTable bool) {
+	mimeType := previewMIME(m)
+
+	// Images don't need bytes — we render an <img> pointing at
+	// /_view/<id> and let the browser scale it. Short-circuit
+	// before opening the artifact so we don't pay the I/O for
+	// a preview the browser fetches anyway through a separate
+	// request.
+	if isImageInlineable(mimeType) {
+		html := fmt.Sprintf(`<img class="img-preview" src="%s/_view/%s" alt="">`,
+			template.HTMLEscapeString(h.prefix),
+			template.HTMLEscapeString(string(id)))
+		return html, "Image", "", true
+	}
+
 	f, _, err := h.fs.OpenArtifact(ctx, id)
 	if err != nil {
-		return ""
+		return "", "", "", false
 	}
 	defer f.Close()
-	buf := make([]byte, hexPreviewBytes)
+
+	// Choose the read budget by category. Hex needs only
+	// the first 256 B; structured/text formats need more.
+	limit := hexPreviewBytes
+	if isStructuredText(mimeType) {
+		limit = textPreviewBytes
+	}
+	buf := make([]byte, limit)
 	n, err := f.Read(buf)
 	if err != nil && err != io.EOF {
-		return ""
+		return "", "", "", false
 	}
 	if n == 0 {
-		return ""
+		return "", "", "", false
 	}
-	return formatHexDump(buf[:n])
+	data := buf[:n]
+	truncated := int64(n) < m.OriginalSize
+
+	// Dispatch on MIME. Any failure falls back to hex so we
+	// always show something rather than nothing.
+	switch {
+	case mimeIs(mimeType, "application/json"):
+		if pretty, ok := tryFormatJSON(data); ok {
+			return pretty, "JSON", truncatedNote(truncated), false
+		}
+	case mimeIs(mimeType, "application/xml") || mimeIs(mimeType, "text/xml"):
+		if pretty, ok := tryFormatXML(data); ok {
+			return pretty, "XML", truncatedNote(truncated), false
+		}
+	case mimeIs(mimeType, "text/csv"):
+		if html, ok := tryFormatCSV(data); ok {
+			return html, "CSV", truncatedNote(truncated), true
+		}
+	case mimeIs(mimeType, "text/plain") || mimeIs(mimeType, "text/markdown"):
+		// Plain text: just show as-is.
+		return string(data), "Text", truncatedNote(truncated), false
+	}
+
+	// Fallback: hex.
+	return formatHexDump(data), "Hex (first 256 bytes)", "", false
 }
 
 // formatHexDump renders bytes in classic xxd / hexdump -C
@@ -160,22 +242,183 @@ func formatHexDump(data []byte) string {
 	return b.String()
 }
 
+// previewMIME picks the MIME used to choose a preview format.
+// fsmeta is the authoritative source; filename extension is the
+// fallback. Empty when neither yields anything — caller treats
+// that as "use hex".
+func previewMIME(m domain.Manifest) string {
+	mimeType := ""
+	name := ""
+	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
+		mimeType = fs.MIME
+		name = pathLastSegment(fs.Path)
+	}
+	if mimeType == "" {
+		mimeType = inferMIME(name, "")
+	}
+	return mimeType
+}
+
+// mimeIs reports whether the given MIME (possibly with
+// parameters like ";charset=utf-8") matches the bare type.
+// Comparison is on the part before any semicolon.
+func mimeIs(mimeType, want string) bool {
+	base := mimeType
+	if i := strings.IndexByte(base, ';'); i >= 0 {
+		base = strings.TrimSpace(base[:i])
+	}
+	return base == want
+}
+
+// isStructuredText reports whether the MIME type benefits from
+// the larger text-preview budget. Anything we render via JSON,
+// XML, CSV, or plain-text paths counts; hex stays on its tiny
+// 256 B budget so giant binaries don't pay needless I/O.
+func isStructuredText(mimeType string) bool {
+	switch {
+	case mimeIs(mimeType, "application/json"),
+		mimeIs(mimeType, "application/xml"),
+		mimeIs(mimeType, "text/xml"),
+		mimeIs(mimeType, "text/csv"),
+		mimeIs(mimeType, "text/plain"),
+		mimeIs(mimeType, "text/markdown"):
+		return true
+	}
+	return false
+}
+
+// truncatedNote returns the user-visible label appended to the
+// preview heading when we read fewer bytes than the artifact
+// holds. Empty when the read covered everything.
+func truncatedNote(truncated bool) string {
+	if !truncated {
+		return ""
+	}
+	return fmt.Sprintf("truncated at %d KiB", textPreviewBytes/1024)
+}
+
+// tryFormatJSON re-formats raw JSON bytes with two-space indent.
+// Returns (pretty, true) on success, ("", false) on parse error
+// (caller falls back to hex preview).
+//
+// Truncation caveat: we may have read only the first 64 KiB of
+// a larger document, which mid-object is invalid JSON.
+// Unmarshal will fail in that case — we accept the fallback to
+// hex rather than try heroic prefix-recovery.
+func tryFormatJSON(data []byte) (string, bool) {
+	var any interface{}
+	if err := json.Unmarshal(data, &any); err != nil {
+		return "", false
+	}
+	out, err := json.MarshalIndent(any, "", "  ")
+	if err != nil {
+		return "", false
+	}
+	return string(out), true
+}
+
+// tryFormatXML re-emits the XML with line breaks and indent.
+// Same truncation caveat as JSON: a truncated document is not
+// well-formed XML and parsing fails — we fall back to hex.
+//
+// Implementation uses encoding/xml.Decoder + xml.Encoder with
+// indent. We don't validate against any schema; we only
+// reformat structurally valid input.
+func tryFormatXML(data []byte) (string, bool) {
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	var out bytes.Buffer
+	enc := xml.NewEncoder(&out)
+	enc.Indent("", "  ")
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", false
+		}
+		if err := enc.EncodeToken(tok); err != nil {
+			return "", false
+		}
+	}
+	if err := enc.Flush(); err != nil {
+		return "", false
+	}
+	return out.String(), true
+}
+
+// tryFormatCSV parses CSV bytes and renders them as an HTML
+// table. The first row is treated as the header (rendered in
+// <thead>); subsequent rows go in <tbody>. We use a permissive
+// reader (FieldsPerRecord=-1) so ragged rows still render —
+// extra cells appear, missing cells stay empty.
+//
+// Truncation caveat: a truncation that splits a row mid-field
+// produces an io.ErrUnexpectedEOF. We accept whatever rows
+// came back before the error and ignore the trailing fragment;
+// users see "truncated" in the heading.
+//
+// Output is template.HTML — pre-rendered. The artifact-page
+// template inserts it verbatim, but we still escape every cell
+// via html/template.HTMLEscapeString to avoid HTML injection
+// from CSV cells like "<script>".
+func tryFormatCSV(data []byte) (string, bool) {
+	r := csv.NewReader(bytes.NewReader(data))
+	r.FieldsPerRecord = -1
+	r.LazyQuotes = true
+	var rows [][]string
+	for {
+		rec, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			// Salvage what we have. Truncation often shows
+			// up here as ErrFieldCount or ErrBareQuote on
+			// the last partial row.
+			if len(rows) == 0 {
+				return "", false
+			}
+			break
+		}
+		rows = append(rows, rec)
+	}
+	if len(rows) == 0 {
+		return "", false
+	}
+
+	var b strings.Builder
+	b.WriteString(`<table class="csv">`)
+
+	// First row → thead; even one-row inputs get a thead so
+	// the styling is consistent.
+	b.WriteString("<thead><tr>")
+	for _, cell := range rows[0] {
+		fmt.Fprintf(&b, "<th>%s</th>", template.HTMLEscapeString(cell))
+	}
+	b.WriteString("</tr></thead>")
+
+	if len(rows) > 1 {
+		b.WriteString("<tbody>")
+		for _, row := range rows[1:] {
+			b.WriteString("<tr>")
+			for _, cell := range row {
+				fmt.Fprintf(&b, "<td>%s</td>", template.HTMLEscapeString(cell))
+			}
+			b.WriteString("</tr>")
+		}
+		b.WriteString("</tbody>")
+	}
+	b.WriteString("</table>")
+	return b.String(), true
+}
+
 // artifactPageData is what artifactTemplate consumes.
 type artifactPageData struct {
 	StorePath    string
 	NowFormatted string
 	StatsURL     string
 	BrowsePrefix string
-
-	// ThumbURL points at /_view/<id> when the artifact is an
-	// image type the browser is known to render. Non-empty
-	// activates the inline thumbnail at the top of the page.
-	// Browser does the scaling via CSS max-width/max-height;
-	// we don't resize on the server.
-	ThumbURL string
-
-	// ThumbName is the display name for the image's alt text.
-	ThumbName string
 
 	// Identity & storage are flat tables of label/value rows.
 	// We render them as ordered slices instead of maps so the
@@ -203,13 +446,32 @@ type artifactPageData struct {
 	// inside a <details> at the bottom of the page.
 	RawJSON string
 
-	// HexPreview is a hexdump-style view of the first ~256
-	// bytes of the artifact's payload. Presented inside a
-	// <details> so the user opts into reading bytes; for
-	// large artifacts we never fetch more than the preview
-	// window. Empty when the artifact's bytes couldn't be
-	// fetched (encrypted-locked store, missing blob, etc.).
-	HexPreview string
+	// Preview is a content-aware peek at the artifact's
+	// payload, shown inside a <details> just above the
+	// raw manifest. The kind drives both the section's
+	// heading and the rendering style (CSV → table, JSON →
+	// pretty pre, etc.). Empty kind hides the section.
+	Preview     string
+	PreviewKind string
+	PreviewNote string // e.g. "truncated at 64 KB"
+
+	// PreviewIsTable signals that Preview is already rendered
+	// HTML (a CSV table, an <img>); the template inserts it
+	// verbatim without escaping. Other kinds use the
+	// plain-text path.
+	PreviewIsTable bool
+
+	// PreviewHTML carries the safe template.HTML for the
+	// table/image cases. We use a separate field so
+	// html/template's auto-escaping keeps protecting the
+	// plain-text variants.
+	PreviewHTML template.HTML
+
+	// PreviewOpen makes the <details> default to expanded.
+	// True for content-meaningful previews (image, JSON, CSV,
+	// text); false for hex, where the user opts in only when
+	// they need to inspect bytes.
+	PreviewOpen bool
 }
 
 // labelValue is one row of a label/value table.
@@ -237,28 +499,6 @@ func (h *Handler) buildArtifactData(m domain.Manifest) (artifactPageData, error)
 		NowFormatted: time.Now().UTC().Format(time.RFC3339),
 		StatsURL:     "/" + h.cfg.ServicePrefix + "/stats",
 		BrowsePrefix: h.prefix,
-	}
-
-	// Thumbnail: if the artifact is an image type we know
-	// browsers render natively, point an <img> at the
-	// /_view/ endpoint. Browser handles scaling via CSS;
-	// no server-side resize. Only fired for image MIMEs in
-	// the conservative whitelist (no AVIF, no exotics) so
-	// users always see an actual image, not a save dialog.
-	thumbMIME := ""
-	thumbName := ""
-	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
-		thumbMIME = fs.MIME
-		thumbName = pathLastSegment(fs.Path)
-	}
-	if thumbMIME == "" {
-		// Fall back to filename-based MIME if no fsmeta MIME
-		// was recorded (most artifacts in the wild).
-		thumbMIME = inferMIME(thumbName, "")
-	}
-	if isImageInlineable(thumbMIME) {
-		data.ThumbURL = h.prefix + "/_view/" + string(m.ArtifactID)
-		data.ThumbName = thumbName
 	}
 
 	data.Identity = []labelValue{
@@ -503,13 +743,19 @@ const artifactPageHTML = `<!DOCTYPE html>
         font-size: 0.85em; line-height: 1.5; border-radius: 4px;
         border: 1px solid #e0e0e0; }
   pre.hexdump { font-size: 0.78em; line-height: 1.4; letter-spacing: 0.02em; }
+  table.csv { border-collapse: collapse; max-width: 1100px;
+              font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+              font-size: 0.85em; margin: 0; }
+  table.csv th, table.csv td { padding: 0.3em 0.8em; border: 1px solid #ddd;
+                                text-align: left; vertical-align: top; }
+  table.csv th { background: #ececec; color: #555; font-weight: 500; }
+  table.csv tbody tr:nth-child(even) td { background: #f7f7f7; }
   details summary { cursor: pointer; color: #888; font-size: 0.9em;
                     margin: 1.5em 0 0.5em; }
   details summary:hover { color: #06f; }
-  .thumb { margin: 1.5em 0; }
-  .thumb img { max-width: 400px; max-height: 400px;
-               border: 1px solid #e0e0e0; border-radius: 4px;
-               background: #fff; }
+  .img-preview { max-width: 600px; max-height: 600px;
+                 border: 1px solid #e0e0e0; border-radius: 4px;
+                 background: #fff; display: block; }
   footer { margin-top: 3em; padding-top: 0.8em; border-top: 1px solid #e0e0e0;
            color: #888; font-size: 0.85em; }
   footer a { color: #06f; text-decoration: none; }
@@ -523,10 +769,6 @@ const artifactPageHTML = `<!DOCTYPE html>
   <span class="store">{{.StorePath}}</span>
   <span class="back"><a href="{{.BrowsePrefix}}/">← back to browse</a></span>
 </header>
-
-{{if .ThumbURL}}
-<div class="thumb"><img src="{{.ThumbURL}}" alt="{{.ThumbName}}"></div>
-{{end}}
 
 <h2>Identity</h2>
 <table>
@@ -574,10 +816,10 @@ const artifactPageHTML = `<!DOCTYPE html>
 {{if .SchemaHTML}}{{.SchemaHTML}}{{else}}<pre>{{.SchemaJSON}}</pre>{{end}}
 {{end}}
 
-{{if .HexPreview}}
-<details>
-  <summary>Hex preview (first 256 bytes)</summary>
-  <pre class="hexdump">{{.HexPreview}}</pre>
+{{if .PreviewKind}}
+<details{{if .PreviewOpen}} open{{end}}>
+  <summary>Preview · {{.PreviewKind}}{{if .PreviewNote}} · {{.PreviewNote}}{{end}}</summary>
+  {{if .PreviewIsTable}}{{.PreviewHTML}}{{else}}<pre{{if eq .PreviewKind "Hex (first 256 bytes)"}} class="hexdump"{{end}}>{{.Preview}}</pre>{{end}}
 </details>
 {{end}}
 
