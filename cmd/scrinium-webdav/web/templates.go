@@ -30,16 +30,26 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
   .crumbs a { color: #06f; text-decoration: none; }
   .crumbs a:hover { text-decoration: underline; }
   .crumbs .sep { color: #aaa; margin: 0 0.3em; }
-  table { border-collapse: collapse; width: 100%; max-width: 1100px; }
+  table { border-collapse: collapse; width: 100%; max-width: 1100px;
+          table-layout: fixed; }
   th, td { padding: 0.4em 1em; text-align: left; }
   th { font-weight: 500; color: #888; font-size: 0.9em;
        border-bottom: 1px solid #ddd; }
+  th a { color: inherit; text-decoration: none; }
+  th a:hover { color: #06f; }
+  th.size, th.time { text-align: left; }
+  th.size { width: 9em; }
+  th.time { width: 11em; }
+  th.actions { width: 6em; }
   tr:nth-child(even) td { background: #f3f3f3; }
-  td.name { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  td.name { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            max-width: 0; /* makes table-layout:fixed honour the cell width */ }
   td.name a { color: #06f; text-decoration: none; }
   td.name a:hover { text-decoration: underline; }
   td.size, td.time { color: #666; font-variant-numeric: tabular-nums;
-                     font-family: ui-monospace, monospace; font-size: 0.92em; }
+                     font-family: ui-monospace, monospace; font-size: 0.92em;
+                     white-space: nowrap; }
   td.size { text-align: right; }
   td.actions { width: 6em; text-align: right; white-space: nowrap; }
   td.actions a { color: #888; text-decoration: none; font-size: 0.85em;
@@ -62,6 +72,14 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
            color: #888; font-size: 0.85em; }
   footer a { color: #06f; text-decoration: none; }
   footer a:hover { text-decoration: underline; }
+  .summary { margin-top: 0.6em; color: #888; font-size: 0.85em;
+             font-variant-numeric: tabular-nums; }
+  .pagination { margin-top: 0.6em; font-size: 0.9em; display: flex;
+                gap: 1em; align-items: baseline; }
+  .pagination .pages { color: #888; }
+  .pagination a { color: #06f; text-decoration: none; }
+  .pagination a:hover { text-decoration: underline; }
+  .pagination .disabled { color: #ccc; }
 </style>
 </head>
 <body>
@@ -78,9 +96,9 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
 <table>
   <thead>
     <tr>
-      <th>Name</th>
-      <th class="size">Size</th>
-      <th class="time">Modified</th>
+      <th><a href="{{.SortNameURL}}">Name{{.SortNameArrow}}</a></th>
+      <th class="size"><a href="{{.SortSizeURL}}">Size{{.SortSizeArrow}}</a></th>
+      <th class="time"><a href="{{.SortTimeURL}}">Modified{{.SortTimeArrow}}</a></th>
       <th class="actions"></th>
     </tr>
   </thead>
@@ -95,7 +113,7 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
 {{- end}}
 {{- range .Entries}}
     <tr{{if .IsSystem}} class="system"{{end}}>
-      <td class="name">{{if .IsDir}}<span class="icon-dir">▸</span>{{else}}<span class="icon-file">·</span>{{end}}{{if .URL}}<a href="{{.URL}}">{{.Name}}{{if .IsDir}}/{{end}}</a>{{else}}{{.Name}}{{end}}{{if .IsSystem}}<span class="badge">system</span>{{end}}</td>
+      <td class="name">{{if .IsDir}}<span class="icon-dir">▸</span>{{else}}<span class="icon-file">·</span>{{end}}{{if .URL}}<a href="{{.URL}}" title="{{.Name}}">{{.Name}}{{if .IsDir}}/{{end}}</a>{{else}}<span title="{{.Name}}">{{.Name}}</span>{{end}}{{if .IsSystem}}<span class="badge">system</span>{{end}}</td>
       <td class="size">{{.SizeText}}</td>
       <td class="time">{{.TimeText}}</td>
       <td class="actions">{{if .ViewURL}}<a href="{{.ViewURL}}" target="_blank" rel="noopener">view</a>{{end}}{{if .DownloadURL}}<a href="{{.DownloadURL}}">dl</a>{{end}}</td>
@@ -103,6 +121,19 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
 {{- end}}
   </tbody>
 </table>
+
+<div class="summary">
+  {{.TotalDirs}} {{if eq .TotalDirs 1}}directory{{else}}directories{{end}},
+  {{.TotalFiles}} {{if eq .TotalFiles 1}}file{{else}}files{{end}}{{if gt .TotalFiles 0}}, {{.TotalBytesFmt}}{{end}}
+</div>
+
+{{if gt .TotalPages 1}}
+<div class="pagination">
+  <span class="pages">page {{.Page}} of {{.TotalPages}}</span>
+  {{if .PrevURL}}<a href="{{.PrevURL}}">← prev</a>{{else}}<span class="disabled">← prev</span>{{end}}
+  {{if .NextURL}}<a href="{{.NextURL}}">next →</a>{{else}}<span class="disabled">next →</span>{{end}}
+</div>
+{{end}}
 
 <footer>
   {{.NowFormatted}} · <a href="{{.BrowsePrefix}}/_stats">stats</a> · <a href="{{.StatsURL}}">text stats</a>
