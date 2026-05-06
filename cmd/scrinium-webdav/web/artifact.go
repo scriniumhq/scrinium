@@ -201,6 +201,73 @@ func (h *Handler) tryPreview(ctx context.Context, id domain.ArtifactID, m domain
 	return formatHexDump(data), "Hex (first 256 bytes)", "", false
 }
 
+// buildLocationViews assembles the rows for the artifact page's
+// Locations panel — one row per tree this artifact appears in.
+// Empty tree paths produce no row (that tree doesn't carry the
+// artifact, e.g. ByPath="" for orphaned).
+//
+// Each URL points at the parent directory of the artifact's
+// slot, not at the artifact file itself: clicking lands the
+// user on the listing where the artifact's siblings are
+// visible (the whole point of "show me where this lives").
+//
+// We always route service trees through _scrinium/<tree>/...
+// regardless of which RootView is configured. That guarantees
+// stable links: even if the daemon is started with
+// RootView=byDate (so byDate is at the URL root), the by-path
+// link still works via /_browse/_scrinium/by-path/...
+func (h *Handler) buildLocationViews(locs Locations) []locationView {
+	out := make([]locationView, 0, 6)
+	servicePrefix := h.cfg.ServicePrefix
+	if servicePrefix == "" {
+		// Without a service prefix the only navigable tree is
+		// the root view. Show whichever placement we have.
+		if locs.ByPath != "" {
+			out = append(out, locationView{
+				Tree: "by-path",
+				Path: locs.ByPath,
+				URL:  parentURL(h.prefix+"/", locs.ByPath),
+			})
+		}
+		return out
+	}
+
+	add := func(label, path, treeSegment string) {
+		if path == "" {
+			return
+		}
+		base := h.prefix + "/" + servicePrefix + "/" + treeSegment + "/"
+		out = append(out, locationView{
+			Tree: label,
+			Path: path,
+			URL:  parentURL(base, path),
+		})
+	}
+
+	// Order goes from "most useful" to "diagnostic": users
+	// usually want by-path or by-date first, by-artifact /
+	// by-orphaned are infrastructure peeks.
+	add("by-path", locs.ByPath, "by-path")
+	add("by-orphaned", locs.ByOrphaned, "orphaned")
+	add("by-date", locs.ByDate, "by-date")
+	add("by-namespace", locs.ByNamespace, "by-namespace")
+	add("by-session", locs.BySession, "by-session")
+	add("by-artifact", locs.ByArtifact, "by-artifact")
+
+	return out
+}
+
+// parentURL composes the URL pointing at the parent directory
+// of `path` under `base`. If path has no directory component
+// (e.g. "stats" at the tree root), the URL is base alone —
+// landing the user at the root listing.
+func parentURL(base, path string) string {
+	if i := strings.LastIndexByte(path, '/'); i >= 0 {
+		return base + path[:i+1]
+	}
+	return base
+}
+
 // formatHexDump renders bytes in classic xxd / hexdump -C
 // layout: "OFFSET  HEX-PAIRS  |ASCII|" with 16 bytes per row.
 // Non-printable ASCII becomes ".".
@@ -426,6 +493,13 @@ type artifactPageData struct {
 	Identity []labelValue
 	Storage  []labelValue
 
+	// Locations lists this artifact's placement across each
+	// view tree. Each row links to the parent directory in
+	// browse — clicking jumps the user to where the artifact
+	// lives in that tree, with its siblings visible. Empty
+	// for the few synthesised artifacts that have no records.
+	Locations []locationView
+
 	// Pipeline is the per-stage transform list. Empty for
 	// artifacts that went straight to disk untransformed.
 	Pipeline []pipelineStageView
@@ -496,6 +570,17 @@ type pipelineStageView struct {
 	IVHex     string
 }
 
+// locationView is one row of the Locations panel. Tree is the
+// human-readable tree label ("by-path", "by-date" etc.); Path
+// shows the artifact's slot in that tree; URL points at the
+// parent directory in browse so the user lands on the listing
+// with the artifact's siblings visible.
+type locationView struct {
+	Tree string
+	Path string
+	URL  string
+}
+
 // relatedView is one row of the Related-artifacts table. Each
 // row links to the sibling's info page; the URL is built once
 // up front so the template stays free of helpers.
@@ -526,6 +611,13 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		{Label: "SessionID", Value: orDash(m.SessionID), Mono: m.SessionID != ""},
 		{Label: "CreatedAt", Value: m.CreatedAt.UTC().Format(time.RFC3339)},
 		{Label: "RetentionUntil", Value: formatTimeOrDash(m.RetentionUntil)},
+	}
+
+	// Locations panel — where the artifact appears in each
+	// tree, linked to the parent directory in browse so the
+	// user sees siblings.
+	if locs, ok, err := h.fs.LookupLocations(ctx, m.ArtifactID); err == nil && ok {
+		data.Locations = h.buildLocationViews(locs)
 	}
 
 	blobRefValue := string(m.BlobRef)
@@ -804,6 +896,8 @@ const artifactPageHTML = `<!DOCTYPE html>
   table.related td.session.mono { font-family: ui-monospace, monospace;
                                    font-size: 0.85em; color: #888;
                                    word-break: break-all; }
+  table.locations td.value.mono a { color: #06f; text-decoration: none; }
+  table.locations td.value.mono a:hover { text-decoration: underline; }
   details summary { cursor: pointer; color: #888; font-size: 0.9em;
                     margin: 1.5em 0 0.5em; }
   details summary:hover { color: #06f; }
@@ -838,6 +932,20 @@ const artifactPageHTML = `<!DOCTYPE html>
 {{- end}}
   </tbody>
 </table>
+
+{{if .Locations}}
+<h2>Locations</h2>
+<table class="locations">
+  <tbody>
+{{- range .Locations}}
+    <tr>
+      <td class="label">{{.Tree}}</td>
+      <td class="value mono"><a href="{{.URL}}">{{.Path}}</a></td>
+    </tr>
+{{- end}}
+  </tbody>
+</table>
+{{end}}
 
 <h2>Storage</h2>
 <table>

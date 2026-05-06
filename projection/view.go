@@ -515,6 +515,44 @@ func (v *View) RootView() RootView { return v.opts.rootView }
 
 // --- Read methods (one set per tree) ---
 
+// Locations bundles every tree-placement of one artifact —
+// what the web "Locations" panel shows. Empty fields (e.g.
+// PathByPath="" for orphaned, PathByOrphaned="" for placed)
+// signal "this tree doesn't carry this artifact".
+type Locations struct {
+	ByArtifact  string
+	BySession   string
+	ByNamespace string
+	ByDate      string
+	ByPath      string // "" if orphaned
+	ByOrphaned  string // "" if placed under byPath
+}
+
+// LookupLocations returns the per-tree paths of an artifact.
+// Used by the web artifact details page to surface "show me
+// where this lives" links into each tree's listing.
+//
+// (zero, false) if the artifact isn't tracked.
+func (v *View) LookupLocations(id domain.ArtifactID) (Locations, bool) {
+	if v.closed.Load() {
+		return Locations{}, false
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+	rec, ok := v.artifacts[id]
+	if !ok {
+		return Locations{}, false
+	}
+	return Locations{
+		ByArtifact:  rec.pathByArtifact,
+		BySession:   rec.pathBySession,
+		ByNamespace: rec.pathByNamespace,
+		ByDate:      rec.pathByDate,
+		ByPath:      rec.pathByPath,
+		ByOrphaned:  rec.pathByOrphaned,
+	}, true
+}
+
 // SearchResult is one hit returned by View.Search. Carries
 // enough fields to render a result row without forcing the
 // caller to follow up with manifest lookups.

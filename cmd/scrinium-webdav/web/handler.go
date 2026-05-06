@@ -65,6 +65,23 @@ type BackingFS interface {
 	// a value of 0 means unlimited. Used by the /_search
 	// endpoint.
 	Search(ctx context.Context, query string, limit int) ([]SearchResult, error)
+
+	// LookupLocations returns the per-tree paths of an
+	// artifact. Empty fields signal "this tree doesn't
+	// carry it" (e.g. PathByPath="" for orphaned artifacts).
+	// Used by the artifact details page's Locations panel
+	// to wire "show me where this lives" links.
+	LookupLocations(ctx context.Context, id domain.ArtifactID) (Locations, bool, error)
+}
+
+// Locations mirrors projection.Locations.
+type Locations struct {
+	ByArtifact  string
+	BySession   string
+	ByNamespace string
+	ByDate      string
+	ByPath      string
+	ByOrphaned  string
 }
 
 // SearchResult mirrors projection.SearchResult — kept here so

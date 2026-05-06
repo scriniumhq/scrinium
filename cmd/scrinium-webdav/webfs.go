@@ -180,3 +180,20 @@ func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]w
 	}
 	return out, nil
 }
+
+// LookupLocations forwards to the View, returning the per-tree
+// placement of an artifact.
+func (b *webBackingFS) LookupLocations(ctx context.Context, id domain.ArtifactID) (web.Locations, bool, error) {
+	locs, ok := b.wfs.view.LookupLocations(id)
+	if !ok {
+		return web.Locations{}, false, nil
+	}
+	return web.Locations{
+		ByArtifact:  locs.ByArtifact,
+		BySession:   locs.BySession,
+		ByNamespace: locs.ByNamespace,
+		ByDate:      locs.ByDate,
+		ByPath:      locs.ByPath,
+		ByOrphaned:  locs.ByOrphaned,
+	}, true, nil
+}
