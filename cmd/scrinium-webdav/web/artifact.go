@@ -237,8 +237,16 @@ func (h *Handler) buildArtifactData(m domain.Manifest) (artifactPageData, error)
 		{Label: "RetentionUntil", Value: formatTimeOrDash(m.RetentionUntil)},
 	}
 
+	blobRefValue := string(m.BlobRef)
+	if string(m.BlobRef) == string(m.ContentHash) && len(m.Pipeline) == 0 {
+		// Pipeline-empty artifacts have BlobRef == ContentHash by
+		// construction (the same bytes get hashed twice along
+		// the put path). Surface this so the user doesn't read
+		// it as a coincidence.
+		blobRefValue = string(m.BlobRef) + " (same as ContentHash, no pipeline)"
+	}
 	data.Storage = []labelValue{
-		{Label: "BlobRef", Value: string(m.BlobRef), Mono: true},
+		{Label: "BlobRef", Value: blobRefValue, Mono: true},
 		{Label: "ContentHash", Value: string(m.ContentHash), Mono: true},
 		{Label: "OriginalSize", Value: fmt.Sprintf("%d (%s)", m.OriginalSize, HumanSize(m.OriginalSize))},
 		{Label: "Layout", Value: orDash(m.LayoutHeader.BlobStorage)},
@@ -538,7 +546,7 @@ const artifactPageHTML = `<!DOCTYPE html>
 </details>
 
 <footer>
-  {{.NowFormatted}} · <a href="{{.StatsURL}}">stats</a> · <a href="{{.BrowsePrefix}}/">browse</a>
+  {{.NowFormatted}} · <a href="{{.BrowsePrefix}}/_stats">stats</a> · <a href="{{.BrowsePrefix}}/">browse</a>
 </footer>
 
 </body>

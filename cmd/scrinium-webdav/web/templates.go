@@ -105,7 +105,7 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
 </table>
 
 <footer>
-  {{.NowFormatted}} · <a href="{{.StatsURL}}">stats</a>
+  {{.NowFormatted}} · <a href="{{.BrowsePrefix}}/_stats">stats</a> · <a href="{{.StatsURL}}">text stats</a>
 </footer>
 
 </body>

@@ -14,6 +14,7 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
+	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
 // View is the read side of the projection. It holds five
@@ -985,12 +986,47 @@ func byArtifactPath(id domain.ArtifactID) string {
 }
 
 // byDatePath: <YYYY>/<MM>/<DD>/<HH-MM-SS>-<id-short>.bin
+// byDatePath builds the by-date layout: <YYYY>/<MM>/<DD>/<HH-MM-SS>-<name>.
+// The trailing name is the fsmeta path's basename when available
+// (so the listing shows "12-34-56-sunset.jpg") or a short artifact
+// id otherwise (for non-fsmeta artifacts that have no human name).
+//
+// Time resolution is 1 second; same-second artifacts get a dash-id
+// suffix appended via the basename which is always unique.
 func byDatePath(m domain.Manifest) string {
 	t := m.CreatedAt.UTC()
-	return fmt.Sprintf("%04d/%02d/%02d/%02d-%02d-%02d-%s.bin",
+	name := byDateLabel(m)
+	return fmt.Sprintf("%04d/%02d/%02d/%02d-%02d-%02d-%s",
 		t.Year(), t.Month(), t.Day(),
 		t.Hour(), t.Minute(), t.Second(),
-		shortID(m.ArtifactID))
+		name)
+}
+
+// byDateLabel picks the human-friendly suffix for a by-date path.
+// Priority: fsmeta path basename → short artifact id with ".bin"
+// extension. Two artifacts created in the same second with the
+// same fsmeta basename collide; that's accepted — the by-date
+// tree is a diagnostic aid, not an authoritative storage layout.
+func byDateLabel(m domain.Manifest) string {
+	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
+		base := pathLastSegment(fs.Path)
+		if base != "" {
+			return base
+		}
+	}
+	return shortID(m.ArtifactID) + ".bin"
+}
+
+// pathLastSegment returns everything after the last "/" in p,
+// or p itself if there's no slash. Empty path returns "".
+func pathLastSegment(p string) string {
+	if p == "" {
+		return ""
+	}
+	if i := strings.LastIndexByte(p, '/'); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
 
 // byNamespacePath: <ns>/<aa>/<bb>/<id>

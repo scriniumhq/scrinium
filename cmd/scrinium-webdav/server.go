@@ -179,6 +179,28 @@ func runServe(args []string) int {
 		})
 	}
 
+	// htmlStatsProvider builds the same snapshot for the
+	// browser surface, only as structured data web can lay out
+	// in HTML rather than pre-rendered text. Two providers,
+	// one source of facts — they read the same view, capacity,
+	// and extension list each time.
+	htmlStatsProvider := func() web.StatsData {
+		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
+		defer capCancel()
+		var capPtr *domain.StorageInfo
+		if cap, err := store.Capacity(capCtx); err == nil {
+			capPtr = &cap
+		}
+		exts := make([]web.StatsExtension, 0)
+		for _, e := range idx.ListExtensions() {
+			exts = append(exts, web.StatsExtension{
+				Name:          e.Name,
+				SchemaVersion: e.SchemaVersion,
+			})
+		}
+		return buildWebStatsData(view, capPtr, exts, startedAt, mountSession, cfg)
+	}
+
 	wfs := newWebdavFS(view, fsops, routingCfg, !cfg.AllowOSJunk, statsProvider)
 
 	rejectJunk := !cfg.AllowOSJunk
@@ -222,6 +244,10 @@ func runServe(args []string) int {
 		// schema-agnostic and only consumes whatever the
 		// host installs.
 		webHandler.RegisterDecoder(fsmetaDecoder{})
+
+		// Wire the structured stats provider so /_browse/_stats
+		// has live data to render.
+		webHandler.SetStatsProvider(htmlStatsProvider)
 
 		prefix := webHandler.Prefix()
 		// Register both "/_browse" and "/_browse/" so requests

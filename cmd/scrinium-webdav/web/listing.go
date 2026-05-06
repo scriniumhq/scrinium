@@ -68,6 +68,7 @@ type listingData struct {
 	StorePath    string
 	NowFormatted string
 	StatsURL     string
+	BrowsePrefix string
 }
 
 type crumb struct {
@@ -110,6 +111,7 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 		StorePath:    h.cfg.StorePath,
 		NowFormatted: time.Now().UTC().Format(time.RFC3339),
 		StatsURL:     "/" + h.cfg.ServicePrefix + "/stats",
+		BrowsePrefix: h.prefix,
 	}
 	if dir != "" {
 		parent := pathpkg.Dir(dir)

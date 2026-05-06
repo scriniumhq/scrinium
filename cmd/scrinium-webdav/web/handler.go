@@ -104,6 +104,11 @@ type Handler struct {
 	// host calls RegisterDecoder. Lookup on the request hot
 	// path is cheap (small map, no contention).
 	decoders map[string]SchemaDecoder
+
+	// statsProvider, when set, supplies the live data for the
+	// /_stats HTML page. nil disables the page (404). The
+	// host typically sets one at boot via SetStatsProvider.
+	statsProvider StatsProvider
 }
 
 // NewHandler builds a Handler. Empty BrowsePrefix is rejected —
@@ -156,6 +161,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if id, ok := matchByIDRoute(rel, "_download/"); ok {
 		h.serveByID(w, r, id, dispositionAttachment)
+		return
+	}
+	if rel == "_stats" || rel == "_stats/" {
+		h.serveStats(w, r)
 		return
 	}
 
