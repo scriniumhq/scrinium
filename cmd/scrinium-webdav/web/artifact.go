@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
 // SchemaDecoder is the contract for plugging schema-aware
@@ -166,6 +167,16 @@ type artifactPageData struct {
 	StatsURL     string
 	BrowsePrefix string
 
+	// ThumbURL points at /_view/<id> when the artifact is an
+	// image type the browser is known to render. Non-empty
+	// activates the inline thumbnail at the top of the page.
+	// Browser does the scaling via CSS max-width/max-height;
+	// we don't resize on the server.
+	ThumbURL string
+
+	// ThumbName is the display name for the image's alt text.
+	ThumbName string
+
 	// Identity & storage are flat tables of label/value rows.
 	// We render them as ordered slices instead of maps so the
 	// row order is deterministic across reloads.
@@ -226,6 +237,28 @@ func (h *Handler) buildArtifactData(m domain.Manifest) (artifactPageData, error)
 		NowFormatted: time.Now().UTC().Format(time.RFC3339),
 		StatsURL:     "/" + h.cfg.ServicePrefix + "/stats",
 		BrowsePrefix: h.prefix,
+	}
+
+	// Thumbnail: if the artifact is an image type we know
+	// browsers render natively, point an <img> at the
+	// /_view/ endpoint. Browser handles scaling via CSS;
+	// no server-side resize. Only fired for image MIMEs in
+	// the conservative whitelist (no AVIF, no exotics) so
+	// users always see an actual image, not a save dialog.
+	thumbMIME := ""
+	thumbName := ""
+	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
+		thumbMIME = fs.MIME
+		thumbName = pathLastSegment(fs.Path)
+	}
+	if thumbMIME == "" {
+		// Fall back to filename-based MIME if no fsmeta MIME
+		// was recorded (most artifacts in the wild).
+		thumbMIME = inferMIME(thumbName, "")
+	}
+	if isImageInlineable(thumbMIME) {
+		data.ThumbURL = h.prefix + "/_view/" + string(m.ArtifactID)
+		data.ThumbName = thumbName
 	}
 
 	data.Identity = []labelValue{
@@ -473,6 +506,10 @@ const artifactPageHTML = `<!DOCTYPE html>
   details summary { cursor: pointer; color: #888; font-size: 0.9em;
                     margin: 1.5em 0 0.5em; }
   details summary:hover { color: #06f; }
+  .thumb { margin: 1.5em 0; }
+  .thumb img { max-width: 400px; max-height: 400px;
+               border: 1px solid #e0e0e0; border-radius: 4px;
+               background: #fff; }
   footer { margin-top: 3em; padding-top: 0.8em; border-top: 1px solid #e0e0e0;
            color: #888; font-size: 0.85em; }
   footer a { color: #06f; text-decoration: none; }
@@ -486,6 +523,10 @@ const artifactPageHTML = `<!DOCTYPE html>
   <span class="store">{{.StorePath}}</span>
   <span class="back"><a href="{{.BrowsePrefix}}/">← back to browse</a></span>
 </header>
+
+{{if .ThumbURL}}
+<div class="thumb"><img src="{{.ThumbURL}}" alt="{{.ThumbName}}"></div>
+{{end}}
 
 <h2>Identity</h2>
 <table>

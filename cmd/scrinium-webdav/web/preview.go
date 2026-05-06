@@ -60,6 +60,25 @@ func isInlineable(mimeType string) bool {
 	return inlineableMIMEs[base]
 }
 
+// isImageInlineable is the image-only subset of isInlineable —
+// matches just the image/* types from the whitelist. Used by
+// the artifact page to decide whether to embed a <img> thumb.
+// Reusing isInlineable plus a "image/" prefix check would also
+// admit text/* and PDF, which we don't want as thumbnails.
+func isImageInlineable(mimeType string) bool {
+	if mimeType == "" {
+		return false
+	}
+	base := mimeType
+	if i := strings.IndexByte(base, ';'); i >= 0 {
+		base = strings.TrimSpace(base[:i])
+	}
+	if !strings.HasPrefix(base, "image/") {
+		return false
+	}
+	return inlineableMIMEs[base]
+}
+
 // inferMIME picks the best available MIME for a file. Priority:
 //
 //  1. The fsmeta-encoded MIME, if non-empty. Authoritative —
@@ -83,4 +102,19 @@ func inferMIME(filename, fsmetaMIME string) string {
 		return ""
 	}
 	return mime.TypeByExtension(ext)
+}
+
+// pathLastSegment returns everything after the last "/" in p,
+// or p itself if there's no slash. Empty path returns "".
+// Mirrors the projection helper of the same name; duplicated
+// here to keep web a self-contained library that doesn't pull
+// projection just for a one-line utility.
+func pathLastSegment(p string) string {
+	if p == "" {
+		return ""
+	}
+	if i := strings.LastIndexByte(p, '/'); i >= 0 {
+		return p[i+1:]
+	}
+	return p
 }
