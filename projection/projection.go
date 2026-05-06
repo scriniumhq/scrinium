@@ -142,6 +142,7 @@ const (
 	RootByNamespace RootView = "by-namespace"
 	RootByDate      RootView = "by-date"
 	RootByArtifact  RootView = "by-artifact"
+	RootByOrphaned  RootView = "by-orphaned"
 )
 
 // PathFallback governs how artifacts without a resolver path are

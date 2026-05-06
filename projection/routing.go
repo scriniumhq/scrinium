@@ -171,14 +171,13 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 		if !cfg.ShowOrphaned {
 			return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
 		}
-		// Orphaned is a synthetic listing assembled from
-		// View.WalkByArtifact + filter for fsmeta-less artifacts.
-		// 5a treats it as a regular by-artifact subtree for now;
-		// the dispatcher applies the orphan filter when serving
-		// reads.
+		// orphaned has its own tree (RootByOrphaned), populated
+		// only with artifacts whose path could not be resolved.
+		// Distinct from by-artifact (which contains every
+		// artifact). See projection/view.go indexArtifact.
 		return RouteTarget{
 			Kind:    RouteServiceTree,
-			Tree:    RootByArtifact,
+			Tree:    RootByOrphaned,
 			SubPath: treeRest,
 		}, nil
 

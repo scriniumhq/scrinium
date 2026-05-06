@@ -48,6 +48,13 @@ type View struct {
 	byNamespace map[string]*viewNode
 	byDate      map[string]*viewNode
 	byArtifact  map[string]*viewNode
+	// byOrphaned holds artifacts the path resolver couldn't
+	// place — typically system manifests or artifacts written
+	// without an fsmeta payload. Same id-shaped layout as
+	// byArtifact (aa/bb/<id>) so the same lookup helpers work.
+	// Unlike byArtifact (which contains every artifact), this
+	// one only contains the ones missing from byPath.
+	byOrphaned map[string]*viewNode
 
 	// Per-artifact tracking. Used by Remove/Move to fan out a
 	// deletion or move across every tree without re-deriving the
@@ -95,6 +102,7 @@ type artifactRecord struct {
 	pathByNamespace string
 	pathByDate      string
 	pathByPath      string // "" if artifact is orphaned
+	pathByOrphaned  string // "" if artifact is in byPath
 }
 
 // loserEntry records a losing artifact in a path collision —
@@ -143,6 +151,7 @@ func NewView(ctx context.Context, source ProjectionSource, opts ...ViewOption) (
 		byNamespace: make(map[string]*viewNode),
 		byDate:      make(map[string]*viewNode),
 		byArtifact:  make(map[string]*viewNode),
+		byOrphaned:  make(map[string]*viewNode),
 
 		artifacts:  make(map[domain.ArtifactID]*artifactRecord),
 		pathOwner:  make(map[string]domain.ArtifactID),
@@ -175,7 +184,7 @@ func NewView(ctx context.Context, source ProjectionSource, opts ...ViewOption) (
 // named fields directly.
 func (v *View) allTrees() []map[string]*viewNode {
 	return []map[string]*viewNode{
-		v.byPath, v.bySession, v.byNamespace, v.byDate, v.byArtifact,
+		v.byPath, v.bySession, v.byNamespace, v.byDate, v.byArtifact, v.byOrphaned,
 	}
 }
 
@@ -350,10 +359,15 @@ func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
 		v.insertFile(v.bySession, rec.pathBySession, m)
 	}
 
-	// by-path — depends on resolver + fallback.
+	// by-path — depends on resolver + fallback. When the
+	// resolver doesn't produce a path the artifact lands in
+	// byOrphaned instead, indexed under the same id-shaped
+	// layout byArtifact uses.
 	if path, ok := v.resolvePathForManifest(m); ok {
 		v.applyByPathInsert(path, m, rec)
 	} else {
+		rec.pathByOrphaned = byArtifactPath(m.ArtifactID)
+		v.insertFile(v.byOrphaned, rec.pathByOrphaned, m)
 		v.Stats.OrphanedCount++
 	}
 
@@ -505,18 +519,21 @@ func (v *View) GetBySession(path string) (Node, error)   { return v.getInTree(v.
 func (v *View) GetByNamespace(path string) (Node, error) { return v.getInTree(v.byNamespace, path) }
 func (v *View) GetByDate(path string) (Node, error)      { return v.getInTree(v.byDate, path) }
 func (v *View) GetByArtifact(path string) (Node, error)  { return v.getInTree(v.byArtifact, path) }
+func (v *View) GetByOrphaned(path string) (Node, error)  { return v.getInTree(v.byOrphaned, path) }
 
 func (v *View) ListByPath(path string) NodeSeq      { return v.listInTree(v.byPath, path) }
 func (v *View) ListBySession(path string) NodeSeq   { return v.listInTree(v.bySession, path) }
 func (v *View) ListByNamespace(path string) NodeSeq { return v.listInTree(v.byNamespace, path) }
 func (v *View) ListByDate(path string) NodeSeq      { return v.listInTree(v.byDate, path) }
 func (v *View) ListByArtifact(path string) NodeSeq  { return v.listInTree(v.byArtifact, path) }
+func (v *View) ListByOrphaned(path string) NodeSeq  { return v.listInTree(v.byOrphaned, path) }
 
 func (v *View) WalkByPath(prefix string) NodeSeq      { return v.walkInTree(v.byPath, prefix) }
 func (v *View) WalkBySession(prefix string) NodeSeq   { return v.walkInTree(v.bySession, prefix) }
 func (v *View) WalkByNamespace(prefix string) NodeSeq { return v.walkInTree(v.byNamespace, prefix) }
 func (v *View) WalkByDate(prefix string) NodeSeq      { return v.walkInTree(v.byDate, prefix) }
 func (v *View) WalkByArtifact(prefix string) NodeSeq  { return v.walkInTree(v.byArtifact, prefix) }
+func (v *View) WalkByOrphaned(prefix string) NodeSeq  { return v.walkInTree(v.byOrphaned, prefix) }
 
 func (v *View) OpenByPath(ctx context.Context, path string, opts domain.GetOptions) (core.ReadHandle, error) {
 	return v.openInTree(ctx, v.byPath, path, opts)
@@ -532,6 +549,9 @@ func (v *View) OpenByDate(ctx context.Context, path string, opts domain.GetOptio
 }
 func (v *View) OpenByArtifact(ctx context.Context, path string, opts domain.GetOptions) (core.ReadHandle, error) {
 	return v.openInTree(ctx, v.byArtifact, path, opts)
+}
+func (v *View) OpenByOrphaned(ctx context.Context, path string, opts domain.GetOptions) (core.ReadHandle, error) {
+	return v.openInTree(ctx, v.byOrphaned, path, opts)
 }
 
 // --- Per-tree implementations ---
@@ -718,6 +738,9 @@ func (v *View) removeArtifactFromTrees(id domain.ArtifactID, rec *artifactRecord
 	}
 	if rec.pathByPath != "" {
 		v.removeFromByPath(id, rec)
+	}
+	if rec.pathByOrphaned != "" {
+		v.removeFile(v.byOrphaned, rec.pathByOrphaned)
 	}
 
 	delete(v.artifacts, id)
@@ -991,11 +1014,18 @@ func byNamespacePath(m domain.Manifest) string {
 // Sessions shorter than 4 characters bucket under "_short/<sid>/...".
 // Caller must check m.SessionID != "" before calling.
 func bySessionPath(m domain.Manifest) string {
+	// Flat layout: <session>/<artifactID>. Earlier versions
+	// sharded like by-artifact (xx/yy/sid/...) for forward
+	// scalability, but in practice session counts stay tiny
+	// (one per process restart) and the sharding only
+	// obscured the listing for human inspection.
 	sid := m.SessionID
-	if len(sid) < 4 {
-		return "_short/" + sid + "/" + string(m.ArtifactID)
+	if sid == "" {
+		// Defensive: callers gate this with m.SessionID != ""
+		// before invoking, but guard against drift.
+		sid = "_no_session"
 	}
-	return sid[:2] + "/" + sid[2:4] + "/" + sid + "/" + string(m.ArtifactID)
+	return sid + "/" + string(m.ArtifactID)
 }
 
 // sessionShard returns the first-segment shard for a SessionID.

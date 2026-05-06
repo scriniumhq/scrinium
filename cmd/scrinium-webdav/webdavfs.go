@@ -384,6 +384,8 @@ func serviceLookup(view *projection.View, tree projection.RootView, sub string) 
 		return view.GetByDate(sub)
 	case projection.RootByArtifact:
 		return view.GetByArtifact(sub)
+	case projection.RootByOrphaned:
+		return view.GetByOrphaned(sub)
 	}
 	return projection.Node{}, errs.ErrPathNotFound
 }
@@ -400,6 +402,8 @@ func serviceList(view *projection.View, tree projection.RootView, sub string) pr
 		return view.ListByDate(sub)
 	case projection.RootByArtifact:
 		return view.ListByArtifact(sub)
+	case projection.RootByOrphaned:
+		return view.ListByOrphaned(sub)
 	}
 	return func(yield func(projection.Node, error) bool) {
 		yield(projection.Node{}, errs.ErrPathNotFound)
@@ -418,6 +422,8 @@ func serviceOpen(ctx context.Context, view *projection.View, tree projection.Roo
 		return view.OpenByDate(ctx, sub, domain.GetOptions{})
 	case projection.RootByArtifact:
 		return view.OpenByArtifact(ctx, sub, domain.GetOptions{})
+	case projection.RootByOrphaned:
+		return view.OpenByOrphaned(ctx, sub, domain.GetOptions{})
 	}
 	return nil, errs.ErrPathNotFound
 }

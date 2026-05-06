@@ -874,6 +874,8 @@ func serviceLookupInTree(view *projection.View, tree projection.RootView, sub st
 		return view.GetByDate(sub)
 	case projection.RootByArtifact:
 		return view.GetByArtifact(sub)
+	case projection.RootByOrphaned:
+		return view.GetByOrphaned(sub)
 	}
 	return projection.Node{}, errs.ErrPathNotFound
 }
@@ -891,6 +893,8 @@ func serviceListInTree(view *projection.View, tree projection.RootView, sub stri
 		return view.ListByDate(sub)
 	case projection.RootByArtifact:
 		return view.ListByArtifact(sub)
+	case projection.RootByOrphaned:
+		return view.ListByOrphaned(sub)
 	}
 	return func(yield func(projection.Node, error) bool) {
 		yield(projection.Node{}, errs.ErrPathNotFound)
@@ -910,6 +914,8 @@ func serviceOpenInTree(ctx context.Context, view *projection.View, tree projecti
 		return view.OpenByDate(ctx, sub, domain.GetOptions{})
 	case projection.RootByArtifact:
 		return view.OpenByArtifact(ctx, sub, domain.GetOptions{})
+	case projection.RootByOrphaned:
+		return view.OpenByOrphaned(ctx, sub, domain.GetOptions{})
 	}
 	return nil, errs.ErrPathNotFound
 }

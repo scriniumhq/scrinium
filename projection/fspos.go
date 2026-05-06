@@ -456,6 +456,8 @@ func (o *FSOps) lookupInRoot(path string) (Node, error) {
 		return o.view.GetByDate(path)
 	case RootByArtifact:
 		return o.view.GetByArtifact(path)
+	case RootByOrphaned:
+		return o.view.GetByOrphaned(path)
 	default:
 		// Unknown RootView — should not happen because the enum
 		// is closed; treat as misconfiguration.
@@ -475,6 +477,8 @@ func (o *FSOps) listInRoot(path string) NodeSeq {
 		return o.view.ListByDate(path)
 	case RootByArtifact:
 		return o.view.ListByArtifact(path)
+	case RootByOrphaned:
+		return o.view.ListByOrphaned(path)
 	default:
 		return func(yield func(Node, error) bool) {
 			yield(Node{}, fmt.Errorf("projection.FSOps: unknown RootView %q", o.view.RootView()))
@@ -494,6 +498,8 @@ func (o *FSOps) openInRoot(ctx context.Context, path string) (core.ReadHandle, e
 		return o.view.OpenByDate(ctx, path, domain.GetOptions{})
 	case RootByArtifact:
 		return o.view.OpenByArtifact(ctx, path, domain.GetOptions{})
+	case RootByOrphaned:
+		return o.view.OpenByOrphaned(ctx, path, domain.GetOptions{})
 	default:
 		return nil, fmt.Errorf("projection.FSOps: unknown RootView %q", o.view.RootView())
 	}

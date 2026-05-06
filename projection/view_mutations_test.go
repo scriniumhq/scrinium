@@ -25,10 +25,10 @@ func TestBySession_Populated(t *testing.T) {
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	if _, err := v.GetBySession("ab/cd/abcd1234/sha256-aaaa1111"); err != nil {
+	if _, err := v.GetBySession("abcd1234/sha256-aaaa1111"); err != nil {
 		t.Errorf("first artifact: %v", err)
 	}
-	if _, err := v.GetBySession("ab/cd/abcd1234/sha256-bbbb2222"); err != nil {
+	if _, err := v.GetBySession("abcd1234/sha256-bbbb2222"); err != nil {
 		t.Errorf("second artifact: %v", err)
 	}
 	if v.Stats.SessionCount != 1 {
@@ -64,7 +64,7 @@ func TestBySession_Short(t *testing.T) {
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	if _, err := v.GetBySession("_short/ab/sha256-aabbccdd"); err != nil {
+	if _, err := v.GetBySession("ab/sha256-aabbccdd"); err != nil {
 		t.Errorf("short session bucket: %v", err)
 	}
 }
@@ -158,7 +158,7 @@ func TestAdd_AppearsInAllTrees(t *testing.T) {
 	if _, err := v.GetByArtifact("aa/bb/sha256-aabbccdd"); err != nil {
 		t.Errorf("by-artifact: %v", err)
 	}
-	if _, err := v.GetBySession("se/ss/sess1/sha256-aabbccdd"); err != nil {
+	if _, err := v.GetBySession("sess1/sha256-aabbccdd"); err != nil {
 		t.Errorf("by-session: %v", err)
 	}
 	if _, err := v.GetByNamespace("files/aa/bb/sha256-aabbccdd"); err != nil {
