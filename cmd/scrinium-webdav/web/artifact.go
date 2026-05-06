@@ -73,7 +73,7 @@ func (h *Handler) serveArtifact(w http.ResponseWriter, r *http.Request, id domai
 		return
 	}
 
-	data, renderErr := h.buildArtifactData(m)
+	data, renderErr := h.buildArtifactData(r.Context(), m)
 	if renderErr != nil {
 		// The page still renders even when individual
 		// sub-renders fail — the user sees the unaffected
@@ -430,6 +430,12 @@ type artifactPageData struct {
 	// artifacts that went straight to disk untransformed.
 	Pipeline []pipelineStageView
 
+	// Related is the list of dedup siblings — other artifacts
+	// pointing at the same BlobRef. Empty (nil) when this
+	// blob is unique; the template hides the section. Each
+	// entry links back to that artifact's info page.
+	Related []relatedView
+
 	// Schema renders one of:
 	//   - SchemaHTML — when a registered decoder claimed the
 	//     metadata's "kind". Trusted HTML, the decoder owns it.
@@ -490,10 +496,22 @@ type pipelineStageView struct {
 	IVHex     string
 }
 
+// relatedView is one row of the Related-artifacts table. Each
+// row links to the sibling's info page; the URL is built once
+// up front so the template stays free of helpers.
+type relatedView struct {
+	URL       string
+	Path      string // empty → "(orphaned)"
+	Namespace string
+	SessionID string
+	CreatedAt string // pre-formatted RFC3339
+	IsOrphan  bool
+}
+
 // buildArtifactData fills the template payload. Errors are
 // returned but only as diagnostics — the data is always
 // renderable, errors signal partial degradation.
-func (h *Handler) buildArtifactData(m domain.Manifest) (artifactPageData, error) {
+func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (artifactPageData, error) {
 	data := artifactPageData{
 		StorePath:    h.cfg.StorePath,
 		NowFormatted: time.Now().UTC().Format(time.RFC3339),
@@ -544,6 +562,23 @@ func (h *Handler) buildArtifactData(m domain.Manifest) (artifactPageData, error)
 			Hash:      stage.Hash,
 			IVHex:     hex.EncodeToString(stage.IV),
 		})
+	}
+
+	// Related artifacts — other manifests that share this
+	// blob. Best-effort: a lookup error doesn't block the
+	// page; we just don't show siblings.
+	if related, err := h.fs.LookupRelated(ctx, m.BlobRef, m.ArtifactID); err == nil {
+		for _, ra := range related {
+			view := relatedView{
+				URL:       h.prefix + "/_artifact/" + string(ra.ArtifactID),
+				Path:      ra.Path,
+				Namespace: ra.Namespace,
+				SessionID: ra.SessionID,
+				CreatedAt: ra.CreatedAt.UTC().Format(time.RFC3339),
+				IsOrphan:  ra.Path == "",
+			}
+			data.Related = append(data.Related, view)
+		}
 	}
 
 	// Schema rendering. Three branches:
@@ -750,6 +785,19 @@ const artifactPageHTML = `<!DOCTYPE html>
                                 text-align: left; vertical-align: top; }
   table.csv th { background: #ececec; color: #555; font-weight: 500; }
   table.csv tbody tr:nth-child(even) td { background: #f7f7f7; }
+  .related-count { font-weight: normal; color: #888; font-size: 0.85em;
+                   text-transform: none; letter-spacing: normal;
+                   margin-left: 0.6em; }
+  table.related td.path { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+                          font-size: 0.92em; }
+  table.related td.path a { color: #06f; text-decoration: none; }
+  table.related td.path a:hover { text-decoration: underline; }
+  table.related td.path .orphan { color: #aaa; font-style: italic; }
+  table.related td.ns,
+  table.related td.created { color: #666; font-size: 0.9em; }
+  table.related td.session.mono { font-family: ui-monospace, monospace;
+                                   font-size: 0.85em; color: #888;
+                                   word-break: break-all; }
   details summary { cursor: pointer; color: #888; font-size: 0.9em;
                     margin: 1.5em 0 0.5em; }
   details summary:hover { color: #06f; }
@@ -804,6 +852,22 @@ const artifactPageHTML = `<!DOCTYPE html>
       <td class="algo">{{.Algorithm}}</td>
       <td class="hash">{{.Hash}}</td>
       <td class="iv">{{if .IVHex}}IV: {{.IVHex}}{{end}}</td>
+    </tr>
+{{- end}}
+  </tbody>
+</table>
+{{end}}
+
+{{if .Related}}
+<h2>Related <span class="related-count">{{len .Related}} {{if eq (len .Related) 1}}artifact shares{{else}}artifacts share{{end}} this blob</span></h2>
+<table class="related">
+  <tbody>
+{{- range .Related}}
+    <tr>
+      <td class="path"><a href="{{.URL}}">{{if .IsOrphan}}<span class="orphan">(orphaned)</span>{{else}}{{.Path}}{{end}}</a></td>
+      <td class="ns">{{if .Namespace}}{{.Namespace}}{{else}}—{{end}}</td>
+      <td class="session mono">{{if .SessionID}}{{.SessionID}}{{else}}—{{end}}</td>
+      <td class="created">{{.CreatedAt}}</td>
     </tr>
 {{- end}}
   </tbody>

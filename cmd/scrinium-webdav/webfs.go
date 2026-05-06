@@ -140,3 +140,23 @@ func (a *readHandleAdapter) Close() error {
 
 func (a *readHandleAdapter) Readdir(int) ([]os.FileInfo, error) { return nil, nil }
 func (a *readHandleAdapter) Stat() (os.FileInfo, error)         { return nil, nil }
+
+// LookupRelated walks the View for artifacts pointing at the
+// same blob, excluding the caller. Linear scan inside the
+// view; fast for any reasonable store. Errors aren't expected
+// (the View call doesn't fail) but the interface allows for
+// them, so we return nil-error.
+func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]web.RelatedArtifact, error) {
+	siblings := b.wfs.view.RelatedByBlobRef(blobRef, exclude)
+	out := make([]web.RelatedArtifact, 0, len(siblings))
+	for _, s := range siblings {
+		out = append(out, web.RelatedArtifact{
+			ArtifactID: s.ArtifactID,
+			Path:       s.Path,
+			Namespace:  s.Namespace,
+			SessionID:  s.SessionID,
+			CreatedAt:  s.CreatedAt,
+		})
+	}
+	return out, nil
+}

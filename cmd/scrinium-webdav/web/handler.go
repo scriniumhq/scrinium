@@ -47,6 +47,30 @@ type BackingFS interface {
 	// (nil, _, _, err) when the artifact doesn't exist or
 	// can't be opened.
 	OpenArtifact(ctx context.Context, id domain.ArtifactID) (File, ArtifactMeta, error)
+
+	// LookupRelated returns every artifact that shares the
+	// given BlobRef, excluding the one identified by
+	// `exclude` (typically the artifact being viewed). Used
+	// by the artifact details page to surface dedup siblings
+	// — the "where else does this blob live" question that's
+	// distinctive to a content-addressable store.
+	//
+	// Returns a fresh slice on every call; nil when no
+	// siblings exist.
+	LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]RelatedArtifact, error)
+}
+
+// RelatedArtifact mirrors projection.RelatedArtifact verbatim,
+// kept here so web stays a clean library that hosts adapt to
+// rather than importing projection. Hosts translate at the
+// boundary; the few extra fields don't justify a shared
+// package.
+type RelatedArtifact struct {
+	ArtifactID domain.ArtifactID
+	Path       string // by-path placement; empty if orphaned
+	Namespace  string
+	SessionID  string
+	CreatedAt  time.Time
 }
 
 // ArtifactMeta is the small descriptor returned alongside the

@@ -522,6 +522,59 @@ func (v *View) GetByDate(path string) (Node, error)      { return v.getInTree(v.
 func (v *View) GetByArtifact(path string) (Node, error)  { return v.getInTree(v.byArtifact, path) }
 func (v *View) GetByOrphaned(path string) (Node, error)  { return v.getInTree(v.byOrphaned, path) }
 
+// RelatedArtifact is the small descriptor returned by
+// RelatedByBlobRef. Carries enough fields for a UI to render
+// "where else this blob lives" without forcing the caller to
+// follow up with manifest lookups.
+type RelatedArtifact struct {
+	ArtifactID domain.ArtifactID
+	Path       string // by-path placement; empty if orphaned
+	Namespace  string
+	SessionID  string
+	CreatedAt  time.Time
+}
+
+// RelatedByBlobRef returns every artifact that shares the given
+// BlobRef, excluding the artifact identified by `exclude`.
+// Useful for the "this blob is also used here" web view —
+// one of the few introspections specific to a CAS store.
+//
+// Implementation is a linear scan of the artifacts map. That
+// scales to roughly 100K artifacts inside a single web request
+// without blocking; bigger stores will want an index by
+// blob_ref. We accept the linearity now because the alternative
+// (push the query into core.Store/index) costs more wiring than
+// the value justifies at this scale.
+//
+// Concurrency: holds RLock for the scan duration. A
+// long-running scan would block writers; the 100K-artifact
+// budget keeps it under ~10ms in practice.
+func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactID) []RelatedArtifact {
+	if v.closed.Load() {
+		return nil
+	}
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	var out []RelatedArtifact
+	for id, rec := range v.artifacts {
+		if id == exclude {
+			continue
+		}
+		if rec.manifest.BlobRef != blobRef {
+			continue
+		}
+		out = append(out, RelatedArtifact{
+			ArtifactID: id,
+			Path:       rec.pathByPath,
+			Namespace:  rec.manifest.Namespace,
+			SessionID:  rec.manifest.SessionID,
+			CreatedAt:  rec.manifest.CreatedAt,
+		})
+	}
+	return out
+}
+
 func (v *View) ListByPath(path string) NodeSeq      { return v.listInTree(v.byPath, path) }
 func (v *View) ListBySession(path string) NodeSeq   { return v.listInTree(v.bySession, path) }
 func (v *View) ListByNamespace(path string) NodeSeq { return v.listInTree(v.byNamespace, path) }
