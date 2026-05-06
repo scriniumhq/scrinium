@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/net/webdav"
 
+	"github.com/rkurbatov/scrinium/cmd/scrinium-webdav/web"
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver/localfs"
@@ -206,13 +207,23 @@ func runServe(args []string) int {
 	// under a separate prefix — a secondary surface for
 	// human inspection that doesn't perturb WebDAV traffic.
 	mux := http.NewServeMux()
-	if browser := newBrowserHandler(wfs, cfg); browser.prefix != "" {
+	if cfg.BrowsePrefix != "" {
+		webHandler := web.NewHandler(
+			newWebBackingFS(wfs),
+			cleanWebDAVPath,
+			web.Config{
+				StorePath:     cfg.StorePath,
+				ServicePrefix: cfg.ServicePrefix,
+				BrowsePrefix:  cfg.BrowsePrefix,
+			},
+		)
+		prefix := webHandler.Prefix()
 		// Register both "/_browse" and "/_browse/" so requests
 		// without the trailing slash are matched too. Go's
 		// ServeMux would otherwise 404 the bare prefix.
-		mux.Handle(browser.prefix, http.RedirectHandler(browser.prefix+"/", http.StatusMovedPermanently))
-		mux.Handle(browser.prefix+"/", browser)
-		fmt.Fprintf(os.Stderr, "Browser: %s\n", browser.prefix)
+		mux.Handle(prefix, http.RedirectHandler(prefix+"/", http.StatusMovedPermanently))
+		mux.Handle(prefix+"/", webHandler)
+		fmt.Fprintf(os.Stderr, "Browser: %s\n", prefix)
 	}
 	mux.Handle("/", handler)
 

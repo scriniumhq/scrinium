@@ -101,7 +101,7 @@ func TestRegister_DoubleRegister_Rejects(t *testing.T) {
 	}
 }
 
-// --- ManifestIndexed handler ---
+// --- ManifestIndexed handler.go ---
 
 func TestApply_Indexed_FSMetadata_Stored(t *testing.T) {
 	idx, ext := newRegisteredFSIndex(t)
@@ -239,7 +239,7 @@ func TestWalkAll_VisitsAll(t *testing.T) {
 	}
 }
 
-// --- ManifestDeleted handler ---
+// --- ManifestDeleted handler.go ---
 
 func TestApply_Deleted_RemovesEntries(t *testing.T) {
 	idx, ext := newRegisteredFSIndex(t)
