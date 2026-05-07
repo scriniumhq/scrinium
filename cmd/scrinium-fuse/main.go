@@ -6,8 +6,8 @@
 //
 // Subcommands:
 //
-//	scrinium-fuse mount   --store-path=... --mount-point=... [flags]
-//	scrinium-fuse unmount --mount-point=...
+//	scrinium-fuse mount   --store=URI --mount-point=PATH [flags]
+//	scrinium-fuse unmount --mount-point=PATH
 //
 // See docs/4 §14 FUSE Mount for the full specification.
 package main

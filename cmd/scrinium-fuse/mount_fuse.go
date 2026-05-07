@@ -4,13 +4,10 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
-	"hash"
 	"hash/fnv"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -18,29 +15,25 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 
-	"github.com/google/uuid"
-
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/driver/localfs"
-	"github.com/rkurbatov/scrinium/index/sqlite"
+	"github.com/rkurbatov/scrinium/internal/daemon"
 	"github.com/rkurbatov/scrinium/projection"
-	"github.com/rkurbatov/scrinium/projection/fsindex"
-	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
-// runMount with the FUSE backend wired in.  Builds the View, the
-// FSOps, generates a mount session and hands the assembled root
-// inode to fs.Mount.
+// runMount with the FUSE backend wired in. The heavy lifting
+// (open store, build view, fsops, scratch dir, mount session)
+// lives in internal/daemon.Open. This function owns only the
+// FUSE-specific surface: the root inode tree, the mount, and
+// signal handling.
 //
 // Lifecycle:
+//
 //  1. Parse + validate config.
-//  2. Open the Store.
-//  3. Build the View (synchronous backfill).
-//  4. Build the FSOps with the configured policy.
-//  5. Construct the root inode tree and mount.
-//  6. Block on the FUSE server, propagating SIGINT/SIGTERM as
-//     a graceful Unmount.
+//  2. daemon.Open — bootstrap the shared resources.
+//  3. Build the routing config from daemon Config.
+//  4. Construct the root inode tree and mount.
+//  5. Block on the FUSE server, propagating SIGINT/SIGTERM
+//     as a graceful Unmount.
 func runMount(args []string) int {
 	cfg, _, err := loadConfig(args)
 	if err != nil {
@@ -53,108 +46,26 @@ func runMount(args []string) int {
 
 	ctx := context.Background()
 
-	// Build the dependencies for core.OpenStore. cmd/scrinium-fuse
-	// is a reference daemon: it picks localfs as the driver and
-	// sqlite as the index, both rooted under cfg.StorePath. Hosts
-	// that need other backends (S3 driver, postgres index) write
-	// their own daemon — the FSOps/View layers below are
-	// driver-agnostic.
-	drv, err := localfs.New(cfg.StorePath)
+	d, err := daemon.Open(ctx, cfg.Daemon)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-fuse: localfs driver: %v\n", err)
+		fmt.Fprintf(os.Stderr, "scrinium-fuse: %v\n", err)
 		return 1
 	}
-	idx, err := sqlite.NewStore(ctx, filepath.Join(cfg.StorePath, "index.db"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-fuse: sqlite index: %v\n", err)
-		return 1
-	}
+	defer d.Close()
 
-	// Register the filesystem-projection index extension. fsindex
-	// persists each artifact's fsmeta payload alongside the main
-	// index in the same transaction, so View backfill can fetch
-	// metadata in bulk instead of round-tripping Source.Get for
-	// every manifest. Registration must happen before OpenStore
-	// so the very first IndexManifest dispatches into fsindex.
-	fsidx := fsindex.New()
-	if err := idx.Extensions().Register(ctx, fsidx); err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-fuse: register fsindex: %v\n", err)
-		return 1
-	}
+	fmt.Fprintf(os.Stderr, "Mount session: %s\n", d.MountSession)
 
-	store, err := core.OpenStore(ctx, drv,
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(defaultHashRegistry()),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-fuse: open store: %v\n", err)
-		return 1
-	}
-
-	// TODO encrypted-store unlock via cfg.PassphraseFile lands
-	// once we wire core.Unlock; for 5b we assume an unlocked store.
-
-	view, err := projection.NewView(ctx, store,
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithFSIndex(fsidx),
-		projection.WithRootView(cfg.RootView),
-		projection.WithFallback(cfg.ByPathFallback),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-fuse: build view: %v\n", err)
-		return 1
-	}
-	defer view.Close()
-
-	mountSession := "mount-" + uuid.New().String()
-	fmt.Fprintf(os.Stderr, "Mount session: %s\n", mountSession)
-
-	scratchDir := cfg.ScratchDir
-	if scratchDir == "" {
-		scratchDir = filepath.Join(cfg.StorePath, ".scratch")
-	}
-	if err := os.MkdirAll(scratchDir, 0o700); err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-fuse: mkdir scratch: %v\n", err)
-		return 1
-	}
-	// Recreate-at-mount: clear any leftovers from a previous
-	// session. Failures here are non-fatal — the underlying FS
-	// may complain about specific files, scratch will still
-	// work.
-	clearScratch(scratchDir)
-
-	fsopsOpts := []projection.FSOpsOption{
-		projection.WithStore(store),
-		projection.WithScratchDir(scratchDir),
-		projection.WithScratchQuota(cfg.ScratchQuota),
-		projection.WithDefaultMode(cfg.DefaultMode),
-		projection.WithDefaultUID(cfg.DefaultUID),
-		projection.WithDefaultGID(cfg.DefaultGID),
-		projection.WithEditingPolicy(cfg.EditingPolicy()),
-		projection.WithMountSession(mountSession),
-		projection.WithNamespace(cfg.Namespace),
-	}
-	if cfg.ReadOnly {
-		fsopsOpts = append(fsopsOpts, projection.WithReadOnly())
-	}
-	fsops, err := projection.NewFSOps(view, fsopsOpts...)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-fuse: build fsops: %v\n", err)
-		return 1
-	}
-
-	// Build the routing config snapshot once: the dispatcher does
-	// not need any of the other Config fields.
+	// Routing config snapshot for the dispatcher.
 	routingCfg := projection.RoutingConfig{
-		ServicePrefix:   cfg.ServicePrefix,
-		RootView:        cfg.RootView,
-		ShowStats:       cfg.ShowStats,
-		ShowByArtifact:  cfg.ShowByArtifact,
-		ShowOrphaned:    cfg.ShowOrphaned,
-		ShowByDate:      cfg.ShowByDate,
-		ShowBySession:   cfg.ShowBySession,
-		ShowByNamespace: cfg.ShowByNamespace,
-		ShowRaw:         cfg.ShowRaw,
+		ServicePrefix:   d.Config.ServicePrefix,
+		RootView:        d.Config.RootView,
+		ShowStats:       d.Config.ShowStats,
+		ShowByArtifact:  d.Config.ShowByArtifact,
+		ShowOrphaned:    d.Config.ShowOrphaned,
+		ShowByDate:      d.Config.ShowByDate,
+		ShowBySession:   d.Config.ShowBySession,
+		ShowByNamespace: d.Config.ShowByNamespace,
+		ShowRaw:         d.Config.ShowRaw,
 	}
 
 	startedAt := time.Now().UTC()
@@ -166,31 +77,31 @@ func runMount(args []string) int {
 		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
 		defer capCancel()
 		var capPtr *domain.StorageInfo
-		if cap, err := store.Capacity(capCtx); err == nil {
+		if cap, err := d.Store.Capacity(capCtx); err == nil {
 			capPtr = &cap
 		}
 		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range idx.ListExtensions() {
+		for _, e := range d.ListExtensions() {
 			exts = append(exts, projection.ExtensionInfo{
 				Name:          e.Name,
 				SchemaVersion: e.SchemaVersion,
 			})
 		}
-		return projection.RenderStats(view, projection.DaemonInfo{
+		return projection.RenderStats(d.View, projection.DaemonInfo{
 			StartedAt:    startedAt,
-			MountSession: mountSession,
-			StorePath:    cfg.StorePath,
-			ReadOnly:     cfg.ReadOnly,
-			Namespace:    cfg.Namespace,
+			MountSession: d.MountSession,
+			StorePath:    d.Config.Store,
+			ReadOnly:     d.Config.ReadOnly,
+			Namespace:    d.Config.Namespace,
 			Capacity:     capPtr,
 			Extensions:   exts,
 		})
 	}
 
 	root := &rootNode{
-		view:          view,
-		fsops:         fsops,
-		store:         store,
+		view:          d.View,
+		fsops:         d.FSOps,
+		store:         d.Store,
 		routingCfg:    routingCfg,
 		startedAt:     startedAt,
 		statsProvider: statsProvider,
@@ -200,7 +111,7 @@ func runMount(args []string) int {
 		MountOptions: fuse.MountOptions{
 			AllowOther: cfg.AllowOther,
 			Name:       "scrinium",
-			FsName:     cfg.StorePath,
+			FsName:     d.Config.Store,
 		},
 	}
 
@@ -212,8 +123,8 @@ func runMount(args []string) int {
 	fmt.Fprintf(os.Stderr, "Mounted at %s\n", cfg.MountPoint)
 
 	// SIGINT/SIGTERM trigger a graceful unmount. fs.Server.Wait
-	// blocks until either the server exits on its own or we tell
-	// it to via Unmount.
+	// blocks until either the server exits on its own or we
+	// tell it to via Unmount.
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -225,29 +136,17 @@ func runMount(args []string) int {
 	return 0
 }
 
-// clearScratch removes every entry inside dir without removing
-// dir itself. Errors are swallowed: scratch eviction is a
-// best-effort hygiene step, not a correctness barrier.
-func clearScratch(dir string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
-	}
-}
-
-// inodeFor maps a (tree, subPath) pair to a deterministic 64-bit
-// inode number. fnv-64 is more than enough for the cardinalities
-// of a single mount session; collisions translate to "two virtual
-// paths share an inode", which go-fuse tolerates in practice
-// because it dedupes on (parent, name) at lookup time.
+// inodeFor maps a (tree, subPath) pair to a deterministic
+// 64-bit inode number. fnv-64 is more than enough for the
+// cardinalities of a single mount session; collisions
+// translate to "two virtual paths share an inode", which
+// go-fuse tolerates in practice because it dedupes on
+// (parent, name) at lookup time.
 //
 // inode 1 is reserved for the mount root (FUSE convention).
-// Service-root and stats nodes have fixed values to keep their
-// inodes stable across remounts — useful for tools that cache
-// `stat` output.
+// Service-root and stats nodes have fixed values to keep
+// their inodes stable across remounts — useful for tools
+// that cache `stat` output.
 func inodeFor(tree string, subPath string) uint64 {
 	if tree == "" && subPath == "" {
 		return 1
@@ -264,9 +163,9 @@ func inodeFor(tree string, subPath string) uint64 {
 	return v
 }
 
-// joinTreePath glues a tree subpath together. parentSub is the
-// parent path within the tree ("" = tree root), child is the
-// last segment to append.
+// joinTreePath glues a tree subpath together. parentSub is
+// the parent path within the tree ("" = tree root), child is
+// the last segment to append.
 func joinTreePath(parentSub, child string) string {
 	if parentSub == "" {
 		return child
@@ -277,18 +176,9 @@ func joinTreePath(parentSub, child string) string {
 	return parentSub + "/" + child
 }
 
-// strip extra trailing slash if any (defensive — go-fuse passes
-// names without slashes, but we want robustness against future
-// callers).
+// cleanName strips an extra trailing slash if any (defensive
+// — go-fuse passes names without slashes, but we want
+// robustness against future callers).
 func cleanName(s string) string {
 	return strings.Trim(s, "/")
-}
-
-// defaultHashRegistry returns a HashRegistry with the algorithms
-// the daemon needs to read a Scrinium store written by reference
-// hosts. Currently sha256 — the default content hasher in
-// core.InitStore for unsealed stores.
-func defaultHashRegistry() domain.HashRegistry {
-	return core.NewHashRegistry().
-		Register("sha256", func() hash.Hash { return sha256.New() })
 }

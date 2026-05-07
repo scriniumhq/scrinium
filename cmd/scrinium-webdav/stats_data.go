@@ -34,7 +34,7 @@ func buildWebStatsData(
 			StartedAt:    startedAt,
 			Uptime:       formatStatsUptime(time.Since(startedAt)),
 			MountSession: mountSession,
-			StorePath:    cfg.StorePath,
+			StorePath:    cfg.Daemon.Store,
 		},
 		View: web.StatsView{
 			TotalNodes:     stats.TotalNodes,
@@ -62,11 +62,11 @@ func buildWebStatsData(
 		d.HasStorage = true
 	}
 
-	if cfg.ReadOnly || cfg.Editing != "" || cfg.Namespace != "" {
+	if cfg.Daemon.ReadOnly || cfg.Daemon.Editing != "" || cfg.Daemon.Namespace != "" {
 		d.Config = web.StatsConfig{
-			ReadOnly:  cfg.ReadOnly,
-			Editing:   cfg.Editing,
-			Namespace: cfg.Namespace,
+			ReadOnly:  cfg.Daemon.ReadOnly,
+			Editing:   cfg.Daemon.Editing,
+			Namespace: cfg.Daemon.Namespace,
 		}
 		d.HasConfig = true
 	}

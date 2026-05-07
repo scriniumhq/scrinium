@@ -24,6 +24,6 @@ func runMount(args []string) int {
 	fmt.Fprintf(os.Stderr,
 		"scrinium-fuse: this build has no FUSE backend. Rebuild with `-tags fuse` (Linux/macOS only).\n"+
 			"Validated config OK: store=%q mount=%q rootView=%q editing=%q.\n",
-		cfg.StorePath, cfg.MountPoint, cfg.RootView, cfg.Editing)
+		cfg.Daemon.Store, cfg.MountPoint, cfg.Daemon.RootView, cfg.Daemon.Editing)
 	return 1
 }

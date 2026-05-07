@@ -57,10 +57,24 @@ type Config struct {
 	// modifications (there are none to publish).
 	ReadOnly bool `yaml:"readOnly"`
 
-	// Editing controls draft/transit semantics: "off" rejects
-	// in-place edits, "on" allows them. The empty string
-	// defaults to "off" — strict CAS semantics.
+	// Editing controls draft/transit semantics. Values:
+	//   "off"    — reject all in-place edits (strict CAS).
+	//   "on"     — allow all editing operations.
+	//   "custom" — consult AllowRename/AllowSetattr/...
+	//              individually. Each flag defaults to false
+	//              (a nil pointer is treated as off).
+	// Empty string is treated as "off".
 	Editing string `yaml:"editing"`
+
+	// Custom editing flags. Only consulted when Editing is
+	// "custom"; unused otherwise. Pointers so the YAML
+	// loader can distinguish "unset" from "explicit false"
+	// when assembling a policy from layered sources (file +
+	// env + CLI).
+	AllowRename   *bool `yaml:"allowRename,omitempty"`
+	AllowSetattr  *bool `yaml:"allowSetattr,omitempty"`
+	AllowTruncate *bool `yaml:"allowTruncate,omitempty"`
+	AllowAppend   *bool `yaml:"allowAppend,omitempty"`
 
 	// DefaultMode/UID/GID fill in fsmeta defaults for
 	// artifacts written without explicit POSIX bits.
@@ -120,10 +134,10 @@ func (c Config) Validate() error {
 	}
 
 	switch c.Editing {
-	case "", "off", "on":
+	case "", "off", "on", "custom":
 		// OK
 	default:
-		errs = append(errs, fmt.Sprintf("editing: %q is not one of {off, on}", c.Editing))
+		errs = append(errs, fmt.Sprintf("editing: %q is not one of {off, on, custom}", c.Editing))
 	}
 
 	switch c.ByPathFallback {
@@ -155,11 +169,24 @@ func (c Config) Validate() error {
 // editingPolicy returns the projection-level policy derived
 // from the string field. Centralised here so the cmd packages
 // don't each duplicate the mapping.
+//
+// "custom" inspects the per-operation pointer flags; a nil
+// pointer is read as false.
 func (c Config) editingPolicy() projection.EditingPolicy {
 	switch c.Editing {
 	case "on":
 		return projection.EditingOn()
+	case "custom":
+		return projection.EditingPolicy{
+			AllowRename:   ptrBool(c.AllowRename),
+			AllowSetattr:  ptrBool(c.AllowSetattr),
+			AllowTruncate: ptrBool(c.AllowTruncate),
+			AllowAppend:   ptrBool(c.AllowAppend),
+		}
 	default:
 		return projection.EditingOff()
 	}
 }
+
+// ptrBool dereferences a *bool, treating nil as false.
+func ptrBool(p *bool) bool { return p != nil && *p }

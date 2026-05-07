@@ -2,42 +2,38 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
-	"hash"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
 	"golang.org/x/net/webdav"
 
 	"github.com/rkurbatov/scrinium/cmd/scrinium-webdav/web"
-	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/driver/localfs"
-	"github.com/rkurbatov/scrinium/index/sqlite"
+	"github.com/rkurbatov/scrinium/internal/daemon"
 	"github.com/rkurbatov/scrinium/projection"
-	"github.com/rkurbatov/scrinium/projection/fsindex"
-	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
-// runServe is the entry point for "scrinium-webdav serve". It
-// builds the View, the FSOps, generates a mount session, wraps
-// FSOps in a webdav.FileSystem adapter, and starts the HTTP
-// listener.
+// runServe is the entry point for "scrinium-webdav serve". The
+// heavy lifting (open store/index, build view, fsops, scratch
+// dir, mount session) lives in internal/daemon.Open. This
+// function is responsible only for the WebDAV-specific surface:
+// the HTTP listener, the WebDAV adapter, the optional /_browse
+// HTML view, and signal handling.
 //
 // Lifecycle:
 //
 //  1. Parse + validate config.
-//  2. Open the Store (localfs driver + sqlite index — referential
-//     daemon, hosts wanting other backends write their own).
-//  3. Build the View (synchronous backfill).
-//  4. Build the FSOps with the configured policy.
-//  5. Wrap as webdav.FileSystem and start http.Server.
+//  2. daemon.Open — bootstrap the shared resources.
+//  3. Build the routing config from the daemon Config (still
+//     a webdav-cmd concern: it owns _scrinium tree visibility).
+//  4. Wrap d.FSOps as webdav.FileSystem; mount the WebDAV
+//     handler at "/".
+//  5. Optionally mount the embedded HTML browser under
+//     cfg.BrowsePrefix.
 //  6. Block on the server, propagating SIGINT/SIGTERM as a
 //     graceful shutdown.
 func runServe(args []string) int {
@@ -53,101 +49,34 @@ func runServe(args []string) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	drv, err := localfs.New(cfg.StorePath)
+	d, err := daemon.Open(ctx, cfg.Daemon)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: localfs driver: %v\n", err)
+		fmt.Fprintf(os.Stderr, "scrinium-webdav: %v\n", err)
 		return 1
 	}
-	idx, err := sqlite.NewStore(ctx, filepath.Join(cfg.StorePath, "index.db"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: sqlite index: %v\n", err)
-		return 1
-	}
+	defer d.Close()
 
-	// Register the filesystem-projection index extension. fsindex
-	// persists each artifact's fsmeta payload alongside the main
-	// index in the same transaction, so View backfill can fetch
-	// metadata in bulk instead of round-tripping Source.Get for
-	// every manifest. Registration must happen before OpenStore
-	// so the very first IndexManifest dispatches into fsindex.
-	fsidx := fsindex.New()
-	if err := idx.Extensions().Register(ctx, fsidx); err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: register fsindex: %v\n", err)
-		return 1
-	}
+	fmt.Fprintf(os.Stderr, "Mount session: %s\n", d.MountSession)
 
-	store, err := core.OpenStore(ctx, drv,
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(defaultHashRegistry()),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: open store: %v\n", err)
-		return 1
-	}
-
-	view, err := projection.NewView(ctx, store,
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithFSIndex(fsidx),
-		projection.WithRootView(cfg.RootView),
-		projection.WithFallback(cfg.ByPathFallback),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: build view: %v\n", err)
-		return 1
-	}
-	defer view.Close()
-
-	mountSession := "mount-" + uuid.New().String()
-	fmt.Fprintf(os.Stderr, "Mount session: %s\n", mountSession)
-
-	scratchDir := cfg.ScratchDir
-	if scratchDir == "" {
-		scratchDir = filepath.Join(cfg.StorePath, ".scratch")
-	}
-	if err := os.MkdirAll(scratchDir, 0o700); err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: mkdir scratch: %v\n", err)
-		return 1
-	}
-	clearScratchDir(scratchDir)
-
-	fsopsOpts := []projection.FSOpsOption{
-		projection.WithStore(store),
-		projection.WithScratchDir(scratchDir),
-		projection.WithScratchQuota(cfg.ScratchQuota),
-		projection.WithDefaultMode(cfg.DefaultMode),
-		projection.WithDefaultUID(cfg.DefaultUID),
-		projection.WithDefaultGID(cfg.DefaultGID),
-		projection.WithEditingPolicy(cfg.EditingPolicy()),
-		projection.WithMountSession(mountSession),
-		projection.WithNamespace(cfg.Namespace),
-	}
-	if cfg.ReadOnly {
-		fsopsOpts = append(fsopsOpts, projection.WithReadOnly())
-	}
-	fsops, err := projection.NewFSOps(view, fsopsOpts...)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: build fsops: %v\n", err)
-		return 1
-	}
-
+	// Routing config is webdav-cmd's concern: it controls how
+	// the _scrinium service tree appears in the browser/listing.
+	// It mirrors fields from daemon.Config but with the
+	// projection-typed RootView.
 	routingCfg := projection.RoutingConfig{
-		ServicePrefix:   cfg.ServicePrefix,
-		RootView:        cfg.RootView,
-		ShowStats:       cfg.ShowStats,
-		ShowByArtifact:  cfg.ShowByArtifact,
-		ShowOrphaned:    cfg.ShowOrphaned,
-		ShowByDate:      cfg.ShowByDate,
-		ShowBySession:   cfg.ShowBySession,
-		ShowByNamespace: cfg.ShowByNamespace,
-		ShowRaw:         cfg.ShowRaw,
+		ServicePrefix:   d.Config.ServicePrefix,
+		RootView:        d.Config.RootView,
+		ShowStats:       d.Config.ShowStats,
+		ShowByArtifact:  d.Config.ShowByArtifact,
+		ShowOrphaned:    d.Config.ShowOrphaned,
+		ShowByDate:      d.Config.ShowByDate,
+		ShowBySession:   d.Config.ShowBySession,
+		ShowByNamespace: d.Config.ShowByNamespace,
+		ShowRaw:         d.Config.ShowRaw,
 	}
 
-	// statsProvider closes over the daemon's view of the
-	// world: capacity is queried live (every read), extensions
-	// are snapshotted on every read, the rest is the static
-	// daemon config. This is what the user sees when they
-	// open _scrinium/stats — see projection.RenderStats for
-	// the format.
+	// statsProvider closes over the daemon's view of the world:
+	// capacity is queried live (every read), extensions are
+	// snapshotted on every read, the rest is the static config.
 	startedAt := time.Now().UTC()
 	statsProvider := func() []byte {
 		// Capacity is best-effort: failure → render "n/a"
@@ -157,51 +86,46 @@ func runServe(args []string) int {
 		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
 		defer capCancel()
 		var capPtr *domain.StorageInfo
-		if cap, err := store.Capacity(capCtx); err == nil {
+		if cap, err := d.Store.Capacity(capCtx); err == nil {
 			capPtr = &cap
 		}
 		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range idx.ListExtensions() {
+		for _, e := range d.ListExtensions() {
 			exts = append(exts, projection.ExtensionInfo{
 				Name:          e.Name,
 				SchemaVersion: e.SchemaVersion,
 			})
 		}
-		return projection.RenderStats(view, projection.DaemonInfo{
+		return projection.RenderStats(d.View, projection.DaemonInfo{
 			StartedAt:    startedAt,
-			MountSession: mountSession,
-			StorePath:    cfg.StorePath,
-			ReadOnly:     cfg.ReadOnly,
-			Editing:      cfg.Editing,
-			Namespace:    cfg.Namespace,
+			MountSession: d.MountSession,
+			StorePath:    d.Config.Store,
+			ReadOnly:     d.Config.ReadOnly,
+			Editing:      d.Config.Editing,
+			Namespace:    d.Config.Namespace,
 			Capacity:     capPtr,
 			Extensions:   exts,
 		})
 	}
 
-	// htmlStatsProvider builds the same snapshot for the
-	// browser surface, only as structured data web can lay out
-	// in HTML rather than pre-rendered text. Two providers,
-	// one source of facts — they read the same view, capacity,
-	// and extension list each time.
 	htmlStatsProvider := func() web.StatsData {
 		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
 		defer capCancel()
 		var capPtr *domain.StorageInfo
-		if cap, err := store.Capacity(capCtx); err == nil {
+		if cap, err := d.Store.Capacity(capCtx); err == nil {
 			capPtr = &cap
 		}
 		exts := make([]web.StatsExtension, 0)
-		for _, e := range idx.ListExtensions() {
+		for _, e := range d.ListExtensions() {
 			exts = append(exts, web.StatsExtension{
 				Name:          e.Name,
 				SchemaVersion: e.SchemaVersion,
 			})
 		}
-		return buildWebStatsData(view, capPtr, exts, startedAt, mountSession, cfg)
+		return buildWebStatsData(d.View, capPtr, exts, startedAt, d.MountSession, cfg)
 	}
 
-	wfs := newWebdavFS(view, fsops, routingCfg, !cfg.AllowOSJunk, statsProvider)
+	wfs := newWebdavFS(d.View, d.FSOps, routingCfg, !cfg.AllowOSJunk, statsProvider)
 
 	rejectJunk := !cfg.AllowOSJunk
 	handler := &webdav.Handler{
@@ -222,37 +146,21 @@ func runServe(args []string) int {
 		},
 	}
 
-	// Build the top-level mux. WebDAV stays as the catch-all
-	// at "/", so clients (Finder, rclone, Office) connect to
-	// the daemon's root URL exactly as they would to a stock
-	// WebDAV server. The browser, when configured, is mounted
-	// under a separate prefix — a secondary surface for
-	// human inspection that doesn't perturb WebDAV traffic.
 	mux := http.NewServeMux()
 	if cfg.BrowsePrefix != "" {
 		webHandler := web.NewHandler(
-			newWebBackingFS(wfs, store),
+			newWebBackingFS(wfs, d.Store),
 			cleanWebDAVPath,
 			web.Config{
-				StorePath:     cfg.StorePath,
-				ServicePrefix: cfg.ServicePrefix,
+				StorePath:     d.Config.Store,
+				ServicePrefix: d.Config.ServicePrefix,
 				BrowsePrefix:  cfg.BrowsePrefix,
 			},
 		)
-		// Register schema decoders the daemon understands.
-		// Each domain has its own decoder; web stays
-		// schema-agnostic and only consumes whatever the
-		// host installs.
 		webHandler.RegisterDecoder(fsmetaDecoder{})
-
-		// Wire the structured stats provider so /_browse/_stats
-		// has live data to render.
 		webHandler.SetStatsProvider(htmlStatsProvider)
 
 		prefix := webHandler.Prefix()
-		// Register both "/_browse" and "/_browse/" so requests
-		// without the trailing slash are matched too. Go's
-		// ServeMux would otherwise 404 the bare prefix.
 		mux.Handle(prefix, http.RedirectHandler(prefix+"/", http.StatusMovedPermanently))
 		mux.Handle(prefix+"/", webHandler)
 		fmt.Fprintf(os.Stderr, "Browser: %s\n", prefix)
@@ -282,29 +190,4 @@ func runServe(args []string) int {
 		return 1
 	}
 	return 0
-}
-
-// clearScratchDir removes every entry inside dir without removing
-// dir itself. Errors are swallowed: scratch eviction is a
-// best-effort hygiene step.
-func clearScratchDir(dir string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		_ = os.RemoveAll(filepath.Join(dir, e.Name()))
-	}
-}
-
-// defaultHashRegistry returns a HashRegistry with the algorithms
-// the daemon needs to read a Scrinium store written by reference
-// hosts. Currently sha256 — the default content hasher in
-// core.InitStore for unsealed stores. blake3 is mapped to sha256
-// for parity with internal/testutil/storefx; production stores
-// using a real blake3 implementation should use a custom daemon
-// that registers the proper constructor.
-func defaultHashRegistry() domain.HashRegistry {
-	return core.NewHashRegistry().
-		Register("sha256", func() hash.Hash { return sha256.New() })
 }
