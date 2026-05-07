@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/rkurbatov/scrinium/domain"
@@ -71,34 +72,8 @@ func TestCleanWebDAVPath(t *testing.T) {
 	}
 }
 
-// --- isAtServiceRoot ---
-
-func TestIsAtServiceRoot(t *testing.T) {
-	cfg := projection.RoutingConfig{ServicePrefix: "_scrinium"}
-	cases := []struct {
-		path string
-		want bool
-	}{
-		{"", false},
-		{"photos", false},
-		{"_scrinium", true},
-		{"_scrinium/by-session", true},
-		{"_scrinium/anything", true},
-		{"photos/_scrinium", false},
-	}
-	for _, tc := range cases {
-		if got := isAtServiceRoot(tc.path, cfg); got != tc.want {
-			t.Errorf("isAtServiceRoot(%q) = %v, want %v", tc.path, got, tc.want)
-		}
-	}
-}
-
-func TestIsAtServiceRoot_PrefixDisabled(t *testing.T) {
-	cfg := projection.RoutingConfig{ServicePrefix: ""}
-	if isAtServiceRoot("_scrinium/x", cfg) {
-		t.Error("with empty prefix, isAtServiceRoot must always be false")
-	}
-}
+// (TestIsAtServiceRoot moved to projection/vfs — that helper
+// is now an internal of the VFS package.)
 
 // --- Stat ---
 
@@ -195,7 +170,7 @@ func TestOpenFile_ReadFile(t *testing.T) {
 	w, _ := newTestFS(t)
 
 	// Create a file via WebDAV, then re-open and verify content.
-	flag := os.O_WRONLY | syscallOCreate | os.O_TRUNC
+	flag := os.O_WRONLY | syscall.O_CREAT | os.O_TRUNC
 	wf, err := w.OpenFile(context.Background(), "/hello.txt", flag, 0o644)
 	if err != nil {
 		t.Fatalf("OpenFile create: %v", err)
@@ -226,7 +201,7 @@ func TestOpenFile_ReadFile(t *testing.T) {
 
 func TestOpenFile_CreateWriteRead(t *testing.T) {
 	w, _ := newTestFS(t)
-	flag := os.O_WRONLY | syscallOCreate | os.O_TRUNC
+	flag := os.O_WRONLY | syscall.O_CREAT | os.O_TRUNC
 
 	wf, err := w.OpenFile(context.Background(), "/note.txt", flag, 0o644)
 	if err != nil {
@@ -389,7 +364,7 @@ func TestOpenFile_JunkCreateBlackHole(t *testing.T) {
 	// them) — otherwise macOS Finder aborts copies. The store
 	// must remain unaffected.
 	w, _ := newTestFS(t)
-	flag := os.O_WRONLY | syscallOCreate | os.O_TRUNC
+	flag := os.O_WRONLY | syscall.O_CREAT | os.O_TRUNC
 
 	f, err := w.OpenFile(context.Background(), "/.DS_Store", flag, 0o644)
 	if err != nil {
@@ -425,7 +400,8 @@ func TestOpenFile_JunkReadIsNotFound(t *testing.T) {
 
 func TestStat_JunkIsNotFound(t *testing.T) {
 	w, _ := newTestFS(t)
-	_, err := w.Stat(context.Background(), "/.DS_Store")
+	_, err := w.Stat(context.Background(),
+		"/.DS_Store")
 	if err != fs.ErrNotExist {
 		t.Errorf("expected fs.ErrNotExist, got %v", err)
 	}

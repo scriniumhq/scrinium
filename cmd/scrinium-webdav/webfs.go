@@ -147,7 +147,7 @@ func (a *readHandleAdapter) Stat() (os.FileInfo, error)         { return nil, ni
 // (the View call doesn't fail) but the interface allows for
 // them, so we return nil-error.
 func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]web.RelatedArtifact, error) {
-	siblings := b.wfs.view.RelatedByBlobRef(blobRef, exclude)
+	siblings := b.wfs.VFS().View().RelatedByBlobRef(blobRef, exclude)
 	out := make([]web.RelatedArtifact, 0, len(siblings))
 	for _, s := range siblings {
 		out = append(out, web.RelatedArtifact{
@@ -165,7 +165,7 @@ func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef
 // caveats as LookupRelated; an actual search index is a backlog
 // item once the store grows beyond ~100K artifacts.
 func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]web.SearchResult, error) {
-	hits := b.wfs.view.Search(query, limit)
+	hits := b.wfs.VFS().View().Search(query, limit)
 	out := make([]web.SearchResult, 0, len(hits))
 	for _, h := range hits {
 		out = append(out, web.SearchResult{
@@ -184,7 +184,7 @@ func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]w
 // LookupLocations forwards to the View, returning the per-tree
 // placement of an artifact.
 func (b *webBackingFS) LookupLocations(ctx context.Context, id domain.ArtifactID) (web.Locations, bool, error) {
-	locs, ok := b.wfs.view.LookupLocations(id)
+	locs, ok := b.wfs.VFS().View().LookupLocations(id)
 	if !ok {
 		return web.Locations{}, false, nil
 	}
