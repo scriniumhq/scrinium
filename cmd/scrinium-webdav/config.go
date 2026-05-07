@@ -35,16 +35,6 @@ type Config struct {
 	// Required.
 	Listen string `yaml:"listen"`
 
-	// BrowsePrefix is the URL prefix under which the daemon
-	// serves human-readable HTML directory listings. Default
-	// "/_browse"; empty disables the browser entirely.
-	//
-	// WebDAV stays on the root path regardless of this
-	// setting: the browser is a separate, secondary surface
-	// for ad-hoc inspection. Clients (Finder, rclone, Office)
-	// connect to "/", get pure WebDAV.
-	BrowsePrefix string `yaml:"browsePrefix"`
-
 	// AllowOSJunk disables the desktop-junk filter (.DS_Store,
 	// Thumbs.db, AppleDouble ._*, etc.). Off by default — see
 	// junkfilter.go for the patterns rejected.
@@ -57,9 +47,8 @@ type Config struct {
 // the legacy "files" namespace are set here.
 func DefaultConfig() Config {
 	cfg := Config{
-		Daemon:       daemon.DefaultConfig(),
-		Listen:       ":8080",
-		BrowsePrefix: "/_browse",
+		Daemon: daemon.DefaultConfig(),
+		Listen: ":8080",
 	}
 	// Backward-compat default for the daemon-level namespace.
 	// Old configs left it implicit; we keep "files" so an
@@ -72,6 +61,16 @@ func DefaultConfig() Config {
 	if cfg.Daemon.ScratchQuota == 0 {
 		cfg.Daemon.ScratchQuota = 1 << 30
 	}
+	// Service trees default OFF for WebDAV. Diagnostic trees
+	// generate Finder/rclone listing noise; admins enable
+	// specific trees explicitly with --show-X flags.
+	cfg.Daemon.ShowStats = false
+	cfg.Daemon.ShowByArtifact = false
+	cfg.Daemon.ShowOrphaned = false
+	cfg.Daemon.ShowByDate = false
+	cfg.Daemon.ShowBySession = false
+	cfg.Daemon.ShowByNamespace = false
+	cfg.Daemon.ShowRaw = false
 	return cfg
 }
 
@@ -138,8 +137,6 @@ func bindFlags(fs *flag.FlagSet, cfg *Config) {
 
 	// WebDAV-specific.
 	fs.StringVar(&cfg.Listen, "listen", cfg.Listen, "HTTP listen address.")
-	fs.StringVar(&cfg.BrowsePrefix, "browse-prefix", cfg.BrowsePrefix,
-		"URL prefix for HTML browser listings. Empty disables. Default \"/_browse\".")
 	fs.BoolVar(&cfg.AllowOSJunk, "allow-os-junk", cfg.AllowOSJunk,
 		"Permit clients to write OS-generated junk files (.DS_Store, Thumbs.db, AppleDouble ._*, etc).")
 

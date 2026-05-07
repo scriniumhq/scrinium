@@ -11,7 +11,6 @@ import (
 
 	"golang.org/x/net/webdav"
 
-	"github.com/rkurbatov/scrinium/cmd/scrinium-webdav/web"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/internal/daemon"
 	"github.com/rkurbatov/scrinium/projection"
@@ -20,22 +19,16 @@ import (
 // runServe is the entry point for "scrinium-webdav serve". The
 // heavy lifting (open store/index, build view, fsops, scratch
 // dir, mount session) lives in internal/daemon.Open. This
-// function is responsible only for the WebDAV-specific surface:
-// the HTTP listener, the WebDAV adapter, the optional /_browse
-// HTML view, and signal handling.
+// function owns only the WebDAV-specific surface: the HTTP
+// listener and the WebDAV adapter on top of vfs.
 //
-// Lifecycle:
-//
-//  1. Parse + validate config.
-//  2. daemon.Open — bootstrap the shared resources.
-//  3. Build the routing config from the daemon Config (still
-//     a webdav-cmd concern: it owns _scrinium tree visibility).
-//  4. Wrap d.FSOps as webdav.FileSystem; mount the WebDAV
-//     handler at "/".
-//  5. Optionally mount the embedded HTML browser under
-//     cfg.BrowsePrefix.
-//  6. Block on the server, propagating SIGINT/SIGTERM as a
-//     graceful shutdown.
+// scrinium-webdav is a clean WebDAV protocol server. The HTML
+// browser ("/_browse/") that earlier versions embedded has
+// moved to scrinium-webview; run it alongside if you want a
+// diagnostic UI on the same store. Service trees
+// (_scrinium/by-date/, etc.) are still reachable when
+// configured, but disabled by default — Finder/rclone don't
+// want to see them in their listings.
 func runServe(args []string) int {
 	cfg, _, err := loadConfig(args)
 	if err != nil {
@@ -58,10 +51,11 @@ func runServe(args []string) int {
 
 	fmt.Fprintf(os.Stderr, "Mount session: %s\n", d.MountSession)
 
-	// Routing config is webdav-cmd's concern: it controls how
-	// the _scrinium service tree appears in the browser/listing.
-	// It mirrors fields from daemon.Config but with the
-	// projection-typed RootView.
+	// Routing config snapshot. Service trees follow daemon
+	// config — webdav defaults to all off so a vanilla
+	// `scrinium-webdav serve` exposes only the user-visible
+	// filesystem; admins enable specific trees with --show-X
+	// flags when they want them.
 	routingCfg := projection.RoutingConfig{
 		ServicePrefix:   d.Config.ServicePrefix,
 		RootView:        d.Config.RootView,
@@ -74,15 +68,11 @@ func runServe(args []string) int {
 		ShowRaw:         d.Config.ShowRaw,
 	}
 
-	// statsProvider closes over the daemon's view of the world:
-	// capacity is queried live (every read), extensions are
-	// snapshotted on every read, the rest is the static config.
+	// Stats body for vfs-level _scrinium/stats reads. Only
+	// rendered if ShowStats is on (otherwise routing rejects
+	// the path).
 	startedAt := time.Now().UTC()
 	statsProvider := func() []byte {
-		// Capacity is best-effort: failure → render "n/a"
-		// fields rather than fail the whole stats read.
-		// Bound the call so a slow driver doesn't hang the
-		// stats endpoint.
 		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
 		defer capCancel()
 		var capPtr *domain.StorageInfo
@@ -108,23 +98,6 @@ func runServe(args []string) int {
 		})
 	}
 
-	htmlStatsProvider := func() web.StatsData {
-		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
-		defer capCancel()
-		var capPtr *domain.StorageInfo
-		if cap, err := d.Store.Capacity(capCtx); err == nil {
-			capPtr = &cap
-		}
-		exts := make([]web.StatsExtension, 0)
-		for _, e := range d.ListExtensions() {
-			exts = append(exts, web.StatsExtension{
-				Name:          e.Name,
-				SchemaVersion: e.SchemaVersion,
-			})
-		}
-		return buildWebStatsData(d.View, capPtr, exts, startedAt, d.MountSession, cfg)
-	}
-
 	wfs := newWebdavFS(d.View, d.FSOps, routingCfg, !cfg.AllowOSJunk, statsProvider)
 
 	rejectJunk := !cfg.AllowOSJunk
@@ -135,10 +108,10 @@ func runServe(args []string) int {
 			if err == nil {
 				return
 			}
-			// Suppress the noise that the OS-junk filter
-			// generates by design: "missing" .DS_Store /
-			// AppleDouble companion lookups, etc. Real errors
-			// against real paths still land in the log.
+			// Suppress the noise the OS-junk filter generates
+			// by design: "missing" .DS_Store / AppleDouble
+			// companion lookups, etc. Real errors against
+			// real paths still land in the log.
 			if rejectJunk && isOSJunk(cleanWebDAVPath(r.URL.Path)) {
 				return
 			}
@@ -146,34 +119,12 @@ func runServe(args []string) int {
 		},
 	}
 
-	mux := http.NewServeMux()
-	if cfg.BrowsePrefix != "" {
-		webHandler := web.NewHandler(
-			newWebBackingFS(wfs, d.Store),
-			cleanWebDAVPath,
-			web.Config{
-				StorePath:     d.Config.Store,
-				ServicePrefix: d.Config.ServicePrefix,
-				BrowsePrefix:  cfg.BrowsePrefix,
-			},
-		)
-		webHandler.RegisterDecoder(fsmetaDecoder{})
-		webHandler.SetStatsProvider(htmlStatsProvider)
-
-		prefix := webHandler.Prefix()
-		mux.Handle(prefix, http.RedirectHandler(prefix+"/", http.StatusMovedPermanently))
-		mux.Handle(prefix+"/", webHandler)
-		fmt.Fprintf(os.Stderr, "Browser: %s\n", prefix)
-	}
-	mux.Handle("/", handler)
-
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	// Signal handling for graceful shutdown.
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {

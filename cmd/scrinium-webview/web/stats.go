@@ -271,7 +271,7 @@ const statsPageHTML = `<!DOCTYPE html>
 {{end}}
 
 <footer>
-  {{.NowFormatted}} · <a href="{{.StatsURL}}">text stats</a> · <a href="{{.BrowsePrefix}}/">browse</a>
+  {{.NowFormatted}} · <a href="{{.BrowsePrefix}}/">browse</a>
 </footer>
 
 </body>

@@ -265,7 +265,7 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 		data.NextURL = pageLinkURL(r.URL, page+1)
 	}
 
-	if dir != "" {
+	if dir != "" && !isServiceTreeRoot(dir) {
 		parent := pathpkg.Dir(dir)
 		if parent == "." {
 			parent = ""
@@ -434,4 +434,23 @@ func pageLinkURL(orig *url.URL, page int) string {
 	out := *orig
 	out.RawQuery = q.Encode()
 	return out.RequestURI()
+}
+
+// isServiceTreeRoot reports whether dir is exactly one of
+// the service tree names (by-path, by-date, by-session,
+// by-namespace, by-artifact, orphaned) — and not a sub-path
+// inside one. Used to suppress the ".." entry on tree roots:
+// climbing up from /by-date/ would land on the redirect-only
+// "/" handler, which is confusing UX.
+//
+// Stays in web pkg rather than in projection because it's a
+// presentation concern: the projection's Route function
+// happily resolves these paths regardless.
+func isServiceTreeRoot(dir string) bool {
+	switch dir {
+	case "by-path", "by-date", "by-session", "by-namespace",
+		"by-artifact", "orphaned":
+		return true
+	}
+	return false
 }

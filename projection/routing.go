@@ -83,6 +83,25 @@ type RoutingConfig struct {
 	ShowBySession   bool
 	ShowByNamespace bool
 	ShowRaw         bool
+
+	// UnprefixedServiceTrees, when true, exposes service tree
+	// names (by-path, by-date, by-session, by-namespace,
+	// by-artifact, orphaned, stats, raw) at the root of the
+	// path namespace — without the ServicePrefix wrapper.
+	//
+	// Only honoured when ServicePrefix is empty: the
+	// configurations are mutually exclusive. Surfaces that
+	// dedicate the entire URL space to diagnostics (webview)
+	// turn this on; surfaces sharing root with user content
+	// (webdav, fuse) keep ServicePrefix non-empty and leave
+	// this off.
+	//
+	// Caveat: with UnprefixedServiceTrees on, names like
+	// "by-date" cannot exist as ordinary path components
+	// (they always route to the service tree). The webview
+	// surface accepts this trade-off because it never
+	// surfaces user content under the root anyway.
+	UnprefixedServiceTrees bool
 }
 
 // ErrRouteRejected is returned by Route when the path falls into
@@ -119,8 +138,17 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 		}, nil
 	}
 
-	// Disabled service surface — every path is regular.
+	// Disabled service surface — every path is regular
+	// unless UnprefixedServiceTrees flips into "service tree
+	// names live at the root" mode.
 	if cfg.ServicePrefix == "" {
+		if cfg.UnprefixedServiceTrees {
+			// Treat the first segment as a tree name.
+			// dispatchServiceTree returns RouteRoot when no
+			// match, so plain user paths still work in the
+			// rare case the host has no service trees enabled.
+			return dispatchServiceTree(path, cfg)
+		}
 		return RouteTarget{
 			Kind:    RouteRoot,
 			Tree:    cfg.RootView,
@@ -144,8 +172,18 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 		return RouteTarget{Kind: RouteServiceRoot}, nil
 	}
 
-	// Inside the service prefix: dispatch by the second segment.
-	tree, treeRest := splitFirstSegment(rest)
+	// Inside the service prefix: dispatch by the second
+	// segment via the same logic UnprefixedServiceTrees uses.
+	return dispatchServiceTree(rest, cfg)
+}
+
+// dispatchServiceTree maps a path whose first segment is a
+// tree name (by-path, by-date, etc.) to its RouteTarget.
+// Used both by the prefixed flow (after stripping
+// ServicePrefix) and the unprefixed flow (as the top-level
+// dispatcher when ServicePrefix is empty).
+func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
+	tree, treeRest := splitFirstSegment(path)
 	switch tree {
 	case "stats":
 		if !cfg.ShowStats {
@@ -231,7 +269,24 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 		}, nil
 	}
 
-	// Unknown tree under the service prefix.
+	// Unknown first segment.
+	//
+	// In prefixed mode (we got here after stripping
+	// ServicePrefix) anything unknown under the prefix is a
+	// nonsense path → RouteRejected.
+	//
+	// In unprefixed mode the first segment is just a
+	// regular path component, so the path routes to the
+	// root view. This is what lets the empty-prefix surface
+	// still serve user content even when service trees take
+	// the same namespace.
+	if cfg.ServicePrefix == "" && cfg.UnprefixedServiceTrees {
+		return RouteTarget{
+			Kind:    RouteRoot,
+			Tree:    cfg.RootView,
+			SubPath: path,
+		}, nil
+	}
 	return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
 }
 

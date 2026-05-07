@@ -11,80 +11,69 @@ import (
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/projection/fsmeta"
+	"github.com/rkurbatov/scrinium/projection/vfs"
 )
 
-// webBackingFS adapts the daemon's webdavFS to the web package's
-// BackingFS interface. It's a paper-thin wrapper — the only real
-// translation is OpenFile's return type, which web wants as
-// web.File (a narrower interface than webdav.File). Go's
-// structural subtyping does the conversion automatically once
-// we say so explicitly.
+// webBackingFS adapts vfs.VFS to web.BackingFS.
+// Read-only by design — webview never invokes write paths.
+//
+// The webdav cmd has a similar adapter that goes through its
+// webdav-shaped FileSystem because that surface needs the
+// junk filter and locking machinery; webview talks to vfs
+// directly because its only consumer is HTML rendering.
 type webBackingFS struct {
-	wfs   *webdavFS
+	v     *vfs.VFS
 	store core.Store
 }
 
-func newWebBackingFS(wfs *webdavFS, store core.Store) *webBackingFS {
-	return &webBackingFS{wfs: wfs, store: store}
+func newWebBackingFS(v *vfs.VFS, store core.Store) *webBackingFS {
+	return &webBackingFS{v: v, store: store}
 }
 
 func (b *webBackingFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
-	return b.wfs.Stat(ctx, name)
+	return b.v.Stat(ctx, name)
 }
 
 func (b *webBackingFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (web.File, error) {
-	f, err := b.wfs.OpenFile(ctx, name, flag, perm)
+	f, err := b.v.OpenFile(ctx, name, flag, perm)
 	if err != nil {
 		return nil, err
 	}
-	// webdav.File is a superset of web.File (it adds Write).
-	// The interface conversion is structural — every method
-	// web.File requires is on f.
+	// vfs.File and web.File share Read/Write/Seek/Close +
+	// Readdir + Stat — Go's structural subtyping does the
+	// conversion automatically.
 	return f, nil
 }
 
-// LookupManifest fetches the full manifest for an artifact id
-// through the core.Store. We open and immediately close the
-// ReadHandle: web only needs the manifest, not the bytes.
-//
-// (zero, false, nil) for "not found"; the third return covers
-// driver/index errors. The handler page degrades gracefully
-// either way.
+// LookupManifest fetches the manifest by id through the
+// store. Open-and-close pattern: web only needs the
+// manifest, not bytes.
 func (b *webBackingFS) LookupManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, bool, error) {
 	rh, err := b.store.Get(ctx, id, domain.GetOptions{})
 	if err != nil {
-		// Distinguishing "not found" from infrastructure
-		// errors here is awkward — core.Store.Get wraps both
-		// in the same error type. Treat any error as
-		// "not found" for now; if we wire structured errors
-		// later, branch on errs.ErrArtifactNotFound.
+		// "Not found" and infrastructure errors aren't
+		// distinguished here; treat both as "not found"
+		// since the page degrades gracefully either way.
 		return domain.Manifest{}, false, nil
 	}
 	defer rh.Close()
 	return rh.Manifest(), true, nil
 }
 
-// OpenArtifact opens an artifact's bytes by id, returning a
-// handle along with display name + MIME for the response
-// headers. The ReadHandle's body satisfies web.File via
-// readHandleAdapter — http.ServeContent uses Read+Seek, both
-// available.
+// OpenArtifact opens artifact bytes by id. Used by /_view
+// and /_download endpoints which don't have a path.
 func (b *webBackingFS) OpenArtifact(ctx context.Context, id domain.ArtifactID) (web.File, web.ArtifactMeta, error) {
 	rh, err := b.store.Get(ctx, id, domain.GetOptions{})
 	if err != nil {
 		return nil, web.ArtifactMeta{}, err
 	}
 	m := rh.Manifest()
-
-	// Display name from fsmeta path; fallback handled by
-	// web.serveByID when we leave it empty.
 	name := ""
 	mimeType := ""
 	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
 		name = pathpkg.Base(fs.Path)
 		mimeType = fs.MIME
 	}
-
 	return &readHandleAdapter{rh: rh, size: m.OriginalSize}, web.ArtifactMeta{
 		Name:    name,
 		MIME:    mimeType,
@@ -93,10 +82,9 @@ func (b *webBackingFS) OpenArtifact(ctx context.Context, id domain.ArtifactID) (
 }
 
 // readHandleAdapter wraps a core.ReadHandle so it satisfies
-// web.File. ReadHandle provides Read/Close + ReadAt; we synthesise
-// Seek via the readSeeker helper so http.ServeContent's Range
-// support keeps working. Readdir/Stat are stubbed — web uses
-// neither for byte streaming.
+// web.File. Same shape as the webdav-cmd version — kept here
+// rather than in shared web because the type is glue
+// between core and the web pkg, owned by each cmd.
 type readHandleAdapter struct {
 	rh   core.ReadHandle
 	pos  int64
@@ -112,9 +100,6 @@ func (a *readHandleAdapter) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// Seek synthesises seekability over ReadHandle's ReaderAt. This
-// is what http.ServeContent expects; without it Range requests
-// fail with "seeker can't seek".
 func (a *readHandleAdapter) Seek(offset int64, whence int) (int64, error) {
 	var abs int64
 	switch whence {
@@ -134,20 +119,18 @@ func (a *readHandleAdapter) Seek(offset int64, whence int) (int64, error) {
 	return abs, nil
 }
 
-func (a *readHandleAdapter) Close() error {
-	return a.rh.Close()
+func (a *readHandleAdapter) Write(p []byte) (int, error) {
+	return 0, errors.New("readHandleAdapter: read-only")
 }
 
+func (a *readHandleAdapter) Close() error                       { return a.rh.Close() }
 func (a *readHandleAdapter) Readdir(int) ([]os.FileInfo, error) { return nil, nil }
 func (a *readHandleAdapter) Stat() (os.FileInfo, error)         { return nil, nil }
 
-// LookupRelated walks the View for artifacts pointing at the
-// same blob, excluding the caller. Linear scan inside the
-// view; fast for any reasonable store. Errors aren't expected
-// (the View call doesn't fail) but the interface allows for
-// them, so we return nil-error.
+// LookupRelated walks the View for artifacts pointing at
+// the same blob.
 func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]web.RelatedArtifact, error) {
-	siblings := b.wfs.VFS().View().RelatedByBlobRef(blobRef, exclude)
+	siblings := b.v.View().RelatedByBlobRef(blobRef, exclude)
 	out := make([]web.RelatedArtifact, 0, len(siblings))
 	for _, s := range siblings {
 		out = append(out, web.RelatedArtifact{
@@ -161,11 +144,9 @@ func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef
 	return out, nil
 }
 
-// Search proxies to the View's text search. Same linear-scan
-// caveats as LookupRelated; an actual search index is a backlog
-// item once the store grows beyond ~100K artifacts.
+// Search proxies to the View's text search.
 func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]web.SearchResult, error) {
-	hits := b.wfs.VFS().View().Search(query, limit)
+	hits := b.v.View().Search(query, limit)
 	out := make([]web.SearchResult, 0, len(hits))
 	for _, h := range hits {
 		out = append(out, web.SearchResult{
@@ -181,10 +162,10 @@ func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]w
 	return out, nil
 }
 
-// LookupLocations forwards to the View, returning the per-tree
-// placement of an artifact.
+// LookupLocations returns the per-tree placement of an
+// artifact for the Locations panel.
 func (b *webBackingFS) LookupLocations(ctx context.Context, id domain.ArtifactID) (web.Locations, bool, error) {
-	locs, ok := b.wfs.VFS().View().LookupLocations(id)
+	locs, ok := b.v.View().LookupLocations(id)
 	if !ok {
 		return web.Locations{}, false, nil
 	}

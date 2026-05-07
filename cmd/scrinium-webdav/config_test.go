@@ -32,9 +32,6 @@ func TestDefaultConfig_Sane(t *testing.T) {
 	if cfg.Daemon.DefaultMode != 0o644 {
 		t.Errorf("DefaultMode: got %#o, want 0644", cfg.Daemon.DefaultMode)
 	}
-	if cfg.BrowsePrefix != "/_browse" {
-		t.Errorf("BrowsePrefix: got %q", cfg.BrowsePrefix)
-	}
 }
 
 func TestLoadConfig_FlagsOnly(t *testing.T) {

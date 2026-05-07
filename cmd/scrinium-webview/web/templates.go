@@ -20,11 +20,16 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
          background: #fafafa; color: #222; margin: 0; padding: 1.5em 2em; }
-  header { display: flex; align-items: baseline; gap: 1em;
+  header { display: flex; align-items: baseline; gap: 1em; flex-wrap: wrap;
            border-bottom: 1px solid #e0e0e0; padding-bottom: 0.7em; margin-bottom: 1em; }
   header .brand { font-weight: 600; color: #06f; font-size: 1.1em; letter-spacing: 0.02em; }
   header .store { color: #888; font-size: 0.9em;
                   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  header .switcher { display: flex; gap: 0.1em; }
+  header .switcher a { color: #888; text-decoration: none; font-size: 0.85em;
+                       padding: 0.25em 0.7em; border-radius: 4px;
+                       border: 1px solid transparent; }
+  header .switcher a:hover { color: #06f; background: #ececec; }
   header .header-search { margin-left: auto; }
   header .header-search input { padding: 0.3em 0.6em; font-size: 0.9em;
                                   border: 1px solid #ddd; border-radius: 4px;
@@ -93,6 +98,13 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
 <header>
   <span class="brand">Scrinium</span>
   <span class="store">{{.StorePath}}</span>
+  <nav class="switcher">
+    <a href="{{.BrowsePrefix}}/by-path/">by-path</a>
+    <a href="{{.BrowsePrefix}}/by-date/">by-date</a>
+    <a href="{{.BrowsePrefix}}/by-session/">by-session</a>
+    <a href="{{.BrowsePrefix}}/by-namespace/">by-namespace</a>
+    <a href="{{.BrowsePrefix}}/by-artifact/">by-artifact</a>
+  </nav>
   <form class="header-search" method="get" action="{{.BrowsePrefix}}/_search">
     <input type="text" name="q" placeholder="search…">
   </form>
@@ -145,7 +157,7 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
 {{end}}
 
 <footer>
-  {{.NowFormatted}} · <a href="{{.BrowsePrefix}}/_stats">stats</a> · <a href="{{.StatsURL}}">text stats</a>
+  {{.NowFormatted}} · <a href="{{.BrowsePrefix}}/_stats">stats</a>
 </footer>
 
 </body>

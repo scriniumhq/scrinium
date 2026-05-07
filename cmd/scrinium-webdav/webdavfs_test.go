@@ -400,8 +400,7 @@ func TestOpenFile_JunkReadIsNotFound(t *testing.T) {
 
 func TestStat_JunkIsNotFound(t *testing.T) {
 	w, _ := newTestFS(t)
-	_, err := w.Stat(context.Background(),
-		"/.DS_Store")
+	_, err := w.Stat(context.Background(), "/.DS_Store")
 	if err != fs.ErrNotExist {
 		t.Errorf("expected fs.ErrNotExist, got %v", err)
 	}
