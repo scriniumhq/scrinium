@@ -7,8 +7,6 @@ import (
 
 	"github.com/rkurbatov/scrinium/cmd/internal/cliflags"
 	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Config is what scrinium-webview reads. The daemon-level
@@ -73,7 +71,7 @@ func loadConfig(args []string) (Config, *flag.FlagSet, error) {
 		return cfg, fs, err
 	}
 	if configPath != "" {
-		if err := loadYAMLInto(configPath, &cfg); err != nil {
+		if err := cliflags.LoadYAMLInto(configPath, &cfg); err != nil {
 			return cfg, fs, fmt.Errorf("load config %q: %w", configPath, err)
 		}
 		applyEnv(&cfg)
@@ -148,17 +146,6 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("SCRINIUM_WEBVIEW_PASSPHRASE_FILE"); v != "" {
 		cfg.Daemon.PassphraseFile = v
 	}
-}
-
-func loadYAMLInto(path string, cfg *Config) error {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if err := yaml.Unmarshal(raw, cfg); err != nil {
-		return fmt.Errorf("YAML parse: %w", err)
-	}
-	return nil
 }
 
 func (cfg *Config) Validate() error {
