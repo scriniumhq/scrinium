@@ -13,27 +13,21 @@ import (
 	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
-// MarkVerified updates the last_verified_at timestamp of a blob.
-// Used by the Scrub Agent after a successful integrity check.
+// MarkVerified records that a Scrub Agent has just finished a
+// successful checksum verification of blobRef. The timestamp is
+// the moment the verification completed; future scrubs use it
+// to prioritise the oldest-verified blobs first.
 //
 // A missing blob is a no-op rather than an error: by the time the
 // Scrub Agent reaches a blob, the GC may have already removed it
 // in a parallel cycle. Failing here would create useless noise in
 // scrub logs without helping anything.
 func (i *Index) MarkVerified(blobRef string, timestamp time.Time) error {
-	const op = "MarkVerified"
-	start := time.Now()
-	defer func() { i.emitLatency(op, time.Since(start)) }()
-
-	const stmt = `UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`
-	_, err := i.db.ExecContext(context.Background(), stmt, timefmt.Format(timestamp), blobRef)
-	if err != nil {
-		if isBusyError(err) {
-			i.emitContention(op, time.Since(start))
-		}
-		return classifyError(err)
-	}
-	return nil
+	return i.observe("MarkVerified", func() error {
+		const stmt = `UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`
+		_, err := i.db.ExecContext(context.Background(), stmt, timefmt.Format(timestamp), blobRef)
+		return err
+	})
 }
 
 // DeletePacked removes every packed_blobs row whose pack_blob_ref
@@ -48,19 +42,11 @@ func (i *Index) MarkVerified(blobRef string, timestamp time.Time) error {
 //
 // Idempotent: a missing pack_blob_ref returns nil.
 func (i *Index) DeletePacked(packBlobRef string) error {
-	const op = "DeletePacked"
-	start := time.Now()
-	defer func() { i.emitLatency(op, time.Since(start)) }()
-
-	const stmt = `DELETE FROM packed_blobs WHERE pack_blob_ref = ?`
-	_, err := i.db.ExecContext(context.Background(), stmt, packBlobRef)
-	if err != nil {
-		if isBusyError(err) {
-			i.emitContention(op, time.Since(start))
-		}
-		return classifyError(err)
-	}
-	return nil
+	return i.observe("DeletePacked", func() error {
+		const stmt = `DELETE FROM packed_blobs WHERE pack_blob_ref = ?`
+		_, err := i.db.ExecContext(context.Background(), stmt, packBlobRef)
+		return err
+	})
 }
 
 // VacuumInto creates a snapshot copy of the database at destPath.
@@ -82,10 +68,6 @@ func (i *Index) DeletePacked(packBlobRef string) error {
 // index, but the explicit error is friendlier than a confusing
 // SQLite-level failure.
 func (i *Index) VacuumInto(ctx context.Context, destPath string) error {
-	const op = "VacuumInto"
-	start := time.Now()
-	defer func() { i.emitLatency(op, time.Since(start)) }()
-
 	if destPath == "" {
 		return fmt.Errorf("sqlite: VacuumInto: empty destPath")
 	}
@@ -109,18 +91,15 @@ func (i *Index) VacuumInto(ctx context.Context, destPath string) error {
 		return fmt.Errorf("sqlite: VacuumInto: stat dest: %w", err)
 	}
 
-	// SQLite string literal: single-quote the path and escape any
-	// embedded single-quote by doubling it. VACUUM INTO accepts a
-	// string literal, not an identifier, so single-quote quoting
-	// (escapeSQLString) is what we need here.
-	q := "VACUUM INTO '" + escapeSQLString(destPath) + "'"
-	if _, err := i.db.ExecContext(ctx, q); err != nil {
-		if isBusyError(err) {
-			i.emitContention(op, time.Since(start))
-		}
-		return classifyError(err)
-	}
-	return nil
+	return i.observe("VacuumInto", func() error {
+		// SQLite string literal: single-quote the path and escape any
+		// embedded single-quote by doubling it. VACUUM INTO accepts a
+		// string literal, not an identifier, so single-quote quoting
+		// (escapeSQLString) is what we need here.
+		q := "VACUUM INTO '" + escapeSQLString(destPath) + "'"
+		_, err := i.db.ExecContext(ctx, q)
+		return err
+	})
 }
 
 // escapeSQLString doubles single quotes for SQLite string literal
@@ -164,19 +143,11 @@ func (i *Index) GetMeta(key string) (string, error) {
 // upsert is one statement; concurrent writers go through SQLite's
 // busy_timeout machinery without us doing anything special.
 func (i *Index) SetMeta(key string, value string) error {
-	const op = "SetMeta"
-	start := time.Now()
-	defer func() { i.emitLatency(op, time.Since(start)) }()
-
-	const stmt = `
-		INSERT INTO store_meta (key, value) VALUES (?, ?)
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-	_, err := i.db.ExecContext(context.Background(), stmt, key, value)
-	if err != nil {
-		if isBusyError(err) {
-			i.emitContention(op, time.Since(start))
-		}
-		return classifyError(err)
-	}
-	return nil
+	return i.observe("SetMeta", func() error {
+		const stmt = `
+			INSERT INTO store_meta (key, value) VALUES (?, ?)
+			ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+		_, err := i.db.ExecContext(context.Background(), stmt, key, value)
+		return err
+	})
 }

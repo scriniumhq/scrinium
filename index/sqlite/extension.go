@@ -75,46 +75,40 @@ func (r *extensionRegistry) Register(ctx context.Context, ext index.IndexExtensi
 		return fmt.Errorf("%w: %q", index.ErrExtensionExists, name)
 	}
 
+	// store is captured inside the tx closure and reused after
+	// commit (useDB switch + cache insertion).
+	var store *sqliteExtStore
+
 	// Begin a transaction for Setup. The persisted version is read,
 	// Setup runs against a tx-bound store, and the new version is
 	// written — all atomically. On error nothing changes on disk
 	// nor in the in-memory dispatch maps.
-	tx, err := r.idx.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("sqlite: Register: begin tx: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+	err := r.idx.inTx(ctx, func(tx *sql.Tx) error {
+		oldVersion, err := loadExtensionVersion(ctx, tx, name)
+		if err != nil {
+			return fmt.Errorf("sqlite: Register: load version: %w", err)
 		}
-	}()
+		newVersion := ext.SchemaVersion()
+		if newVersion < oldVersion {
+			return fmt.Errorf("%w: %q v%d → v%d",
+				index.ErrSchemaRegression, name, oldVersion, newVersion)
+		}
 
-	oldVersion, err := loadExtensionVersion(ctx, tx, name)
+		store = newSqliteExtStore(name)
+		store.useTx(tx)
+
+		if err := ext.Setup(ctx, store, oldVersion); err != nil {
+			return fmt.Errorf("extension %q setup: %w", name, err)
+		}
+
+		if err := upsertExtensionVersion(ctx, tx, name, newVersion); err != nil {
+			return fmt.Errorf("sqlite: Register: persist version: %w", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("sqlite: Register: load version: %w", err)
+		return err
 	}
-	newVersion := ext.SchemaVersion()
-	if newVersion < oldVersion {
-		return fmt.Errorf("%w: %q v%d → v%d",
-			index.ErrSchemaRegression, name, oldVersion, newVersion)
-	}
-
-	store := newSqliteExtStore(name)
-	store.useTx(tx)
-
-	if err := ext.Setup(ctx, store, oldVersion); err != nil {
-		return fmt.Errorf("extension %q setup: %w", name, err)
-	}
-
-	if err := upsertExtensionVersion(ctx, tx, name, newVersion); err != nil {
-		return fmt.Errorf("sqlite: Register: persist version: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("sqlite: Register: commit: %w", err)
-	}
-	committed = true
 
 	// After commit the store flips to db-mode for read-side use
 	// after Setup. The extension may have captured the store
@@ -130,7 +124,6 @@ func (r *extensionRegistry) Register(ctx context.Context, ext index.IndexExtensi
 	for _, kind := range ext.Subscribe() {
 		r.idx.extByKind[kind] = append(r.idx.extByKind[kind], ext)
 	}
-
 	return nil
 }
 

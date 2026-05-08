@@ -74,35 +74,19 @@ func applyMigrations(ctx context.Context, db *sql.DB) error {
 // of the same transaction so a crash mid-migration leaves the
 // previous version intact.
 func applyMigration(ctx context.Context, db *sql.DB, m migration) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	// Rollback on any error path; the explicit Commit below
-	// suppresses it on success.
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+	return runInTx(ctx, db, func(tx *sql.Tx) error {
+		for i, stmt := range m.Statements {
+			if _, err := tx.ExecContext(ctx, stmt); err != nil {
+				return fmt.Errorf("statement %d: %w", i, err)
+			}
 		}
-	}()
 
-	for i, stmt := range m.Statements {
-		if _, err := tx.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("statement %d: %w", i, err)
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schema_version(version, applied_at) VALUES (?, ?)`,
+			m.Version, timefmt.Format(time.Now()),
+		); err != nil {
+			return fmt.Errorf("record version: %w", err)
 		}
-	}
-
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO schema_version(version, applied_at) VALUES (?, ?)`,
-		m.Version, timefmt.Format(time.Now()),
-	); err != nil {
-		return fmt.Errorf("record version: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+		return nil
+	})
 }

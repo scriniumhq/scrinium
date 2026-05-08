@@ -31,23 +31,15 @@ func (i *Index) IndexManifest(
 	chunkRefs []string,
 	packedEntries []domain.PackedEntry,
 ) error {
-	const op = "IndexManifest"
-	start := time.Now()
-	defer func() { i.emitLatency(op, time.Since(start)) }()
-
-	ctx := context.Background()
-	if err := i.indexManifestTx(ctx, m, addr, chunkRefs, packedEntries); err != nil {
-		if isBusyError(err) {
-			i.emitContention(op, time.Since(start))
-		}
-		return classifyError(err)
-	}
-	return nil
+	return i.observe("IndexManifest", func() error {
+		return i.indexManifestTx(context.Background(), m, addr, chunkRefs, packedEntries)
+	})
 }
 
-// indexManifestTx runs the actual transactional work. Split out for
-// readability and so the latency timer in IndexManifest stays
-// honest even on the error path.
+// indexManifestTx runs the actual transactional work. Split out
+// for readability — IndexManifest stays a thin observability
+// wrapper, while the transactional flow lives here at one level
+// of nesting.
 func (i *Index) indexManifestTx(
 	ctx context.Context,
 	m domain.Manifest,
@@ -55,52 +47,38 @@ func (i *Index) indexManifestTx(
 	chunkRefs []string,
 	packedEntries []domain.PackedEntry,
 ) error {
-	tx, err := i.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+	return i.inTx(ctx, func(tx *sql.Tx) error {
+		switch m.Type {
+		case domain.ManifestTypeBlob:
+			if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
+				return err
+			}
+		case domain.ManifestTypeTOC:
+			if err := indexTOCManifest(ctx, tx, m, addr, chunkRefs); err != nil {
+				return err
+			}
+		case domain.ManifestTypePack:
+			if err := indexPackManifest(ctx, tx, m, addr, packedEntries); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("sqlite: unknown manifest type: %q", m.Type)
 		}
-	}()
 
-	switch m.Type {
-	case domain.ManifestTypeBlob:
-		if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
-			return err
+		// Dispatch to subscribed extensions BEFORE commit. An error
+		// from any extension rolls back the entire transaction —
+		// strict-consistency guarantee per ADR-49. Pack manifests
+		// are an internal type (not surfaced through Walk) so we
+		// skip dispatch for them; extensions index user-visible
+		// artifacts only.
+		if m.Type != domain.ManifestTypePack {
+			args := index.EventArgs{Manifest: m, ArtifactID: m.ArtifactID}
+			if err := i.dispatchExtensions(ctx, tx, index.EventKindManifestIndexed, args); err != nil {
+				return err
+			}
 		}
-	case domain.ManifestTypeTOC:
-		if err := indexTOCManifest(ctx, tx, m, addr, chunkRefs); err != nil {
-			return err
-		}
-	case domain.ManifestTypePack:
-		if err := indexPackManifest(ctx, tx, m, addr, packedEntries); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("sqlite: unknown manifest type: %q", m.Type)
-	}
-
-	// Dispatch to subscribed extensions BEFORE commit. An error
-	// from any extension rolls back the entire transaction —
-	// strict-consistency guarantee per ADR-49. Pack manifests
-	// are an internal type (not surfaced through Walk) so we
-	// skip dispatch for them; extensions index user-visible
-	// artifacts only.
-	if m.Type != domain.ManifestTypePack {
-		args := index.EventArgs{Manifest: m, ArtifactID: m.ArtifactID}
-		if err := i.dispatchExtensions(ctx, tx, index.EventKindManifestIndexed, args); err != nil {
-			return err
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+		return nil
+	})
 }
 
 // upsertBlob inserts the blob row if missing. ref_count is bumped
@@ -408,18 +386,9 @@ func indexPackManifest(
 // edges in manifest_blobs by design (§9.2.1), so checking that
 // table for "exists" gives the wrong answer for them.
 func (i *Index) DeleteManifest(artifactID domain.ArtifactID, blobRefs []string) error {
-	const op = "DeleteManifest"
-	start := time.Now()
-	defer func() { i.emitLatency(op, time.Since(start)) }()
-
-	ctx := context.Background()
-	if err := i.deleteManifestTx(ctx, artifactID, blobRefs); err != nil {
-		if isBusyError(err) {
-			i.emitContention(op, time.Since(start))
-		}
-		return classifyError(err)
-	}
-	return nil
+	return i.observe("DeleteManifest", func() error {
+		return i.deleteManifestTx(context.Background(), artifactID, blobRefs)
+	})
 }
 
 func (i *Index) deleteManifestTx(
@@ -427,84 +396,67 @@ func (i *Index) deleteManifestTx(
 	artifactID domain.ArtifactID,
 	blobRefs []string,
 ) error {
-	tx, err := i.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
-
-	// Read the actual edges from the index. Source of truth is
-	// manifest_blobs, not the caller — but if the caller's set
-	// disagrees we want to know.
-	rows, err := tx.QueryContext(ctx,
-		`SELECT blob_ref FROM manifest_blobs WHERE artifact_id = ?`,
-		string(artifactID),
-	)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	var actual []string
-	for rows.Next() {
-		var ref string
-		if err := rows.Scan(&ref); err != nil {
+	return i.inTx(ctx, func(tx *sql.Tx) error {
+		// Read the actual edges from the index. Source of truth is
+		// manifest_blobs, not the caller — but if the caller's set
+		// disagrees we want to know.
+		rows, err := tx.QueryContext(ctx,
+			`SELECT blob_ref FROM manifest_blobs WHERE artifact_id = ?`,
+			string(artifactID),
+		)
+		if err != nil {
 			return err
 		}
-		actual = append(actual, ref)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
+		defer rows.Close()
+		var actual []string
+		for rows.Next() {
+			var ref string
+			if err := rows.Scan(&ref); err != nil {
+				return err
+			}
+			actual = append(actual, ref)
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
 
-	if !sameSet(actual, blobRefs) {
-		return fmt.Errorf("sqlite: DeleteManifest: blobRefs mismatch for %q "+
-			"(index has %d edges, caller passed %d)",
-			artifactID, len(actual), len(blobRefs))
-	}
+		if !sameSet(actual, blobRefs) {
+			return fmt.Errorf("sqlite: DeleteManifest: blobRefs mismatch for %q "+
+				"(index has %d edges, caller passed %d)",
+				artifactID, len(actual), len(blobRefs))
+		}
 
-	for _, ref := range actual {
+		for _, ref := range actual {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE blobs SET ref_count = ref_count - 1 WHERE blob_ref = ? AND ref_count > 0`,
+				ref,
+			); err != nil {
+				return err
+			}
+		}
+
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE blobs SET ref_count = ref_count - 1 WHERE blob_ref = ? AND ref_count > 0`,
-			ref,
+			`DELETE FROM manifest_blobs WHERE artifact_id = ?`,
+			string(artifactID),
 		); err != nil {
 			return err
 		}
-	}
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM manifests WHERE artifact_id = ?`,
+			string(artifactID),
+		); err != nil {
+			return err
+		}
 
-	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM manifest_blobs WHERE artifact_id = ?`,
-		string(artifactID),
-	); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM manifests WHERE artifact_id = ?`,
-		string(artifactID),
-	); err != nil {
-		return err
-	}
-
-	// Dispatch to extensions before commit. EventArgs carries
-	// the actual blob refs we read from manifest_blobs (the
-	// authoritative set), not whatever the caller passed in.
-	args := index.EventArgs{
-		ArtifactID: artifactID,
-		BlobRefs:   actual,
-	}
-	if err := i.dispatchExtensions(ctx, tx, index.EventKindManifestDeleted, args); err != nil {
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+		// Dispatch to extensions before commit. EventArgs carries
+		// the actual blob refs we read from manifest_blobs (the
+		// authoritative set), not whatever the caller passed in.
+		args := index.EventArgs{
+			ArtifactID: artifactID,
+			BlobRefs:   actual,
+		}
+		return i.dispatchExtensions(ctx, tx, index.EventKindManifestDeleted, args)
+	})
 }
 
 // sameSet returns true iff a and b contain the same elements
@@ -556,61 +508,39 @@ func (i *Index) ManifestExists(id domain.ArtifactID) (bool, error) {
 // successfully (no rows affected → no event dispatched, since
 // extensions saw nothing change).
 func (i *Index) RebindBlob(ctx context.Context, blobRef string, newAddr domain.PhysicalAddress) error {
-	const op = "RebindBlob"
-	start := time.Now()
-	defer func() { i.emitLatency(op, time.Since(start)) }()
+	return i.observe("RebindBlob", func() error {
+		return i.inTx(ctx, func(tx *sql.Tx) error {
+			const stmt = `
+				UPDATE blobs SET
+					physical_workspace = ?,
+					physical_path      = ?,
+					pack_ref           = ?,
+					pack_offset        = ?,
+					pack_size          = ?
+				WHERE blob_ref = ?`
+			res, err := tx.ExecContext(ctx, stmt,
+				int(newAddr.Workspace),
+				newAddr.Path,
+				newAddr.PackRef,
+				newAddr.Offset,
+				newAddr.Size,
+				blobRef,
+			)
+			if err != nil {
+				return err
+			}
+			rowsAffected, _ := res.RowsAffected()
 
-	tx, err := i.db.BeginTx(ctx, nil)
-	if err != nil {
-		if isBusyError(err) {
-			i.emitContention(op, time.Since(start))
-		}
-		return classifyError(err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
-
-	const stmt = `
-		UPDATE blobs SET
-			physical_workspace = ?,
-			physical_path      = ?,
-			pack_ref           = ?,
-			pack_offset        = ?,
-			pack_size          = ?
-		WHERE blob_ref = ?`
-	res, err := tx.ExecContext(ctx, stmt,
-		int(newAddr.Workspace),
-		newAddr.Path,
-		newAddr.PackRef,
-		newAddr.Offset,
-		newAddr.Size,
-		blobRef,
-	)
-	if err != nil {
-		if isBusyError(err) {
-			i.emitContention(op, time.Since(start))
-		}
-		return classifyError(err)
-	}
-	rowsAffected, _ := res.RowsAffected()
-
-	// Only dispatch if a row was actually rebound. A no-op (idempotent
-	// retry on already-rebound blob) doesn't surface an event —
-	// extensions saw the rebind once already.
-	if rowsAffected > 0 {
-		args := index.EventArgs{BlobRefs: []string{blobRef}}
-		if err := i.dispatchExtensions(ctx, tx, index.EventKindBlobRebound, args); err != nil {
-			return err
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	committed = true
-	return nil
+			// Only dispatch if a row was actually rebound. A no-op
+			// (idempotent retry on already-rebound blob) doesn't
+			// surface an event — extensions saw the rebind once already.
+			if rowsAffected > 0 {
+				args := index.EventArgs{BlobRefs: []string{blobRef}}
+				if err := i.dispatchExtensions(ctx, tx, index.EventKindBlobRebound, args); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	})
 }

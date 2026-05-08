@@ -89,3 +89,24 @@ func (i *Index) emitLatency(operation string, dur time.Duration) {
 		Duration:  dur,
 	})
 }
+
+// observe wraps a mutating Index operation with the standard
+// instrumentation contract: latency emission on every exit
+// (success or failure), contention emission on busy/locked
+// errors, and uniform classifyError translation.
+//
+// Every public mutating method on Index that emits metrics
+// goes through this helper. Calling it makes it impossible
+// to forget the contention emission on a new method, and
+// keeps the metric label (operation name) co-located with
+// the work it measures.
+func (i *Index) observe(op string, fn func() error) error {
+	start := time.Now()
+	defer func() { i.emitLatency(op, time.Since(start)) }()
+
+	err := fn()
+	if isBusyError(err) {
+		i.emitContention(op, time.Since(start))
+	}
+	return classifyError(err)
+}
