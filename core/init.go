@@ -11,6 +11,7 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/manifestcrypto"
 )
 
 // InitStore creates a new Store at the Location served by drv.
@@ -178,7 +179,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		wrapped, kdfParams, kitBytes, ierr := initEncryptedDEK(
 			ctx, storeID, dek, o.passphrase, cfg.KDFParams)
 		if ierr != nil {
-			wipeSecret(dek)
+			manifestcrypto.Wipe(dek)
 			return nil, nil, wrap("", ierr)
 		}
 		desc.DEK = wrapped
@@ -194,11 +195,11 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	}
 
 	if err := descriptor.Persist(ctx, drv, desc); err != nil {
-		wipeSecret(dek)
+		manifestcrypto.Wipe(dek)
 		return nil, nil, wrap("write descriptor", err)
 	}
 	if err := saveDescriptorCache(ctx, idx, desc); err != nil {
-		wipeSecret(dek)
+		manifestcrypto.Wipe(dek)
 		return nil, nil, wrap("save L2 cache", err)
 	}
 
@@ -219,12 +220,12 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	s, err := buildStore(ctx, o, drv, idx, cfg, desc, dek)
 	if err != nil {
-		wipeSecret(dek)
+		manifestcrypto.Wipe(dek)
 		return nil, nil, wrap("", err)
 	}
 	s.promoteKeyResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
-		wipeSecret(dek)
+		manifestcrypto.Wipe(dek)
 		return nil, nil, wrap("", err)
 	}
 	return s, kit, nil

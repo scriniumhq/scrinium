@@ -20,6 +20,7 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/manifestcrypto"
 )
 
 // buildRecoveryKit assembles the kit text for a freshly-encrypted
@@ -80,7 +81,7 @@ func initEncryptedDEK(
 		cost = *cfgKDFParams
 	}
 	wrapped, params, werr := wrapDEK(dek, passphrase, cost)
-	wipeSecret(passphrase)
+	manifestcrypto.Wipe(passphrase)
 	if werr != nil {
 		return nil, descriptor.KDFParams{}, nil, fmt.Errorf("wrap DEK: %w", werr)
 	}

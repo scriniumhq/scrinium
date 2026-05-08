@@ -15,6 +15,7 @@ import (
 	"github.com/rkurbatov/scrinium/event"
 	"github.com/rkurbatov/scrinium/internal/blobpath"
 	"github.com/rkurbatov/scrinium/internal/manifestcodec"
+	"github.com/rkurbatov/scrinium/internal/manifestcrypto"
 )
 
 // stagingPrefix is the directory where in-flight blob writes live
@@ -225,7 +226,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		dekSnapshot = append([]byte{}, s.dek...)
 		keyID = s.keyResolver.DefaultKeyID()
 		s.cryptoMu.Unlock()
-		defer wipeSecret(dekSnapshot)
+		defer manifestcrypto.Wipe(dekSnapshot)
 	}
 
 	artifactID, manifestBytes, signedManifest, err := manifestcodec.ComputeArtifactID(

@@ -102,8 +102,19 @@ func DecodeFileEncrypted(data []byte, keys KeyProvider) (domain.Manifest, error)
 		return domain.Manifest{}, fmt.Errorf("manifestcodec.DecodeFileEncrypted: GetKeys: %w", err)
 	}
 	if len(candidates) == 0 {
+
 		return domain.Manifest{}, fmt.Errorf("%w: keyID=%q", errs.ErrKeyNotFound, header.KeyID)
 	}
+	// candidates is a slice of DEK copies (KeyResolver implementations
+	// such as staticKeyResolver hand out defensive copies). They are
+	// secret material; wipe them on the way out so a long-running
+	// process does not accumulate copies of the active DEK in heap
+	// for the GC to eventually collect.
+	defer func() {
+		for _, k := range candidates {
+			manifestcrypto.Wipe(k)
+		}
+	}()
 
 	headerBytes := data[:bodyOffset]
 	body := data[bodyOffset:]

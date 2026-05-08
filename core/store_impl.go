@@ -82,7 +82,7 @@ type store struct {
 	//
 	// dek is the unwrapped data-encryption key. nil for Plain
 	// Stores and for encrypted Stores in StateLocked. Populated
-	// at successful Unlock; cleared (wipeSecret + nil) when the
+	// at successful Unlock; cleared (manifestcrypto.Wipe + nil) when the
 	// state machine returns to Locked.
 	//
 	// passphraseProvider is captured from WithPassphrase at
@@ -94,6 +94,13 @@ type store struct {
 	desc               *descriptor.Descriptor
 	dek                []byte
 	passphraseProvider PassphraseProvider
+
+	// closed is set by Close. Guarded by stateMu. Reads from
+	// non-Close paths use a fast no-op check; the canonical
+	// "operational" gate is checkOperational, which compares
+	// state/maintenance and is unaffected by closed (Close
+	// transitions state to Locked anyway).
+	closed bool
 }
 
 // AdminStore crypto methods — bodies live in core/crypto_admin.go.

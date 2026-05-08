@@ -130,6 +130,28 @@ type AdminStore interface {
 	// ConfigHistory returns the full history of configuration
 	// versions.
 	ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
+
+	// Close releases secrets held by the Store and transitions it
+	// to a terminal state. After Close:
+	//
+	//   - The in-memory DEK is wiped.
+	//   - The capability token (if any) is wiped.
+	//   - The default StaticKeyResolver (if installed) drops its
+	//     internal copy of the DEK.
+	//   - The Store's state is set to Locked.
+	//   - The Store's StoreIndex is NOT closed: the host owns the
+	//     StoreIndex's lifetime (DI contract: see WithStoreIndex)
+	//     and must call StoreIndex.Close after this method
+	//     returns.
+	//
+	// Idempotent: a second Close on an already-closed Store
+	// returns nil. Operations on a closed Store return an
+	// implementation-defined error; do not call Close while reads
+	// or writes are in flight.
+	//
+	// The intended caller is the host application's
+	// graceful-shutdown path.
+	Close() error
 }
 
 // Store is the union of DataStore and AdminStore. Returned by

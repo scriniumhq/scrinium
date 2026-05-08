@@ -214,27 +214,11 @@ func TestCallProvider_RejectsEmptyPassphrase(t *testing.T) {
 		t.Fatalf("expected ErrPassphraseRequired, got %v", err)
 	}
 
-	p = PassphraseProvider(func(_ context.Context, _ PassphraseHint) ([]byte, error) {
+	p = func(_ context.Context, _ PassphraseHint) ([]byte, error) {
 		return nil, nil
-	})
+	}
 	_, err = callProvider(context.Background(), p, PassphraseHint{})
 	if !errors.Is(err, errs.ErrPassphraseRequired) {
 		t.Fatalf("expected ErrPassphraseRequired on nil from provider, got %v", err)
 	}
-}
-
-// --- zeroBytes ---
-
-func TestZeroBytes(t *testing.T) {
-	b := []byte{1, 2, 3, 4, 5}
-	wipeSecret(b)
-	for i, v := range b {
-		if v != 0 {
-			t.Errorf("byte %d: got %d, want 0", i, v)
-		}
-	}
-
-	// Nil and empty are no-op safe.
-	wipeSecret(nil)
-	wipeSecret([]byte{})
 }

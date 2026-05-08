@@ -9,6 +9,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/manifestcrypto"
 )
 
 // transformerRegistry implements TransformerRegistry with an RWMutex
@@ -83,13 +84,25 @@ func (r *hashRegistry) Register(algo string, fn func() hash.Hash) domain.HashReg
 // staticKeyResolver implements KeyResolver with a single DEK. It
 // returns one key for any KeyID; DefaultKeyID is the empty string.
 // This is the default behaviour for typical scenarios.
+//
+// mu guards dek so close (called from Store.Close) and GetKeys
+// (called by manifestcodec on every encrypted decode) cannot race.
 type staticKeyResolver struct {
+	mu  sync.Mutex
 	dek []byte
 }
 
 func (r *staticKeyResolver) GetKeys(keyID string) ([][]byte, error) {
 	// Return a defensive copy so the caller cannot zero out or
 	// modify the resolver's internal key.
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.dek == nil {
+		// Closed. The most accurate signal is "no keys for this
+		// id"; the codec turns that into ErrKeyNotFound, which is
+		// what a caller of a closed Store should see.
+		return nil, nil
+	}
 	cp := make([]byte, len(r.dek))
 	copy(cp, r.dek)
 	return [][]byte{cp}, nil
@@ -97,4 +110,15 @@ func (r *staticKeyResolver) GetKeys(keyID string) ([][]byte, error) {
 
 func (r *staticKeyResolver) DefaultKeyID() string {
 	return ""
+}
+
+// close wipes the resolver's internal DEK copy. Called by
+// store.Close. Idempotent.
+func (r *staticKeyResolver) close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.dek != nil {
+		manifestcrypto.Wipe(r.dek)
+		r.dek = nil
+	}
 }

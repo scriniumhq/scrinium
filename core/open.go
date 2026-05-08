@@ -10,6 +10,7 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/manifestcrypto"
 )
 
 // OpenStore opens an existing Store at the Location served by drv.
@@ -212,19 +213,19 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		// Defensive: a descriptor with DEKEncrypted=true must
 		// have KDFParams (Validate enforces). Reaching this
 		// branch means the Validate contract has drifted.
-		wipeSecret(passphrase)
+		manifestcrypto.Wipe(passphrase)
 		return nil, fmt.Errorf("%w: descriptor reports DEKEncrypted=true without KDFParams",
 			errs.ErrStoreCorrupted)
 	}
 	dek, err := unwrapDEK(desc.DEK, *desc.KDFParams, passphrase)
-	wipeSecret(passphrase)
+	manifestcrypto.Wipe(passphrase)
 	if err != nil {
 		return nil, wrap("", err)
 	}
 
 	s, err := buildStore(ctx, o, drv, idx, active, desc, dek)
 	if err != nil {
-		wipeSecret(dek)
+		manifestcrypto.Wipe(dek)
 		return nil, wrap("", err)
 	}
 	s.promoteKeyResolverIfDefault()
