@@ -2,6 +2,8 @@ package main
 
 import (
 	"strings"
+
+	"github.com/rkurbatov/scrinium/internal/pathx"
 )
 
 // isOSJunk reports whether the last path segment of name matches
@@ -32,7 +34,7 @@ import (
 //	                   System Volume Information
 //	Microsoft Office   ~$<anything> (lock files for open docs)
 func isOSJunk(name string) bool {
-	seg := lastSegment(name)
+	seg := pathx.LastSegment(name)
 	if seg == "" {
 		return false
 	}
@@ -77,13 +79,4 @@ func isOSJunk(name string) bool {
 		return true
 	}
 	return false
-}
-
-// lastSegment returns the trailing component of a slash-separated
-// path. Empty input yields empty output.
-func lastSegment(p string) string {
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
-	}
-	return p
 }

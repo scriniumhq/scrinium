@@ -138,25 +138,6 @@ func TestInodeFor_AvoidsReservedRange(t *testing.T) {
 	}
 }
 
-// --- joinTreePath ---
-
-func TestJoinTreePath(t *testing.T) {
-	cases := []struct {
-		parent, child, want string
-	}{
-		{"", "", ""},
-		{"", "a", "a"},
-		{"a", "", "a"},
-		{"a", "b", "a/b"},
-		{"a/b", "c", "a/b/c"},
-	}
-	for _, tc := range cases {
-		if got := joinTreePath(tc.parent, tc.child); got != tc.want {
-			t.Errorf("joinTreePath(%q,%q)=%q, want %q", tc.parent, tc.child, got, tc.want)
-		}
-	}
-}
-
 // --- rootNode.Getattr ---
 
 func TestRootNode_Getattr(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"github.com/rkurbatov/scrinium/internal/pathx"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
@@ -367,7 +368,7 @@ func (n *treeNode) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.Attr
 }
 
 func (n *treeNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
-	child := joinTreePath(n.subPath, cleanName(name))
+	child := pathx.Join(n.subPath, cleanName(name))
 	if n.readOnly || n.tree != n.root.routingCfg.RootView {
 		node, err := n.root.view.GetIn(n.tree, child)
 		if err != nil {

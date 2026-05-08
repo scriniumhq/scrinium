@@ -2,7 +2,8 @@ package projection
 
 import (
 	"errors"
-	"strings"
+
+	"github.com/rkurbatov/scrinium/internal/pathx"
 )
 
 // RouteKind tags the destination of a routed path. The FUSE
@@ -156,7 +157,7 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 		}, nil
 	}
 
-	first, rest := splitFirstSegment(path)
+	first, rest := pathx.SplitFirst(path)
 
 	// Non-service first segment: regular root path.
 	if first != cfg.ServicePrefix {
@@ -183,7 +184,7 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 // ServicePrefix) and the unprefixed flow (as the top-level
 // dispatcher when ServicePrefix is empty).
 func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
-	tree, treeRest := splitFirstSegment(path)
+	tree, treeRest := pathx.SplitFirst(path)
 	switch tree {
 	case "stats":
 		if !cfg.ShowStats {
@@ -290,18 +291,6 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 	return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
 }
 
-// splitFirstSegment returns (first, rest) where first is the path
-// up to (but not including) the first '/', and rest is the
-// remainder after the slash. For paths with no slash the entire
-// input is first and rest is "".
-func splitFirstSegment(path string) (string, string) {
-	i := strings.IndexByte(path, '/')
-	if i < 0 {
-		return path, ""
-	}
-	return path[:i], path[i+1:]
-}
-
 // IsServicePath reports whether the path's first segment equals
 // the configured service prefix. Useful when validating new-file
 // creation: writes to <servicePrefix>/* are forbidden because the
@@ -310,6 +299,6 @@ func IsServicePath(path string, cfg RoutingConfig) bool {
 	if cfg.ServicePrefix == "" {
 		return false
 	}
-	first, _ := splitFirstSegment(path)
+	first, _ := pathx.SplitFirst(path)
 	return first == cfg.ServicePrefix
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/internal/pathx"
 	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
@@ -318,7 +319,7 @@ func previewMIME(m domain.Manifest) string {
 	name := ""
 	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
 		mimeType = fs.MIME
-		name = pathLastSegment(fs.Path)
+		name = pathx.LastSegment(fs.Path)
 	}
 	if mimeType == "" {
 		mimeType = inferMIME(name, "")

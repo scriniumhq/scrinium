@@ -103,18 +103,3 @@ func inferMIME(filename, fsmetaMIME string) string {
 	}
 	return mime.TypeByExtension(ext)
 }
-
-// pathLastSegment returns everything after the last "/" in p,
-// or p itself if there's no slash. Empty path returns "".
-// Mirrors the projection helper of the same name; duplicated
-// here to keep web a self-contained library that doesn't pull
-// projection just for a one-line utility.
-func pathLastSegment(p string) string {
-	if p == "" {
-		return ""
-	}
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
-	}
-	return p
-}

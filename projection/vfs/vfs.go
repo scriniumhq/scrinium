@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/pathx"
 	"github.com/rkurbatov/scrinium/projection"
 )
 
@@ -244,7 +245,7 @@ func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileM
 		}
 		return &readHandleFile{
 			rh:    rh,
-			name:  lastSegmentOf(target.SubPath),
+			name:  pathx.LastSegment(target.SubPath),
 			path:  target.SubPath,
 			size:  node.FS.Size,
 			mtime: nodeModTime(node, v.startedAt),
@@ -291,10 +292,7 @@ func isAtServiceRoot(clean string, cfg projection.RoutingConfig) bool {
 	if cfg.ServicePrefix == "" {
 		return false
 	}
-	if clean == cfg.ServicePrefix {
-		return true
-	}
-	return strings.HasPrefix(clean, cfg.ServicePrefix+"/")
+	return pathx.IsUnder(clean, cfg.ServicePrefix)
 }
 
 // nodeModTime returns the View node's modification time, or
@@ -305,20 +303,3 @@ func nodeModTime(n projection.Node, fallback time.Time) time.Time {
 	}
 	return fallback
 }
-
-// lastSegmentOf returns the last "/"-separated segment of p.
-// "" for the empty path.
-func lastSegmentOf(p string) string {
-	if p == "" {
-		return ""
-	}
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
-	}
-	return p
-}
-
-// lastSegment is an alias kept here because the file-types
-// (blackHoleFile naming) read it without the "Of" suffix
-// elsewhere in the package. Same semantics.
-func lastSegment(p string) string { return lastSegmentOf(p) }

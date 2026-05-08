@@ -7,6 +7,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/rkurbatov/scrinium/internal/pathx"
 	"golang.org/x/net/webdav"
 
 	"github.com/rkurbatov/scrinium/projection"
@@ -97,7 +98,7 @@ func (w *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 		// bytes land in /dev/null, the store stays clean.
 		// Reads remain ENOENT so listing/stat stays honest.
 		if flag&(syscall.O_CREAT|os.O_WRONLY|os.O_RDWR) != 0 {
-			return webdavFileAdapter{vfs.NewBlackHoleFile(lastSegmentWebDAV(clean))}, nil
+			return webdavFileAdapter{vfs.NewBlackHoleFile(pathx.LastSegment(clean))}, nil
 		}
 		return nil, fs.ErrNotExist
 	}
@@ -135,16 +136,6 @@ func cleanWebDAVPath(name string) string {
 	name = strings.TrimPrefix(name, "/")
 	name = strings.TrimSuffix(name, "/")
 	return name
-}
-
-// lastSegmentWebDAV returns the last "/"-separated segment
-// of a path. Used for synth FileInfo names on black-hole
-// writes.
-func lastSegmentWebDAV(p string) string {
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
-	}
-	return p
 }
 
 // Compile-time guard.

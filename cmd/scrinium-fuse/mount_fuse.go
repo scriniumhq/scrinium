@@ -163,19 +163,6 @@ func inodeFor(tree string, subPath string) uint64 {
 	return v
 }
 
-// joinTreePath glues a tree subpath together. parentSub is
-// the parent path within the tree ("" = tree root), child is
-// the last segment to append.
-func joinTreePath(parentSub, child string) string {
-	if parentSub == "" {
-		return child
-	}
-	if child == "" {
-		return parentSub
-	}
-	return parentSub + "/" + child
-}
-
 // cleanName strips an extra trailing slash if any (defensive
 // — go-fuse passes names without slashes, but we want
 // robustness against future callers).

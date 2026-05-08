@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rkurbatov/scrinium/internal/pathx"
 )
 
 // dirEntry is one row in the rendered listing. Computed up-front
@@ -354,10 +356,7 @@ func (h *Handler) isSystemPath(p string) bool {
 	if sp == "" {
 		return false
 	}
-	if p == sp {
-		return true
-	}
-	return strings.HasPrefix(p, sp+"/")
+	return pathx.IsUnder(p, sp)
 }
 
 // buildCrumbs renders the path bar above the listing.

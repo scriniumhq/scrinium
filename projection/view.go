@@ -14,6 +14,7 @@ import (
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
+	"github.com/rkurbatov/scrinium/internal/pathx"
 	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
@@ -1081,8 +1082,8 @@ func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 // ModTime here is seeded from m.CreatedAt as a baseline; FSOps
 // overrides with fsmeta.ModTime when non-zero.
 func (v *View) insertFile(tree map[string]*viewNode, path string, m domain.Manifest) {
-	v.ensureDirs(tree, parentPath(path))
-	name := lastSegment(path)
+	v.ensureDirs(tree, pathx.Parent(path))
+	name := pathx.LastSegment(path)
 	tree[path] = &viewNode{
 		fs: FilesystemFacet{
 			Name:    name,
@@ -1093,7 +1094,7 @@ func (v *View) insertFile(tree map[string]*viewNode, path string, m domain.Manif
 		},
 		artifact: artifactFacetFrom(m),
 	}
-	parent := parentPath(path)
+	parent := pathx.Parent(path)
 	if pn, ok := tree[parent]; ok {
 		pn.children = insertSorted(pn.children, name)
 	}
@@ -1107,15 +1108,15 @@ func (v *View) removeFile(tree map[string]*viewNode, path string) {
 		return
 	}
 	delete(tree, path)
-	parent := parentPath(path)
-	name := lastSegment(path)
+	parent := pathx.Parent(path)
+	name := pathx.LastSegment(path)
 	if pn, ok := tree[parent]; ok {
 		pn.children = removeSorted(pn.children, name)
 		// Prune empty virtual directory cascading upwards.
 		for parent != "" && len(pn.children) == 0 && pn.artifact == nil {
 			delete(tree, parent)
-			grand := parentPath(parent)
-			gname := lastSegment(parent)
+			grand := pathx.Parent(parent)
+			gname := pathx.LastSegment(parent)
 			parent = grand
 			pn, ok = tree[grand]
 			if !ok {
@@ -1251,24 +1252,12 @@ func byDatePath(m domain.Manifest) string {
 // tree is a diagnostic aid, not an authoritative storage layout.
 func byDateLabel(m domain.Manifest) string {
 	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
-		base := pathLastSegment(fs.Path)
+		base := pathx.LastSegment(fs.Path)
 		if base != "" {
 			return base
 		}
 	}
 	return shortID(m.ArtifactID) + ".bin"
-}
-
-// pathLastSegment returns everything after the last "/" in p,
-// or p itself if there's no slash. Empty path returns "".
-func pathLastSegment(p string) string {
-	if p == "" {
-		return ""
-	}
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
-	}
-	return p
 }
 
 // byNamespacePath: <ns>/<aa>/<bb>/<id>
@@ -1332,22 +1321,6 @@ func hashPart(id string) string {
 		return id[i+1:]
 	}
 	return id
-}
-
-func parentPath(p string) string {
-	i := strings.LastIndexByte(p, '/')
-	if i < 0 {
-		return ""
-	}
-	return p[:i]
-}
-
-func lastSegment(p string) string {
-	i := strings.LastIndexByte(p, '/')
-	if i < 0 {
-		return p
-	}
-	return p[i+1:]
 }
 
 // insertSorted inserts name into a sorted slice (idempotent).

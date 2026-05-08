@@ -13,6 +13,7 @@ import (
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/pathx"
 	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
@@ -949,7 +950,7 @@ func (o *FSOps) isPendingDir(path string) bool {
 // Mode comes from FSOps default for directories (0755).
 func (o *FSOps) pendingDirInfo(path string) FileInfo {
 	return FileInfo{
-		Name:  lastPathSegment(path),
+		Name:  pathx.LastSegment(path),
 		Path:  path,
 		IsDir: true,
 		Mode:  0o755,
@@ -965,11 +966,11 @@ func (o *FSOps) pendingChildrenOf(parent string) []FileInfo {
 	defer o.pendingDirsMu.Unlock()
 	var out []FileInfo
 	for p := range o.pendingDirs {
-		if parentOfPath(p) != parent {
+		if pathx.Parent(p) != parent {
 			continue
 		}
 		out = append(out, FileInfo{
-			Name:  lastPathSegment(p),
+			Name:  pathx.LastSegment(p),
 			Path:  p,
 			IsDir: true,
 			Mode:  0o755,
@@ -984,28 +985,6 @@ func (o *FSOps) pendingChildrenOf(parent string) []FileInfo {
 		}
 	}
 	return out
-}
-
-// parentOfPath returns the parent directory of a slash-separated
-// path. parentOfPath("a/b/c") == "a/b"; parentOfPath("a") == "".
-func parentOfPath(p string) string {
-	for i := len(p) - 1; i >= 0; i-- {
-		if p[i] == '/' {
-			return p[:i]
-		}
-	}
-	return ""
-}
-
-// lastPathSegment returns the final segment of a slash-separated
-// path. lastPathSegment("a/b/c") == "c"; lastPathSegment("a") == "a".
-func lastPathSegment(p string) string {
-	for i := len(p) - 1; i >= 0; i-- {
-		if p[i] == '/' {
-			return p[i+1:]
-		}
-	}
-	return p
 }
 
 // --- Scratch handling ---
@@ -1289,26 +1268,10 @@ func (o *FSOps) dropParentPendingDirs(path string) {
 		if p == "" {
 			continue
 		}
-		if path == p || hasParentPath(path, p) {
+		if pathx.IsUnder(path, p) {
 			delete(o.pendingDirs, p)
 		}
 	}
-}
-
-// hasParentPath reports whether parent is a strict ancestor of
-// child. hasParentPath("a/b/c", "a/b") == true; ("a/b", "a/b") ==
-// false.
-func hasParentPath(child, parent string) bool {
-	if parent == "" {
-		return child != ""
-	}
-	if len(child) <= len(parent) {
-		return false
-	}
-	if child[:len(parent)] != parent {
-		return false
-	}
-	return child[len(parent)] == '/'
 }
 
 // --- quotaTracker ---

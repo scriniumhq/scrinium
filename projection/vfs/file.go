@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/internal/pathx"
 	"github.com/rkurbatov/scrinium/projection"
 )
 
@@ -254,7 +255,7 @@ func (f *rwFile) Seek(offset int64, whence int) (int64, error) {
 func (f *rwFile) Readdir(count int) ([]os.FileInfo, error) { return nil, fs.ErrInvalid }
 func (f *rwFile) Stat() (os.FileInfo, error) {
 	return synthInfo{
-		name:    lastSegmentOf(f.path),
+		name:    pathx.LastSegment(f.path),
 		size:    f.size,
 		mode:    f.mode,
 		modTime: f.mtime,
