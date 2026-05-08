@@ -2,14 +2,13 @@ package sqlite
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/index"
+	"github.com/rkurbatov/scrinium/internal/uriresolve"
 )
 
 // init registers the sqlite:// scheme with the index registry.
@@ -44,29 +43,16 @@ func openSQLiteURI(ctx context.Context, u *url.URL, opts ...index.IndexOption) (
 		return NewStore(ctx, ":memory:", opts...)
 	}
 
-	var path string
-	switch u.Host {
-	case "":
-		path = u.Path
-	case "~":
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("sqlite: expand ~: %w", err)
-		}
-		path = filepath.Join(home, strings.TrimPrefix(u.Path, "/"))
-	case ".":
-		path = "." + u.Path
-	default:
-		return nil, fmt.Errorf("sqlite: sqlite:// host %q not supported (use sqlite:///path or sqlite://~/path)", u.Host)
-	}
-
-	if path == "" {
-		return nil, fmt.Errorf("sqlite: sqlite:// URI has empty path")
-	}
-
-	abs, err := filepath.Abs(path)
+	abs, err := uriresolve.ResolveLocalPath(u)
 	if err != nil {
-		return nil, fmt.Errorf("sqlite: absolute path: %w", err)
+		switch {
+		case errors.Is(err, uriresolve.ErrUnsupportedHost):
+			return nil, fmt.Errorf("sqlite: sqlite:// host %q not supported (use sqlite:///path or sqlite://~/path)", u.Host)
+		case errors.Is(err, uriresolve.ErrEmptyPath):
+			return nil, fmt.Errorf("sqlite: sqlite:// URI has empty path")
+		default:
+			return nil, fmt.Errorf("sqlite: %w", err)
+		}
 	}
 	return NewStore(ctx, abs, opts...)
 }
