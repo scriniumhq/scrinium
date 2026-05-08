@@ -105,7 +105,7 @@ func recoverOrphans(ctx context.Context, drv driver.Driver, idx StoreIndex) (Orp
 					fmt.Errorf("recoverOrphans: blobs parse: %w", err))
 				return nil
 			}
-			_, resolveErr := idx.Resolve(ref)
+			_, resolveErr := idx.Resolve(ctx, ref)
 			switch {
 			case errors.Is(resolveErr, errs.ErrArtifactNotFound):
 				if rmErr := drv.Remove(ctx, om.Path); rmErr != nil {
@@ -137,7 +137,7 @@ func recoverOrphans(ctx context.Context, drv driver.Driver, idx StoreIndex) (Orp
 					fmt.Errorf("recoverOrphans: manifests parse: %w", err))
 				return nil
 			}
-			exists, err := idx.ManifestExists(id)
+			exists, err := idx.ManifestExists(ctx, id)
 			if err != nil {
 				report.Errors = append(report.Errors,
 					fmt.Errorf("recoverOrphans: manifests exists %q: %w", id, err))

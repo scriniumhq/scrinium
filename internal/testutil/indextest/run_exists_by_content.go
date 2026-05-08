@@ -10,14 +10,15 @@ import (
 
 func runExistsByContent(t *testing.T, f Factory) {
 	t.Run("Hit", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		hash := manifestfx.SyntheticHash('a')
 		m := manifestfx.BlobWithHash("art-1", "blob-1", hash, 1024)
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("blobs/blob-1"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("blobs/blob-1"), nil, nil); err != nil {
 			t.Fatalf("IndexManifest: %v", err)
 		}
 
-		ref, ok, err := idx.ExistsByContent(hash, 1024)
+		ref, ok, err := idx.ExistsByContent(ctx, hash, 1024)
 		if err != nil {
 			t.Fatalf("ExistsByContent: %v", err)
 		}
@@ -30,8 +31,9 @@ func runExistsByContent(t *testing.T, f Factory) {
 	})
 
 	t.Run("Miss", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
-		ref, ok, err := idx.ExistsByContent("sha256-deadbeef", 999)
+		ref, ok, err := idx.ExistsByContent(ctx, "sha256-deadbeef", 999)
 		if err != nil {
 			t.Fatalf("ExistsByContent: %v", err)
 		}
@@ -44,17 +46,18 @@ func runExistsByContent(t *testing.T, f Factory) {
 	})
 
 	t.Run("HashHitSizeMiss", func(t *testing.T) {
+		ctx := t.Context()
 		// The composite key (content_hash, original_size) is
 		// strict: same hash, different size — distinct entries,
 		// not matches.
 		idx := f.New(t)
 		hash := manifestfx.SyntheticHash('x')
 		m := manifestfx.BlobWithHash("art-1k", "blob-1k", hash, 1024)
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p1"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p1"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
 
-		_, ok, err := idx.ExistsByContent(hash, 2048)
+		_, ok, err := idx.ExistsByContent(ctx, hash, 2048)
 		if err != nil {
 			t.Fatal(err)
 		}

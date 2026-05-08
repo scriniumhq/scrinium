@@ -104,10 +104,11 @@ func TestRegister_DoubleRegister_Rejects(t *testing.T) {
 // --- ManifestIndexed handler.go ---
 
 func TestApply_Indexed_FSMetadata_Stored(t *testing.T) {
+	ctx := t.Context()
 	idx, ext := newRegisteredFSIndex(t)
 
 	m := makeFSManifest(t, "art-1", "photos/2024/sunset.jpg")
-	if err := idx.IndexManifest(m, physAddr(), nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr(), nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -128,10 +129,11 @@ func TestApply_Indexed_FSMetadata_Stored(t *testing.T) {
 }
 
 func TestApply_Indexed_ForeignSchema_Skipped(t *testing.T) {
+	ctx := t.Context()
 	idx, ext := newRegisteredFSIndex(t)
 
 	m := makeForeignManifest(t, "email-1")
-	if err := idx.IndexManifest(m, physAddr(), nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr(), nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -145,6 +147,7 @@ func TestApply_Indexed_ForeignSchema_Skipped(t *testing.T) {
 }
 
 func TestApply_Indexed_NoMetadata_Skipped(t *testing.T) {
+	ctx := t.Context()
 	idx, ext := newRegisteredFSIndex(t)
 
 	m := domain.Manifest{
@@ -158,7 +161,7 @@ func TestApply_Indexed_NoMetadata_Skipped(t *testing.T) {
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
 		// Metadata is nil
 	}
-	if err := idx.IndexManifest(m, physAddr(), nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr(), nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 	_, ok, _ := ext.GetByID("bare-1")
@@ -170,10 +173,11 @@ func TestApply_Indexed_NoMetadata_Skipped(t *testing.T) {
 // --- LookupByPath ---
 
 func TestLookupByPath_Hit(t *testing.T) {
+	ctx := t.Context()
 	idx, ext := newRegisteredFSIndex(t)
 
 	m := makeFSManifest(t, "art-photo", "photos/2024/sunset.jpg")
-	if err := idx.IndexManifest(m, physAddr(), nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr(), nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -203,6 +207,7 @@ func TestLookupByPath_Miss(t *testing.T) {
 // --- WalkAll ---
 
 func TestWalkAll_VisitsAll(t *testing.T) {
+	ctx := t.Context()
 	idx, ext := newRegisteredFSIndex(t)
 
 	pairs := map[domain.ArtifactID]string{
@@ -212,7 +217,7 @@ func TestWalkAll_VisitsAll(t *testing.T) {
 	}
 	for id, path := range pairs {
 		m := makeFSManifest(t, id, path)
-		if err := idx.IndexManifest(m, physAddr(), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, physAddr(), nil, nil); err != nil {
 			t.Fatalf("IndexManifest %q: %v", id, err)
 		}
 	}
@@ -242,10 +247,11 @@ func TestWalkAll_VisitsAll(t *testing.T) {
 // --- ManifestDeleted handler.go ---
 
 func TestApply_Deleted_RemovesEntries(t *testing.T) {
+	ctx := t.Context()
 	idx, ext := newRegisteredFSIndex(t)
 
 	m := makeFSManifest(t, "art-del", "tmp/file.txt")
-	if err := idx.IndexManifest(m, physAddr(), nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr(), nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -256,7 +262,7 @@ func TestApply_Deleted_RemovesEntries(t *testing.T) {
 	}
 
 	// Delete via the index. It will dispatch ManifestDeleted.
-	if err := idx.DeleteManifest("art-del", []string{string(m.BlobRef)}); err != nil {
+	if err := idx.DeleteManifest(ctx, "art-del", []string{string(m.BlobRef)}); err != nil {
 		t.Fatalf("DeleteManifest: %v", err)
 	}
 
@@ -271,15 +277,16 @@ func TestApply_Deleted_RemovesEntries(t *testing.T) {
 }
 
 func TestApply_Deleted_NotIndexed_NoOp(t *testing.T) {
+	ctx := t.Context()
 	idx, _ := newRegisteredFSIndex(t)
 
 	// Index a non-fsmeta manifest then delete; fsindex should
 	// silently no-op since we never indexed it.
 	m := makeForeignManifest(t, "email-2")
-	if err := idx.IndexManifest(m, physAddr(), nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr(), nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
-	if err := idx.DeleteManifest("email-2", []string{string(m.BlobRef)}); err != nil {
+	if err := idx.DeleteManifest(ctx, "email-2", []string{string(m.BlobRef)}); err != nil {
 		t.Errorf("DeleteManifest of un-indexed artifact failed: %v", err)
 	}
 }
@@ -290,6 +297,7 @@ func TestApply_Deleted_NotIndexed_NoOp(t *testing.T) {
 // passing in a malformed metadata payload that decodes as fsmeta
 // (right marker) but has an invalid type for Path.
 func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
+	ctx := t.Context()
 	idx, _ := newRegisteredFSIndex(t)
 
 	// Construct a payload with the right marker but wrong type
@@ -306,13 +314,13 @@ func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
 		Metadata:     bad,
 	}
-	err := idx.IndexManifest(m, physAddr(), nil, nil)
+	err := idx.IndexManifest(ctx, m, physAddr(), nil, nil)
 	if err == nil {
 		t.Fatal("expected error from broken fsmeta, got nil")
 	}
 
 	// Main write must have rolled back too.
-	exists, err := idx.ManifestExists("art-bad")
+	exists, err := idx.ManifestExists(ctx, "art-bad")
 	if err != nil {
 		t.Fatalf("ManifestExists: %v", err)
 	}

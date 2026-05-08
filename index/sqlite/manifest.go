@@ -26,13 +26,14 @@ import (
 // All work happens inside a single transaction; partial registration
 // is impossible.
 func (i *Index) IndexManifest(
+	ctx context.Context,
 	m domain.Manifest,
 	addr domain.PhysicalAddress,
 	chunkRefs []string,
 	packedEntries []domain.PackedEntry,
 ) error {
 	return i.observe("IndexManifest", func() error {
-		return i.indexManifestTx(context.Background(), m, addr, chunkRefs, packedEntries)
+		return i.indexManifestTx(ctx, m, addr, chunkRefs, packedEntries)
 	})
 }
 
@@ -385,9 +386,9 @@ func indexPackManifest(
 // manifests table, not manifest_blobs: Inline manifests have no
 // edges in manifest_blobs by design (§9.2.1), so checking that
 // table for "exists" gives the wrong answer for them.
-func (i *Index) DeleteManifest(artifactID domain.ArtifactID, blobRefs []string) error {
+func (i *Index) DeleteManifest(ctx context.Context, artifactID domain.ArtifactID, blobRefs []string) error {
 	return i.observe("DeleteManifest", func() error {
-		return i.deleteManifestTx(context.Background(), artifactID, blobRefs)
+		return i.deleteManifestTx(ctx, artifactID, blobRefs)
 	})
 }
 
@@ -484,10 +485,10 @@ func sameSet(a, b []string) bool {
 // against the primary key. Returns (false, nil) when the row is
 // absent — the caller distinguishes "not present" from
 // "infrastructure error" via the boolean.
-func (i *Index) ManifestExists(id domain.ArtifactID) (bool, error) {
+func (i *Index) ManifestExists(ctx context.Context, id domain.ArtifactID) (bool, error) {
 	const stmt = `SELECT 1 FROM manifests WHERE artifact_id = ? LIMIT 1`
 	var one int
-	err := i.db.QueryRowContext(context.Background(), stmt, string(id)).Scan(&one)
+	err := i.db.QueryRowContext(ctx, stmt, string(id)).Scan(&one)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return false, nil

@@ -105,11 +105,12 @@ func TestVacuumInto_CreatesParentDir(t *testing.T) {
 // --- GetMeta / SetMeta ---
 
 func TestSetMeta_GetMeta_RoundTrip(t *testing.T) {
+	ctx := t.Context()
 	idx := newMemoryIndex(t)
-	if err := idx.SetMeta("schema_notes", "v1: initial"); err != nil {
+	if err := idx.SetMeta(ctx, "schema_notes", "v1: initial"); err != nil {
 		t.Fatalf("SetMeta: %v", err)
 	}
-	got, err := idx.GetMeta("schema_notes")
+	got, err := idx.GetMeta(ctx, "schema_notes")
 	if err != nil {
 		t.Fatalf("GetMeta: %v", err)
 	}
@@ -119,14 +120,15 @@ func TestSetMeta_GetMeta_RoundTrip(t *testing.T) {
 }
 
 func TestSetMeta_Overwrites(t *testing.T) {
+	ctx := t.Context()
 	idx := newMemoryIndex(t)
-	if err := idx.SetMeta("k", "first"); err != nil {
+	if err := idx.SetMeta(ctx, "k", "first"); err != nil {
 		t.Fatal(err)
 	}
-	if err := idx.SetMeta("k", "second"); err != nil {
+	if err := idx.SetMeta(ctx, "k", "second"); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := idx.GetMeta("k")
+	got, _ := idx.GetMeta(ctx, "k")
 	if got != "second" {
 		t.Errorf("got %q, want %q", got, "second")
 	}
@@ -137,22 +139,24 @@ func TestSetMeta_Overwrites(t *testing.T) {
 }
 
 func TestGetMeta_Missing(t *testing.T) {
+	ctx := t.Context()
 	idx := newMemoryIndex(t)
-	_, err := idx.GetMeta("never-set")
+	_, err := idx.GetMeta(ctx, "never-set")
 	if !errors.Is(err, errs.ErrMetaKeyNotFound) {
 		t.Fatalf("expected errs.ErrMetaKeyNotFound, got %v", err)
 	}
 }
 
 func TestSetMeta_BinarySafe(t *testing.T) {
+	ctx := t.Context()
 	idx := newMemoryIndex(t)
 	// Unicode, tabs, newlines, quotes — store_meta must survive
 	// arbitrary text payloads.
 	weird := "lineA\nlineB\tcol\u200b\"quoted'mixed"
-	if err := idx.SetMeta("weird", weird); err != nil {
+	if err := idx.SetMeta(ctx, "weird", weird); err != nil {
 		t.Fatal(err)
 	}
-	got, err := idx.GetMeta("weird")
+	got, err := idx.GetMeta(ctx, "weird")
 	if err != nil {
 		t.Fatal(err)
 	}

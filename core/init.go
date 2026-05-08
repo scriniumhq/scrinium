@@ -201,7 +201,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		zeroBytes(dek)
 		return nil, nil, wrap("write descriptor", err)
 	}
-	if err := saveDescriptorCache(idx, desc); err != nil {
+	if err := saveDescriptorCache(ctx, idx, desc); err != nil {
 		zeroBytes(dek)
 		return nil, nil, wrap("save L2 cache", err)
 	}

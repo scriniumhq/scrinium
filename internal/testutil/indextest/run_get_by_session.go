@@ -11,6 +11,7 @@ import (
 
 func runGetBySession(t *testing.T, f Factory) {
 	t.Run("Hit", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		stage := []struct {
 			id, ref, sess string
@@ -24,12 +25,12 @@ func runGetBySession(t *testing.T, f Factory) {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
 			m.Namespace = "ns"
 			m.SessionID = s.sess
-			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 		}
 
-		ids, err := idx.GetBySession("sess-1")
+		ids, err := idx.GetBySession(ctx, "sess-1")
 		if err != nil {
 			t.Fatalf("GetBySession: %v", err)
 		}
@@ -46,8 +47,9 @@ func runGetBySession(t *testing.T, f Factory) {
 	})
 
 	t.Run("Miss", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
-		ids, err := idx.GetBySession("nonexistent")
+		ids, err := idx.GetBySession(ctx, "nonexistent")
 		if err != nil {
 			t.Fatalf("GetBySession: %v", err)
 		}

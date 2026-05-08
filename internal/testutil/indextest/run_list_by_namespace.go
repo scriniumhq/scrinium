@@ -23,6 +23,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 	// staging shape.
 
 	t.Run("ExactMatch", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		stage := []struct {
 			id, ref, ns string
@@ -35,7 +36,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
 			m.Namespace = s.ns
-			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 		}
@@ -52,18 +53,19 @@ func runListByNamespace(t *testing.T, f Factory) {
 	})
 
 	t.Run("DefaultNamespace", func(t *testing.T) {
+		ctx := t.Context()
 		// Empty-string namespace is the "default" bucket; passing
 		// "" to ListByNamespace returns ONLY this bucket, not all
 		// namespaces (that's what "*" is for).
 		idx := f.New(t)
 		mDefault := manifestfx.BlobWithHash("no-ns-1", "blob-d", manifestfx.SyntheticHash('a'), 1024)
 		mDefault.Namespace = ""
-		if err := idx.IndexManifest(mDefault, manifestfx.PhysAddr("p/d"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, mDefault, manifestfx.PhysAddr("p/d"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
 		mAlpha := manifestfx.BlobWithHash("user-ns", "blob-a", manifestfx.SyntheticHash('b'), 1024)
 		mAlpha.Namespace = "alpha"
-		if err := idx.IndexManifest(mAlpha, manifestfx.PhysAddr("p/a"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, mAlpha, manifestfx.PhysAddr("p/a"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -77,6 +79,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 	})
 
 	t.Run("Wildcard_ExcludesSystem", func(t *testing.T) {
+		ctx := t.Context()
 		// "*" is the user-namespace wildcard: everything except
 		// the reserved "system." prefix.
 		idx := f.New(t)
@@ -92,7 +95,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
 			m.Namespace = s.ns
-			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 		}
@@ -109,6 +112,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 	})
 
 	t.Run("OrderByCreatedAt", func(t *testing.T) {
+		ctx := t.Context()
 		// Inserting in reverse temporal order; the iterator must
 		// return them sorted ascending by CreatedAt.
 		idx := f.New(t)
@@ -117,7 +121,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
 			m.Namespace = "ns"
 			m.CreatedAt = at
-			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
 				t.Fatalf("seed %s: %v", id, err)
 			}
 		}
@@ -138,6 +142,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 	})
 
 	t.Run("StopWalk", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		for i := 0; i < 5; i++ {
 			fillChar := byte('a' + i)
@@ -145,7 +150,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 			ref := "blob-" + string(fillChar)
 			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
 			m.Namespace = "ns"
-			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
 				t.Fatalf("seed %s: %v", id, err)
 			}
 		}
@@ -167,10 +172,11 @@ func runListByNamespace(t *testing.T, f Factory) {
 	})
 
 	t.Run("CallbackErrorPropagates", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.BlobWithHash("a1", "blob-a1", manifestfx.SyntheticHash('a'), 1024)
 		m.Namespace = "ns"
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -184,13 +190,14 @@ func runListByNamespace(t *testing.T, f Factory) {
 	})
 
 	t.Run("PackManifestsExcluded", func(t *testing.T) {
+		ctx := t.Context()
 		// Pack manifests live in the index, but listings are for
 		// user-visible artifacts only. ListByNamespace must skip
 		// pack manifests.
 		idx := f.New(t)
 		blob := manifestfx.BlobWithHash("blob-1", "ref-blob-1", manifestfx.SyntheticHash('a'), 1024)
 		blob.Namespace = "ns"
-		if err := idx.IndexManifest(blob, manifestfx.PhysAddr("p/blob"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, blob, manifestfx.PhysAddr("p/blob"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -203,7 +210,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 			OriginalSize: 4096,
 			CreatedAt:    time.Now(),
 		}
-		if err := idx.IndexManifest(pack, manifestfx.PhysAddr("p/pack"), nil, []domain.PackedEntry{
+		if err := idx.IndexManifest(ctx, pack, manifestfx.PhysAddr("p/pack"), nil, []domain.PackedEntry{
 			{ArtifactID: "inner-1", BlobRef: "inner-blob-1", BlobSize: 100,
 				ContentHash: manifestfx.SyntheticHash('i'), PipelineParams: []byte{}},
 		}); err != nil {
@@ -228,6 +235,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 	})
 
 	t.Run("FieldsRoundTrip", func(t *testing.T) {
+		ctx := t.Context()
 		// Every persisted field must round-trip through the
 		// iterator. Non-persisted fields (Pipeline, LayoutHeader,
 		// Metadata) reach the iterator zero-valued — callers
@@ -240,7 +248,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 		src.SessionID = "sess-42"
 		src.CreatedAt = now
 		src.RetentionUntil = retention
-		if err := idx.IndexManifest(src, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, src, manifestfx.PhysAddr("p"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -273,6 +281,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 	})
 
 	t.Run("ContextCancelled", func(t *testing.T) {
+		ctx := t.Context()
 		// A pre-cancelled ctx must surface context.Canceled.
 		// Implementations may observe the cancellation either
 		// before the query starts or before the first row is
@@ -284,7 +293,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 			ref := "blob-" + string(fillChar)
 			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
 			m.Namespace = "ns"
-			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
 				t.Fatalf("seed %s: %v", id, err)
 			}
 		}

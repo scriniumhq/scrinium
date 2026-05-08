@@ -91,7 +91,7 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 		// layout invariant in Internals/01. The read-path follows
 		// what the index recorded at IndexManifest time, not what
 		// the current PathTopology would compute.
-		addr, err := s.index.Resolve(string(m.BlobRef))
+		addr, err := s.index.Resolve(ctx, string(m.BlobRef))
 		if err != nil {
 			return fmt.Errorf("core.Verify: resolve blob path: %w", err)
 		}

@@ -12,13 +12,14 @@ import (
 
 func runIndexManifest(t *testing.T, f Factory) {
 	t.Run("Blob_FreshInsert", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("blobs/aa/bb/blob-1"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("blobs/aa/bb/blob-1"), nil, nil); err != nil {
 			t.Fatalf("IndexManifest: %v", err)
 		}
 		// Manifest visible.
-		exists, err := idx.ManifestExists("art-1")
+		exists, err := idx.ManifestExists(ctx, "art-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -26,7 +27,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 			t.Error("manifest must be visible after IndexManifest")
 		}
 		// Blob has a ref.
-		n, err := idx.GetRefCount("blob-1")
+		n, err := idx.GetRefCount(ctx, "blob-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -34,23 +35,24 @@ func runIndexManifest(t *testing.T, f Factory) {
 			t.Errorf("ref_count: got %d, want 1", n)
 		}
 		// Blob is resolvable.
-		if _, err := idx.Resolve("blob-1"); err != nil {
+		if _, err := idx.Resolve(ctx, "blob-1"); err != nil {
 			t.Errorf("Resolve after Index: %v", err)
 		}
 	})
 
 	t.Run("Blob_Dedup", func(t *testing.T) {
+		ctx := t.Context()
 		// Two distinct artifacts referencing the same blob —
 		// blob row stays single, ref_count climbs to 2.
 		idx := f.New(t)
 		addr := manifestfx.PhysAddr("blobs/aa/bb/blob-1")
-		if err := idx.IndexManifest(manifestfx.Blob("art-1", "blob-1"), addr, nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), addr, nil, nil); err != nil {
 			t.Fatal(err)
 		}
-		if err := idx.IndexManifest(manifestfx.Blob("art-2", "blob-1"), addr, nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-2", "blob-1"), addr, nil, nil); err != nil {
 			t.Fatal(err)
 		}
-		n, err := idx.GetRefCount("blob-1")
+		n, err := idx.GetRefCount(ctx, "blob-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,19 +62,20 @@ func runIndexManifest(t *testing.T, f Factory) {
 	})
 
 	t.Run("Blob_Idempotent", func(t *testing.T) {
+		ctx := t.Context()
 		// Re-indexing the same artifact (same ID, same blobRef)
 		// must not fail. Manifest-row uniqueness is the strict
 		// invariant; ref_count behaviour on retries is an
 		// implementation detail covered by the per-backend tests.
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
 			t.Fatalf("re-indexing same manifest must not fail: %v", err)
 		}
-		exists, err := idx.ManifestExists("art-1")
+		exists, err := idx.ManifestExists(ctx, "art-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -82,6 +85,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 	})
 
 	t.Run("TOC_RegistersChunks", func(t *testing.T) {
+		ctx := t.Context()
 		// A TOC manifest pulls together previously-registered
 		// chunk blobs. Each chunk's ref_count climbs by one; the
 		// TOC's own blob (the manifest body) is also a regular
@@ -107,7 +111,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 				c.hash,
 				1024,
 			)
-			if err := idx.IndexManifest(m, manifestfx.PhysAddr("chunks/"+c.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("chunks/"+c.ref), nil, nil); err != nil {
 				t.Fatalf("seed chunk %d: %v", i, err)
 			}
 		}
@@ -122,14 +126,14 @@ func runIndexManifest(t *testing.T, f Factory) {
 			CreatedAt:    time.Now(),
 		}
 		chunkRefs := []string{chunks[0].ref, chunks[1].ref, chunks[2].ref}
-		if err := idx.IndexManifest(toc, manifestfx.PhysAddr("blobs/toc-blob"), chunkRefs, nil); err != nil {
+		if err := idx.IndexManifest(ctx, toc, manifestfx.PhysAddr("blobs/toc-blob"), chunkRefs, nil); err != nil {
 			t.Fatalf("IndexManifest TOC: %v", err)
 		}
 
 		// Each chunk now ref-counted: 1 (from its own manifest)
 		// + 1 (from the TOC chunkRefs) = 2.
 		for _, c := range chunks {
-			n, err := idx.GetRefCount(c.ref)
+			n, err := idx.GetRefCount(ctx, c.ref)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -138,7 +142,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 			}
 		}
 		// TOC blob: 1.
-		n, err := idx.GetRefCount("toc-blob")
+		n, err := idx.GetRefCount(ctx, "toc-blob")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,6 +152,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 	})
 
 	t.Run("TOC_MissingChunkFails", func(t *testing.T) {
+		ctx := t.Context()
 		// A TOC pointing at a chunk that was never registered
 		// must fail. The manifest must NOT appear in the index
 		// (the call rolls back).
@@ -161,11 +166,11 @@ func runIndexManifest(t *testing.T, f Factory) {
 			OriginalSize: 3072,
 			CreatedAt:    time.Now(),
 		}
-		err := idx.IndexManifest(toc, manifestfx.PhysAddr("p"), []string{"chunk-missing"}, nil)
+		err := idx.IndexManifest(ctx, toc, manifestfx.PhysAddr("p"), []string{"chunk-missing"}, nil)
 		if err == nil {
 			t.Fatal("expected error on missing chunk")
 		}
-		exists, qerr := idx.ManifestExists("art-toc")
+		exists, qerr := idx.ManifestExists(ctx, "art-toc")
 		if qerr != nil {
 			t.Fatalf("ManifestExists post-rollback: %v", qerr)
 		}
@@ -175,6 +180,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 	})
 
 	t.Run("Pack_RegistersEntries", func(t *testing.T) {
+		ctx := t.Context()
 		// Pack manifests are invisible to ManifestExists/Walk —
 		// that is the contract. What is observable: each packed
 		// entry resolves to its packed location, and the pack
@@ -211,12 +217,12 @@ func runIndexManifest(t *testing.T, f Factory) {
 				PipelineParams: []byte{},
 			},
 		}
-		if err := idx.IndexManifest(packManifest, manifestfx.PhysAddr("packs/pack-1"), nil, entries); err != nil {
+		if err := idx.IndexManifest(ctx, packManifest, manifestfx.PhysAddr("packs/pack-1"), nil, entries); err != nil {
 			t.Fatalf("IndexManifest pack: %v", err)
 		}
 
 		// Pack-blob ref_count: one per packed artifact.
-		n, err := idx.GetRefCount("pack-blob-1")
+		n, err := idx.GetRefCount(ctx, "pack-blob-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -225,7 +231,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 		}
 
 		// Pack manifests are NOT in ManifestExists.
-		packExists, err := idx.ManifestExists("pack-1")
+		packExists, err := idx.ManifestExists(ctx, "pack-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -235,7 +241,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 
 		// LookupPacked sees the entries.
 		for _, e := range entries {
-			info, ok, err := idx.LookupPacked(e.ArtifactID)
+			info, ok, err := idx.LookupPacked(ctx, e.ArtifactID)
 			if err != nil {
 				t.Fatalf("LookupPacked(%s): %v", e.ArtifactID, err)
 			}

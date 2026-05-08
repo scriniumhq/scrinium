@@ -259,7 +259,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	// to skip the blobs-table insertion for inline; the manifest
 	// itself is still indexed so Walk and GetBySession find it.
 
-	if err := s.index.IndexManifest(manifest, blobAddr, nil, nil); err != nil {
+	if err := s.index.IndexManifest(ctx, manifest, blobAddr, nil, nil); err != nil {
 		// Manifest file is on disk but unindexed. RebuildIndexAgent
 		// (M3) is the recovery path. We surface the error so the
 		// caller can retry the index step or reissue Put (which
@@ -344,7 +344,7 @@ func (s *store) commitBlob(
 	originalSize int64,
 	blobRef domain.BlobRef,
 ) (domain.BlobRef, domain.PhysicalAddress, error) {
-	existingRef, found, err := s.index.ExistsByContent(contentHash, originalSize)
+	existingRef, found, err := s.index.ExistsByContent(ctx, contentHash, originalSize)
 	if err != nil {
 		_ = s.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: dedup probe: %w", err)
@@ -353,7 +353,7 @@ func (s *store) commitBlob(
 		if err := s.drv.Remove(ctx, stagingPath); err != nil {
 			return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: drop staging: %w", err)
 		}
-		addr, err := s.index.Resolve(existingRef)
+		addr, err := s.index.Resolve(ctx, existingRef)
 		if err != nil {
 			return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: resolve existing blob: %w", err)
 		}

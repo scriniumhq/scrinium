@@ -30,6 +30,7 @@ import (
 //  5. errs.ErrConfigMismatch on a reopen with a conflicting
 //     immutable parameter.
 func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
+	ctx := t.Context()
 	location := t.TempDir()
 	indexPath := filepath.Join(t.TempDir(), "index.db")
 
@@ -148,7 +149,7 @@ func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
 		BlobRef:      "blob-test",
 		OriginalSize: 1024,
 	}
-	if err := idx1.IndexManifest(manifest, addr, nil, nil); err != nil {
+	if err := idx1.IndexManifest(ctx, manifest, addr, nil, nil); err != nil {
 		t.Fatalf("seed index: %v", err)
 	}
 	if err := idx1.Close(); err != nil {
@@ -192,7 +193,7 @@ func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
 		t.Errorf("ContentHasher changed across reopen: %q -> %q", cfg1.ContentHasher, cfg2.ContentHasher)
 	}
 
-	gotAddr, err := idx2.Resolve("blob-test")
+	gotAddr, err := idx2.Resolve(ctx, "blob-test")
 	if err != nil {
 		t.Fatalf("Resolve after reopen: %v", err)
 	}

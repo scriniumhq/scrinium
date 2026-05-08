@@ -12,6 +12,7 @@ import (
 
 func runMarkVerified(t *testing.T, f Factory) {
 	t.Run("UpdatesObservableThroughListUnverified", func(t *testing.T) {
+		ctx := t.Context()
 		// MarkVerified updates last_verified_at on a blob.
 		// Without poking the storage, we observe it through
 		// ListUnverified: a blob freshly indexed has NULL
@@ -21,13 +22,13 @@ func runMarkVerified(t *testing.T, f Factory) {
 		// before the verification stops reporting it.
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
 
 		// Truncate to seconds (RFC 3339 storage precision).
 		verifiedAt := time.Now().UTC().Truncate(time.Second)
-		if err := idx.MarkVerified("blob-1", verifiedAt); err != nil {
+		if err := idx.MarkVerified(ctx, "blob-1", verifiedAt); err != nil {
 			t.Fatalf("MarkVerified: %v", err)
 		}
 
@@ -49,8 +50,9 @@ func runMarkVerified(t *testing.T, f Factory) {
 	})
 
 	t.Run("MissingBlobIsNoOp", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
-		if err := idx.MarkVerified("nonexistent", time.Now()); err != nil {
+		if err := idx.MarkVerified(ctx, "nonexistent", time.Now()); err != nil {
 			t.Errorf("missing blob must be no-op, got %v", err)
 		}
 	})

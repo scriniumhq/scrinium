@@ -18,6 +18,7 @@ func runListUnverified(t *testing.T, f Factory) {
 	// verified rows are skipped.
 
 	t.Run("CutoffBoundary", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		now := time.Now().UTC().Truncate(time.Second)
 
@@ -33,11 +34,11 @@ func runListUnverified(t *testing.T, f Factory) {
 		}
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
-			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 			if s.everVerified {
-				if err := idx.MarkVerified(s.ref, now.Add(-s.verifiedAgo)); err != nil {
+				if err := idx.MarkVerified(ctx, s.ref, now.Add(-s.verifiedAgo)); err != nil {
 					t.Fatalf("MarkVerified %s: %v", s.ref, err)
 				}
 			}
@@ -71,6 +72,7 @@ func runListUnverified(t *testing.T, f Factory) {
 	})
 
 	t.Run("OldestFirst", func(t *testing.T) {
+		ctx := t.Context()
 		// Sorting order: oldest verification first. NEVER-verified
 		// rows are also reported, but the relative position of
 		// NEVER vs verified rows is implementation-defined when
@@ -91,10 +93,10 @@ func runListUnverified(t *testing.T, f Factory) {
 		}
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
-			if err := idx.IndexManifest(m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
-			if err := idx.MarkVerified(s.ref, now.Add(-s.verifiedAgo)); err != nil {
+			if err := idx.MarkVerified(ctx, s.ref, now.Add(-s.verifiedAgo)); err != nil {
 				t.Fatalf("MarkVerified %s: %v", s.ref, err)
 			}
 		}

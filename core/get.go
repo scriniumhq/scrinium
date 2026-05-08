@@ -132,7 +132,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 		// Agent, OQ-21) safe by construction — the read-path
 		// follows whatever the index says, the topology config
 		// only governs where new writes go.
-		addr, err := s.index.Resolve(string(manifest.BlobRef))
+		addr, err := s.index.Resolve(ctx, string(manifest.BlobRef))
 		if err != nil {
 			return nil, fmt.Errorf("core.Get: resolve blob path: %w", err)
 		}

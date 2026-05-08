@@ -428,6 +428,7 @@ func TestExtStore_NamespaceIsolation(t *testing.T) {
 // --- Dispatch on IndexManifest ---
 
 func TestDispatch_ManifestIndexed(t *testing.T) {
+	ctx := t.Context()
 	idx := openMemIndex(t)
 	defer idx.Close()
 
@@ -442,7 +443,7 @@ func TestDispatch_ManifestIndexed(t *testing.T) {
 
 	m := makeBlobManifest("art-1")
 	addr := domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "/blobs/x"}
-	if err := idx.IndexManifest(m, addr, nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, addr, nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -467,6 +468,7 @@ func TestDispatch_ManifestIndexed(t *testing.T) {
 }
 
 func TestDispatch_NotSubscribed_NoApply(t *testing.T) {
+	ctx := t.Context()
 	idx := openMemIndex(t)
 	defer idx.Close()
 
@@ -479,7 +481,7 @@ func TestDispatch_NotSubscribed_NoApply(t *testing.T) {
 	idx.Extensions().Register(context.Background(), ext)
 
 	m := makeBlobManifest("art-2")
-	idx.IndexManifest(m, domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "/blobs/y"}, nil, nil)
+	idx.IndexManifest(ctx, m, domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "/blobs/y"}, nil, nil)
 
 	if len(ext.applyCalls) != 0 {
 		t.Errorf("non-subscribed extension's Apply called %d times", len(ext.applyCalls))
@@ -487,6 +489,7 @@ func TestDispatch_NotSubscribed_NoApply(t *testing.T) {
 }
 
 func TestDispatch_ApplyError_RollsBack(t *testing.T) {
+	ctx := t.Context()
 	idx := openMemIndex(t)
 	defer idx.Close()
 
@@ -501,14 +504,14 @@ func TestDispatch_ApplyError_RollsBack(t *testing.T) {
 
 	m := makeBlobManifest("art-rollback")
 	addr := domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "/blobs/z"}
-	err := idx.IndexManifest(m, addr, nil, nil)
+	err := idx.IndexManifest(ctx, m, addr, nil, nil)
 	if !errors.Is(err, failure) {
 		t.Errorf("expected apply error to propagate, got %v", err)
 	}
 
 	// The main index write must have rolled back too — manifest
 	// should NOT be in the manifests table.
-	exists, err := idx.ManifestExists("art-rollback")
+	exists, err := idx.ManifestExists(ctx, "art-rollback")
 	if err != nil {
 		t.Fatalf("ManifestExists: %v", err)
 	}
@@ -520,6 +523,7 @@ func TestDispatch_ApplyError_RollsBack(t *testing.T) {
 // --- Dispatch on DeleteManifest ---
 
 func TestDispatch_ManifestDeleted(t *testing.T) {
+	ctx := t.Context()
 	idx := openMemIndex(t)
 	defer idx.Close()
 
@@ -533,10 +537,10 @@ func TestDispatch_ManifestDeleted(t *testing.T) {
 	// Insert a manifest, then delete.
 	m := makeBlobManifest("art-del")
 	addr := domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "/blobs/d"}
-	if err := idx.IndexManifest(m, addr, nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, addr, nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
-	if err := idx.DeleteManifest("art-del", []string{string(m.BlobRef)}); err != nil {
+	if err := idx.DeleteManifest(ctx, "art-del", []string{string(m.BlobRef)}); err != nil {
 		t.Fatalf("DeleteManifest: %v", err)
 	}
 

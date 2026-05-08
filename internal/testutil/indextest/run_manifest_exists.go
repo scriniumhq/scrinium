@@ -12,8 +12,9 @@ import (
 
 func runManifestExists(t *testing.T, f Factory) {
 	t.Run("Fresh_ReturnsFalse", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
-		exists, err := idx.ManifestExists(domain.ArtifactID("sha256-" + strings.Repeat("a", 64)))
+		exists, err := idx.ManifestExists(ctx, domain.ArtifactID("sha256-"+strings.Repeat("a", 64)))
 		if err != nil {
 			t.Fatalf("ManifestExists: %v", err)
 		}
@@ -23,12 +24,13 @@ func runManifestExists(t *testing.T, f Factory) {
 	})
 
 	t.Run("AfterIndex_ReturnsTrue", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
-		exists, err := idx.ManifestExists("art-1")
+		exists, err := idx.ManifestExists(ctx, "art-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -38,15 +40,16 @@ func runManifestExists(t *testing.T, f Factory) {
 	})
 
 	t.Run("AfterDelete_ReturnsFalse", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.Blob("art-2", "blob-2")
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
-		if err := idx.DeleteManifest("art-2", []string{"blob-2"}); err != nil {
+		if err := idx.DeleteManifest(ctx, "art-2", []string{"blob-2"}); err != nil {
 			t.Fatal(err)
 		}
-		exists, err := idx.ManifestExists("art-2")
+		exists, err := idx.ManifestExists(ctx, "art-2")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,19 +59,20 @@ func runManifestExists(t *testing.T, f Factory) {
 	})
 
 	t.Run("DistinguishesIDs", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.Blob("art-known", "blob-known")
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
-		known, err := idx.ManifestExists("art-known")
+		known, err := idx.ManifestExists(ctx, "art-known")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !known {
 			t.Error("ManifestExists(known) = false, want true")
 		}
-		unknown, err := idx.ManifestExists("art-unknown")
+		unknown, err := idx.ManifestExists(ctx, "art-unknown")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,15 +82,16 @@ func runManifestExists(t *testing.T, f Factory) {
 	})
 
 	t.Run("NotConfusedByBlobRef", func(t *testing.T) {
+		ctx := t.Context()
 		// ManifestExists must look in the manifests-table only,
 		// not the blobs-table. Probe with a blob_ref-shaped
 		// string that is NOT an ArtifactID.
 		idx := f.New(t)
 		m := manifestfx.Blob("art-real", "blob-real")
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
-		exists, err := idx.ManifestExists("blob-real")
+		exists, err := idx.ManifestExists(ctx, "blob-real")
 		if err != nil {
 			t.Fatal(err)
 		}

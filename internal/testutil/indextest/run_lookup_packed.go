@@ -12,6 +12,7 @@ import (
 
 func runLookupPacked(t *testing.T, f Factory) {
 	t.Run("Hit", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		packManifest := domain.Manifest{
 			ArtifactID:   "pack-1",
@@ -31,11 +32,11 @@ func runLookupPacked(t *testing.T, f Factory) {
 			ContentHash:    manifestfx.SyntheticHash('1'),
 			PipelineParams: []byte{0xde, 0xad, 0xbe, 0xef},
 		}}
-		if err := idx.IndexManifest(packManifest, manifestfx.PhysAddr("packs/pack-1"), nil, entries); err != nil {
+		if err := idx.IndexManifest(ctx, packManifest, manifestfx.PhysAddr("packs/pack-1"), nil, entries); err != nil {
 			t.Fatalf("setup: %v", err)
 		}
 
-		info, ok, err := idx.LookupPacked("art-p1")
+		info, ok, err := idx.LookupPacked(ctx, "art-p1")
 		if err != nil {
 			t.Fatalf("LookupPacked: %v", err)
 		}
@@ -59,8 +60,9 @@ func runLookupPacked(t *testing.T, f Factory) {
 	})
 
 	t.Run("Miss", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
-		_, ok, err := idx.LookupPacked("not-packed")
+		_, ok, err := idx.LookupPacked(ctx, "not-packed")
 		if err != nil {
 			t.Fatalf("LookupPacked: %v", err)
 		}

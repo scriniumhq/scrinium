@@ -93,9 +93,9 @@ func (i *Index) ListByNamespace(
 // last-line check, but consistency demands the index honour any
 // query the caller passes. The engine's RollbackSession is the
 // place where mass-delete safety lives.
-func (i *Index) GetBySession(sessionID string) ([]domain.ArtifactID, error) {
+func (i *Index) GetBySession(ctx context.Context, sessionID string) ([]domain.ArtifactID, error) {
 	const stmt = `SELECT artifact_id FROM manifests WHERE session_id = ?`
-	rows, err := i.db.QueryContext(context.Background(), stmt, sessionID)
+	rows, err := i.db.QueryContext(ctx, stmt, sessionID)
 	if err != nil {
 		return nil, classifyError(err)
 	}

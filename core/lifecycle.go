@@ -133,8 +133,8 @@ func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.
 // The "load failed" branch swallows the load error on purpose:
 // the cache is a fast-start aid, not authoritative, and a
 // damaged cache is fully recoverable from Location.
-func refreshDescriptorCache(idx metaStore, canonical *descriptor.Descriptor) error {
-	cache, _ := loadDescriptorCache(idx)
+func refreshDescriptorCache(ctx context.Context, idx metaStore, canonical *descriptor.Descriptor) error {
+	cache, _ := loadDescriptorCache(ctx, idx)
 
 	if cache != nil {
 		want, err := descriptor.Checksum(canonical)
@@ -147,7 +147,7 @@ func refreshDescriptorCache(idx metaStore, canonical *descriptor.Descriptor) err
 	}
 
 	// Save (or re-save). saveDescriptorCache is idempotent.
-	if err := saveDescriptorCache(idx, canonical); err != nil {
+	if err := saveDescriptorCache(ctx, idx, canonical); err != nil {
 		return fmt.Errorf("save: %w", err)
 	}
 	return nil
@@ -219,7 +219,7 @@ func unlockBootstrap(ctx context.Context, s *store, pub Publisher) error {
 	// SetMeta failure is appended to the report so observability sees
 	// it, but does not block the transition — the cache key is a
 	// diagnostic aid, not a liveness gate.
-	if setErr := s.index.SetMeta("last_orphan_scan_at", time.Now().UTC().Format(time.RFC3339)); setErr != nil {
+	if setErr := s.index.SetMeta(ctx, "last_orphan_scan_at", time.Now().UTC().Format(time.RFC3339)); setErr != nil {
 		report.Errors = append(report.Errors,
 			fmt.Errorf("unlockBootstrap: persist last_orphan_scan_at: %w", setErr))
 	}

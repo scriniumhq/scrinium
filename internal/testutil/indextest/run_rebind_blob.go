@@ -12,13 +12,14 @@ import (
 
 func runRebindBlob(t *testing.T, f Factory) {
 	t.Run("Basic", func(t *testing.T) {
+		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(m, manifestfx.PhysAddr("transit/blob-1"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("transit/blob-1"), nil, nil); err != nil {
 			t.Fatal(err)
 		}
 		// Initial address.
-		got, err := idx.Resolve("blob-1")
+		got, err := idx.Resolve(ctx, "blob-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -31,7 +32,7 @@ func runRebindBlob(t *testing.T, f Factory) {
 		if err := idx.RebindBlob(context.Background(), "blob-1", newAddr); err != nil {
 			t.Fatalf("RebindBlob: %v", err)
 		}
-		got, err = idx.Resolve("blob-1")
+		got, err = idx.Resolve(ctx, "blob-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -42,7 +43,7 @@ func runRebindBlob(t *testing.T, f Factory) {
 			t.Errorf("workspace: got %d, want %d", got.Workspace, domain.WorkspaceLocation)
 		}
 		// ref_count untouched.
-		n, err := idx.GetRefCount("blob-1")
+		n, err := idx.GetRefCount(ctx, "blob-1")
 		if err != nil {
 			t.Fatal(err)
 		}

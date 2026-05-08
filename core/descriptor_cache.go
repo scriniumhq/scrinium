@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -56,10 +57,10 @@ type DescriptorCache struct {
 //     blob). The caller MUST NOT use the returned data; the
 //     correct recovery is to re-derive the cache from the
 //     authoritative Location replicas.
-func loadDescriptorCache(meta metaStore) (*DescriptorCache, error) {
-	blob, blobErr := meta.GetMeta(metaKeyDescriptorBlob)
-	seqStr, seqErr := meta.GetMeta(metaKeyDescriptorSequence)
-	csumHex, csumErr := meta.GetMeta(metaKeyDescriptorChecksum)
+func loadDescriptorCache(ctx context.Context, meta metaStore) (*DescriptorCache, error) {
+	blob, blobErr := meta.GetMeta(ctx, metaKeyDescriptorBlob)
+	seqStr, seqErr := meta.GetMeta(ctx, metaKeyDescriptorSequence)
+	csumHex, csumErr := meta.GetMeta(ctx, metaKeyDescriptorChecksum)
 
 	missing := 0
 	if errors.Is(blobErr, errs.ErrMetaKeyNotFound) {
@@ -128,7 +129,7 @@ func loadDescriptorCache(meta metaStore) (*DescriptorCache, error) {
 // the trio is not atomic across a crash. A crash mid-trio leaves
 // a partial cache, which the next loadDescriptorCache rejects as
 // corruption — the caller then re-saves. The flow is idempotent.
-func saveDescriptorCache(meta metaStore, d *descriptor.Descriptor) error {
+func saveDescriptorCache(ctx context.Context, meta metaStore, d *descriptor.Descriptor) error {
 	blob, err := descriptor.Marshal(d)
 	if err != nil {
 		return fmt.Errorf("descriptor cache: marshal: %w", err)
@@ -138,13 +139,13 @@ func saveDescriptorCache(meta metaStore, d *descriptor.Descriptor) error {
 		return fmt.Errorf("descriptor cache: checksum: %w", err)
 	}
 
-	if err := meta.SetMeta(metaKeyDescriptorBlob, string(blob)); err != nil {
+	if err := meta.SetMeta(ctx, metaKeyDescriptorBlob, string(blob)); err != nil {
 		return fmt.Errorf("descriptor cache: write blob: %w", err)
 	}
-	if err := meta.SetMeta(metaKeyDescriptorSequence, strconv.FormatUint(d.Sequence, 10)); err != nil {
+	if err := meta.SetMeta(ctx, metaKeyDescriptorSequence, strconv.FormatUint(d.Sequence, 10)); err != nil {
 		return fmt.Errorf("descriptor cache: write sequence: %w", err)
 	}
-	if err := meta.SetMeta(metaKeyDescriptorChecksum, hex.EncodeToString(csum)); err != nil {
+	if err := meta.SetMeta(ctx, metaKeyDescriptorChecksum, hex.EncodeToString(csum)); err != nil {
 		return fmt.Errorf("descriptor cache: write checksum: %w", err)
 	}
 	return nil

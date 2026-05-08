@@ -22,10 +22,10 @@ import (
 // Scrub Agent reaches a blob, the GC may have already removed it
 // in a parallel cycle. Failing here would create useless noise in
 // scrub logs without helping anything.
-func (i *Index) MarkVerified(blobRef string, timestamp time.Time) error {
+func (i *Index) MarkVerified(ctx context.Context, blobRef string, timestamp time.Time) error {
 	return i.observe("MarkVerified", func() error {
 		const stmt = `UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`
-		_, err := i.db.ExecContext(context.Background(), stmt, timefmt.Format(timestamp), blobRef)
+		_, err := i.db.ExecContext(ctx, stmt, timefmt.Format(timestamp), blobRef)
 		return err
 	})
 }
@@ -41,10 +41,10 @@ func (i *Index) MarkVerified(blobRef string, timestamp time.Time) error {
 // owns only the `packed_blobs` cleanup.
 //
 // Idempotent: a missing pack_blob_ref returns nil.
-func (i *Index) DeletePacked(packBlobRef string) error {
+func (i *Index) DeletePacked(ctx context.Context, packBlobRef string) error {
 	return i.observe("DeletePacked", func() error {
 		const stmt = `DELETE FROM packed_blobs WHERE pack_blob_ref = ?`
-		_, err := i.db.ExecContext(context.Background(), stmt, packBlobRef)
+		_, err := i.db.ExecContext(ctx, stmt, packBlobRef)
 		return err
 	})
 }
@@ -126,10 +126,10 @@ func escapeSQLString(s string) string {
 // parse. Keeping serialisation out of the index keeps the store_meta
 // contract trivial — encode/decode lives where the typed field
 // lives.
-func (i *Index) GetMeta(key string) (string, error) {
+func (i *Index) GetMeta(ctx context.Context, key string) (string, error) {
 	const stmt = `SELECT value FROM store_meta WHERE key = ?`
 	var val string
-	err := i.db.QueryRowContext(context.Background(), stmt, key).Scan(&val)
+	err := i.db.QueryRowContext(ctx, stmt, key).Scan(&val)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return "", errs.ErrMetaKeyNotFound
@@ -142,12 +142,12 @@ func (i *Index) GetMeta(key string) (string, error) {
 // SetMeta writes (or overwrites) a value in store_meta. The whole
 // upsert is one statement; concurrent writers go through SQLite's
 // busy_timeout machinery without us doing anything special.
-func (i *Index) SetMeta(key string, value string) error {
+func (i *Index) SetMeta(ctx context.Context, key string, value string) error {
 	return i.observe("SetMeta", func() error {
 		const stmt = `
 			INSERT INTO store_meta (key, value) VALUES (?, ?)
 			ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-		_, err := i.db.ExecContext(context.Background(), stmt, key, value)
+		_, err := i.db.ExecContext(ctx, stmt, key, value)
 		return err
 	})
 }

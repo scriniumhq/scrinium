@@ -21,14 +21,14 @@ import (
 // engine-level "this thing is not here" error; from the StoreIndex
 // perspective there is no separate "blob not found" — the index
 // either knows where to find a blob or it does not.
-func (i *Index) Resolve(blobRef string) (domain.PhysicalAddress, error) {
+func (i *Index) Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error) {
 	const stmt = `
 		SELECT physical_workspace, physical_path,
 		       pack_ref, pack_offset, pack_size
 		FROM blobs WHERE blob_ref = ?`
 	var addr domain.PhysicalAddress
 	var ws int
-	err := i.db.QueryRowContext(context.Background(), stmt, blobRef).
+	err := i.db.QueryRowContext(ctx, stmt, blobRef).
 		Scan(&ws, &addr.Path, &addr.PackRef, &addr.Offset, &addr.Size)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -48,13 +48,13 @@ func (i *Index) Resolve(blobRef string) (domain.PhysicalAddress, error) {
 //
 // Returns (blobRef, true, nil) when found; ("", false, nil) when
 // absent; and ("", false, err) for unexpected failures.
-func (i *Index) ExistsByContent(hash domain.ContentHash, originalSize int64) (string, bool, error) {
+func (i *Index) ExistsByContent(ctx context.Context, hash domain.ContentHash, originalSize int64) (string, bool, error) {
 	const stmt = `
 		SELECT blob_ref FROM blobs
 		WHERE content_hash = ? AND original_size = ?
 		LIMIT 1`
 	var ref string
-	err := i.db.QueryRowContext(context.Background(), stmt, string(hash), originalSize).Scan(&ref)
+	err := i.db.QueryRowContext(ctx, stmt, string(hash), originalSize).Scan(&ref)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return "", false, nil
@@ -82,10 +82,10 @@ func (i *Index) ExistsByContent(hash domain.ContentHash, originalSize int64) (st
 // uses the index for liveness (ref_count > 0) and the driver for
 // physical state. Until M3.2 (GC) ties them together, BlobIsTombstone
 // returns are not produced.
-func (i *Index) ExistsByHash(hash domain.ContentHash) (domain.BlobExistStatus, error) {
+func (i *Index) ExistsByHash(ctx context.Context, hash domain.ContentHash) (domain.BlobExistStatus, error) {
 	const stmt = `SELECT 1 FROM blobs WHERE content_hash = ? LIMIT 1`
 	var one int
-	err := i.db.QueryRowContext(context.Background(), stmt, string(hash)).Scan(&one)
+	err := i.db.QueryRowContext(ctx, stmt, string(hash)).Scan(&one)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return domain.BlobNotFound, nil
@@ -103,10 +103,10 @@ func (i *Index) ExistsByHash(hash domain.ContentHash) (domain.BlobExistStatus, e
 // for "it's just a number, callers can treat it as no references"
 // — but it would hide the difference between "blob is dead, GC can
 // reap" and "blob never existed". Two very different conditions.
-func (i *Index) GetRefCount(blobRef string) (int, error) {
+func (i *Index) GetRefCount(ctx context.Context, blobRef string) (int, error) {
 	const stmt = `SELECT ref_count FROM blobs WHERE blob_ref = ?`
 	var n int
-	err := i.db.QueryRowContext(context.Background(), stmt, blobRef).Scan(&n)
+	err := i.db.QueryRowContext(ctx, stmt, blobRef).Scan(&n)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return 0, errs.ErrArtifactNotFound
@@ -126,13 +126,13 @@ func (i *Index) GetRefCount(blobRef string) (int, error) {
 // it is the only way to know whether to open a sliced range read
 // or a full blob. A missing packed_blobs row is the normal case:
 // most artifacts are not packed.
-func (i *Index) LookupPacked(artifactID domain.ArtifactID) (domain.PackedBlobInfo, bool, error) {
+func (i *Index) LookupPacked(ctx context.Context, artifactID domain.ArtifactID) (domain.PackedBlobInfo, bool, error) {
 	const stmt = `
 		SELECT pack_blob_ref, manifest_offset, manifest_size,
 		       blob_offset, blob_size, COALESCE(pipeline_params, x'')
 		FROM packed_blobs WHERE artifact_id = ?`
 	var info domain.PackedBlobInfo
-	err := i.db.QueryRowContext(context.Background(), stmt, string(artifactID)).Scan(
+	err := i.db.QueryRowContext(ctx, stmt, string(artifactID)).Scan(
 		&info.PackBlobRef,
 		&info.ManifestOffset, &info.ManifestSize,
 		&info.BlobOffset, &info.BlobSize,

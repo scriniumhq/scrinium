@@ -51,7 +51,7 @@ func (s *store) RollbackSession(ctx context.Context, sessionID string) error {
 	}
 
 	// 1. Resolve the artifact set through the index.
-	ids, err := s.index.GetBySession(sessionID)
+	ids, err := s.index.GetBySession(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("core.RollbackSession: index lookup: %w", err)
 	}

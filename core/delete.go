@@ -93,7 +93,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	// already have returned errs.ErrArtifactNotFound (the manifest
 	// file is gone). The "manifest file present, index row
 	// absent" window is RebuildIndexAgent territory.
-	if err := s.index.DeleteManifest(id, blobRefs); err != nil {
+	if err := s.index.DeleteManifest(ctx, id, blobRefs); err != nil {
 		return fmt.Errorf("core.Delete: index: %w", err)
 	}
 

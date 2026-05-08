@@ -23,6 +23,7 @@ import (
 // stages the row to verify the columns flow through Scan
 // correctly.
 func TestResolve_PackedBlob_FromBlobRow(t *testing.T) {
+	ctx := t.Context()
 	idx := newMemoryIndex(t)
 	insertBlob(t, idx, "blob-in-pack",
 		"sha256-"+strings.Repeat("p", 64), 4096,
@@ -34,7 +35,7 @@ func TestResolve_PackedBlob_FromBlobRow(t *testing.T) {
 			Size:      4096,
 		}, 1)
 
-	addr, err := idx.Resolve("blob-in-pack")
+	addr, err := idx.Resolve(ctx, "blob-in-pack")
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -56,6 +57,7 @@ func TestResolve_PackedBlob_FromBlobRow(t *testing.T) {
 // NULL pipeline_params, which is not reachable through
 // IndexManifest (which always supplies a []byte, even empty).
 func TestLookupPacked_NilParams(t *testing.T) {
+	ctx := t.Context()
 	idx := newMemoryIndex(t)
 
 	_, err := idx.db.ExecContext(context.Background(),
@@ -73,7 +75,7 @@ func TestLookupPacked_NilParams(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	info, ok, err := idx.LookupPacked("art-null-params")
+	info, ok, err := idx.LookupPacked(ctx, "art-null-params")
 	if err != nil {
 		t.Fatalf("LookupPacked: %v", err)
 	}
