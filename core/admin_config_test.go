@@ -140,8 +140,9 @@ func TestConfigHistory_OrdersByCreatedAtDesc(t *testing.T) {
 	ctx := context.Background()
 
 	// Manifest CreatedAt has 1-second resolution per docs/2 §7.5.
-	// Sleep just over a second between snapshots so the sort key
-	// is observably different.
+	// Sleep before the first UpdateConfig so the Init snapshot is
+	// observably older than what follows.
+	time.Sleep(1100 * time.Millisecond)
 	if err := s.UpdateConfig(ctx, domain.StoreConfig{
 		RetentionPeriod: 2 * time.Hour,
 	}); err != nil {
