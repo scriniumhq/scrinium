@@ -95,7 +95,7 @@ func (r *rootNode) lookupRoot(ctx context.Context, sub string, out *fuse.EntryOu
 	if err != nil {
 		return nil, errnoFromError(err)
 	}
-	fillEntry(out, fi)
+	fillAttr(&out.Attr, fi)
 
 	child := &treeNode{
 		root:     r,
@@ -222,7 +222,7 @@ func (r *rootNode) Create(ctx context.Context, name string, flags uint32, mode u
 		_ = f.Close()
 		return nil, nil, 0, syscall.EIO
 	}
-	fillEntry(out, fi)
+	fillAttr(&out.Attr, fi)
 	child := &treeNode{root: r, tree: r.routingCfg.RootView, subPath: name}
 	inode := r.NewInode(ctx, child, fs.StableAttr{
 		Mode: fuse.S_IFREG,
@@ -348,7 +348,7 @@ func (n *treeNode) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.Attr
 		if err != nil {
 			return errnoFromError(err)
 		}
-		fillAttr(out, projection.FileInfo{
+		fillAttr(&out.Attr, projection.FileInfo{
 			Name:    node.FS.Name,
 			Path:    node.FS.Path,
 			Size:    node.FS.Size,
@@ -363,7 +363,7 @@ func (n *treeNode) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.Attr
 	if err != nil {
 		return errnoFromError(err)
 	}
-	fillAttr(out, fi)
+	fillAttr(&out.Attr, fi)
 	return 0
 }
 
@@ -394,7 +394,7 @@ func (n *treeNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 	if err != nil {
 		return nil, errnoFromError(err)
 	}
-	fillEntry(out, fi)
+	fillAttr(&out.Attr, fi)
 	mode := uint32(fuse.S_IFREG)
 	if fi.IsDir {
 		mode = fuse.S_IFDIR
@@ -506,7 +506,7 @@ func (n *treeNode) Setattr(ctx context.Context, fh fs.FileHandle, in *fuse.SetAt
 	if err != nil {
 		return errnoFromError(err)
 	}
-	fillAttr(out, fi)
+	fillAttr(&out.Attr, fi)
 	return 0
 }
 
@@ -802,29 +802,14 @@ func errnoFromError(err error) syscall.Errno {
 	return syscall.EIO
 }
 
-// fillEntry populates fuse.EntryOut from a projection.FileInfo.
-func fillEntry(out *fuse.EntryOut, fi projection.FileInfo) {
-	mode := uint32(0)
+// fillAttr populates a fuse.Attr from a projection.FileInfo.
+// Used both by Lookup-side fills (through &entry.Attr) and
+// Getattr-side fills (through &attr.Attr); the embedded Attr
+// is identical in fuse.EntryOut and fuse.AttrOut.
+func fillAttr(out *fuse.Attr, fi projection.FileInfo) {
+	mode := uint32(fuse.S_IFREG)
 	if fi.IsDir {
 		mode = fuse.S_IFDIR
-	} else {
-		mode = fuse.S_IFREG
-	}
-	out.Mode = mode | (fi.Mode & 0o7777)
-	out.Size = uint64(fi.Size)
-	t := uint64(fi.ModTime.Unix())
-	out.Mtime, out.Ctime, out.Atime = t, t, t
-	out.Owner.Uid = fi.UID
-	out.Owner.Gid = fi.GID
-}
-
-// fillAttr populates fuse.AttrOut likewise.
-func fillAttr(out *fuse.AttrOut, fi projection.FileInfo) {
-	mode := uint32(0)
-	if fi.IsDir {
-		mode = fuse.S_IFDIR
-	} else {
-		mode = fuse.S_IFREG
 	}
 	out.Mode = mode | (fi.Mode & 0o7777)
 	out.Size = uint64(fi.Size)
