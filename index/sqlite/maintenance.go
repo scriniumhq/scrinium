@@ -108,10 +108,10 @@ func (i *Index) VacuumInto(ctx context.Context, destPath string) error {
 		return fmt.Errorf("sqlite: VacuumInto: stat dest: %w", err)
 	}
 
-	// SQLite identifier quoting: double-quote the path and escape
-	// any embedded double-quote by doubling it. Single-quote would
-	// also work for a string literal but VACUUM INTO accepts a
-	// string literal.
+	// SQLite string literal: single-quote the path and escape any
+	// embedded single-quote by doubling it. VACUUM INTO accepts a
+	// string literal, not an identifier, so single-quote quoting
+	// (escapeSQLString) is what we need here.
 	q := "VACUUM INTO '" + escapeSQLString(destPath) + "'"
 	if _, err := i.db.ExecContext(ctx, q); err != nil {
 		if isBusyError(err) {

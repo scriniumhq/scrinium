@@ -204,22 +204,14 @@ func decodeEnvelope(body []byte, candidates [][]byte, aad []byte) (domain.Manife
 }
 
 // tryDecrypt walks the candidate keys and returns the first
-// successful Open. All candidates failing surfaces
-// ErrDecryptionFailed.
+// successful Open. All candidates failing — including the
+// degenerate empty-slice case — surfaces ErrDecryptionFailed.
 func tryDecrypt(ciphertext []byte, candidates [][]byte, aad []byte) ([]byte, error) {
-	var lastErr error
 	for _, dek := range candidates {
 		plaintext, err := manifestcrypto.Open(ciphertext, dek, aad)
 		if err == nil {
 			return plaintext, nil
 		}
-		lastErr = err
 	}
-	if lastErr != nil {
-		return nil, errs.ErrDecryptionFailed
-	}
-	// No candidates iterated (slice was non-empty per caller) →
-	// programmer error. Surface as decryption failed for caller
-	// uniformity.
 	return nil, errs.ErrDecryptionFailed
 }

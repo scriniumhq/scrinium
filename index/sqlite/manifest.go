@@ -447,26 +447,18 @@ func (i *Index) deleteManifestTx(
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 	var actual []string
 	for rows.Next() {
 		var ref string
 		if err := rows.Scan(&ref); err != nil {
-			rows.Close()
 			return err
 		}
 		actual = append(actual, ref)
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
 		return err
 	}
-	rows.Close()
-
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return err
-	}
-	rows.Close()
 
 	if !sameSet(actual, blobRefs) {
 		return fmt.Errorf("sqlite: DeleteManifest: blobRefs mismatch for %q "+

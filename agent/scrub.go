@@ -122,7 +122,6 @@ type SnapshotAgent interface {
 }
 
 // NewSnapshotAgent creates a Snapshot Agent instance.
-// TODO(M3.3): blob verification with high-water-mark cursor.
 func NewSnapshotAgent(
 	store core.Store,
 	bus event.EventBus,
