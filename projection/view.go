@@ -735,6 +735,68 @@ func (v *View) OpenByOrphaned(ctx context.Context, path string, opts domain.GetO
 	return v.openInTree(ctx, v.byOrphaned, path, opts)
 }
 
+// --- Root-view dispatchers ---
+//
+// GetIn, ListIn and OpenIn select the appropriate per-tree
+// method based on a RootView enum. Used by callers that already
+// hold a RootView value (FSOps when routing through the
+// configured root, scrinium-fuse when serving _scrinium/<tree>/
+// service paths) instead of branching on the enum themselves.
+//
+// An unknown RootView returns ErrPathNotFound for Get/Open and
+// a single-shot error sequence for List, matching the behaviour
+// service callers expect when a configuration drifts.
+
+// GetIn dispatches GetByX based on rv.
+func (v *View) GetIn(rv RootView, path string) (Node, error) {
+	tree := v.treeFor(rv)
+	if tree == nil {
+		return Node{}, errs.ErrPathNotFound
+	}
+	return v.getInTree(tree, path)
+}
+
+// ListIn dispatches ListByX based on rv.
+func (v *View) ListIn(rv RootView, path string) NodeSeq {
+	tree := v.treeFor(rv)
+	if tree == nil {
+		return func(yield func(Node, error) bool) {
+			yield(Node{}, errs.ErrPathNotFound)
+		}
+	}
+	return v.listInTree(tree, path)
+}
+
+// OpenIn dispatches OpenByX based on rv.
+func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts domain.GetOptions) (core.ReadHandle, error) {
+	tree := v.treeFor(rv)
+	if tree == nil {
+		return nil, errs.ErrPathNotFound
+	}
+	return v.openInTree(ctx, tree, path, opts)
+}
+
+// treeFor returns the internal tree for the given RootView, or
+// nil for an unknown enum value. Private — outside callers go
+// through GetIn/ListIn/OpenIn, which absorb the nil check.
+func (v *View) treeFor(rv RootView) map[string]*viewNode {
+	switch rv {
+	case RootByPath:
+		return v.byPath
+	case RootBySession:
+		return v.bySession
+	case RootByNamespace:
+		return v.byNamespace
+	case RootByDate:
+		return v.byDate
+	case RootByArtifact:
+		return v.byArtifact
+	case RootByOrphaned:
+		return v.byOrphaned
+	}
+	return nil
+}
+
 // --- Per-tree implementations ---
 
 func (v *View) getInTree(tree map[string]*viewNode, path string) (Node, error) {

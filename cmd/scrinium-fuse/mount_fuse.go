@@ -15,8 +15,8 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 
+	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
 	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/internal/daemon"
 	"github.com/rkurbatov/scrinium/projection"
 )
 

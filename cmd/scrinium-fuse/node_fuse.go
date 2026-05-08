@@ -129,7 +129,7 @@ func (r *rootNode) lookupServiceRoot(ctx context.Context, out *fuse.EntryOut) (*
 
 func (r *rootNode) lookupServiceTree(ctx context.Context, tree projection.RootView, sub string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	// Look up directly in the View, bypass FSOps (read-only).
-	node, err := serviceLookupInTree(r.view, tree, sub)
+	node, err := r.view.GetIn(tree, sub)
 	if err != nil {
 		return nil, errnoFromError(err)
 	}
@@ -343,7 +343,7 @@ var (
 func (n *treeNode) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	if n.readOnly || n.tree != n.root.routingCfg.RootView {
 		// Service-tree node: read from View.
-		node, err := serviceLookupInTree(n.root.view, n.tree, n.subPath)
+		node, err := n.root.view.GetIn(n.tree, n.subPath)
 		if err != nil {
 			return errnoFromError(err)
 		}
@@ -369,7 +369,7 @@ func (n *treeNode) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.Attr
 func (n *treeNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	child := joinTreePath(n.subPath, cleanName(name))
 	if n.readOnly || n.tree != n.root.routingCfg.RootView {
-		node, err := serviceLookupInTree(n.root.view, n.tree, child)
+		node, err := n.root.view.GetIn(n.tree, child)
 		if err != nil {
 			return nil, errnoFromError(err)
 		}
@@ -406,7 +406,7 @@ func (n *treeNode) Lookup(ctx context.Context, name string, out *fuse.EntryOut) 
 func (n *treeNode) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	var entries []fuse.DirEntry
 	if n.readOnly || n.tree != n.root.routingCfg.RootView {
-		for child, err := range serviceListInTree(n.root.view, n.tree, n.subPath) {
+		for child, err := range n.root.view.ListIn(n.tree, n.subPath) {
 			if err != nil {
 				return nil, errnoFromError(err)
 			}
@@ -446,7 +446,7 @@ func (n *treeNode) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint3
 		// Direct open via View — FSOps would route the same way
 		// but service-tree paths aren't in the FSOps root tree
 		// universe.
-		rh, err := serviceOpenInTree(ctx, n.root.view, n.tree, n.subPath)
+		rh, err := n.root.view.OpenIn(ctx, n.tree, n.subPath, domain.GetOptions{})
 		if err != nil {
 			return nil, 0, errnoFromError(err)
 		}
@@ -859,63 +859,4 @@ func openModeFromFlags(flags uint32) projection.OpenMode {
 		m |= projection.OpenAppend
 	}
 	return m
-}
-
-// serviceLookupInTree dispatches View.GetByX for the given tree.
-func serviceLookupInTree(view *projection.View, tree projection.RootView, sub string) (projection.Node, error) {
-	switch tree {
-	case projection.RootByPath:
-		return view.GetByPath(sub)
-	case projection.RootBySession:
-		return view.GetBySession(sub)
-	case projection.RootByNamespace:
-		return view.GetByNamespace(sub)
-	case projection.RootByDate:
-		return view.GetByDate(sub)
-	case projection.RootByArtifact:
-		return view.GetByArtifact(sub)
-	case projection.RootByOrphaned:
-		return view.GetByOrphaned(sub)
-	}
-	return projection.Node{}, errs.ErrPathNotFound
-}
-
-// serviceListInTree dispatches View.ListByX.
-func serviceListInTree(view *projection.View, tree projection.RootView, sub string) projection.NodeSeq {
-	switch tree {
-	case projection.RootByPath:
-		return view.ListByPath(sub)
-	case projection.RootBySession:
-		return view.ListBySession(sub)
-	case projection.RootByNamespace:
-		return view.ListByNamespace(sub)
-	case projection.RootByDate:
-		return view.ListByDate(sub)
-	case projection.RootByArtifact:
-		return view.ListByArtifact(sub)
-	case projection.RootByOrphaned:
-		return view.ListByOrphaned(sub)
-	}
-	return func(yield func(projection.Node, error) bool) {
-		yield(projection.Node{}, errs.ErrPathNotFound)
-	}
-}
-
-// serviceOpenInTree dispatches View.OpenByX.
-func serviceOpenInTree(ctx context.Context, view *projection.View, tree projection.RootView, sub string) (core.ReadHandle, error) {
-	switch tree {
-	case projection.RootByPath:
-		return view.OpenByPath(ctx, sub, domain.GetOptions{})
-	case projection.RootBySession:
-		return view.OpenBySession(ctx, sub, domain.GetOptions{})
-	case projection.RootByNamespace:
-		return view.OpenByNamespace(ctx, sub, domain.GetOptions{})
-	case projection.RootByDate:
-		return view.OpenByDate(ctx, sub, domain.GetOptions{})
-	case projection.RootByArtifact:
-		return view.OpenByArtifact(ctx, sub, domain.GetOptions{})
-	case projection.RootByOrphaned:
-		return view.OpenByOrphaned(ctx, sub, domain.GetOptions{})
-	}
-	return nil, errs.ErrPathNotFound
 }

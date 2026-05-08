@@ -460,64 +460,15 @@ func (o *FSOps) openForRead(ctx context.Context, path string) (File, error) {
 
 // lookupInRoot routes Get to the tree configured as the root.
 func (o *FSOps) lookupInRoot(path string) (Node, error) {
-	switch o.view.RootView() {
-	case RootByPath:
-		return o.view.GetByPath(path)
-	case RootBySession:
-		return o.view.GetBySession(path)
-	case RootByNamespace:
-		return o.view.GetByNamespace(path)
-	case RootByDate:
-		return o.view.GetByDate(path)
-	case RootByArtifact:
-		return o.view.GetByArtifact(path)
-	case RootByOrphaned:
-		return o.view.GetByOrphaned(path)
-	default:
-		// Unknown RootView — should not happen because the enum
-		// is closed; treat as misconfiguration.
-		return Node{}, fmt.Errorf("projection.FSOps: unknown RootView %q", o.view.RootView())
-	}
+	return o.view.GetIn(o.view.RootView(), path)
 }
 
 func (o *FSOps) listInRoot(path string) NodeSeq {
-	switch o.view.RootView() {
-	case RootByPath:
-		return o.view.ListByPath(path)
-	case RootBySession:
-		return o.view.ListBySession(path)
-	case RootByNamespace:
-		return o.view.ListByNamespace(path)
-	case RootByDate:
-		return o.view.ListByDate(path)
-	case RootByArtifact:
-		return o.view.ListByArtifact(path)
-	case RootByOrphaned:
-		return o.view.ListByOrphaned(path)
-	default:
-		return func(yield func(Node, error) bool) {
-			yield(Node{}, fmt.Errorf("projection.FSOps: unknown RootView %q", o.view.RootView()))
-		}
-	}
+	return o.view.ListIn(o.view.RootView(), path)
 }
 
 func (o *FSOps) openInRoot(ctx context.Context, path string) (core.ReadHandle, error) {
-	switch o.view.RootView() {
-	case RootByPath:
-		return o.view.OpenByPath(ctx, path, domain.GetOptions{})
-	case RootBySession:
-		return o.view.OpenBySession(ctx, path, domain.GetOptions{})
-	case RootByNamespace:
-		return o.view.OpenByNamespace(ctx, path, domain.GetOptions{})
-	case RootByDate:
-		return o.view.OpenByDate(ctx, path, domain.GetOptions{})
-	case RootByArtifact:
-		return o.view.OpenByArtifact(ctx, path, domain.GetOptions{})
-	case RootByOrphaned:
-		return o.view.OpenByOrphaned(ctx, path, domain.GetOptions{})
-	default:
-		return nil, fmt.Errorf("projection.FSOps: unknown RootView %q", o.view.RootView())
-	}
+	return o.view.OpenIn(ctx, o.view.RootView(), path, domain.GetOptions{})
 }
 
 // fileInfoFromNode converts a Node into a FileInfo, applying
