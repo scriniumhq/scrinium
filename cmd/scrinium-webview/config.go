@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rkurbatov/scrinium/internal/daemon"
+	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
 	"github.com/rkurbatov/scrinium/projection"
 
 	"gopkg.in/yaml.v3"

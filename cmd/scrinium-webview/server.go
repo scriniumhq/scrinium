@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
 	"github.com/rkurbatov/scrinium/cmd/scrinium-webview/web"
 	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/internal/daemon"
 	"github.com/rkurbatov/scrinium/projection"
 	"github.com/rkurbatov/scrinium/projection/vfs"
 )

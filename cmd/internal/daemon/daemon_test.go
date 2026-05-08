@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/internal/daemon"
 
 	// Importing daemon already pulls in localfs and sqlite via
 	// its own side-effect imports, but tests sometimes verify

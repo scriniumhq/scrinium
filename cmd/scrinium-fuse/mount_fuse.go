@@ -22,7 +22,7 @@ import (
 
 // runMount with the FUSE backend wired in. The heavy lifting
 // (open store, build view, fsops, scratch dir, mount session)
-// lives in internal/daemon.Open. This function owns only the
+// lives in cmd/internal/daemon.Open. This function owns only the
 // FUSE-specific surface: the root inode tree, the mount, and
 // signal handling.
 //

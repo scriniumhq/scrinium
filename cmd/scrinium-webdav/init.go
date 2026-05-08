@@ -29,7 +29,7 @@ import (
 // that invokes core.InitStore with WithPassphrase. The reference
 // daemon stays minimal.
 //
-// Doesn't go through internal/daemon — init is a one-shot
+// Doesn't go through cmd/internal/daemon — init is a one-shot
 // operation that creates the store before there's anything to
 // open. core.OpenStore (which the daemon uses) requires a valid
 // system.config; we're producing it.
@@ -100,7 +100,7 @@ func runInit(args []string) int {
 
 // initHashRegistry returns a HashRegistry with sha256
 // registered. Same set as the daemon uses; duplicated here
-// rather than reaching into internal/daemon because init runs
+// rather than reaching into cmd/internal/daemon because init runs
 // outside the daemon abstraction.
 func initHashRegistry() domain.HashRegistry {
 	return core.NewHashRegistry().

@@ -22,7 +22,11 @@
 // specific config (listen address, mount point, etc.) stays
 // in each cmd package.
 //
-// Internal because this is not part of the public Scrinium
-// API — external consumers compose Store/Index/View directly
-// from the public packages.
+// Lives under cmd/internal/ rather than top-level internal/
+// because the only consumers are the cmd/ binaries — pinning
+// visibility there makes the boundary explicit and matches
+// cmd/internal/cliflags and other cmd-shared utilities.
+//
+// Not part of the public Scrinium API: external consumers
+// compose Store/Index/View directly from the public packages.
 package daemon

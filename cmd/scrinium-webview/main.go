@@ -5,7 +5,7 @@
 // projection stats.
 //
 // scrinium-webview is the read-only sibling of scrinium-webdav.
-// They share the same daemon library (internal/daemon) and the
+// They share the same daemon library (cmd/internal/daemon) and the
 // same HTML implementation (internal/scriniumweb), differing
 // only in surface: webdav exposes WebDAV protocol on the same
 // port as the HTML browser; webview exposes only the browser
