@@ -14,6 +14,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/core"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/internal/humanize"
 	"github.com/rkurbatov/scrinium/internal/testutil/driverfx"
 	"github.com/rkurbatov/scrinium/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/internal/testutil/storefx"
@@ -80,7 +81,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 		}
 	}
 	emit("config: N=%d, payload=%dB, heap-ceiling=%s",
-		n, payloadSize, humanBytes(heapDeltaCeiling))
+		n, payloadSize, humanize.Bytes(heapDeltaCeiling))
 
 	s, _ := newDiskStore(t)
 	ctx := context.Background()
@@ -89,7 +90,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 	runtime.GC()
 	var baseline runtime.MemStats
 	runtime.ReadMemStats(&baseline)
-	emit("baseline HeapAlloc: %s", humanBytes(int64(baseline.HeapAlloc)))
+	emit("baseline HeapAlloc: %s", humanize.Bytes(int64(baseline.HeapAlloc)))
 
 	// --- Put loop ---
 	ids := make([]domain.ArtifactID, 0, 3) // first, mid, last for sample Get
@@ -122,10 +123,10 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 	runtime.ReadMemStats(&afterPut)
 	delta := int64(afterPut.HeapAlloc) - int64(baseline.HeapAlloc)
 	emit("HeapAlloc after Put: %s (delta from baseline: %s)",
-		humanBytes(int64(afterPut.HeapAlloc)), humanBytes(delta))
+		humanize.Bytes(int64(afterPut.HeapAlloc)), humanize.Bytes(delta))
 	if delta > heapDeltaCeiling {
 		t.Errorf("heap delta %s exceeds ceiling %s — likely O(N) accumulation",
-			humanBytes(delta), humanBytes(int64(heapDeltaCeiling)))
+			humanize.Bytes(delta), humanize.Bytes(int64(heapDeltaCeiling)))
 	}
 
 	// --- Walk: every artifact visible through the index ---
@@ -227,28 +228,6 @@ func readAllAndClose(t *testing.T, rh core.ReadHandle) []byte {
 	return buf.Bytes()
 }
 
-// humanBytes formats a byte count as KB / MB / GB. Signed because
-// heap deltas can be negative after a GC settles.
-func humanBytes(n int64) string {
-	abs := n
-	sign := ""
-	if abs < 0 {
-		abs = -abs
-		sign = "-"
-	}
-	const unit = 1024
-	if abs < unit {
-		return fmt.Sprintf("%s%d B", sign, abs)
-	}
-	div, exp := int64(unit), 0
-	for x := abs / unit; x >= unit; x /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%s%.1f %cB", sign,
-		float64(abs)/float64(div), "KMGTPE"[exp])
-}
-
 // newDiskStore returns a Store whose index lives on disk, not in
 // memory. Required for the million-files smoke: with :memory: the
 // pure-Go modernc.org/sqlite holds every row in Go heap (~1+ GiB
@@ -344,7 +323,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 		}
 	}
 	emit("config: N=%d, crypto=Envelope, payload=%dB, heap-ceiling=%s",
-		n, payloadSize, humanBytes(heapDeltaCeiling))
+		n, payloadSize, humanize.Bytes(heapDeltaCeiling))
 
 	// Disk-backed Store, encrypted with Envelope. Same factory
 	// as the Plain smoke would have used, with the additional
@@ -355,7 +334,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 	runtime.GC()
 	var baseline runtime.MemStats
 	runtime.ReadMemStats(&baseline)
-	emit("baseline HeapAlloc: %s", humanBytes(int64(baseline.HeapAlloc)))
+	emit("baseline HeapAlloc: %s", humanize.Bytes(int64(baseline.HeapAlloc)))
 
 	// --- Put loop ---
 	ids := make([]domain.ArtifactID, 0, 3)
@@ -416,9 +395,9 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 	var after runtime.MemStats
 	runtime.ReadMemStats(&after)
 	delta := int64(after.HeapAlloc) - int64(baseline.HeapAlloc)
-	emit("HeapAlloc delta: %s", humanBytes(delta))
+	emit("HeapAlloc delta: %s", humanize.Bytes(delta))
 	if delta > heapDeltaCeiling {
 		t.Errorf("HeapAlloc delta %s exceeds ceiling %s",
-			humanBytes(delta), humanBytes(heapDeltaCeiling))
+			humanize.Bytes(delta), humanize.Bytes(heapDeltaCeiling))
 	}
 }

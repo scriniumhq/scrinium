@@ -6,6 +6,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/cmd/scrinium-webview/web"
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/internal/humanize"
 	"github.com/rkurbatov/scrinium/projection"
 )
 
@@ -39,7 +40,7 @@ func buildWebStatsData(
 		View: web.StatsView{
 			TotalNodes:     stats.TotalNodes,
 			TotalBytes:     stats.TotalBytes,
-			TotalBytesText: fmt.Sprintf("%d (%s)", stats.TotalBytes, web.HumanSize(stats.TotalBytes)),
+			TotalBytesText: fmt.Sprintf("%d (%s)", stats.TotalBytes, humanize.Bytes(stats.TotalBytes)),
 			SessionCount:   stats.SessionCount,
 			NamespaceCount: stats.NamespaceCount,
 			OrphanedCount:  stats.OrphanedCount,
@@ -89,7 +90,7 @@ func formatBytesOrNA(n int64) string {
 	if n < 0 {
 		return "n/a"
 	}
-	return fmt.Sprintf("%d (%s)", n, web.HumanSize(n))
+	return fmt.Sprintf("%d (%s)", n, humanize.Bytes(n))
 }
 
 // formatDedup synthesises ArtifactCount / BlobCount as a ratio

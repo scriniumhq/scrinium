@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rkurbatov/scrinium/internal/humanize"
 	"github.com/rkurbatov/scrinium/internal/pathx"
 )
 
@@ -242,7 +243,7 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 		TotalDirs:     totalDirs,
 		TotalFiles:    totalFiles,
 		TotalBytes:    totalBytes,
-		TotalBytesFmt: HumanSize(totalBytes),
+		TotalBytesFmt: humanize.Bytes(totalBytes),
 		SortColumn:    sortCol,
 		SortOrder:     sortOrder,
 		Page:          page,
@@ -310,7 +311,7 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 			// "info" is the default action. Inline rendering
 			// and downloading are explicit alternatives
 			// reachable via the [view] / [dl] buttons.
-			row.SizeText = HumanSize(e.Size)
+			row.SizeText = humanize.Bytes(e.Size)
 			id := extractArtifactID(e.Info)
 			if id != "" {
 				row.URL = h.prefix + "/_artifact/" + string(id)

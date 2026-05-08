@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/internal/humanize"
 )
 
 // DaemonInfo carries the per-process state RenderStats can't
@@ -118,7 +119,7 @@ func writeViewSection(b *strings.Builder, view *View) {
 	stats := view.Stats
 	fmt.Fprintln(b, "[view]")
 	fmt.Fprintf(b, "TotalNodes:       %d\n", stats.TotalNodes)
-	fmt.Fprintf(b, "TotalBytes:       %d (%s)\n", stats.TotalBytes, humanBytes(stats.TotalBytes))
+	fmt.Fprintf(b, "TotalBytes:       %d (%s)\n", stats.TotalBytes, humanize.Bytes(stats.TotalBytes))
 	fmt.Fprintf(b, "SessionCount:     %d\n", stats.SessionCount)
 	fmt.Fprintf(b, "NamespaceCount:   %d\n", stats.NamespaceCount)
 	fmt.Fprintf(b, "OrphanedCount:    %d\n", stats.OrphanedCount)
@@ -230,31 +231,6 @@ func formatUptime(d time.Duration) string {
 	}
 }
 
-// humanBytes renders a byte count in the smallest unit that
-// keeps the number under 1024 — "1.42 MiB", "356 KiB", etc.
-// Negative numbers are rendered as-is (caller should have
-// filtered "n/a" already through formatBytes).
-func humanBytes(n int64) string {
-	const (
-		KiB = 1024
-		MiB = 1024 * KiB
-		GiB = 1024 * MiB
-		TiB = 1024 * GiB
-	)
-	switch {
-	case n >= TiB:
-		return fmt.Sprintf("%.2f TiB", float64(n)/float64(TiB))
-	case n >= GiB:
-		return fmt.Sprintf("%.2f GiB", float64(n)/float64(GiB))
-	case n >= MiB:
-		return fmt.Sprintf("%.2f MiB", float64(n)/float64(MiB))
-	case n >= KiB:
-		return fmt.Sprintf("%.2f KiB", float64(n)/float64(KiB))
-	default:
-		return fmt.Sprintf("%d B", n)
-	}
-}
-
 // formatBytes is humanBytes for storage values, treating -1 as
 // "n/a". Used in the [storage] section where Driver may report
 // "unavailable" for cloud backends.
@@ -262,7 +238,7 @@ func formatBytes(n int64) string {
 	if n < 0 {
 		return "n/a"
 	}
-	return fmt.Sprintf("%d (%s)", n, humanBytes(n))
+	return fmt.Sprintf("%d (%s)", n, humanize.Bytes(n))
 }
 
 // formatCount is the integer counterpart, treating -1 as "n/a".
