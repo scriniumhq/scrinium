@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rkurbatov/scrinium/cmd/internal/cliflags"
 	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
-	"github.com/rkurbatov/scrinium/projection"
 
 	"gopkg.in/yaml.v3"
 )
@@ -117,7 +117,7 @@ func bindFlags(fs *flag.FlagSet, cfg *Config) {
 		"Namespace constraint (visible-only filter for webview).")
 
 	// Daemon — routing (which trees the browser shows).
-	fs.Var(rootViewFlag{&cfg.Daemon.RootView}, "root-view",
+	fs.Var(cliflags.RootViewFlag{P: &cfg.Daemon.RootView}, "root-view",
 		"Root tree: by-path|by-session|by-namespace|by-date|by-artifact.")
 	fs.StringVar(&cfg.Daemon.ByPathFallback, "by-path-fallback", cfg.Daemon.ByPathFallback,
 		"Behaviour for artifacts without a resolver path: orphaned|synthetic.")
@@ -179,29 +179,3 @@ func (cfg *Config) Validate() error {
 	}
 	return nil
 }
-
-// --- flag types (mirror webdav's; deliberate duplication) ---
-
-type rootViewFlag struct{ p *projection.RootView }
-
-func (f rootViewFlag) String() string {
-	if f.p == nil {
-		return ""
-	}
-	return string(*f.p)
-}
-
-func (f rootViewFlag) Set(s string) error {
-	rv := projection.RootView(s)
-	switch rv {
-	case projection.RootByPath, projection.RootBySession,
-		projection.RootByNamespace, projection.RootByDate, projection.RootByArtifact:
-		*f.p = rv
-		return nil
-	}
-	return fmt.Errorf("invalid root-view %q", s)
-}
-
-// (no boolPtrFlag, byteSizeFlag, octalFlag, uintFlag — webview
-// doesn't bind any of those flags. If we add admin commands
-// later we'll reach for the same definitions.)
