@@ -82,7 +82,7 @@ type store struct {
 	//
 	// dek is the unwrapped data-encryption key. nil for Plain
 	// Stores and for encrypted Stores in StateLocked. Populated
-	// at successful Unlock; cleared (zeroBytes + nil) when the
+	// at successful Unlock; cleared (wipeSecret + nil) when the
 	// state machine returns to Locked.
 	//
 	// passphraseProvider is captured from WithPassphrase at

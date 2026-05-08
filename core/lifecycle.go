@@ -80,7 +80,7 @@ func initEncryptedDEK(
 		cost = *cfgKDFParams
 	}
 	wrapped, params, werr := wrapDEK(dek, passphrase, cost)
-	zeroBytes(passphrase)
+	wipeSecret(passphrase)
 	if werr != nil {
 		return nil, descriptor.KDFParams{}, nil, fmt.Errorf("wrap DEK: %w", werr)
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/google/uuid"
 	"github.com/rkurbatov/scrinium/core/internal/descriptor"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/driver"
@@ -148,12 +149,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Generate identity ---
 
-	storeID, err := generateUUID()
-	if err != nil {
-		// idx came from the caller via WithStoreIndex — we do not
-		// own its lifecycle and must not close it on our error path.
-		return nil, nil, err
-	}
+	storeID := uuid.NewString()
 
 	// --- DEK lifecycle ---
 	//
@@ -182,7 +178,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		wrapped, kdfParams, kitBytes, ierr := initEncryptedDEK(
 			ctx, storeID, dek, o.passphrase, cfg.KDFParams)
 		if ierr != nil {
-			zeroBytes(dek)
+			wipeSecret(dek)
 			return nil, nil, wrap("", ierr)
 		}
 		desc.DEK = wrapped
@@ -198,11 +194,11 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	}
 
 	if err := descriptor.Persist(ctx, drv, desc); err != nil {
-		zeroBytes(dek)
+		wipeSecret(dek)
 		return nil, nil, wrap("write descriptor", err)
 	}
 	if err := saveDescriptorCache(ctx, idx, desc); err != nil {
-		zeroBytes(dek)
+		wipeSecret(dek)
 		return nil, nil, wrap("save L2 cache", err)
 	}
 
@@ -223,12 +219,12 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	s, err := buildStore(ctx, o, drv, idx, cfg, desc, dek)
 	if err != nil {
-		zeroBytes(dek)
+		wipeSecret(dek)
 		return nil, nil, wrap("", err)
 	}
 	s.promoteKeyResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
-		zeroBytes(dek)
+		wipeSecret(dek)
 		return nil, nil, wrap("", err)
 	}
 	return s, kit, nil

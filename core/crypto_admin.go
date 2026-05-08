@@ -77,7 +77,7 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 	}
 
 	dek, err := unwrapDEK(s.desc.DEK, *s.desc.KDFParams, passphrase)
-	zeroBytes(passphrase)
+	wipeSecret(passphrase)
 	if err != nil {
 		return fmt.Errorf("core.Unlock: %w", err)
 	}
@@ -98,7 +98,7 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 		// Wipe the DEK we just unwrapped — the Store is not
 		// safely operational, holding the key in memory adds
 		// risk without benefit.
-		zeroBytes(s.dek)
+		wipeSecret(s.dek)
 		s.dek = nil
 		s.stateMu.Lock()
 		s.state = domain.StateLocked
@@ -164,7 +164,7 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 	}
 
 	wrapped, kdfParams, err := wrapDEK(s.dek, passphrase, cost)
-	zeroBytes(passphrase)
+	wipeSecret(passphrase)
 	if err != nil {
 		return fmt.Errorf("core.SetPassphrase: %w", err)
 	}
@@ -237,12 +237,12 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		return fmt.Errorf("core.RotateKEK: current passphrase: %w", err)
 	}
 	verified, err := unwrapDEK(s.desc.DEK, *s.desc.KDFParams, currentPass)
-	zeroBytes(currentPass)
+	wipeSecret(currentPass)
 	if err != nil {
 		return fmt.Errorf("core.RotateKEK: %w", err)
 	}
 	if !bytes.Equal(verified, s.dek) {
-		zeroBytes(verified)
+		wipeSecret(verified)
 		// Should never happen: if the passphrase unwrapped, it
 		// must have produced the same DEK that's already in
 		// memory. Surface as corruption since the alternative
@@ -250,7 +250,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		return fmt.Errorf("%w: current-passphrase unwrap produced unexpected DEK",
 			errs.ErrStoreCorrupted)
 	}
-	zeroBytes(verified)
+	wipeSecret(verified)
 
 	// Second half: obtain new passphrase, wrap with the same
 	// cost parameters as before (rotation does not retune
@@ -266,7 +266,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		Threads: s.desc.KDFParams.Threads,
 	}
 	wrapped, kdfParams, err := wrapDEK(s.dek, newPass, cost)
-	zeroBytes(newPass)
+	wipeSecret(newPass)
 	if err != nil {
 		return fmt.Errorf("core.RotateKEK: %w", err)
 	}

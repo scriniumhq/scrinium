@@ -59,7 +59,7 @@ func wrapDEK(dek, passphrase []byte, cost domain.KDFParams) ([]byte, descriptor.
 	}
 
 	kek := kdf.Derive(passphrase, salt, cost.Time, cost.Memory, cost.Threads)
-	defer zeroBytes(kek)
+	defer wipeSecret(kek)
 
 	wrapped, err := keywrap.Wrap(dek, kek)
 	if err != nil {
@@ -105,7 +105,7 @@ func unwrapDEK(wrappedDEK []byte, params descriptor.KDFParams, passphrase []byte
 	}
 
 	kek := kdf.Derive(passphrase, params.Salt, params.Time, params.Memory, params.Threads)
-	defer zeroBytes(kek)
+	defer wipeSecret(kek)
 
 	dek, err := keywrap.Unwrap(wrappedDEK, kek)
 	if err != nil {
@@ -129,7 +129,7 @@ func unwrapDEK(wrappedDEK []byte, params descriptor.KDFParams, passphrase []byte
 // callers can branch with errors.Is.
 //
 // The returned slice is owned by the caller and MUST be wiped
-// with zeroBytes once the KEK has been derived. callProvider
+// with wipeSecret once the KEK has been derived. callProvider
 // does not retain a reference.
 func callProvider(ctx context.Context, p PassphraseProvider, hint PassphraseHint) ([]byte, error) {
 	if p == nil {
@@ -145,20 +145,22 @@ func callProvider(ctx context.Context, p PassphraseProvider, hint PassphraseHint
 	return pass, nil
 }
 
-// zeroBytes overwrites b with zeros. Used for KEK and passphrase
+// wipeSecret overwrites b with zeros. Used for KEK and passphrase
 // buffers as soon as they are no longer needed. Defends against
 // the trivial leakage path: a goroutine that holds a reference
 // to a slice of memory after the engine is "done" with it.
 //
 // Note: Go's runtime can copy or relocate slice contents
-// (escape analysis, GC compaction in future runtimes). zeroBytes
+// (escape analysis, GC compaction in future runtimes). wipeSecret
 // is a best-effort hygiene measure, not a security guarantee.
 // For threat models that require it (HSM-grade), use
 // memguard-style locked memory in the host application.
-func zeroBytes(b []byte) {
-	for i := range b {
-		b[i] = 0
-	}
+//
+// The wrapper around the clear() builtin is kept deliberately:
+// the name documents intent at every call site (we are zeroing
+// a secret, not initialising a slice).
+func wipeSecret(b []byte) {
+	clear(b)
 }
 
 // promoteKeyResolverIfDefault installs a default StaticKeyResolver

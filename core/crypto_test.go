@@ -227,7 +227,7 @@ func TestCallProvider_RejectsEmptyPassphrase(t *testing.T) {
 
 func TestZeroBytes(t *testing.T) {
 	b := []byte{1, 2, 3, 4, 5}
-	zeroBytes(b)
+	wipeSecret(b)
 	for i, v := range b {
 		if v != 0 {
 			t.Errorf("byte %d: got %d, want 0", i, v)
@@ -235,6 +235,6 @@ func TestZeroBytes(t *testing.T) {
 	}
 
 	// Nil and empty are no-op safe.
-	zeroBytes(nil)
-	zeroBytes([]byte{})
+	wipeSecret(nil)
+	wipeSecret([]byte{})
 }

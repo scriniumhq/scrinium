@@ -212,19 +212,19 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		// Defensive: a descriptor with DEKEncrypted=true must
 		// have KDFParams (Validate enforces). Reaching this
 		// branch means the Validate contract has drifted.
-		zeroBytes(passphrase)
+		wipeSecret(passphrase)
 		return nil, fmt.Errorf("%w: descriptor reports DEKEncrypted=true without KDFParams",
 			errs.ErrStoreCorrupted)
 	}
 	dek, err := unwrapDEK(desc.DEK, *desc.KDFParams, passphrase)
-	zeroBytes(passphrase)
+	wipeSecret(passphrase)
 	if err != nil {
 		return nil, wrap("", err)
 	}
 
 	s, err := buildStore(ctx, o, drv, idx, active, desc, dek)
 	if err != nil {
-		zeroBytes(dek)
+		wipeSecret(dek)
 		return nil, wrap("", err)
 	}
 	s.promoteKeyResolverIfDefault()

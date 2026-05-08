@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
 	"github.com/rkurbatov/scrinium/event"
@@ -224,7 +225,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		dekSnapshot = append([]byte{}, s.dek...)
 		keyID = s.keyResolver.DefaultKeyID()
 		s.cryptoMu.Unlock()
-		defer zeroBytes(dekSnapshot)
+		defer wipeSecret(dekSnapshot)
 	}
 
 	artifactID, manifestBytes, signedManifest, err := manifestcodec.ComputeArtifactID(
@@ -296,10 +297,7 @@ func (s *store) streamThroughPipeline(
 	blobAddr domain.PhysicalAddress,
 	err error,
 ) {
-	stagingPath, err := s.makeStagingPath()
-	if err != nil {
-		return "", "", 0, nil, domain.PhysicalAddress{}, err
-	}
+	stagingPath := s.makeStagingPath()
 
 	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline)
 	if err != nil {
@@ -454,14 +452,10 @@ func (s *store) publish(typ string, payload any) {
 
 // makeStagingPath returns a fresh, unique path under
 // system.state/staging/. Uniqueness is provided by the UUID v4
-// helper (the same generator we use for StoreID). A future
-// improvement (multi-host) is to mix in a host_id (TODO M3.1).
-func (s *store) makeStagingPath() (string, error) {
-	id, err := generateUUID()
-	if err != nil {
-		return "", fmt.Errorf("core.Put: staging id: %w", err)
-	}
-	return stagingPrefix + "/" + id, nil
+// helper. A future improvement (multi-host) is to mix in a
+// host_id (TODO M3.1).
+func (s *store) makeStagingPath() string {
+	return stagingPrefix + "/" + uuid.NewString()
 }
 
 // countingReader wraps an io.Reader and tracks the number of bytes
