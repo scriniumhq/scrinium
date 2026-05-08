@@ -119,10 +119,6 @@ func defaultOptions() options {
 // migrations are long-running and deserve cancellation. Doc
 // amendment tracked separately.
 func NewStore(ctx context.Context, path string, opts ...index.IndexOption) (*Index, error) {
-	if path == "" {
-		return nil, fmt.Errorf("sqlite: empty path")
-	}
-
 	// Resolve umbrella IndexOptions, then map them onto our local
 	// options struct. The reverse direction (sqlite-private knobs
 	// reachable through index.IndexOption) is intentionally not
@@ -132,9 +128,34 @@ func NewStore(ctx context.Context, path string, opts ...index.IndexOption) (*Ind
 	for _, fn := range opts {
 		fn(&idxOpts)
 	}
-
 	o := defaultOptions()
 	o.publisher = idxOpts.Publisher
+	return newStoreInternal(ctx, path, o)
+}
+
+// newStoreForTests is the in-package constructor used by sqlite_test.go
+// to exercise paths that need non-default tunables (sync_off,
+// custom busy_timeout). Not exported because chaos-test packages
+// outside sqlite have no legitimate need for them — they should
+// inject faults at the driver layer instead.
+func newStoreForTests(ctx context.Context, path string, mut func(*options)) (*Index, error) {
+	o := defaultOptions()
+	if mut != nil {
+		mut(&o)
+	}
+	return newStoreInternal(ctx, path, o)
+}
+
+// newStoreInternal is the shared body of NewStore and
+// newStoreForTests. It receives a fully-resolved options struct
+// and runs the open/pragma/migrate sequence common to both
+// constructors. The split keeps the public/test-only entry
+// points free of implementation-detail churn — when the open
+// flow grows a step, both constructors get it for free.
+func newStoreInternal(ctx context.Context, path string, o options) (*Index, error) {
+	if path == "" {
+		return nil, fmt.Errorf("sqlite: empty path")
+	}
 
 	dsn := buildDSN(path, o)
 	db, err := openSQL(dsn)
@@ -162,45 +183,6 @@ func NewStore(ctx context.Context, path string, opts ...index.IndexOption) (*Ind
 		return nil, err
 	}
 
-	return &Index{
-		db:        db,
-		opts:      o,
-		extByName: make(map[string]index.IndexExtension),
-		extByKind: make(map[index.EventKind][]index.IndexExtension),
-		extStores: make(map[string]*sqliteExtStore),
-	}, nil
-}
-
-// newStoreForTests is the in-package constructor used by sqlite_test.go
-// to exercise paths that need non-default tunables (sync_off,
-// custom busy_timeout). Not exported because chaos-test packages
-// outside sqlite have no legitimate need for them — they should
-// inject faults at the driver layer instead.
-func newStoreForTests(ctx context.Context, path string, mut func(*options)) (*Index, error) {
-	if path == "" {
-		return nil, fmt.Errorf("sqlite: empty path")
-	}
-	o := defaultOptions()
-	if mut != nil {
-		mut(&o)
-	}
-
-	dsn := buildDSN(path, o)
-	db, err := openSQL(dsn)
-	if err != nil {
-		return nil, fmt.Errorf("sqlite: open: %w", err)
-	}
-	db.SetMaxOpenConns(8)
-	db.SetMaxIdleConns(2)
-
-	if err := applyPragmas(ctx, db, path, o); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("sqlite: apply pragmas: %w", err)
-	}
-	if err := applyMigrations(ctx, db); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
 	return &Index{
 		db:        db,
 		opts:      o,
