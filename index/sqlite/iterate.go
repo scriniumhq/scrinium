@@ -9,6 +9,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
 // ListByNamespace iterates over manifests whose namespace matches
@@ -149,7 +150,7 @@ func (i *Index) ListOrphanBlobs(
 // what the scrub schedule wants. RFC 3339 second-precision strings
 // (UTC) sort lexicographically the same as chronologically.
 func (i *Index) ListUnverified(ctx context.Context, before time.Time, cb func(blobRef string) error) error {
-	cutoff := fmtRFC3339(before)
+	cutoff := timefmt.Format(before)
 	const stmt = `
 		SELECT blob_ref FROM blobs
 		WHERE last_verified_at IS NULL OR last_verified_at < ?

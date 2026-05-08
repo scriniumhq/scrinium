@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
 // MarkVerified updates the last_verified_at timestamp of a blob.
@@ -25,7 +26,7 @@ func (i *Index) MarkVerified(blobRef string, timestamp time.Time) error {
 	defer func() { i.emitLatency(op, time.Since(start)) }()
 
 	const stmt = `UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`
-	_, err := i.db.ExecContext(context.Background(), stmt, fmtRFC3339(timestamp), blobRef)
+	_, err := i.db.ExecContext(context.Background(), stmt, timefmt.Format(timestamp), blobRef)
 	if err != nil {
 		if isBusyError(err) {
 			i.emitContention(op, time.Since(start))

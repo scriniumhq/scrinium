@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
 // newMemoryIndex spins up an in-memory Index for fast unit tests.
@@ -97,7 +98,7 @@ func TestNewStore_FutureSchemaRejected(t *testing.T) {
 	idx, path := newDiskIndex(t)
 	if _, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO schema_version(version, applied_at) VALUES (?, ?)`,
-		CurrentSchemaVersion+1, fmtRFC3339(time.Now()),
+		CurrentSchemaVersion+1, timefmt.Format(time.Now()),
 	); err != nil {
 		t.Fatalf("seed future version: %v", err)
 	}

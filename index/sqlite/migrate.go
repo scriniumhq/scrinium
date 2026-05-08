@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
 // readSchemaVersion returns the highest version recorded in
@@ -94,7 +95,7 @@ func applyMigration(ctx context.Context, db *sql.DB, m migration) error {
 
 	if _, err := tx.ExecContext(ctx,
 		`INSERT INTO schema_version(version, applied_at) VALUES (?, ?)`,
-		m.Version, fmtRFC3339(time.Now()),
+		m.Version, timefmt.Format(time.Now()),
 	); err != nil {
 		return fmt.Errorf("record version: %w", err)
 	}

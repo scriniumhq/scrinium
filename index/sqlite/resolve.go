@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
 // Resolve returns the physical address of a blob. It is the
@@ -197,42 +197,17 @@ func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	if originalSize.Valid {
 		m.OriginalSize = originalSize.Int64
 	}
-	t, err := parseRFC3339(createdAt)
+	t, err := timefmt.Parse(createdAt)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("scan created_at: %w", err)
 	}
 	m.CreatedAt = t
 	if retentionUntil.Valid {
-		t, err := parseRFC3339(retentionUntil.String)
+		t, err := timefmt.Parse(retentionUntil.String)
 		if err != nil {
 			return domain.Manifest{}, fmt.Errorf("scan retention_until: %w", err)
 		}
 		m.RetentionUntil = t
 	}
 	return m, nil
-}
-
-// fmtRFC3339 returns the timestamp in RFC 3339 / second precision
-// (UTC). Matches internal/manifestcodec §7.5: the same format the
-// manifest writes on disk, so RebuildIndex (M3) can copy strings
-// without reformatting. Empty string for zero time — paired with a
-// sql.NullString in callers, this becomes SQL NULL.
-func fmtRFC3339(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return t.UTC().Format(time.RFC3339)
-}
-
-// parseRFC3339 reads a timestamp written by fmtRFC3339. Empty string
-// returns zero Time. Accepts the Nano variant too for forward
-// compatibility (in case a future migration writes nanoseconds).
-func parseRFC3339(s string) (time.Time, error) {
-	if s == "" {
-		return time.Time{}, nil
-	}
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t, nil
-	}
-	return time.Parse(time.RFC3339Nano, s)
 }

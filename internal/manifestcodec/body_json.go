@@ -13,10 +13,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
 // --- Body JSON encoding (deterministic, sorted keys, RFC 3339) ---
@@ -75,7 +75,7 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 	body := jsonBody{
 		BlobRef:       string(m.BlobRef),
 		ContentHash:   string(m.ContentHash),
-		CreatedAt:     formatRFC3339(m.CreatedAt),
+		CreatedAt:     timefmt.Format(m.CreatedAt),
 		ExternalURI:   m.ExternalURI,
 		LayoutHeader:  jsonLayoutHeader{BlobStorage: m.LayoutHeader.BlobStorage},
 		Metadata:      m.Metadata,
@@ -92,7 +92,7 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 		body.InlineBlob = base64.StdEncoding.EncodeToString(m.InlineBlob)
 	}
 	if !m.RetentionUntil.IsZero() {
-		body.RetentionTime = formatRFC3339(m.RetentionUntil)
+		body.RetentionTime = timefmt.Format(m.RetentionUntil)
 	}
 	if m.SystemFlags.TOCOffset != 0 || m.SystemFlags.TOCSize != 0 {
 		body.System = &jsonSystemFlags{
@@ -148,14 +148,14 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 		m.InlineBlob = raw
 	}
 	if b.CreatedAt != "" {
-		t, err := parseRFC3339(b.CreatedAt)
+		t, err := timefmt.Parse(b.CreatedAt)
 		if err != nil {
 			return domain.Manifest{}, fmt.Errorf("manifestcodec: created_at: %w", err)
 		}
 		m.CreatedAt = t
 	}
 	if b.RetentionTime != "" {
-		t, err := parseRFC3339(b.RetentionTime)
+		t, err := timefmt.Parse(b.RetentionTime)
 		if err != nil {
 			return domain.Manifest{}, fmt.Errorf("manifestcodec: retention_until: %w", err)
 		}
@@ -216,25 +216,4 @@ func pipelineFromJSON(stages []jsonPipelineStage) []domain.PipelineStage {
 		out = append(out, ps)
 	}
 	return out
-}
-
-// formatRFC3339 returns the manifest-format timestamp (UTC, second
-// precision) per §7.5. Millisecond/nanosecond precision is
-// deliberately dropped: the ArtifactID must be stable for the same
-// logical content, and sub-second variance from time.Now() would
-// defeat dedup.
-func formatRFC3339(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return t.UTC().Format(time.RFC3339)
-}
-
-// parseRFC3339 accepts both the strict format we write and the
-// nanosecond variant for forward compatibility.
-func parseRFC3339(s string) (time.Time, error) {
-	if t, err := time.Parse(time.RFC3339, s); err == nil {
-		return t, nil
-	}
-	return time.Parse(time.RFC3339Nano, s)
 }

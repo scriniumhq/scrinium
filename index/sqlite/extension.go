@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/index"
+	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
 // Extensions returns the registry for installing index extensions
@@ -160,7 +161,7 @@ func upsertExtensionVersion(ctx context.Context, tx *sql.Tx, name string, versio
 		ON CONFLICT (extension) DO UPDATE SET
 			schema_version = excluded.schema_version,
 			registered_at  = excluded.registered_at`
-	_, err := tx.ExecContext(ctx, stmt, name, version, time.Now().UTC().Format(time.RFC3339))
+	_, err := tx.ExecContext(ctx, stmt, name, version, timefmt.Format(time.Now()))
 	return err
 }
 

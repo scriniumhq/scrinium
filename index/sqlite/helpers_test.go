@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
 // Glass-box helpers shared between the per-package tests of the
@@ -48,7 +49,7 @@ func insertBlob(t *testing.T, idx *Index, ref, contentHash string, size int64, a
 		ref, contentHash, size,
 		int(addr.Workspace), addr.Path,
 		addr.PackRef, addr.Offset, addr.Size,
-		refCount, fmtRFC3339(time.Now()),
+		refCount, timefmt.Format(time.Now()),
 	)
 	if err != nil {
 		t.Fatalf("insertBlob: %v", err)
@@ -76,7 +77,7 @@ func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	}
 	var retentionArg any
 	if !m.RetentionUntil.IsZero() {
-		retentionArg = fmtRFC3339(m.RetentionUntil)
+		retentionArg = timefmt.Format(m.RetentionUntil)
 	}
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO manifests (
@@ -85,7 +86,7 @@ func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		string(m.ArtifactID), string(m.Type),
 		m.Namespace, m.SessionID, blobRefArg,
-		fmtRFC3339(createdAt), retentionArg,
+		timefmt.Format(createdAt), retentionArg,
 	)
 	if err != nil {
 		t.Fatalf("insertManifest: %v", err)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/index"
+	"github.com/rkurbatov/scrinium/internal/timefmt"
 )
 
 // IndexManifest registers an artifact in the index. Branches on
@@ -136,7 +137,7 @@ func upsertBlob(
 		addr.PackRef,
 		addr.Offset,
 		addr.Size,
-		fmtRFC3339(time.Now()),
+		timefmt.Format(time.Now()),
 	)
 	return err
 }
@@ -219,7 +220,7 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	if m.RetentionUntil.IsZero() {
 		retentionArg = nil
 	} else {
-		retentionArg = fmtRFC3339(m.RetentionUntil)
+		retentionArg = timefmt.Format(m.RetentionUntil)
 	}
 
 	createdAt := m.CreatedAt
@@ -233,7 +234,7 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 		m.Namespace,
 		m.SessionID,
 		blobRefArg,
-		fmtRFC3339(createdAt),
+		timefmt.Format(createdAt),
 		retentionArg,
 	)
 	return err
