@@ -1,4 +1,4 @@
-package daemon
+package scrinium
 
 import (
 	"errors"
@@ -10,12 +10,12 @@ import (
 )
 
 // Config is the shared configuration consumed by every
-// scrinium binary. Surface-specific configs (webdav listen
-// address, fuse mount point, etc.) live in the respective
-// cmd packages and reference this Config.
+// Scrinium-backed application. Surface-specific configs (webdav
+// listen address, fuse mount point, etc.) live in the respective
+// host packages and reference this Config.
 //
 // Config is meant to be loaded from YAML or built up
-// programmatically; CLI flag binding is the cmd's job.
+// programmatically; CLI flag binding is the host's job.
 //
 // Two URIs identify the backend:
 //   - Store points at the artifact storage (file://, s3://...).
@@ -36,7 +36,14 @@ type Config struct {
 
 	// PassphraseFile points at a file holding the store's
 	// encryption passphrase. Empty means unencrypted store
-	// (Plain DEK).
+	// (Plain DEK). The file is read at Open time; it is
+	// expected to contain the passphrase as raw bytes (one
+	// line, no trailing newline is required but tolerated —
+	// trailing whitespace is stripped).
+	//
+	// The host is responsible for ensuring file permissions
+	// on the passphrase file are appropriately restrictive
+	// (e.g. 0600 owned by the daemon user).
 	PassphraseFile string `yaml:"passphraseFile"`
 
 	// Namespace constrains writes/visibility to a single
@@ -161,13 +168,13 @@ func (c Config) Validate() error {
 	}
 
 	if len(errs) > 0 {
-		return errors.New("daemon config: " + strings.Join(errs, "; "))
+		return errors.New("scrinium config: " + strings.Join(errs, "; "))
 	}
 	return nil
 }
 
 // editingPolicy returns the projection-level policy derived
-// from the string field. Centralised here so the cmd packages
+// from the string field. Centralised here so host packages
 // don't each duplicate the mapping.
 //
 // "custom" inspects the per-operation pointer flags; a nil

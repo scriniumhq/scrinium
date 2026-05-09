@@ -203,7 +203,7 @@ func TestLoadConfig_FlagOverridesEnv(t *testing.T) {
 
 func TestValidate_RequiredFields(t *testing.T) {
 	cfg := DefaultConfig()
-	// No Store → daemon.Validate fails.
+	// No Store → scrinium.Validate fails.
 	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "store") {
 		t.Errorf("expected store error, got %v", err)
 	}

@@ -15,21 +15,21 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 
-	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
+	"github.com/rkurbatov/scrinium"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/projection"
 )
 
 // runMount with the FUSE backend wired in. The heavy lifting
 // (open store, build view, fsops, scratch dir, mount session)
-// lives in cmd/internal/daemon.Open. This function owns only the
+// lives in cmd/internal/scrinium.Open. This function owns only the
 // FUSE-specific surface: the root inode tree, the mount, and
 // signal handling.
 //
 // Lifecycle:
 //
 //  1. Parse + validate config.
-//  2. daemon.Open — bootstrap the shared resources.
+//  2. scrinium.Open — bootstrap the shared resources.
 //  3. Build the routing config from daemon Config.
 //  4. Construct the root inode tree and mount.
 //  5. Block on the FUSE server, propagating SIGINT/SIGTERM
@@ -46,7 +46,7 @@ func runMount(args []string) int {
 
 	ctx := context.Background()
 
-	d, err := daemon.Open(ctx, cfg.Daemon)
+	d, err := scrinium.Open(ctx, cfg.Daemon)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-fuse: %v\n", err)
 		return 1

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rkurbatov/scrinium"
 	"github.com/rkurbatov/scrinium/cmd/internal/cliflags"
-	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
 )
 
 // Config is what scrinium-fuse reads. The daemon-level fields
@@ -17,7 +17,7 @@ import (
 type Config struct {
 	// Daemon embeds the shared bootstrap config. yaml:",inline"
 	// keeps the user-visible YAML flat.
-	Daemon daemon.Config `yaml:",inline"`
+	Daemon scrinium.Config `yaml:",inline"`
 
 	// MountPoint is the directory the FUSE filesystem mounts
 	// onto. Required.
@@ -40,12 +40,12 @@ type Config struct {
 }
 
 // DefaultConfig returns a Config with the documented defaults.
-// Daemon's defaults come from daemon.DefaultConfig; only
+// Daemon's defaults come from scrinium.DefaultConfig; only
 // FUSE-specific defaults and the "files" namespace fallback
 // are set here.
 func DefaultConfig() Config {
 	cfg := Config{
-		Daemon:    daemon.DefaultConfig(),
+		Daemon:    scrinium.DefaultConfig(),
 		IndexMode: "memory",
 	}
 	if cfg.Daemon.Namespace == "" {

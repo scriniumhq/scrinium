@@ -1,5 +1,15 @@
 # Scrinium — top-level Makefile.
 #
+# Layout (multi-module workspace, go.work):
+#   /          — engine module (github.com/rkurbatov/scrinium)
+#   /cmd       — reference binaries module (github.com/rkurbatov/scrinium/cmd)
+#   /examples  — example programs module  (github.com/rkurbatov/scrinium/examples)
+#
+# go.work at the repo root composes all three so `go build ./...`
+# and `go test ./...` Just Work from the top. `make tidy` runs
+# `go mod tidy` in each module separately (go does not workspace-
+# tidy).
+#
 # Conventions:
 #   make            — same as `make help`
 #   make test       — fast test, package-level summary, no race
@@ -11,7 +21,7 @@
 #                     bypasses gotestsum for live stderr progress);
 #                     N=K to override the artifact count
 #   make build      — go build ./... (no install)
-#   make tidy       — go mod tidy + verify
+#   make tidy       — go mod tidy + verify in every module
 #   make fmt        — gofmt -s -w on all .go files
 #   make vet        — go vet ./...
 #   make ci         — fmt-check + vet + test (what CI should run)
@@ -271,6 +281,8 @@ vet:
 tidy:
 	$(GO) mod tidy
 	$(GO) mod verify
+	cd cmd && $(GO) mod tidy && $(GO) mod verify
+	cd examples && $(GO) mod tidy && $(GO) mod verify
 
 .PHONY: ci
 ci: fmt-check vet test fuzz-smoke

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rkurbatov/scrinium"
 	"github.com/rkurbatov/scrinium/cmd/internal/cliflags"
-	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
 )
 
 // Config is what scrinium-webview reads. The daemon-level
@@ -19,7 +19,7 @@ import (
 // ReadOnly field is shared across binaries; making it always-
 // true at this layer is webview-cmd's policy choice.
 type Config struct {
-	Daemon daemon.Config `yaml:",inline"`
+	Daemon scrinium.Config `yaml:",inline"`
 
 	// Listen is the HTTP listen address. Default ":8081" —
 	// one above webdav's default so a developer can run both
@@ -44,7 +44,7 @@ type Config struct {
 // DefaultConfig — webview defaults.
 func DefaultConfig() Config {
 	cfg := Config{
-		Daemon:       daemon.DefaultConfig(),
+		Daemon:       scrinium.DefaultConfig(),
 		Listen:       ":8081",
 		BrowsePrefix: "/",
 		DefaultTree:  "by-path",

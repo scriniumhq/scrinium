@@ -1,4 +1,4 @@
-package daemon
+package scrinium
 
 import (
 	"context"
@@ -22,37 +22,39 @@ import (
 
 	// Side-effect imports register the URI dialers. Adding new
 	// schemes is a matter of importing the relevant packages
-	// here. cmd binaries that want to constrain the available
-	// schemes can import this package or the dialers
-	// individually as needed.
+	// here. Hosts that want to constrain the available schemes
+	// import the dialers individually.
 	_ "github.com/rkurbatov/scrinium/driver/localfs"
 	_ "github.com/rkurbatov/scrinium/index/sqlite"
 )
 
-// Open builds a Daemon from a Config: parses URIs, opens
-// store and index, registers fsindex, builds the View,
-// generates the mount session, prepares the scratch
-// directory, and assembles FSOps.
+// Open builds a Scrinium runtime from a Config: parses URIs,
+// opens store and index, registers fsindex, builds the View,
+// generates the mount session, prepares the scratch directory,
+// and assembles FSOps.
 //
-// The order of operations matches what existing cmd binaries
-// do today, just consolidated:
+// The order of operations:
 //
 //  1. Validate config.
 //  2. Open driver via DialDriver(cfg.Store).
-//  3. Open index via DialIndex(cfg.Index)  — defaulted from
-//     Store path when cfg.Index is empty and Store is file://.
+//  3. Resolve and open index (default sqlite under store dir
+//     when cfg.Index is empty and store is file://).
 //  4. Register fsindex extension. Must precede OpenStore so
 //     the very first IndexManifest call dispatches into it.
-//  5. core.OpenStore with hash registry.
+//  5. core.OpenStore with hash registry. If
+//     cfg.PassphraseFile is set, the store is opened with a
+//     passphrase provider that reads the file; this transitions
+//     an encrypted Store from Locked to Unlocked.
 //  6. Build View with fsmeta resolver and fsindex backing.
 //  7. Generate MountSession.
 //  8. Prepare scratch directory.
 //  9. Build FSOps with policy from Config.
 //
-// On any failure the partial state is unwound: opened
-// resources are closed, errors are wrapped with their stage
-// for fast diagnosis.
-func Open(ctx context.Context, cfg Config) (_ *Daemon, retErr error) {
+// On any failure the partial state is unwound: opened resources
+// are closed, errors are wrapped with their stage for fast
+// diagnosis. Cleanup errors are logged to stderr; they cannot
+// be returned alongside the primary error.
+func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -75,27 +77,23 @@ func Open(ctx context.Context, cfg Config) (_ *Daemon, retErr error) {
 	// 1. Open driver from URI.
 	drv, err := driver.DialDriver(cfg.Store)
 	if err != nil {
-		return nil, fmt.Errorf("daemon: %w", err)
+		return nil, fmt.Errorf("scrinium.Open: %w", err)
 	}
 
 	// 2. Resolve index URI (default if empty + local store).
 	indexURI, err := resolveIndexURI(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("daemon: %w", err)
+		return nil, fmt.Errorf("scrinium.Open: %w", err)
 	}
 
 	// 3. Open index.
 	idx, err := index.DialIndex(ctx, indexURI)
 	if err != nil {
-		// Driver doesn't have a Close in our abstraction;
-		// the localfs driver releases resources via its
-		// internal handle close on store/index close, so we
-		// just bubble up.
-		return nil, fmt.Errorf("daemon: open index: %w", err)
+		return nil, fmt.Errorf("scrinium.Open: open index: %w", err)
 	}
 	cleanups = append(cleanups, func() {
 		if err := idx.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "daemon: index close on rollback: %v\n", err)
+			fmt.Fprintf(os.Stderr, "scrinium.Open: index close on rollback: %v\n", err)
 		}
 	})
 
@@ -118,7 +116,7 @@ func Open(ctx context.Context, cfg Config) (_ *Daemon, retErr error) {
 	fsidx := fsindex.New()
 	if extIdx, ok := idx.(indexWithExtensions); ok {
 		if err := extIdx.Extensions().Register(ctx, fsidx); err != nil {
-			return nil, fmt.Errorf("daemon: register fsindex: %w", err)
+			return nil, fmt.Errorf("scrinium.Open: register fsindex: %w", err)
 		}
 	}
 
@@ -126,18 +124,42 @@ func Open(ctx context.Context, cfg Config) (_ *Daemon, retErr error) {
 	//    into a Store. Hash registry is fixed at sha256 here
 	//    — every shipped binary uses the same; pluggable
 	//    when we have a use case.
-	store, err := core.OpenStore(ctx, drv,
+	//
+	//    PassphraseFile (if set) flips the Store from a
+	//    Plain-DEK open to an encrypted Unlock by attaching
+	//    a passphrase provider. The provider re-reads the
+	//    file each time it is invoked so RotateKEK / re-Unlock
+	//    paths work correctly even if the host rotates the
+	//    file in between.
+	pp, err := loadPassphraseProvider(cfg.PassphraseFile)
+	if err != nil {
+		return nil, fmt.Errorf("scrinium.Open: %w", err)
+	}
+	storeOpts := []core.StoreOption{
 		core.WithStoreIndex(idx),
 		core.WithHashRegistry(defaultHashRegistry()),
-	)
+	}
+	if pp != nil {
+		storeOpts = append(storeOpts, core.WithPassphrase(pp))
+	}
+	store, err := core.OpenStore(ctx, drv, storeOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("daemon: open store: %w", err)
+		return nil, fmt.Errorf("scrinium.Open: open store: %w", err)
 	}
 	cleanups = append(cleanups, func() {
 		if err := store.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "daemon: store close on rollback: %v\n", err)
+			fmt.Fprintf(os.Stderr, "scrinium.Open: store close on rollback: %v\n", err)
 		}
 	})
+
+	// If the store opened in StateLocked (encrypted, no
+	// passphrase or wrong passphrase), surface that as an
+	// error: callers expect an Unlocked Store from Open.
+	// This catches the case "PassphraseFile points at the
+	// wrong content" without burying it three layers deep.
+	if store.State() == domain.StateLocked {
+		return nil, fmt.Errorf("scrinium.Open: store is locked; check PassphraseFile")
+	}
 
 	// 6. Build View — synchronous backfill over all manifests.
 	viewOpts := []projection.ViewOption{
@@ -152,11 +174,11 @@ func Open(ctx context.Context, cfg Config) (_ *Daemon, retErr error) {
 	}
 	view, err := projection.NewView(ctx, store, viewOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("daemon: build view: %w", err)
+		return nil, fmt.Errorf("scrinium.Open: build view: %w", err)
 	}
 	cleanups = append(cleanups, func() {
 		if err := view.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "daemon: view close on rollback: %v\n", err)
+			fmt.Fprintf(os.Stderr, "scrinium.Open: view close on rollback: %v\n", err)
 		}
 	})
 
@@ -166,10 +188,10 @@ func Open(ctx context.Context, cfg Config) (_ *Daemon, retErr error) {
 	// 8. Scratch directory.
 	scratchDir, err := resolveScratchDir(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("daemon: %w", err)
+		return nil, fmt.Errorf("scrinium.Open: %w", err)
 	}
 	if err := os.MkdirAll(scratchDir, 0o700); err != nil {
-		return nil, fmt.Errorf("daemon: mkdir scratch: %w", err)
+		return nil, fmt.Errorf("scrinium.Open: mkdir scratch: %w", err)
 	}
 	clearScratchDir(scratchDir)
 
@@ -190,10 +212,10 @@ func Open(ctx context.Context, cfg Config) (_ *Daemon, retErr error) {
 	}
 	fsops, err := projection.NewFSOps(view, fsopsOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("daemon: build fsops: %w", err)
+		return nil, fmt.Errorf("scrinium.Open: build fsops: %w", err)
 	}
 
-	return &Daemon{
+	return &Scrinium{
 		Config:       cfg,
 		Store:        store,
 		Index:        idx,
@@ -213,38 +235,11 @@ func resolveIndexURI(cfg Config) (string, error) {
 		return cfg.Index, nil
 	}
 
-	// Try to locate the store path. Two forms accepted:
-	//   - bare path "/abs/path"  → local
-	//   - file:///abs/path       → local
-	// Anything else: error, because we don't know where to put
-	// the default index.
-	storePath := ""
-	if u, err := url.Parse(cfg.Store); err == nil && u.Scheme == "file" {
-		switch u.Host {
-		case "":
-			storePath = u.Path
-		case "~":
-			home, herr := os.UserHomeDir()
-			if herr != nil {
-				return "", fmt.Errorf("expand ~ in store URI: %w", herr)
-			}
-			storePath = filepath.Join(home, strings.TrimPrefix(u.Path, "/"))
-		case ".":
-			storePath = "." + u.Path
-		}
-	} else if !looksLikeSchemeURI(cfg.Store) {
-		// Bare path (no scheme).
-		storePath = cfg.Store
-	}
-
-	if storePath == "" {
+	storePath, err := localStorePath(cfg.Store)
+	if err != nil {
 		return "", fmt.Errorf("index URI is empty and cannot default for store %q (set index explicitly)", cfg.Store)
 	}
-	abs, err := filepath.Abs(expandTilde(storePath))
-	if err != nil {
-		return "", fmt.Errorf("resolve store path: %w", err)
-	}
-	return "sqlite:///" + filepath.Join(abs, "index.db"), nil
+	return "sqlite:///" + filepath.Join(storePath, "index.db"), nil
 }
 
 // resolveScratchDir returns cfg.ScratchDir, or a default under

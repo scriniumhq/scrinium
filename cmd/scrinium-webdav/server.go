@@ -11,14 +11,14 @@ import (
 
 	"golang.org/x/net/webdav"
 
-	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
+	"github.com/rkurbatov/scrinium"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/projection"
 )
 
 // runServe is the entry point for "scrinium-webdav serve". The
 // heavy lifting (open store/index, build view, fsops, scratch
-// dir, mount session) lives in cmd/internal/daemon.Open. This
+// dir, mount session) lives in cmd/internal/scrinium.Open. This
 // function owns only the WebDAV-specific surface: the HTTP
 // listener and the WebDAV adapter on top of vfs.
 //
@@ -42,7 +42,7 @@ func runServe(args []string) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d, err := daemon.Open(ctx, cfg.Daemon)
+	d, err := scrinium.Open(ctx, cfg.Daemon)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-webdav: %v\n", err)
 		return 1

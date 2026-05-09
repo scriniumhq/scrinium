@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
+	"github.com/rkurbatov/scrinium"
 	"github.com/rkurbatov/scrinium/cmd/scrinium-webview/web"
 	"github.com/rkurbatov/scrinium/domain"
 	"github.com/rkurbatov/scrinium/projection"
@@ -58,7 +58,7 @@ func runServe(args []string) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	d, err := daemon.Open(ctx, cfg.Daemon)
+	d, err := scrinium.Open(ctx, cfg.Daemon)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-webview: %v\n", err)
 		return 1

@@ -1,4 +1,4 @@
-package daemon_test
+package scrinium_test
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 )
 
 // openLocalDriver builds a localfs driver for tests. The
-// daemon package itself uses the URI dialer; tests bypass that
-// because they want to verify the daemon against an already-
-// initialised store, and InitStore needs the same driver
-// instance the daemon will later open.
+// scrinium package itself uses the URI dialer; tests bypass
+// that because they want to verify scrinium against an
+// already-initialised store, and InitStore needs the same
+// driver instance scrinium will later open.
 func openLocalDriver(path string) (*localfs.Driver, error) {
 	return localfs.New(path)
 }
@@ -26,7 +26,7 @@ func openLocalIndex(ctx context.Context, path string) (*sqlite.Index, error) {
 	return sqlite.NewStore(ctx, path)
 }
 
-// testHashRegistry mirrors the daemon's defaultHashRegistry —
+// testHashRegistry mirrors scrinium's defaultHashRegistry —
 // duplicated rather than exported because the registry is an
 // internal detail and tests shouldn't depend on it.
 func testHashRegistry() domain.HashRegistry {

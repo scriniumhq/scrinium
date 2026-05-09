@@ -1,4 +1,4 @@
-package daemon
+package scrinium
 
 import (
 	"github.com/rkurbatov/scrinium/core"
@@ -7,6 +7,56 @@ import (
 	"github.com/rkurbatov/scrinium/projection"
 	"github.com/rkurbatov/scrinium/projection/fsindex"
 )
+
+// Scrinium holds the long-lived resources every Scrinium-backed
+// application shares: an open Store, a StoreIndex, a projection
+// View, an FSOps facade, plus a boot-unique MountSession used in
+// stats and as a tiebreaker. Construct with Open or Init; shut
+// down with Close.
+//
+// Hosts consume the fields directly. Surfaces (FUSE, WebDAV,
+// HTTP, gRPC, etc.) read from View and FSOps; admin tooling
+// reaches into Store and Index for management operations.
+//
+// The struct is intentionally a plain bag of pointers — no
+// internal state, no methods beyond the lifecycle ones. That
+// leaves hosts free to wrap or extend it without inheritance
+// gymnastics.
+type Scrinium struct {
+	// Config is the validated config Scrinium was opened with.
+	// Surfaces consult routing/policy fields here when they
+	// need them past Open.
+	Config Config
+
+	// Store is the high-level CAS store. Surfaces use it for
+	// Put/Get and for capacity queries (stats endpoints).
+	Store core.Store
+
+	// Index is the metadata index. Surfaces rarely touch this
+	// directly; it's exposed for diagnostics like the
+	// extension list rendered in stats.
+	Index core.StoreIndex
+
+	// View is the read-side projection of the store: trees by
+	// path, by date, etc. Both FUSE and WebDAV adapters route
+	// reads through it.
+	View *projection.View
+
+	// FSOps is the read/write filesystem facade — the layer
+	// FUSE and WebDAV adapters wrap. Carries the mount session
+	// and editing policy resolved from Config.
+	FSOps *projection.FSOps
+
+	// FSIndex is the filesystem-projection index extension
+	// kept in scope so it can be referenced after Open
+	// (e.g. ListExtensions for stats).
+	FSIndex *fsindex.Extension
+
+	// MountSession is the boot-unique identifier this Scrinium
+	// instance presents in stats and uses as a tiebreaker.
+	// Generated at Open or Init time.
+	MountSession string
+}
 
 // indexWithExtensions is the optional capability some
 // StoreIndex backends expose for registering index extensions
@@ -39,7 +89,7 @@ type indexWithExtensionList interface {
 	ListExtensions() []sqlite.ExtensionInfo
 }
 
-// ExtensionInfo is the public, daemon-level view of a
+// ExtensionInfo is the public, scrinium-level view of a
 // registered index extension. Mirrors what backends expose;
 // surfaces (stats endpoints, debug pages) consume this rather
 // than reaching into the backend type.
@@ -54,8 +104,8 @@ type ExtensionInfo struct {
 //
 // The lookup is cheap (in-memory map on the backend) so we
 // don't cache; surfaces call this on every stats render.
-func (d *Daemon) ListExtensions() []ExtensionInfo {
-	lister, ok := d.Index.(indexWithExtensionList)
+func (s *Scrinium) ListExtensions() []ExtensionInfo {
+	lister, ok := s.Index.(indexWithExtensionList)
 	if !ok {
 		return nil
 	}
@@ -68,44 +118,4 @@ func (d *Daemon) ListExtensions() []ExtensionInfo {
 		})
 	}
 	return out
-}
-
-// Daemon holds the long-lived resources every scrinium binary
-// shares: open store, index, view, FSOps. Construct with Open,
-// shut down with Close. cmd packages consume *Daemon to wire
-// their surfaces (HTTP handler, FUSE mount, etc.).
-type Daemon struct {
-	// Config is the validated config the daemon was opened
-	// with. Surfaces consult routing/policy fields here when
-	// they need them past Open.
-	Config Config
-
-	// Store is the high-level CAS store. Surfaces use it for
-	// Put/Get and for capacity queries (stats endpoints).
-	Store core.Store
-
-	// Index is the metadata index. Surfaces rarely touch this
-	// directly; it's exposed for diagnostics like the
-	// extension list rendered in stats.
-	Index core.StoreIndex
-
-	// View is the read-side projection of the store: trees by
-	// path, by date, etc. Both FUSE and WebDAV adapters route
-	// reads through it.
-	View *projection.View
-
-	// FSOps is the read/write filesystem facade — the layer
-	// FUSE and WebDAV adapters wrap. Carries the mount session
-	// and editing policy resolved from Config.
-	FSOps *projection.FSOps
-
-	// FSIndex is the filesystem-projection index extension
-	// kept in scope so it can be referenced after Open
-	// (e.g. ListExtensions for stats).
-	FSIndex *fsindex.Extension
-
-	// MountSession is the boot-unique identifier this daemon
-	// instance presents in stats and uses as a tiebreaker.
-	// Generated at Open time.
-	MountSession string
 }

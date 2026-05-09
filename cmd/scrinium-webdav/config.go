@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rkurbatov/scrinium"
 	"github.com/rkurbatov/scrinium/cmd/internal/cliflags"
-	"github.com/rkurbatov/scrinium/cmd/internal/daemon"
 )
 
 // Config is what the scrinium-webdav binary reads. The
@@ -25,7 +25,7 @@ type Config struct {
 	// keeps the user-visible YAML flat — `store: ...` and
 	// `listen: ...` live at the same level rather than under
 	// a `daemon:` block. CLI flags follow suit.
-	Daemon daemon.Config `yaml:",inline"`
+	Daemon scrinium.Config `yaml:",inline"`
 
 	// Listen is the HTTP listen address (e.g. ":8080").
 	// Required.
@@ -39,11 +39,11 @@ type Config struct {
 
 // DefaultConfig returns a Config populated with the spec's
 // documented defaults. Daemon's defaults come from
-// daemon.DefaultConfig; only WebDAV-specific defaults and
+// scrinium.DefaultConfig; only WebDAV-specific defaults and
 // the legacy "files" namespace are set here.
 func DefaultConfig() Config {
 	cfg := Config{
-		Daemon: daemon.DefaultConfig(),
+		Daemon: scrinium.DefaultConfig(),
 		Listen: ":8080",
 	}
 	// Backward-compat default for the daemon-level namespace.

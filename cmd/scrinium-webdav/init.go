@@ -2,41 +2,28 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"flag"
 	"fmt"
-	"hash"
 	"os"
-	"path/filepath"
 
-	"github.com/rkurbatov/scrinium/core"
-	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/driver"
-	"github.com/rkurbatov/scrinium/index"
-
-	// Side-effect imports register the URI dialers.
-	_ "github.com/rkurbatov/scrinium/driver/localfs"
-	_ "github.com/rkurbatov/scrinium/index/sqlite"
+	"github.com/rkurbatov/scrinium"
 )
 
 // runInit handles "scrinium-webdav init". It accepts a store
-// URI (file:// or bare path), creates the directory if absent,
-// then writes the descriptor + system.config via core.InitStore.
-// The result is a Plain-DEK store ready to serve — no
-// passphrase, no encryption, suitable for local experimentation.
+// URI (file:// or bare path) and an optional passphrase file,
+// then delegates to scrinium.Init which creates the directory,
+// writes the descriptor + system.config, and returns a runtime
+// already open for use.
 //
-// For encrypted stores, hosts use their own initialisation tool
-// that invokes core.InitStore with WithPassphrase. The reference
-// daemon stays minimal.
-//
-// Doesn't go through cmd/internal/daemon — init is a one-shot
-// operation that creates the store before there's anything to
-// open. core.OpenStore (which the daemon uses) requires a valid
-// system.config; we're producing it.
+// init is one-shot: we Init, write any recovery kit to stderr,
+// and Close. Hosts that need different lifecycle semantics
+// (init-then-serve, init with custom HashRegistry, etc.) build
+// their own using scrinium.Init directly.
 func runInit(args []string) int {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	storeURI := fs.String("store", "", "Store URI (file:///path or bare /path; required).")
+	passphraseFile := fs.String("passphrase-file", "", "Path to a file containing the store passphrase. Empty = Plain (unencrypted).")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -47,77 +34,39 @@ func runInit(args []string) int {
 
 	ctx := context.Background()
 
-	// Open driver via the same registry the daemon uses.
-	drv, err := driver.DialDriver(*storeURI)
+	cfg := scrinium.DefaultConfig()
+	cfg.Store = *storeURI
+	cfg.PassphraseFile = *passphraseFile
+
+	s, kit, err := scrinium.Init(ctx, cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-webdav init: %v\n", err)
 		return 1
 	}
-
-	// Resolve the store's local path so we can synthesise the
-	// default sqlite index URI. init.go can be terse here:
-	// only file:// and bare paths are supported (matching the
-	// store URI semantics — non-local schemes can't be
-	// initialised by us).
-	storePath := *storeURI
-	if len(storePath) >= 7 && storePath[:7] == "file://" {
-		storePath = storePath[7:]
-	}
-	abs, err := filepath.Abs(storePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav init: resolve path: %v\n", err)
-		return 1
-	}
-	if err := os.MkdirAll(abs, 0o755); err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav init: mkdir: %v\n", err)
-		return 1
-	}
-
-	idx, err := index.DialIndex(ctx, "sqlite:///"+filepath.Join(abs, "index.db"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav init: %v\n", err)
-		return 1
-	}
-	// idx must be closed regardless of init outcome — it owns
-	// the sqlite file handle and the OS lock on the index file.
+	// Always Close — wipes secrets, closes index handle.
 	defer func() {
-		if err := idx.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "scrinium-webdav init: index close: %v\n", err)
+		if err := s.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "scrinium-webdav init: close: %v\n", err)
 		}
 	}()
 
-	store, recoveryKit, err := core.InitStore(ctx, drv,
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(initHashRegistry()),
-	)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav init: %v\n", err)
-		return 1
-	}
-	// Wipe in-memory secrets created during init (DEK,
-	// capability token). The store is one-shot here — init
-	// produces the on-disk descriptor and exits; nothing else
-	// in this process needs an open Store.
-	defer func() {
-		if err := store.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "scrinium-webdav init: store close: %v\n", err)
-		}
-	}()
-	if recoveryKit != nil {
-		fmt.Fprintln(os.Stderr, "scrinium-webdav init: unexpected recovery kit produced; refusing to discard")
-		return 1
+	if kit != nil {
+		// Encrypted Init: emit the recovery kit to stderr so
+		// the user can capture it via shell redirection. Hosts
+		// integrating this into a UI should pipe stderr to the
+		// place they want the kit displayed/persisted.
+		fmt.Fprintln(os.Stderr, "--- BEGIN SCRINIUM RECOVERY KIT ---")
+		os.Stderr.Write(kit)
+		fmt.Fprintln(os.Stderr, "--- END SCRINIUM RECOVERY KIT ---")
+		fmt.Fprintln(os.Stderr, "Store this kit somewhere safe. It is the only path to recover")
+		fmt.Fprintln(os.Stderr, "the store if the passphrase is lost.")
 	}
 
-	fmt.Printf("Scrinium store initialised at %s\n", abs)
-	fmt.Printf("Run `scrinium-webdav serve --store=file://%s --listen=:8080` to start serving.\n", abs)
+	fmt.Printf("Scrinium store initialised at %s\n", *storeURI)
+	if *passphraseFile != "" {
+		fmt.Printf("Run `scrinium-webdav serve --store=%s --passphrase-file=%s --listen=:8080` to start serving.\n", *storeURI, *passphraseFile)
+	} else {
+		fmt.Printf("Run `scrinium-webdav serve --store=%s --listen=:8080` to start serving.\n", *storeURI)
+	}
 	return 0
-}
-
-// initHashRegistry returns a HashRegistry with sha256
-// registered. Same set as the daemon uses; duplicated here
-// rather than reaching into cmd/internal/daemon because init runs
-// outside the daemon abstraction.
-func initHashRegistry() domain.HashRegistry {
-	return core.NewHashRegistry().
-		Register("sha256", func() hash.Hash { return sha256.New() })
 }
