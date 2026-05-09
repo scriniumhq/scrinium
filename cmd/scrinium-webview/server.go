@@ -13,7 +13,6 @@ import (
 	"github.com/rkurbatov/scrinium"
 	"github.com/rkurbatov/scrinium/cmd/scrinium-webview/web"
 	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/projection"
 	"github.com/rkurbatov/scrinium/engine/projection/vfs"
 )
 
@@ -67,56 +66,25 @@ func runServe(args []string) int {
 
 	fmt.Fprintf(os.Stderr, "Mount session: %s\n", d.MountSession)
 
-	// Routing config snapshot. Service trees enabled, root
-	// view = byPath, ServicePrefix off + unprefixed mode on
-	// — the trees live at the URL root (/by-path/, /by-date/
-	// etc.) rather than under /_scrinium/.
-	routingCfg := projection.RoutingConfig{
-		ServicePrefix:          "",
-		UnprefixedServiceTrees: true,
-		RootView:               d.Config.RootView,
-		ShowStats:              d.Config.ShowStats,
-		ShowByArtifact:         d.Config.ShowByArtifact,
-		ShowOrphaned:           d.Config.ShowOrphaned,
-		ShowByDate:             d.Config.ShowByDate,
-		ShowBySession:          d.Config.ShowBySession,
-		ShowByNamespace:        d.Config.ShowByNamespace,
-		ShowRaw:                d.Config.ShowRaw,
-	}
+	// Routing config — start from defaults, then override the
+	// two webview-specific fields. Webview lives at the URL
+	// root rather than under a service prefix; service trees
+	// are reachable as /by-path/, /by-date/ etc.
+	routingCfg := d.RoutingConfig()
+	routingCfg.ServicePrefix = ""
+	routingCfg.UnprefixedServiceTrees = true
 
 	startedAt := time.Now().UTC()
 
-	// Stats body for vfs-level _scrinium/stats reads (plain
-	// text). Re-uses projection.RenderStats so the bytes
-	// match what the FUSE/WebDAV surfaces would serve.
-	statsProvider := func() []byte {
-		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
-		defer capCancel()
-		var capPtr *domain.StorageInfo
-		if cap, err := d.Store.Capacity(capCtx); err == nil {
-			capPtr = &cap
-		}
-		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range d.ListExtensions() {
-			exts = append(exts, projection.ExtensionInfo{
-				Name:          e.Name,
-				SchemaVersion: e.SchemaVersion,
-			})
-		}
-		return projection.RenderStats(d.View, projection.DaemonInfo{
-			StartedAt:    startedAt,
-			MountSession: d.MountSession,
-			StorePath:    d.Config.Store,
-			ReadOnly:     true,
-			Namespace:    d.Config.Namespace,
-			Capacity:     capPtr,
-			Extensions:   exts,
-		})
-	}
+	// Plain-text stats body for vfs-level _scrinium/stats reads.
+	// d.Config.ReadOnly is true (forced above) so the rendered
+	// "ReadOnly" line matches webview's actual posture.
+	statsProvider := d.StatsProvider(ctx, startedAt, 2*time.Second)
 
-	// HTML stats provider. Same data, different shape — this
-	// goes into the rendered stats page rather than the raw
-	// virtual file.
+	// HTML stats provider. Same data, different rendering — the
+	// browser uses its own type (web.StatsData) which the
+	// scrinium top-level package does not know about, so the
+	// inline definition stays.
 	htmlStatsProvider := func() web.StatsData {
 		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
 		defer capCancel()

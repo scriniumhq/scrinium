@@ -16,8 +16,6 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 
 	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/projection"
 )
 
 // runMount with the FUSE backend wired in. The heavy lifting
@@ -55,48 +53,9 @@ func runMount(args []string) int {
 
 	fmt.Fprintf(os.Stderr, "Mount session: %s\n", d.MountSession)
 
-	// Routing config snapshot for the dispatcher.
-	routingCfg := projection.RoutingConfig{
-		ServicePrefix:   d.Config.ServicePrefix,
-		RootView:        d.Config.RootView,
-		ShowStats:       d.Config.ShowStats,
-		ShowByArtifact:  d.Config.ShowByArtifact,
-		ShowOrphaned:    d.Config.ShowOrphaned,
-		ShowByDate:      d.Config.ShowByDate,
-		ShowBySession:   d.Config.ShowBySession,
-		ShowByNamespace: d.Config.ShowByNamespace,
-		ShowRaw:         d.Config.ShowRaw,
-	}
-
 	startedAt := time.Now().UTC()
-	statsProvider := func() []byte {
-		// Capacity is best-effort: failure → "n/a" fields
-		// rather than fail the whole stats read. Bound the
-		// call so a slow driver doesn't hang the user's
-		// `cat _scrinium/stats`.
-		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
-		defer capCancel()
-		var capPtr *domain.StorageInfo
-		if cap, err := d.Store.Capacity(capCtx); err == nil {
-			capPtr = &cap
-		}
-		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range d.ListExtensions() {
-			exts = append(exts, projection.ExtensionInfo{
-				Name:          e.Name,
-				SchemaVersion: e.SchemaVersion,
-			})
-		}
-		return projection.RenderStats(d.View, projection.DaemonInfo{
-			StartedAt:    startedAt,
-			MountSession: d.MountSession,
-			StorePath:    d.Config.Store,
-			ReadOnly:     d.Config.ReadOnly,
-			Namespace:    d.Config.Namespace,
-			Capacity:     capPtr,
-			Extensions:   exts,
-		})
-	}
+	routingCfg := d.RoutingConfig()
+	statsProvider := d.StatsProvider(ctx, startedAt, 2*time.Second)
 
 	root := &rootNode{
 		view:          d.View,

@@ -50,6 +50,7 @@ func (s *Scrinium) StatsProvider(ctx context.Context, startedAt time.Time, capac
 			MountSession: s.MountSession,
 			StorePath:    s.Config.Store,
 			ReadOnly:     s.Config.ReadOnly,
+			Editing:      s.Config.Editing,
 			Namespace:    s.Config.Namespace,
 			Capacity:     capPtr,
 			Extensions:   exts,

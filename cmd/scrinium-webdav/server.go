@@ -12,8 +12,6 @@ import (
 	"golang.org/x/net/webdav"
 
 	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/projection"
 )
 
 // runServe is the entry point for "scrinium-webdav serve". The
@@ -51,52 +49,14 @@ func runServe(args []string) int {
 
 	fmt.Fprintf(os.Stderr, "Mount session: %s\n", d.MountSession)
 
-	// Routing config snapshot. Service trees follow daemon
-	// config — webdav defaults to all off so a vanilla
+	// Routing config snapshot for the dispatcher. Webdav
+	// defaults to all visibility flags off so a vanilla
 	// `scrinium-webdav serve` exposes only the user-visible
 	// filesystem; admins enable specific trees with --show-X
 	// flags when they want them.
-	routingCfg := projection.RoutingConfig{
-		ServicePrefix:   d.Config.ServicePrefix,
-		RootView:        d.Config.RootView,
-		ShowStats:       d.Config.ShowStats,
-		ShowByArtifact:  d.Config.ShowByArtifact,
-		ShowOrphaned:    d.Config.ShowOrphaned,
-		ShowByDate:      d.Config.ShowByDate,
-		ShowBySession:   d.Config.ShowBySession,
-		ShowByNamespace: d.Config.ShowByNamespace,
-		ShowRaw:         d.Config.ShowRaw,
-	}
-
-	// Stats body for vfs-level _scrinium/stats reads. Only
-	// rendered if ShowStats is on (otherwise routing rejects
-	// the path).
 	startedAt := time.Now().UTC()
-	statsProvider := func() []byte {
-		capCtx, capCancel := context.WithTimeout(ctx, 2*time.Second)
-		defer capCancel()
-		var capPtr *domain.StorageInfo
-		if cap, err := d.Store.Capacity(capCtx); err == nil {
-			capPtr = &cap
-		}
-		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range d.ListExtensions() {
-			exts = append(exts, projection.ExtensionInfo{
-				Name:          e.Name,
-				SchemaVersion: e.SchemaVersion,
-			})
-		}
-		return projection.RenderStats(d.View, projection.DaemonInfo{
-			StartedAt:    startedAt,
-			MountSession: d.MountSession,
-			StorePath:    d.Config.Store,
-			ReadOnly:     d.Config.ReadOnly,
-			Editing:      d.Config.Editing,
-			Namespace:    d.Config.Namespace,
-			Capacity:     capPtr,
-			Extensions:   exts,
-		})
-	}
+	routingCfg := d.RoutingConfig()
+	statsProvider := d.StatsProvider(ctx, startedAt, 2*time.Second)
 
 	wfs := newWebdavFS(d.View, d.FSOps, routingCfg, !cfg.AllowOSJunk, statsProvider)
 
