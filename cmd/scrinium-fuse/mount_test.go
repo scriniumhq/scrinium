@@ -1,4 +1,4 @@
-//go:build fuse && (linux || darwin)
+//go:build linux || darwin
 
 package main
 
@@ -12,11 +12,11 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/projectionfx"
-	"github.com/rkurbatov/scrinium/engine/projection"
-	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/errs"
+	"github.com/rkurbatov/scrinium/internal/testutil/projectionfx"
+	"github.com/rkurbatov/scrinium/projection"
+	"github.com/rkurbatov/scrinium/projection/fsmeta"
 )
 
 // newTestRoot builds a rootNode wired against an in-memory

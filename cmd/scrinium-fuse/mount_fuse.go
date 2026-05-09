@@ -1,4 +1,4 @@
-//go:build fuse && (linux || darwin)
+//go:build linux || darwin
 
 package main
 
@@ -16,8 +16,8 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 
 	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/projection"
+	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/projection"
 )
 
 // runMount with the FUSE backend wired in. The heavy lifting

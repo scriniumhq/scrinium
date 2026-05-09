@@ -1,8 +1,11 @@
+//go:build linux || darwin
+
 // Command scrinium-fuse mounts a Scrinium store as a POSIX-shaped
-// filesystem via FUSE. The actual mount logic lives in
-// mount_fuse.go behind the `fuse` build tag; without the tag the
-// binary still parses configuration and exits with a clear
-// "FUSE not supported in this build" message.
+// filesystem via FUSE.
+//
+// FUSE is supported on Linux and macOS only — this binary does not
+// build on Windows. Windows users should use scrinium-webdav for a
+// cross-platform alternative.
 //
 // Subcommands:
 //
