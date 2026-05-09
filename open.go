@@ -186,19 +186,32 @@ func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 	mountSession := "mount-" + uuid.New().String()
 
 	// 8. Scratch directory.
-	scratchDir, err := resolveScratchDir(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("scrinium.Open: %w", err)
+	//
+	// Scratch is only used by FSOps writes (Create, Truncate,
+	// Setattr, Rename when the editing policy permits them).
+	// It is NOT used by Store.Put, Store.Get, or any read-side
+	// operation. We pass the configured (or defaulted) path
+	// down to FSOps but do NOT pre-create the directory:
+	// projection.NewFSOps lazy-creates it at first write via
+	// MkdirAll. This keeps Open side-effect-free for read-only
+	// hosts and embedded use cases that never touch FSOps.
+	//
+	// We do best-effort wipe leftover scratch from a previous
+	// crashed run, but ONLY if the directory already exists —
+	// no MkdirAll, no inadvertent write to a parent that should
+	// stay untouched.
+	var scratchDir string
+	if !cfg.ReadOnly {
+		scratchDir, err = resolveScratchDir(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("scrinium.Open: %w", err)
+		}
+		clearScratchDirIfExists(scratchDir)
 	}
-	if err := os.MkdirAll(scratchDir, 0o700); err != nil {
-		return nil, fmt.Errorf("scrinium.Open: mkdir scratch: %w", err)
-	}
-	clearScratchDir(scratchDir)
 
 	// 9. FSOps.
 	fsopsOpts := []projection.FSOpsOption{
 		projection.WithStore(store),
-		projection.WithScratchDir(scratchDir),
 		projection.WithScratchQuota(cfg.ScratchQuota),
 		projection.WithDefaultMode(cfg.DefaultMode),
 		projection.WithDefaultUID(cfg.DefaultUID),
@@ -206,6 +219,9 @@ func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 		projection.WithEditingPolicy(cfg.editingPolicy()),
 		projection.WithMountSession(mountSession),
 		projection.WithNamespace(cfg.Namespace),
+	}
+	if scratchDir != "" {
+		fsopsOpts = append(fsopsOpts, projection.WithScratchDir(scratchDir))
 	}
 	if cfg.ReadOnly {
 		fsopsOpts = append(fsopsOpts, projection.WithReadOnly())
@@ -318,11 +334,17 @@ func expandTilde(p string) string {
 	return p
 }
 
-// clearScratchDir wipes any leftover files from a previous
-// crashed run. Best-effort: a failure here doesn't block boot.
-func clearScratchDir(dir string) {
+// clearScratchDirIfExists wipes leftover files from a previous
+// crashed run. Best-effort: if the directory does not exist,
+// or any individual remove fails, we silently move on. We do
+// NOT MkdirAll here — that's the job of projection.FSOps when
+// it actually writes its first scratch file.
+func clearScratchDirIfExists(dir string) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		// Directory does not exist or is unreadable — nothing
+		// to clean. ReadDir on a missing path returns
+		// fs.ErrNotExist; we treat all errors the same.
 		return
 	}
 	for _, e := range entries {

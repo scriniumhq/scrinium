@@ -151,18 +151,23 @@ func Init(ctx context.Context, cfg Config) (_ *Scrinium, recoveryKit []byte, ret
 	mountSession := "mount-" + uuid.New().String()
 
 	// 8. Scratch directory.
-	scratchDir, err := resolveScratchDir(cfg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("scrinium.Init: %w", err)
-	}
-	if err := os.MkdirAll(scratchDir, 0o700); err != nil {
-		return nil, nil, fmt.Errorf("scrinium.Init: mkdir scratch: %w", err)
+	//
+	// See scrinium.Open for the rationale: we resolve the path
+	// but do not create it. projection.FSOps lazy-creates it
+	// at first write, and read-only setups skip it entirely.
+	// Init does not need to clear leftover scratch — there is
+	// no previous run to leave any.
+	var scratchDir string
+	if !cfg.ReadOnly {
+		scratchDir, err = resolveScratchDir(cfg)
+		if err != nil {
+			return nil, nil, fmt.Errorf("scrinium.Init: %w", err)
+		}
 	}
 
 	// 9. FSOps.
 	fsopsOpts := []projection.FSOpsOption{
 		projection.WithStore(store),
-		projection.WithScratchDir(scratchDir),
 		projection.WithScratchQuota(cfg.ScratchQuota),
 		projection.WithDefaultMode(cfg.DefaultMode),
 		projection.WithDefaultUID(cfg.DefaultUID),
@@ -170,6 +175,9 @@ func Init(ctx context.Context, cfg Config) (_ *Scrinium, recoveryKit []byte, ret
 		projection.WithEditingPolicy(cfg.editingPolicy()),
 		projection.WithMountSession(mountSession),
 		projection.WithNamespace(cfg.Namespace),
+	}
+	if scratchDir != "" {
+		fsopsOpts = append(fsopsOpts, projection.WithScratchDir(scratchDir))
 	}
 	if cfg.ReadOnly {
 		fsopsOpts = append(fsopsOpts, projection.WithReadOnly())
