@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rkurbatov/scrinium/core"
+	"github.com/rkurbatov/scrinium/engine/core"
 )
 
 // loadPassphraseProvider returns a PassphraseProvider that

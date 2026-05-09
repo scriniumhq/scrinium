@@ -12,9 +12,9 @@ import (
 
 	"github.com/rkurbatov/scrinium"
 	"github.com/rkurbatov/scrinium/cmd/scrinium-webview/web"
-	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/projection"
-	"github.com/rkurbatov/scrinium/projection/vfs"
+	"github.com/rkurbatov/scrinium/engine/domain"
+	"github.com/rkurbatov/scrinium/engine/projection"
+	"github.com/rkurbatov/scrinium/engine/projection/vfs"
 )
 
 // runServe is the entry point for "scrinium-webview serve".

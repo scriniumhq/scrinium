@@ -12,8 +12,8 @@ import (
 	"golang.org/x/net/webdav"
 
 	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/projection"
+	"github.com/rkurbatov/scrinium/engine/domain"
+	"github.com/rkurbatov/scrinium/engine/projection"
 )
 
 // runServe is the entry point for "scrinium-webdav serve". The

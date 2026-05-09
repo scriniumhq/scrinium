@@ -8,9 +8,9 @@ import (
 	pathpkg "path"
 
 	"github.com/rkurbatov/scrinium/cmd/scrinium-webview/web"
-	"github.com/rkurbatov/scrinium/core"
-	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/projection/fsmeta"
+	"github.com/rkurbatov/scrinium/engine/core"
+	"github.com/rkurbatov/scrinium/engine/domain"
+	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
 )
 
 // webBackingFS adapts the daemon's webdavFS to the web package's

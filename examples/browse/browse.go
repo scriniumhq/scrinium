@@ -24,7 +24,7 @@ import (
 	"sort"
 
 	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/domain"
+	"github.com/rkurbatov/scrinium/engine/domain"
 )
 
 func main() {

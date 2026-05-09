@@ -1,0 +1,232 @@
+package core
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+
+	"github.com/google/uuid"
+	"github.com/rkurbatov/scrinium/engine/core/internal/descriptor"
+	"github.com/rkurbatov/scrinium/engine/domain"
+	"github.com/rkurbatov/scrinium/engine/driver"
+	"github.com/rkurbatov/scrinium/engine/errs"
+	"github.com/rkurbatov/scrinium/engine/internal/manifestcrypto"
+)
+
+// InitStore creates a new Store at the Location served by drv.
+//
+// Behaviour:
+//  1. Probe the Driver for an existing descriptor. If one is
+//     present and WithForceReinit is NOT set, return
+//     errs.ErrStoreAlreadyExists.
+//  2. With WithForceReinit, wipe the structural state — the
+//     descriptor and the manifests/ directory. Existing blobs/
+//     are NOT removed unless WithPurgeOnReinit is also set;
+//     this lets a user start a fresh Store on top of orphan
+//     blobs and let GC reclaim them.
+//  3. Generate a fresh StoreID. Apply config defaults. Validate
+//     immutable parameters.
+//  4. Validate that a StoreIndex was provided via WithStoreIndex.
+//     core does NOT open the index itself — the caller wires the
+//     concrete implementation (sqlite.NewStore, in-memory, etc.)
+//     and passes it as a dependency. This keeps core free of any
+//     import dependency on index/* packages (DAG: core ← index).
+//  5. Generate a 32-byte DEK from crypto/rand. The DEK is
+//     generated unconditionally per §3.1; encryption can be
+//     turned on later through SetPassphrase without re-keying.
+//  6. If WithPassphrase is configured, derive a KEK through
+//     Argon2id and wrap the DEK with AES-256-GCM. The wrapped
+//     DEK plus its KDFParams land in the descriptor.
+//     Otherwise the DEK is stored in the descriptor in
+//     plaintext — semantically honest: no passphrase, no
+//     protection.
+//  7. Write store.json (both replicas) and the L2 cache.
+//  8. Construct the *store object in StateUnlocked and return.
+//     For encrypted Stores, also return the Recovery Kit
+//     bytes — the host MUST persist them before reporting
+//     success to the user.
+//
+// Recovery Kit:
+//   - nil for Plain-DEK Stores (no encryption to recover).
+//   - non-nil text bytes per §10.3 for encrypted Stores.
+//
+// Refusal cases:
+//   - ManifestCrypto != Plain without WithPassphrase →
+//     errs.ErrPassphraseRequired. An unprotected DEK plus
+//     encrypted manifests is the worst-of-both-worlds shape:
+//     anyone who reads store.json gets the keys to all the
+//     manifests for free.
+func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, []byte, error) {
+	if drv == nil {
+		return nil, nil, errors.New("core.InitStore: nil driver")
+	}
+
+	// wrap is the local error-prefix closure for this function. The
+	// 12+ fmt.Errorf("core.InitStore: ...: %w") sites threaded the
+	// same prefix manually; centralising it here means a single
+	// edit if the prefix ever changes (e.g. a domain-prefixed
+	// errs.Wrap helper lands).
+	wrap := func(stage string, err error) error {
+		if stage == "" {
+			return fmt.Errorf("core.InitStore: %w", err)
+		}
+		return fmt.Errorf("core.InitStore: %s: %w", stage, err)
+	}
+
+	// --- Resolve options ---
+
+	o := storeOptions{}
+	for _, fn := range opts {
+		fn(&o)
+	}
+
+	// Apply defaults to the requested config (the user may have
+	// passed nothing, or only some fields).
+	cfg := domain.StoreConfig{}
+	if o.cfg != nil {
+		cfg = *o.cfg
+	}
+	cfg = applyConfigDefaults(cfg)
+	if err := validateImmutableConfig(cfg); err != nil {
+		return nil, nil, wrap("invalid config", err)
+	}
+
+	// --- Probe for existing descriptor ---
+
+	existing, probeErr := descriptor.Read(ctx, drv)
+	switch {
+	case probeErr == nil:
+		// Descriptor present.
+		if !o.forceReinit {
+			return nil, nil, fmt.Errorf("%w: storeId=%s",
+				errs.ErrStoreAlreadyExists, existing.StoreID)
+		}
+		// Force reinit: clean up structural state. We stay
+		// conservative — only the well-known files are touched.
+		// blobs/ stay in place unless purge is also requested
+		// (purge wiring lands in M3 alongside the GC; M1.4 just
+		// honours WithForceReinit for descriptor + index).
+		if err := drv.Remove(ctx, descriptor.Path); err != nil {
+			return nil, nil, wrap("remove old descriptor", err)
+		}
+	case errors.Is(probeErr, os.ErrNotExist):
+		// Fresh Location, the normal path.
+	default:
+		// The descriptor exists but is unreadable. Refuse to
+		// proceed without WithForceReinit; the user must decide
+		// whether they really want to clobber what is there.
+		if !o.forceReinit {
+			return nil, nil, fmt.Errorf("%w: descriptor present but unreadable: %v",
+				errs.ErrStoreCorrupted, probeErr)
+		}
+		_ = drv.Remove(ctx, descriptor.Path)
+	}
+
+	// --- Validate the StoreIndex dependency ---
+	//
+	// core does not import any concrete index implementation. The
+	// caller is expected to construct one (sqlite.NewStore,
+	// in-memory, or any other) and pass it via WithStoreIndex.
+	// This keeps the dependency graph one-way: core ← index.
+
+	idx := o.storeIndex
+	if idx == nil {
+		return nil, nil, fmt.Errorf(
+			"core.InitStore: WithStoreIndex is required (see DI Example)")
+	}
+
+	// --- Refuse encrypted-manifest configs without a passphrase ---
+	//
+	// MetadataOnly and Envelope only make sense alongside a
+	// wrapped DEK: encrypting manifests against a plaintext key
+	// stored in store.json provides no protection, just
+	// operational pain. Caught here at InitStore so the user
+	// sees the conflict before any disk I/O.
+	if cfg.ManifestCrypto != domain.ManifestCryptoPlain && o.passphrase == nil {
+		return nil, nil, fmt.Errorf("core.InitStore: %w: ManifestCrypto=%q requires WithPassphrase",
+			errs.ErrPassphraseRequired, cfg.ManifestCrypto)
+	}
+
+	// --- Generate identity ---
+
+	storeID := uuid.NewString()
+
+	// --- DEK lifecycle ---
+	//
+	// DEK is generated for every Store regardless of crypto
+	// configuration (§3.1). When WithPassphrase is set the DEK
+	// is wrapped with the resulting KEK; otherwise it lives in
+	// the descriptor in plaintext.
+	//
+	// In both branches dek is the in-memory unwrapped value, kept
+	// alive on *store after construction so subsequent writes
+	// have it without re-fetching from descriptor.
+
+	dek, err := generateDEK()
+	if err != nil {
+		return nil, nil, wrap("", err)
+	}
+
+	desc := &descriptor.Descriptor{
+		StoreID:       storeID,
+		SchemaVersion: descriptor.CurrentSchemaVersion,
+		Sequence:      1,
+	}
+
+	var kit []byte
+	if o.passphrase != nil {
+		wrapped, kdfParams, kitBytes, ierr := initEncryptedDEK(
+			ctx, storeID, dek, o.passphrase, cfg.KDFParams)
+		if ierr != nil {
+			manifestcrypto.Wipe(dek)
+			return nil, nil, wrap("", ierr)
+		}
+		desc.DEK = wrapped
+		desc.DEKEncrypted = true
+		desc.KDFParams = &kdfParams
+		kit = kitBytes
+	} else {
+		// Plaintext DEK path. The descriptor carries the raw key.
+		// Validate enforces "DEKEncrypted=false ⇒ KDFParams
+		// absent"; we don't fight that rule.
+		desc.DEK = dek
+		desc.DEKEncrypted = false
+	}
+
+	if err := descriptor.Persist(ctx, drv, desc); err != nil {
+		manifestcrypto.Wipe(dek)
+		return nil, nil, wrap("write descriptor", err)
+	}
+	if err := saveDescriptorCache(ctx, idx, desc); err != nil {
+		manifestcrypto.Wipe(dek)
+		return nil, nil, wrap("save L2 cache", err)
+	}
+
+	// --- Persist the active StoreConfig as system.config ---
+	//
+	// Per §10.1.4 system.config/current is the source of truth for
+	// projection parameters. It must be writable before the Store
+	// is open for users — Hash registry is therefore required.
+	if o.hashRegistry == nil {
+		return nil, nil, fmt.Errorf(
+			"core.InitStore: WithHashRegistry is required to persist system.config")
+	}
+	if _, err := writeSystemConfig(ctx, drv, idx, o.hashRegistry, cfg); err != nil {
+		return nil, nil, wrap("write system.config", err)
+	}
+
+	// --- Construct *store ---
+
+	s, err := buildStore(ctx, o, drv, idx, cfg, desc, dek)
+	if err != nil {
+		manifestcrypto.Wipe(dek)
+		return nil, nil, wrap("", err)
+	}
+	s.promoteKeyResolverIfDefault()
+	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
+		manifestcrypto.Wipe(dek)
+		return nil, nil, wrap("", err)
+	}
+	return s, kit, nil
+}

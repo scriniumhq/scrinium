@@ -6,10 +6,10 @@ import (
 	"hash"
 	"os"
 
-	"github.com/rkurbatov/scrinium/core"
-	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/driver/localfs"
-	"github.com/rkurbatov/scrinium/index/sqlite"
+	"github.com/rkurbatov/scrinium/engine/core"
+	"github.com/rkurbatov/scrinium/engine/domain"
+	"github.com/rkurbatov/scrinium/engine/driver/localfs"
+	"github.com/rkurbatov/scrinium/engine/index/sqlite"
 )
 
 // openLocalDriver builds a localfs driver for tests. The

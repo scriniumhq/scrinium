@@ -12,20 +12,20 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rkurbatov/scrinium/core"
-	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/driver"
-	"github.com/rkurbatov/scrinium/index"
-	"github.com/rkurbatov/scrinium/projection"
-	"github.com/rkurbatov/scrinium/projection/fsindex"
-	"github.com/rkurbatov/scrinium/projection/fsmeta"
+	"github.com/rkurbatov/scrinium/engine/core"
+	"github.com/rkurbatov/scrinium/engine/domain"
+	"github.com/rkurbatov/scrinium/engine/driver"
+	"github.com/rkurbatov/scrinium/engine/index"
+	"github.com/rkurbatov/scrinium/engine/projection"
+	"github.com/rkurbatov/scrinium/engine/projection/fsindex"
+	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
 
 	// Side-effect imports register the URI dialers. Adding new
 	// schemes is a matter of importing the relevant packages
 	// here. Hosts that want to constrain the available schemes
 	// import the dialers individually.
-	_ "github.com/rkurbatov/scrinium/driver/localfs"
-	_ "github.com/rkurbatov/scrinium/index/sqlite"
+	_ "github.com/rkurbatov/scrinium/engine/driver/localfs"
+	_ "github.com/rkurbatov/scrinium/engine/index/sqlite"
 )
 
 // Open builds a Scrinium runtime from a Config: parses URIs,

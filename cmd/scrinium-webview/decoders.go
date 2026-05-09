@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/projection/fsmeta"
+	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
 )
 
 // fsmetaDecoder renders Manifest.Metadata payloads that match

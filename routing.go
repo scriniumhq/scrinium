@@ -1,6 +1,6 @@
 package scrinium
 
-import "github.com/rkurbatov/scrinium/projection"
+import "github.com/rkurbatov/scrinium/engine/projection"
 
 // RoutingConfig is a snapshot of the visibility/policy fields
 // from the runtime's Config in the shape projection.View and
