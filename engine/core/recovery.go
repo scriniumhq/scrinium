@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/event"
-	"github.com/rkurbatov/scrinium/engine/internal/blobpath"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/internal/blobpath"
 )
 
 // OrphanReport is the result of a bootstrap recoverOrphans pass.

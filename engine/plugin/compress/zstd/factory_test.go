@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	scriniumzstd "github.com/rkurbatov/scrinium/engine/plugin/compress/zstd"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
+	scriniumzstd "scrinium.dev/engine/plugin/compress/zstd"
 )
 
 // roundTrip is the property under test: Decoder(Encoder(x)) == x

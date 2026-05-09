@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/errs"
 )
 
 // decoder is the per-operation Decoder. It consumes the entire

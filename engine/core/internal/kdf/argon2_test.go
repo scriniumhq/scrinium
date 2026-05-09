@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core/internal/kdf"
+	"scrinium.dev/engine/core/internal/kdf"
 )
 
 func deriveDefault(t *testing.T, passphrase string) []byte {

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
 )
 
 // applyConfigDefaults fills in zero-valued StoreConfig fields with

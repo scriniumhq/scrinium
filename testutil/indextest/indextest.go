@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
 )
 
 // Factory describes one StoreIndex implementation under test.

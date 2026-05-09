@@ -1,6 +1,6 @@
 package vfs
 
-import "github.com/rkurbatov/scrinium/engine/projection"
+import "scrinium.dev/engine/projection"
 
 // statsBody returns the bytes served at _scrinium/stats. If
 // a host installed a StatsProvider, it owns the rendering

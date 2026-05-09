@@ -3,7 +3,7 @@ package indextest
 import (
 	"testing"
 
-	"github.com/rkurbatov/scrinium/testutil/manifestfx"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // --- DeleteManifest ---

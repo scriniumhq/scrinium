@@ -9,14 +9,14 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/event"
-	"github.com/rkurbatov/scrinium/engine/internal/blobpath"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
-	"github.com/rkurbatov/scrinium/testutil/driverfx"
-	"github.com/rkurbatov/scrinium/testutil/indexfx"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/internal/blobpath"
+	"scrinium.dev/engine/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
 )
 
 // --- shared test fixtures and helpers ---------------------------

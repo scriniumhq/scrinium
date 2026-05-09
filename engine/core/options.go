@@ -3,7 +3,7 @@ package core
 import (
 	"context"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // PassphraseHint is the call context for a PassphraseProvider.

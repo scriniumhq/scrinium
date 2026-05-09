@@ -6,10 +6,10 @@ import (
 	"io"
 	"sync"
 
-	"github.com/rkurbatov/scrinium/engine/core/internal/descriptor"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
 )
 
 // store is the engine's internal implementation of Store. It is

@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
-	"github.com/rkurbatov/scrinium/testutil/driverfx"
-	"github.com/rkurbatov/scrinium/testutil/indexfx"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
 )
 
 // --- Happy paths ---

@@ -3,11 +3,11 @@ package curator
 import (
 	"fmt"
 
-	"github.com/rkurbatov/scrinium/engine/agent"
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/event"
+	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 )
 
 // CuratorOption is an option for the Curator constructor (New).

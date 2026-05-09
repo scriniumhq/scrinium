@@ -9,14 +9,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
-	scriniumzstd "github.com/rkurbatov/scrinium/engine/plugin/compress/zstd"
-	"github.com/rkurbatov/scrinium/engine/plugin/crypto/aesgcm"
-	"github.com/rkurbatov/scrinium/testutil/driverfx"
-	"github.com/rkurbatov/scrinium/testutil/indexfx"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/testutil/storefx"
+	scriniumzstd "scrinium.dev/engine/plugin/compress/zstd"
+	"scrinium.dev/engine/plugin/crypto/aesgcm"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
 )
 
 var (

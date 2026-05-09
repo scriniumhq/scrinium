@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/testutil/driverfx"
+	"scrinium.dev/testutil/driverfx"
 )
 
 func validDescriptor() *Descriptor {

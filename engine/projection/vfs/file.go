@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/projection"
-	"github.com/rkurbatov/scrinium/pathx"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/projection"
+	"scrinium.dev/pathx"
 )
 
 // File is the open-handle interface VFS hands back from

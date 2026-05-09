@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/projection"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/projection"
 )
 
 // StatsProvider returns a function that renders the runtime's

@@ -3,9 +3,9 @@ package core_test
 import (
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/event"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/event"
 )
 
 // TestEventBusSatisfiesPublisher checks that event.NewEventBus()

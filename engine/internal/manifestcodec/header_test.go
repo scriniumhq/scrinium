@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcodec"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/manifestcodec"
 )
 
 // --- writeHeader: layout per §7.1 ---

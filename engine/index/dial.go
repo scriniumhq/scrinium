@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/rkurbatov/scrinium/engine/core"
+	"scrinium.dev/engine/core"
 )
 
 // Dialer opens a StoreIndex from a parsed URI. Implementations

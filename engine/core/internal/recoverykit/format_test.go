@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/core/internal/recoverykit"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/core/internal/recoverykit"
+	"scrinium.dev/engine/errs"
 )
 
 // validKit returns a Kit with every field populated. Used as the

@@ -1,4 +1,4 @@
-module github.com/rkurbatov/scrinium
+module scrinium.dev
 
 go 1.26.0
 

@@ -1,8 +1,8 @@
 package core
 
 import (
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
 // Close releases secrets held by the Store. See the AdminStore.Close

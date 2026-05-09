@@ -8,8 +8,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
 )
 
 // Verify performs a full integrity check of an artifact:

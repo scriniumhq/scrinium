@@ -1,11 +1,11 @@
-module github.com/rkurbatov/scrinium/cmd
+module scrinium.dev/cmd
 
 go 1.26.0
 
 require (
 	github.com/google/uuid v1.6.0
 	github.com/hanwen/go-fuse/v2 v2.10.1
-	github.com/rkurbatov/scrinium v0.0.0
+	scrinium.dev v0.0.0
 	golang.org/x/net v0.53.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -24,4 +24,4 @@ require (
 	modernc.org/sqlite v1.50.0 // indirect
 )
 
-replace github.com/rkurbatov/scrinium => ../
+replace scrinium.dev => ../

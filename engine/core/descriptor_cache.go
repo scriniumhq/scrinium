@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/rkurbatov/scrinium/engine/core/internal/descriptor"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/errs"
 )
 
 // store_meta keys for the descriptor L2 cache, per §10.1.5. The

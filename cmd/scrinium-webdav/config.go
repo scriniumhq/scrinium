@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/cmd/internal/cliflags"
+	"scrinium.dev"
+	"scrinium.dev/cmd/internal/cliflags"
 )
 
 // Config is what the scrinium-webdav binary reads. The

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/humanize"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/humanize"
 )
 
 // DaemonInfo carries the per-process state RenderStats can't

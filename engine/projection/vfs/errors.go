@@ -4,7 +4,7 @@ import (
 	"errors"
 	"io/fs"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/errs"
 )
 
 // WrapErr translates a projection-level error into the

@@ -9,9 +9,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
 )
 
 // State returns the current state of the Store. Cheap and

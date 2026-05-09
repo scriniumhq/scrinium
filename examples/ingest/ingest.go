@@ -30,9 +30,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"scrinium.dev"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/projection/fsmeta"
 )
 
 func main() {

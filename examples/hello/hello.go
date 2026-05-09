@@ -18,8 +18,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev"
+	"scrinium.dev/engine/domain"
 )
 
 func main() {

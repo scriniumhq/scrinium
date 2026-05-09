@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/projection"
-	"github.com/rkurbatov/scrinium/testutil/manifestfx"
-	"github.com/rkurbatov/scrinium/testutil/projectionfx"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/projection"
+	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/testutil/projectionfx"
 )
 
 // makeManifest is a thin wrapper around manifestfx.Blob that

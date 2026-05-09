@@ -8,7 +8,7 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/rkurbatov/scrinium/engine/core"
+	"scrinium.dev/engine/core"
 )
 
 // encoder is the per-operation Encoder. AES-GCM cannot stream the

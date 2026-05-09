@@ -7,11 +7,11 @@ import (
 	"os"
 	pathpkg "path"
 
-	"github.com/rkurbatov/scrinium/cmd/scrinium-webview/web"
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
-	"github.com/rkurbatov/scrinium/engine/projection/vfs"
+	"scrinium.dev/cmd/scrinium-webview/web"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/engine/projection/vfs"
 )
 
 // webBackingFS adapts vfs.VFS to web.BackingFS.

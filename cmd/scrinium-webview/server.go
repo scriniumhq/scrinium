@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/cmd/scrinium-webview/web"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/projection/vfs"
+	"scrinium.dev"
+	"scrinium.dev/cmd/scrinium-webview/web"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/projection/vfs"
 )
 
 // runServe is the entry point for "scrinium-webview serve".

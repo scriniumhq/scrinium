@@ -10,7 +10,7 @@ HTTP handler).
 - `scrinium-webdav` — cross-platform WebDAV server.
 - `scrinium-webview` — read-only HTML browser for inspecting a store.
 
-This is a separate Go module (`github.com/rkurbatov/scrinium/cmd`) so the
+This is a separate Go module (`scrinium.dev/cmd`) so the
 engine itself stays free of binary-only dependencies (go-fuse, x/net,
 yaml). The `replace` directive in `cmd/go.mod` points at the parent
 engine for local development; tagged releases pin a specific version.
@@ -18,7 +18,7 @@ engine for local development; tagged releases pin a specific version.
 Install from source:
 
 ```bash
-go install github.com/rkurbatov/scrinium/cmd/scrinium-webdav@latest
-go install github.com/rkurbatov/scrinium/cmd/scrinium-fuse@latest    # Linux/macOS only
-go install github.com/rkurbatov/scrinium/cmd/scrinium-webview@latest
+go install scrinium.dev/cmd/scrinium-webdav@latest
+go install scrinium.dev/cmd/scrinium-fuse@latest    # Linux/macOS only
+go install scrinium.dev/cmd/scrinium-webview@latest
 ```

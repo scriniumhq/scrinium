@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	"github.com/rkurbatov/scrinium/pathx"
+	"scrinium.dev/pathx"
 )
 
 // isOSJunk reports whether the last path segment of name matches

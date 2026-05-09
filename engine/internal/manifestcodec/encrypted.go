@@ -11,9 +11,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
 func EncodeFileEncrypted(

@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/index"
-	"github.com/rkurbatov/scrinium/engine/index/sqlite"
-	"github.com/rkurbatov/scrinium/engine/projection/fsindex"
-	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/index/sqlite"
+	"scrinium.dev/engine/projection/fsindex"
+	"scrinium.dev/engine/projection/fsmeta"
 )
 
 // --- helpers ---

@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core/internal/kdf"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/core/internal/kdf"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
 )
 
 func TestGenerateDEK_LengthAndUniqueness(t *testing.T) {

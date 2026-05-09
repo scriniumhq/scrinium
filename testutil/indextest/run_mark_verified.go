@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/testutil/manifestfx"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // --- MarkVerified ---

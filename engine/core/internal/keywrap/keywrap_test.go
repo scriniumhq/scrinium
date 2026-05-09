@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core/internal/keywrap"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/core/internal/keywrap"
+	"scrinium.dev/engine/errs"
 )
 
 // freshKEK returns 32 random bytes. Tests use it instead of

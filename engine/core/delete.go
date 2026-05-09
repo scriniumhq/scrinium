@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/blobpath"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/blobpath"
 )
 
 // Delete logically removes an artifact from the Store. It does

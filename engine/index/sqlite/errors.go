@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/index"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/index"
 )
 
 // classifyError maps a low-level SQLite error to a core sentinel

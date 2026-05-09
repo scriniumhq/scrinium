@@ -1,7 +1,7 @@
 package index
 
 import (
-	"github.com/rkurbatov/scrinium/engine/core"
+	"scrinium.dev/engine/core"
 )
 
 // IndexOption is an option for the constructor of a StoreIndex

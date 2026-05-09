@@ -36,8 +36,8 @@ package manifestcodec
 import (
 	"fmt"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
 )
 
 // KeyProvider is the minimum slice of core.KeyResolver that

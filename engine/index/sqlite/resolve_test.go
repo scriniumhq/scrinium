@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // Most Resolve / ExistsByContent / ExistsByHash / GetRefCount /

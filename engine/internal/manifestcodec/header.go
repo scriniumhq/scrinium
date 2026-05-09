@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
 )
 
 // File-format magic bytes from docs §7.1.

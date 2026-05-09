@@ -1,6 +1,6 @@
 package sqlite
 
-import "github.com/rkurbatov/scrinium/engine/event"
+import "scrinium.dev/engine/event"
 
 // eventOf builds an event.Event. Centralised so other files in the
 // package call publish with just (type, payload).

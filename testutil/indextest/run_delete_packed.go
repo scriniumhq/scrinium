@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/testutil/manifestfx"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // --- DeletePacked ---

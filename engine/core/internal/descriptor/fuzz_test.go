@@ -3,7 +3,7 @@ package descriptor_test
 import (
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core/internal/descriptor"
+	"scrinium.dev/engine/core/internal/descriptor"
 )
 
 // FuzzUnmarshal probes descriptor.Unmarshal against arbitrary

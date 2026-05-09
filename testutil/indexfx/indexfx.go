@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	sqliteindex "github.com/rkurbatov/scrinium/engine/index/sqlite"
+	"scrinium.dev/engine/core"
+	sqliteindex "scrinium.dev/engine/index/sqlite"
 )
 
 // Memory returns an in-memory sqlite-backed StoreIndex.

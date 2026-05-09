@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcodec"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
-	"github.com/rkurbatov/scrinium/testutil/manifestfx"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/engine/internal/testutil/storefx"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 var (

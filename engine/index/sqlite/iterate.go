@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/timefmt"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/timefmt"
 )
 
 // ListByNamespace iterates over manifests whose namespace matches

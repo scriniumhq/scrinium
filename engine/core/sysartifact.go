@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/internal/blobpath"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcodec"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/internal/blobpath"
+	"scrinium.dev/engine/internal/manifestcodec"
 )
 
 // writeInlineSystemArtifact builds an Inline blob manifest in the

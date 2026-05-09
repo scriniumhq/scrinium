@@ -4,8 +4,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/driver"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver"
 )
 
 // DataStore is the artifact-facing API. This interface is sufficient

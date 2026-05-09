@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/humanize"
-	"github.com/rkurbatov/scrinium/pathx"
+	"scrinium.dev/humanize"
+	"scrinium.dev/pathx"
 )
 
 // dirEntry is one row in the rendered listing. Computed up-front

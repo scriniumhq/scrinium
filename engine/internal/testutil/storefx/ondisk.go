@@ -13,9 +13,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/blobpath"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcodec"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/internal/blobpath"
+	"scrinium.dev/engine/internal/manifestcodec"
 )
 
 // OnDisk wraps a localfs root for physical inspection. Construct

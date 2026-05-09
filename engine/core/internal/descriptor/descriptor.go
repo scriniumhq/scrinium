@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rkurbatov/scrinium/engine/driver"
+	"scrinium.dev/engine/driver"
 )
 
 // CurrentSchemaVersion is the schema version this build writes.

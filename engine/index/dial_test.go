@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/index"
+	"scrinium.dev/engine/index"
 
 	// Side-effect import: registers the sqlite:// dialer.
-	_ "github.com/rkurbatov/scrinium/engine/index/sqlite"
+	_ "scrinium.dev/engine/index/sqlite"
 )
 
 // TestDialIndex_SQLiteFile builds a sqlite index from a

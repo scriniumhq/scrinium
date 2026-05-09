@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcodec"
-	"github.com/rkurbatov/scrinium/testutil/manifestfx"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // FuzzDecodeFile probes DecodeFile against arbitrary byte input.

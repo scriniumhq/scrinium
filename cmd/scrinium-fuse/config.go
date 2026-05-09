@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/cmd/internal/cliflags"
+	"scrinium.dev"
+	"scrinium.dev/cmd/internal/cliflags"
 )
 
 // Config is what scrinium-fuse reads. The daemon-level fields

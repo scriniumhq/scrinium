@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/blobpath"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/internal/blobpath"
 )
 
 // --- Resolve: Sharded ---

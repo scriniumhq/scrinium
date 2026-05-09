@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/event"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 )
 
 // IngestMode is the operating mode of the Ingester.

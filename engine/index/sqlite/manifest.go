@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/index"
-	"github.com/rkurbatov/scrinium/engine/internal/timefmt"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/internal/timefmt"
 )
 
 // IndexManifest registers an artifact in the index. Branches on

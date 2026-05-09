@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/errs"
 )
 
 // IndexManifest / DeleteManifest / RebindBlob / ManifestExists

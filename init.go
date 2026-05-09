@@ -7,12 +7,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/index"
-	"github.com/rkurbatov/scrinium/engine/projection"
-	"github.com/rkurbatov/scrinium/engine/projection/fsindex"
-	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/projection"
+	"scrinium.dev/engine/projection/fsindex"
+	"scrinium.dev/engine/projection/fsmeta"
 )
 
 // Init creates a fresh Scrinium store at the location described

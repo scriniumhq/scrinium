@@ -30,7 +30,7 @@ go run ./browse --store=/tmp/my-store
 
 ## What each example uses
 
-All three import the top-level [`scrinium`](https://pkg.go.dev/github.com/rkurbatov/scrinium)
+All three import the top-level [`scrinium`](https://pkg.go.dev/scrinium.dev)
 package — the high-level wrapper that bundles store, index, view, and FSOps. They
 also import the `domain` package for `Artifact`/`PutOptions`/`GetOptions` types.
 

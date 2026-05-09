@@ -4,9 +4,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/projection"
-	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/projection"
+	"scrinium.dev/engine/projection/fsmeta"
 )
 
 // --- os.FileInfo adapters ---

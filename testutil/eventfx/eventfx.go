@@ -3,7 +3,7 @@ package eventfx
 import (
 	"sync"
 
-	"github.com/rkurbatov/scrinium/engine/event"
+	"scrinium.dev/engine/event"
 )
 
 // Recorder is an event.EventBus implementation that captures every

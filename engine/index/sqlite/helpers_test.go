@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/timefmt"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/internal/timefmt"
 )
 
 // Glass-box helpers shared between the per-package tests of the

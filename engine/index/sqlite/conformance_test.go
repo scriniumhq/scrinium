@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/testutil/indextest"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/testutil/indextest"
 )
 
 // TestConformance runs the shared StoreIndex conformance suite

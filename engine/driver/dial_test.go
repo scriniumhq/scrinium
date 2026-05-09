@@ -4,13 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/driver"
+	"scrinium.dev/engine/driver"
 
 	// Importing the localfs driver triggers its init(), which
 	// registers the file:// scheme dialer. Tests below depend
 	// on that registration; without this side-effect import
 	// they would all fail with "scheme not registered".
-	_ "github.com/rkurbatov/scrinium/engine/driver/localfs"
+	_ "scrinium.dev/engine/driver/localfs"
 )
 
 // TestDialDriver_BarePath checks the backward-compat fallback:

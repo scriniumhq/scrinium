@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core/internal/descriptor"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/errs"
 )
 
 // fakeMeta is a minimal in-memory metaStore for unit testing the

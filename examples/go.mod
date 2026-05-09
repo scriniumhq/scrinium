@@ -1,8 +1,8 @@
-module github.com/rkurbatov/scrinium/examples
+module scrinium.dev/examples
 
 go 1.26.0
 
-require github.com/rkurbatov/scrinium v0.0.0
+require scrinium.dev v0.0.0
 
 require (
 github.com/dustin/go-humanize v1.0.1 // indirect
@@ -20,4 +20,4 @@ modernc.org/memory v1.11.0 // indirect
 modernc.org/sqlite v1.50.0 // indirect
 )
 
-replace github.com/rkurbatov/scrinium => ../
+replace scrinium.dev => ../

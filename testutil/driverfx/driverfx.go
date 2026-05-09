@@ -3,7 +3,7 @@ package driverfx
 import (
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/driver/localfs"
+	"scrinium.dev/engine/driver/localfs"
 )
 
 // LocalFS returns a fresh localfs.Driver in t.TempDir() with fsync off.

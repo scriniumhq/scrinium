@@ -6,8 +6,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/event"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/event"
 )
 
 // Publisher is the minimal contract for emitting events; it is

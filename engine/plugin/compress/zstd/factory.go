@@ -5,8 +5,8 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
 )
 
 // Options configures the factory. Zero values pick spec defaults.

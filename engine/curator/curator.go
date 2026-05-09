@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
 )
 
 // Curator is the L3 facade. It implements core.DataStore, adds

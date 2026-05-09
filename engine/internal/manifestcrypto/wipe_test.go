@@ -3,7 +3,7 @@ package manifestcrypto_test
 import (
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
 func TestWipe(t *testing.T) {

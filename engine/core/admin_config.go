@@ -6,8 +6,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
 )
 
 // admin_config.go — AdminStore methods that read or mutate

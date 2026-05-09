@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/index"
-	"github.com/rkurbatov/scrinium/engine/internal/timefmt"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/internal/timefmt"
 )
 
 // Extensions returns the registry for installing index extensions

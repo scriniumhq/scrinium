@@ -3,7 +3,7 @@ package projection
 import (
 	"errors"
 
-	"github.com/rkurbatov/scrinium/pathx"
+	"scrinium.dev/pathx"
 )
 
 // RouteKind tags the destination of a routed path. The FUSE

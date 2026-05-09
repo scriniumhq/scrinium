@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/driver"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver"
 )
 
 // SysConfigPointer is the on-disk path of system.config/current.

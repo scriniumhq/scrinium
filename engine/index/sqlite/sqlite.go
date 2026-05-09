@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/index"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/index"
 )
 
 // DefaultBusyTimeout is the default value applied via

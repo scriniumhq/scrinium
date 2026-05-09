@@ -6,7 +6,7 @@ import (
 	"hash"
 	"io"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // pipelineRunner builds and drives a chain of Encoder / Decoder

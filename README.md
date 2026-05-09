@@ -15,7 +15,7 @@ This repository is a Go workspace with three modules:
 scrinium/
 ├── go.work                  # workspace
 │
-├── go.mod                   # engine module: github.com/rkurbatov/scrinium
+├── go.mod                   # engine module: scrinium.dev
 ├── *.go                     # high-level wrapper API: scrinium.Open / scrinium.Init
 ├── engine/                  # the engine itself
 │   ├── core/                # Store implementation
@@ -29,13 +29,13 @@ scrinium/
 │   └── internal/            # engine-private helpers
 │
 ├── cmd/                     # reference binaries module
-│   ├── go.mod               # github.com/rkurbatov/scrinium/cmd
+│   ├── go.mod               # scrinium.dev/cmd
 │   ├── scrinium-fuse/       # FUSE mount (build tag: fuse)
 │   ├── scrinium-webdav/     # WebDAV server
 │   └── scrinium-webview/    # HTML browser
 │
 └── examples/                # example programs module
-    ├── go.mod               # github.com/rkurbatov/scrinium/examples
+    ├── go.mod               # scrinium.dev/examples
     ├── hello/               # smallest open + put + get
     ├── ingest/               # batch ingest from a directory tree
     └── browse/              # read-only inspector
@@ -54,8 +54,8 @@ import (
     "io"
     "log"
 
-    "github.com/rkurbatov/scrinium"
-    "github.com/rkurbatov/scrinium/engine/domain"
+    "scrinium.dev"
+    "scrinium.dev/engine/domain"
 )
 
 func main() {
@@ -116,7 +116,7 @@ Pre-built CLI applications under `cmd/` demonstrate three integrations:
 Install from source:
 
 ```bash
-go install github.com/rkurbatov/scrinium/cmd/scrinium-webdav@latest
+go install scrinium.dev/cmd/scrinium-webdav@latest
 ```
 
 ## Embedding

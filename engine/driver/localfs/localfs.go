@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rkurbatov/scrinium/engine/driver"
+	"scrinium.dev/engine/driver"
 )
 
 // Driver is a localfs implementation of driver.Driver. Methods are

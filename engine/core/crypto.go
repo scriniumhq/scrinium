@@ -5,12 +5,12 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"github.com/rkurbatov/scrinium/engine/core/internal/descriptor"
-	"github.com/rkurbatov/scrinium/engine/core/internal/kdf"
-	"github.com/rkurbatov/scrinium/engine/core/internal/keywrap"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/core/internal/kdf"
+	"scrinium.dev/engine/core/internal/keywrap"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
 // dekLen is the size of a Scrinium data-encryption key in bytes.

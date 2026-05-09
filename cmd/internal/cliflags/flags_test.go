@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/projection"
+	"scrinium.dev/engine/projection"
 )
 
 func TestRootViewFlag_Set(t *testing.T) {

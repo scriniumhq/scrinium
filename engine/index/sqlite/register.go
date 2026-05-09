@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/index"
-	"github.com/rkurbatov/scrinium/engine/internal/uriresolve"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/internal/uriresolve"
 )
 
 // init registers the sqlite:// scheme with the index registry.

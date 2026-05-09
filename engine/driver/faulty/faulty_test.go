@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/driver/localfs"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/driver/localfs"
+	"scrinium.dev/engine/errs"
 )
 
 // newWrapped is local because faulty_test is in package faulty;

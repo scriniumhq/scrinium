@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/core/internal/descriptor"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/driver/localfs"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	sqliteindex "github.com/rkurbatov/scrinium/engine/index/sqlite"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver/localfs"
+	"scrinium.dev/engine/errs"
+	sqliteindex "scrinium.dev/engine/index/sqlite"
+	"scrinium.dev/engine/internal/testutil/storefx"
 )
 
 // TestM14_FullLifecycle_DiskBacked is the end-to-end smoke test

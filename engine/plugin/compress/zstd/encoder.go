@@ -7,7 +7,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"github.com/rkurbatov/scrinium/engine/core"
+	"scrinium.dev/engine/core"
 )
 
 // encoder is the per-operation Encoder for zstd.

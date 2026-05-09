@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/errs"
 )
 
 // d returns a fresh valid descriptor with the given Sequence.

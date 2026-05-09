@@ -1,9 +1,9 @@
 # Scrinium — top-level Makefile.
 #
 # Layout (multi-module workspace, go.work):
-#   /          — engine module (github.com/rkurbatov/scrinium)
-#   /cmd       — reference binaries module (github.com/rkurbatov/scrinium/cmd)
-#   /examples  — example programs module  (github.com/rkurbatov/scrinium/examples)
+#   /          — engine module (scrinium.dev)
+#   /cmd       — reference binaries module (scrinium.dev/cmd)
+#   /examples  — example programs module  (scrinium.dev/examples)
 #
 # go.work at the repo root composes all three so `go build ./...`
 # and `go test ./...` Just Work from the top. `make tidy` runs

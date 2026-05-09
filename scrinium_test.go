@@ -8,16 +8,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
 
 	// Importing scrinium already pulls in localfs and sqlite via
 	// its own side-effect imports, but tests sometimes verify
 	// schemes are actually wired. The double-import is a no-op
 	// at runtime.
-	_ "github.com/rkurbatov/scrinium/engine/driver/localfs"
-	_ "github.com/rkurbatov/scrinium/engine/index/sqlite"
+	_ "scrinium.dev/engine/driver/localfs"
+	_ "scrinium.dev/engine/index/sqlite"
 )
 
 // initStorePlain initialises an empty Plain-DEK store at dir

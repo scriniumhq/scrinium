@@ -6,10 +6,10 @@ import (
 	"io"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/projection"
-	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
-	"github.com/rkurbatov/scrinium/testutil/projectionfx"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/projection"
+	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/testutil/projectionfx"
 )
 
 // --- Construction ---

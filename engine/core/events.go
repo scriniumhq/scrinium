@@ -3,7 +3,7 @@ package core
 import (
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // Engine event-type constants. Used as the value of

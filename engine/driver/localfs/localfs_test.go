@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
 )
 
 // helper: spin up a fresh driver in a t.TempDir() with fsync off

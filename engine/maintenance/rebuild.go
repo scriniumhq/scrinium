@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/curator"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/event"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/curator"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 )
 
 // RebuildSource is the strategy for picking a source when

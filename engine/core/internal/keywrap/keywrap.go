@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/errs"
 )
 
 // KEKLen is the only supported KEK size. AES-256-GCM means a

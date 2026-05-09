@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rkurbatov/scrinium"
+	"scrinium.dev"
 )
 
 // runInit handles "scrinium-webdav init". It accepts a store

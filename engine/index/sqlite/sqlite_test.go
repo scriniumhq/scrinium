@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/timefmt"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/timefmt"
 )
 
 // newMemoryIndex spins up an in-memory Index for fast unit tests.

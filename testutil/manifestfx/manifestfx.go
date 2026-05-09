@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // Synthetic hashes used in fixtures. Cannot be const because

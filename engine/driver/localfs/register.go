@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/internal/uriresolve"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/internal/uriresolve"
 )
 
 // init registers the file:// scheme with the driver registry

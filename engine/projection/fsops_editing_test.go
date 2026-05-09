@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/projection"
-	"github.com/rkurbatov/scrinium/testutil/projectionfx"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/projection"
+	"scrinium.dev/testutil/projectionfx"
 )
 
 // All editing tests need an FSOps with the relevant policy bit

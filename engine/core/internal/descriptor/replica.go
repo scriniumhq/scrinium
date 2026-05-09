@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
 )
 
 // BackupPath is the L1 shadow-copy descriptor location relative

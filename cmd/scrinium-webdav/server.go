@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/net/webdav"
 
-	"github.com/rkurbatov/scrinium"
+	"scrinium.dev"
 )
 
 // runServe is the entry point for "scrinium-webdav serve". The

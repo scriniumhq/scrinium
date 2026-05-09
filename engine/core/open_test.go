@@ -6,12 +6,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/core/internal/descriptor"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
-	"github.com/rkurbatov/scrinium/testutil/driverfx"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
 )
 
 // --- ErrStoreNotFound at fresh Location ---

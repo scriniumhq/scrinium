@@ -7,9 +7,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/plugin/crypto/aesgcm"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/plugin/crypto/aesgcm"
 )
 
 func mustKey(t *testing.T) []byte {

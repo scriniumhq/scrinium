@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/event"
-	"github.com/rkurbatov/scrinium/engine/internal/blobpath"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcodec"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/internal/blobpath"
+	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
 // stagingPrefix is the directory where in-flight blob writes live

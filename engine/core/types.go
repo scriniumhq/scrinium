@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // ReadHandle is the read primitive returned by Get. It hides the

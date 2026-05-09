@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
 )
 
 // Marker identifies the schema and version. Decode rejects any

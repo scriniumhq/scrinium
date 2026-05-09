@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
 )
 
 // tombstoneSuffix is appended to paths whose original entry has been

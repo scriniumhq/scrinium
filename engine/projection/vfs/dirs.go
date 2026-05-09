@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/projection"
+	"scrinium.dev/engine/projection"
 )
 
 // rootDirFile listings come from FSOps.Listdir(""). The

@@ -15,7 +15,7 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 
-	"github.com/rkurbatov/scrinium"
+	"scrinium.dev"
 )
 
 // runMount with the FUSE backend wired in. The heavy lifting

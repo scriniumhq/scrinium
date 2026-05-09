@@ -17,9 +17,9 @@ package chunker
 import (
 	"fmt"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/curator"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/curator"
+	"scrinium.dev/engine/errs"
 )
 
 // ChunkerConfig holds the slicing parameters. The algorithm

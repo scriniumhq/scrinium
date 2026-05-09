@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/index"
-	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/projection/fsmeta"
 )
 
 // Tables under the extension namespace. Two K/V groups:

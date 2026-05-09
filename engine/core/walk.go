@@ -9,8 +9,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
 )
 
 // Walk iterates over user manifests. See docs/4. API Reference/04

@@ -3,7 +3,7 @@ package curator
 import (
 	"context"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // MultistoreIndex is the aggregating index at the Curator level.

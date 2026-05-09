@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
-	"github.com/rkurbatov/scrinium/testutil/manifestfx"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // --- FakeSource ---

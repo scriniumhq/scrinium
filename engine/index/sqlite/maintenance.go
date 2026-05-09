@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/timefmt"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/timefmt"
 )
 
 // MarkVerified records that a Scrub Agent has just finished a

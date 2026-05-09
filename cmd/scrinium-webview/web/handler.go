@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // BackingFS is the small file-system surface web needs from its

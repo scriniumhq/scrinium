@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
 )
 
 // Method names used by the configuration. They match the Driver

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/index"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/index"
 )
 
 // --- Test helpers ---

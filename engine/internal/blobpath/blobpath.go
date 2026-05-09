@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // rootFor returns the directory prefix for a given blob type:

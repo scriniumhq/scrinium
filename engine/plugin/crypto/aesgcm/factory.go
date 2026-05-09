@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
 )
 
 // ErrInvalidKeyLength is returned by New when key is not 32 bytes.

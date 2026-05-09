@@ -1,11 +1,11 @@
 package scrinium
 
 import (
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/index"
-	"github.com/rkurbatov/scrinium/engine/index/sqlite"
-	"github.com/rkurbatov/scrinium/engine/projection"
-	"github.com/rkurbatov/scrinium/engine/projection/fsindex"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/index/sqlite"
+	"scrinium.dev/engine/projection"
+	"scrinium.dev/engine/projection/fsindex"
 )
 
 // Scrinium holds the long-lived resources every Scrinium-backed

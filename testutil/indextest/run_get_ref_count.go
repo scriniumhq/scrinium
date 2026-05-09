@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/testutil/manifestfx"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // --- GetRefCount ---

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
+	"scrinium.dev/engine/domain"
 )
 
 // HostStorage is the full HostStorage contract — the transit

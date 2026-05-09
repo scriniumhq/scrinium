@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/driver/localfs"
+	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/driver/localfs"
 )
 
 // Reopener captures the (Driver, StoreIndex) pair so a test can

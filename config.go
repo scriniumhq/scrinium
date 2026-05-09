@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rkurbatov/scrinium/engine/projection"
+	"scrinium.dev/engine/projection"
 )
 
 // Config is the shared configuration consumed by every

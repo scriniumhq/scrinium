@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
 // transformerRegistry implements TransformerRegistry with an RWMutex

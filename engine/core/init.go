@@ -7,11 +7,11 @@ import (
 	"os"
 
 	"github.com/google/uuid"
-	"github.com/rkurbatov/scrinium/engine/core/internal/descriptor"
-	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/driver"
-	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
 // InitStore creates a new Store at the Location served by drv.
