@@ -52,10 +52,25 @@ import (
 // On any failure the partial state is unwound: opened
 // resources are closed, errors are wrapped with their stage
 // for fast diagnosis.
-func Open(ctx context.Context, cfg Config) (*Daemon, error) {
+func Open(ctx context.Context, cfg Config) (_ *Daemon, retErr error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+
+	// Deferred cleanup of resources opened during this function.
+	// Each successfully-opened resource appends its closer here;
+	// on error the deferred function runs them in LIFO order.
+	// On success retErr stays nil and the slice is cleared so
+	// nothing is closed.
+	var cleanups []func()
+	defer func() {
+		if retErr == nil {
+			return
+		}
+		for i := len(cleanups) - 1; i >= 0; i-- {
+			cleanups[i]()
+		}
+	}()
 
 	// 1. Open driver from URI.
 	drv, err := driver.DialDriver(cfg.Store)
@@ -78,6 +93,11 @@ func Open(ctx context.Context, cfg Config) (*Daemon, error) {
 		// just bubble up.
 		return nil, fmt.Errorf("daemon: open index: %w", err)
 	}
+	cleanups = append(cleanups, func() {
+		if err := idx.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "daemon: index close on rollback: %v\n", err)
+		}
+	})
 
 	// 4. Register fsindex. Must happen before OpenStore so
 	//    the first IndexManifest dispatch already sees it.
@@ -98,7 +118,6 @@ func Open(ctx context.Context, cfg Config) (*Daemon, error) {
 	fsidx := fsindex.New()
 	if extIdx, ok := idx.(indexWithExtensions); ok {
 		if err := extIdx.Extensions().Register(ctx, fsidx); err != nil {
-			_ = idx.Close()
 			return nil, fmt.Errorf("daemon: register fsindex: %w", err)
 		}
 	}
@@ -112,9 +131,13 @@ func Open(ctx context.Context, cfg Config) (*Daemon, error) {
 		core.WithHashRegistry(defaultHashRegistry()),
 	)
 	if err != nil {
-		_ = idx.Close()
 		return nil, fmt.Errorf("daemon: open store: %w", err)
 	}
+	cleanups = append(cleanups, func() {
+		if err := store.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "daemon: store close on rollback: %v\n", err)
+		}
+	})
 
 	// 6. Build View — synchronous backfill over all manifests.
 	viewOpts := []projection.ViewOption{
@@ -129,9 +152,13 @@ func Open(ctx context.Context, cfg Config) (*Daemon, error) {
 	}
 	view, err := projection.NewView(ctx, store, viewOpts...)
 	if err != nil {
-		_ = idx.Close()
 		return nil, fmt.Errorf("daemon: build view: %w", err)
 	}
+	cleanups = append(cleanups, func() {
+		if err := view.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "daemon: view close on rollback: %v\n", err)
+		}
+	})
 
 	// 7. Mount session — boot-unique tiebreaker.
 	mountSession := "mount-" + uuid.New().String()
@@ -139,13 +166,9 @@ func Open(ctx context.Context, cfg Config) (*Daemon, error) {
 	// 8. Scratch directory.
 	scratchDir, err := resolveScratchDir(cfg)
 	if err != nil {
-		view.Close()
-		_ = idx.Close()
 		return nil, fmt.Errorf("daemon: %w", err)
 	}
 	if err := os.MkdirAll(scratchDir, 0o700); err != nil {
-		view.Close()
-		_ = idx.Close()
 		return nil, fmt.Errorf("daemon: mkdir scratch: %w", err)
 	}
 	clearScratchDir(scratchDir)
@@ -167,8 +190,6 @@ func Open(ctx context.Context, cfg Config) (*Daemon, error) {
 	}
 	fsops, err := projection.NewFSOps(view, fsopsOpts...)
 	if err != nil {
-		view.Close()
-		_ = idx.Close()
 		return nil, fmt.Errorf("daemon: build fsops: %w", err)
 	}
 

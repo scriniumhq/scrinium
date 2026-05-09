@@ -78,6 +78,13 @@ func runInit(args []string) int {
 		fmt.Fprintf(os.Stderr, "scrinium-webdav init: %v\n", err)
 		return 1
 	}
+	// idx must be closed regardless of init outcome — it owns
+	// the sqlite file handle and the OS lock on the index file.
+	defer func() {
+		if err := idx.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "scrinium-webdav init: index close: %v\n", err)
+		}
+	}()
 
 	store, recoveryKit, err := core.InitStore(ctx, drv,
 		core.WithStoreIndex(idx),
@@ -87,7 +94,15 @@ func runInit(args []string) int {
 		fmt.Fprintf(os.Stderr, "scrinium-webdav init: %v\n", err)
 		return 1
 	}
-	_ = store
+	// Wipe in-memory secrets created during init (DEK,
+	// capability token). The store is one-shot here — init
+	// produces the on-disk descriptor and exits; nothing else
+	// in this process needs an open Store.
+	defer func() {
+		if err := store.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "scrinium-webdav init: store close: %v\n", err)
+		}
+	}()
 	if recoveryKit != nil {
 		fmt.Fprintln(os.Stderr, "scrinium-webdav init: unexpected recovery kit produced; refusing to discard")
 		return 1
