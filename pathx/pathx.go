@@ -1,15 +1,3 @@
-// Package pathx contains tiny pure utilities for slash-separated
-// paths. The path types here are logical: tree paths, projection
-// paths, URL-segment paths — not OS filesystem paths (use
-// path/filepath for those).
-//
-// Why not stdlib path? path.Base/path.Dir use unix-basename
-// semantics: empty path becomes ".", "foo/" becomes "foo", "/"
-// stays "/". Across this codebase logical paths use literal
-// last-segment / first-segment semantics where empty/trailing-
-// slash inputs produce empty output. Mixing the two would be a
-// silent footgun. Callers that want unix-basename should reach
-// for path.Base directly.
 package pathx
 
 import "strings"

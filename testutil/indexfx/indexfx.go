@@ -1,7 +1,3 @@
-// Package indexfx supplies StoreIndex fixtures for external tests.
-// In-package tests of index/sqlite use their own helpers — they
-// need the package-private *Index type that this package can't
-// expose through the core.StoreIndex interface.
 package indexfx
 
 import (

@@ -1,5 +1,3 @@
-// Package manifestfx supplies domain.Manifest and domain.PhysicalAddress
-// builders for tests.
 package manifestfx
 
 import (

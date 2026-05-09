@@ -1,16 +1,21 @@
-// Package projectionfx supplies test fixtures for the projection
-// package and its consumers (FSOps, FUSE/WebDAV daemons,
-// ingester). The two main types are:
+// Package projectionfx supplies a FakeSource — an in-memory
+// implementation of core.Source — for unit tests that exercise
+// the projection layer (View, FSOps) without standing up a real
+// store.
 //
-//   - FakeSource — an in-memory ProjectionSource that holds a slice
-//     of manifests and parallel payload bytes. Walk delivers
-//     manifests in insertion order; Get returns a ReadHandle over
-//     the registered payload.
+// FakeSource lets tests:
 //
-//   - FakeReadHandle — a core.ReadHandle backed by bytes.Reader.
-//     Configurable through options (default: random access enabled).
+//   - Add manifests and payloads programmatically.
+//   - Inject errors on Walk/Get/Put/Delete (SetWalkErr etc.) to
+//     verify projection's error-handling paths.
+//   - Replay arbitrary manifest histories without driver/index
+//     setup.
 //
-// Both are deliberately minimal: tests that need richer behaviour
-// (errors injected on the Nth call, Walk that respects ctx
-// cancellation, etc.) extend the type or build a different fake.
+// Useful for testing host code that consumes core.Source — the
+// FakeSource satisfies the same interface a real Store does on
+// the projection-facing side.
+//
+// In-package tests of the projection package itself use this
+// fixture too. External consumers (custom surfaces, integration
+// tests, etc.) are welcome to use it for the same purpose.
 package projectionfx

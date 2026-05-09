@@ -1,13 +1,3 @@
-// Package humanize formats numeric values for display.
-//
-// Currently scoped to byte counts. Other unit families (durations,
-// counts) might join later if patterns repeat — for now the package
-// stays small and focused on resolving the prior fragmentation
-// where projection/stats, web/render and core/smoke_test each
-// rendered byte counts with different precision and unit
-// conventions, leading to user-visible inconsistencies (a stat
-// shown as "1.42 MiB" in the terminal would appear as "1.4 MiB"
-// in the web UI for the same store).
 package humanize
 
 import "fmt"
