@@ -2,7 +2,7 @@ package projection
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -133,7 +133,7 @@ func writeViewSection(b *strings.Builder, view *View) {
 		for name := range stats.ByStore {
 			names = append(names, name)
 		}
-		sort.Strings(names)
+		slices.Sort(names)
 		for _, name := range names {
 			fmt.Fprintf(b, "ByStore[%s]:%s%d\n",
 				name,
@@ -173,8 +173,8 @@ func writeExtensionsSection(b *strings.Builder, exts []ExtensionInfo) {
 		return
 	}
 	sorted := append([]ExtensionInfo(nil), exts...)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Name < sorted[j].Name
+	slices.SortFunc(sorted, func(a, b ExtensionInfo) int {
+		return strings.Compare(a.Name, b.Name)
 	})
 	for _, ext := range sorted {
 		fmt.Fprintf(b, "%-30s v%d\n", ext.Name, ext.SchemaVersion)

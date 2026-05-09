@@ -7,6 +7,8 @@ import (
 	"io"
 	"iter"
 	"os"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -979,11 +981,9 @@ func (o *FSOps) pendingChildrenOf(parent string) []FileInfo {
 		})
 	}
 	// Sort for deterministic order.
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1].Name > out[j].Name; j-- {
-			out[j-1], out[j] = out[j], out[j-1]
-		}
-	}
+	slices.SortFunc(out, func(a, b FileInfo) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 	return out
 }
 
@@ -1405,13 +1405,7 @@ func (m *pathLockManager) lockOrdered(paths ...string) func() {
 	}
 	// Copy so we do not mutate the caller's slice.
 	sorted := append([]string(nil), paths...)
-	// Insertion sort for tiny slices — simpler than sort.Strings
-	// for the common case (2 paths).
-	for i := 1; i < len(sorted); i++ {
-		for j := i; j > 0 && sorted[j-1] > sorted[j]; j-- {
-			sorted[j-1], sorted[j] = sorted[j], sorted[j-1]
-		}
-	}
+	slices.Sort(sorted)
 	taken := make([]*sync.RWMutex, 0, len(sorted))
 	for _, p := range sorted {
 		l := m.Get(p)

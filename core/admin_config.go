@@ -3,7 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/rkurbatov/scrinium/domain"
@@ -119,8 +119,9 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 		return nil, fmt.Errorf("core.ConfigHistory: walk: %w", walkErr)
 	}
 
-	sort.SliceStable(entries, func(i, j int) bool {
-		return entries[i].createdAt.After(entries[j].createdAt)
+	slices.SortStableFunc(entries, func(a, b entry) int {
+		// Reverse chronological order: newest first.
+		return b.createdAt.Compare(a.createdAt)
 	})
 
 	currentIdx := -1

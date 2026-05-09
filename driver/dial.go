@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -57,7 +58,7 @@ func RegisteredSchemes() []string {
 	for s := range dialers {
 		out = append(out, s)
 	}
-	sortStrings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -170,17 +171,4 @@ func expandPath(p string) (string, error) {
 		return "", fmt.Errorf("absolute path: %w", err)
 	}
 	return abs, nil
-}
-
-// sortStrings is an in-place ascending sort. We avoid pulling
-// "sort" into this file because the only caller is
-// RegisteredSchemes which itself runs once or twice per
-// process; insertion sort over <10 elements is faster and
-// keeps imports tight.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j-1] > s[j]; j-- {
-			s[j-1], s[j] = s[j], s[j-1]
-		}
-	}
 }

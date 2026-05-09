@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -1325,8 +1326,8 @@ func hashPart(id string) string {
 
 // insertSorted inserts name into a sorted slice (idempotent).
 func insertSorted(s []string, name string) []string {
-	idx := sort.SearchStrings(s, name)
-	if idx < len(s) && s[idx] == name {
+	idx, found := slices.BinarySearch(s, name)
+	if found {
 		return s
 	}
 	s = append(s, "")
@@ -1337,8 +1338,8 @@ func insertSorted(s []string, name string) []string {
 
 // removeSorted removes name from a sorted slice.
 func removeSorted(s []string, name string) []string {
-	idx := sort.SearchStrings(s, name)
-	if idx >= len(s) || s[idx] != name {
+	idx, found := slices.BinarySearch(s, name)
+	if !found {
 		return s
 	}
 	return append(s[:idx], s[idx+1:]...)

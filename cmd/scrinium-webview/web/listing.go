@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -8,7 +9,7 @@ import (
 	"net/url"
 	"os"
 	pathpkg "path"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -66,38 +67,40 @@ func (h *Handler) dirEntries(ctx context.Context, dir string) ([]dirEntry, error
 func sortDirEntries(entries []dirEntry, column, order string) {
 	desc := order == "desc"
 
-	less := func(i, j int) bool {
-		a, b := entries[i], entries[j]
+	cmpFn := func(a, b dirEntry) int {
 		// Dirs always before files regardless of sort.
 		if a.IsDir != b.IsDir {
-			return a.IsDir
+			if a.IsDir {
+				return -1
+			}
+			return 1
 		}
 		switch column {
 		case "size":
 			if a.Size != b.Size {
 				if desc {
-					return a.Size > b.Size
+					return cmp.Compare(b.Size, a.Size)
 				}
-				return a.Size < b.Size
+				return cmp.Compare(a.Size, b.Size)
 			}
 			// Tie-break by name for determinism.
-			return a.Name < b.Name
+			return cmp.Compare(a.Name, b.Name)
 		case "modified":
 			if !a.ModTime.Equal(b.ModTime) {
 				if desc {
-					return a.ModTime.After(b.ModTime)
+					return a.ModTime.Compare(b.ModTime) * -1
 				}
-				return a.ModTime.Before(b.ModTime)
+				return a.ModTime.Compare(b.ModTime)
 			}
-			return a.Name < b.Name
+			return cmp.Compare(a.Name, b.Name)
 		default: // "name"
 			if desc {
-				return a.Name > b.Name
+				return cmp.Compare(b.Name, a.Name)
 			}
-			return a.Name < b.Name
+			return cmp.Compare(a.Name, b.Name)
 		}
 	}
-	sort.Slice(entries, less)
+	slices.SortFunc(entries, cmpFn)
 }
 
 // listingData binds the HTML template. Field names match
