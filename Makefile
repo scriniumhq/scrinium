@@ -103,7 +103,7 @@ else
 endif
 
 # Single-package test. Usage: make test-pkg P=core
-# (or P=internal/manifestcodec, P=index/sqlite, etc.)
+# (or P=engine/internal/manifestcodec, P=engine/index/sqlite, etc.)
 .PHONY: test-pkg
 test-pkg:
 ifndef P
@@ -155,9 +155,9 @@ endif
 .PHONY: smoke
 smoke:
 ifdef N
-	SCRINIUM_SMOKE=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./core/
+	SCRINIUM_SMOKE=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./engine/core/
 else
-	SCRINIUM_SMOKE=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./core/
+	SCRINIUM_SMOKE=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./engine/core/
 endif
 
 # Encrypted smoke: round-trip on a Store with Envelope manifests.
@@ -169,9 +169,9 @@ endif
 .PHONY: smoke-encrypted
 smoke-encrypted:
 ifdef N
-	SCRINIUM_SMOKE_ENCRYPTED=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./core/
+	SCRINIUM_SMOKE_ENCRYPTED=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./engine/core/
 else
-	SCRINIUM_SMOKE_ENCRYPTED=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./core/
+	SCRINIUM_SMOKE_ENCRYPTED=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./engine/core/
 endif
 
 # --- Fuzzing ---
@@ -201,8 +201,8 @@ else
 endif
 
 # Active fuzz. Usage:
-#   make fuzz P=core/internal/descriptor F=FuzzUnmarshal
-#   make fuzz P=internal/manifestcodec F=FuzzDecodeFile T=2m
+#   make fuzz P=engine/core/internal/descriptor F=FuzzUnmarshal
+#   make fuzz P=engine/internal/manifestcodec F=FuzzDecodeFile T=2m
 .PHONY: fuzz
 fuzz:
 ifndef P
