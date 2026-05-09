@@ -14,9 +14,9 @@ import (
 	"github.com/rkurbatov/scrinium/engine/driver"
 	"github.com/rkurbatov/scrinium/engine/event"
 	"github.com/rkurbatov/scrinium/engine/internal/blobpath"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/driverfx"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
+	"github.com/rkurbatov/scrinium/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/testutil/indexfx"
 )
 
 // --- shared test fixtures and helpers ---------------------------

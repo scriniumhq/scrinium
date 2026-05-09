@@ -12,8 +12,8 @@ import (
 	"github.com/rkurbatov/scrinium/engine/core"
 	"github.com/rkurbatov/scrinium/engine/domain"
 	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/manifestfx"
 	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"github.com/rkurbatov/scrinium/testutil/manifestfx"
 )
 
 // --- FakeSource ---

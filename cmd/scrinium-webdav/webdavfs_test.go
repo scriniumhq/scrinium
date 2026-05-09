@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/projectionfx"
 	"github.com/rkurbatov/scrinium/engine/projection"
 	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"github.com/rkurbatov/scrinium/testutil/projectionfx"
 )
 
 // newTestFS builds a webdavFS wired against an in-memory

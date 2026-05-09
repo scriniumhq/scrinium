@@ -16,8 +16,8 @@ import (
 	"github.com/hanwen/go-fuse/v2/fuse"
 
 	"github.com/rkurbatov/scrinium"
-	"github.com/rkurbatov/scrinium/domain"
-	"github.com/rkurbatov/scrinium/projection"
+	"github.com/rkurbatov/scrinium/engine/domain"
+	"github.com/rkurbatov/scrinium/engine/projection"
 )
 
 // runMount with the FUSE backend wired in. The heavy lifting

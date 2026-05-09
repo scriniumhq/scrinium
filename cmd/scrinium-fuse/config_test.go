@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rkurbatov/scrinium/projection"
+	"github.com/rkurbatov/scrinium/engine/projection"
 )
 
 func TestDefaultConfig_Sane(t *testing.T) {

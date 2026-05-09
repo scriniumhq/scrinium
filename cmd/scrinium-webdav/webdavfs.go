@@ -7,7 +7,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/rkurbatov/scrinium/engine/internal/pathx"
+	"github.com/rkurbatov/scrinium/pathx"
 	"golang.org/x/net/webdav"
 
 	"github.com/rkurbatov/scrinium/engine/projection"

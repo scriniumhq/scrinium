@@ -15,8 +15,8 @@ import (
 	"github.com/rkurbatov/scrinium/engine/domain"
 	"github.com/rkurbatov/scrinium/engine/errs"
 	"github.com/rkurbatov/scrinium/engine/event"
-	"github.com/rkurbatov/scrinium/engine/internal/pathx"
 	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"github.com/rkurbatov/scrinium/pathx"
 )
 
 // View is the read side of the projection. It holds five

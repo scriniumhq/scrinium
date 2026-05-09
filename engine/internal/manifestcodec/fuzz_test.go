@@ -6,7 +6,7 @@ import (
 
 	"github.com/rkurbatov/scrinium/engine/domain"
 	"github.com/rkurbatov/scrinium/engine/internal/manifestcodec"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/manifestfx"
+	"github.com/rkurbatov/scrinium/testutil/manifestfx"
 )
 
 // FuzzDecodeFile probes DecodeFile against arbitrary byte input.

@@ -3,7 +3,7 @@ package indextest
 import (
 	"testing"
 
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/manifestfx"
+	"github.com/rkurbatov/scrinium/testutil/manifestfx"
 )
 
 // --- ExistsByContent ---

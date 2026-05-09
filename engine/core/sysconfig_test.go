@@ -11,8 +11,8 @@ import (
 	"github.com/rkurbatov/scrinium/engine/domain"
 	"github.com/rkurbatov/scrinium/engine/driver/localfs"
 	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
+	"github.com/rkurbatov/scrinium/testutil/indexfx"
 )
 
 // mustWriteSysConfig writes a known StoreConfig through

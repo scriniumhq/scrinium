@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/projectionfx"
 	"github.com/rkurbatov/scrinium/engine/projection"
+	"github.com/rkurbatov/scrinium/testutil/projectionfx"
 )
 
 // minimalView returns a View built on an empty FakeSource so

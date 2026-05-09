@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/projectionfx"
 	"github.com/rkurbatov/scrinium/engine/projection"
 	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
 	"github.com/rkurbatov/scrinium/engine/projection/vfs"
+	"github.com/rkurbatov/scrinium/testutil/projectionfx"
 )
 
 // newTestVFS builds a VFS over an in-memory FakeSource. The

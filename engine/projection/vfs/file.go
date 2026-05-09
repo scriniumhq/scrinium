@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/engine/core"
-	"github.com/rkurbatov/scrinium/engine/internal/pathx"
 	"github.com/rkurbatov/scrinium/engine/projection"
+	"github.com/rkurbatov/scrinium/pathx"
 )
 
 // File is the open-handle interface VFS hands back from

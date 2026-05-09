@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/pathx"
 	"github.com/rkurbatov/scrinium/engine/projection"
+	"github.com/rkurbatov/scrinium/pathx"
 )
 
 // POSIX flag bits used for OpenFile semantics. Aliased to

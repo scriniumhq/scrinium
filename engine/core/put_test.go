@@ -12,11 +12,11 @@ import (
 	"github.com/rkurbatov/scrinium/engine/core"
 	"github.com/rkurbatov/scrinium/engine/domain"
 	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/driverfx"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
 	scriniumzstd "github.com/rkurbatov/scrinium/engine/plugin/compress/zstd"
 	"github.com/rkurbatov/scrinium/engine/plugin/crypto/aesgcm"
+	"github.com/rkurbatov/scrinium/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/testutil/indexfx"
 )
 
 var (

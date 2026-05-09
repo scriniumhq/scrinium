@@ -11,8 +11,8 @@ import (
 	"github.com/rkurbatov/scrinium/engine/domain"
 	"github.com/rkurbatov/scrinium/engine/errs"
 	"github.com/rkurbatov/scrinium/engine/internal/manifestcodec"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/manifestfx"
 	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
+	"github.com/rkurbatov/scrinium/testutil/manifestfx"
 )
 
 var (

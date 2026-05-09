@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/manifestfx"
+	"github.com/rkurbatov/scrinium/testutil/manifestfx"
 )
 
 // --- ExistsByHash ---

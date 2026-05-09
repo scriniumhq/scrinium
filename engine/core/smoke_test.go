@@ -14,10 +14,10 @@ import (
 
 	"github.com/rkurbatov/scrinium/engine/core"
 	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/humanize"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/driverfx"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
+	"github.com/rkurbatov/scrinium/humanize"
+	"github.com/rkurbatov/scrinium/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/testutil/indexfx"
 )
 
 // TestSmoke_MillionSmallFiles is the M1 exit-criterion smoke:

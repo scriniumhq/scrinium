@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/rkurbatov/scrinium/engine/domain"
-	"github.com/rkurbatov/scrinium/engine/internal/humanize"
-	"github.com/rkurbatov/scrinium/engine/internal/pathx"
 	"github.com/rkurbatov/scrinium/engine/projection/fsmeta"
+	"github.com/rkurbatov/scrinium/humanize"
+	"github.com/rkurbatov/scrinium/pathx"
 )
 
 // SchemaDecoder is the contract for plugging schema-aware

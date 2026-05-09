@@ -15,9 +15,9 @@ import (
 	"github.com/rkurbatov/scrinium/engine/core/internal/recoverykit"
 	"github.com/rkurbatov/scrinium/engine/domain"
 	"github.com/rkurbatov/scrinium/engine/errs"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/driverfx"
-	"github.com/rkurbatov/scrinium/engine/internal/testutil/indexfx"
 	"github.com/rkurbatov/scrinium/engine/internal/testutil/storefx"
+	"github.com/rkurbatov/scrinium/testutil/driverfx"
+	"github.com/rkurbatov/scrinium/testutil/indexfx"
 )
 
 // --- InitStore happy path ---
