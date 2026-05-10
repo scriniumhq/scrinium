@@ -140,4 +140,8 @@ and friends directly. The top-level package is a convenience over them.
 
 ## License
 
-TBD.
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Contributions are accepted under the same license. Every commit
+must include a Developer Certificate of Origin sign-off — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for details.

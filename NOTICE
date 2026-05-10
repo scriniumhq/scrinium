@@ -1,0 +1,13 @@
+Scrinium
+Copyright 2026 Roman Kurbatov
+
+This product includes software developed by the Scrinium project
+authors and contributors.
+
+This product includes third-party software whose own NOTICE files
+and license terms are reproduced in the dependency manifests of
+this project (go.mod / go.sum). Notable Apache-2.0 licensed
+dependencies retain their own NOTICE files within their respective
+modules; consumers redistributing this software in source or binary
+form must comply with the attribution requirements of those
+dependencies.
