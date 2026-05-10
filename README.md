@@ -49,37 +49,37 @@ The smallest program — open a fresh store, put one artifact, read it back:
 package main
 
 import (
-    "bytes"
-    "context"
-    "io"
-    "log"
+  "bytes"
+  "context"
+  "io"
+  "log"
 
-    "scrinium.dev"
-    "scrinium.dev/engine/domain"
+  scrinium "scrinium.dev"
+  "scrinium.dev/engine/domain"
 )
 
 func main() {
-    cfg := scrinium.DefaultConfig()
-    cfg.Store = "file:///tmp/my-store"
+  cfg := scrinium.DefaultConfig()
+  cfg.Store = "file:///tmp/my-store"
 
-    s, _, err := scrinium.Init(context.Background(), cfg)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer s.Close()
+  s, _, err := scrinium.Init(context.Background(), cfg)
+  if err != nil {
+    log.Fatal(err)
+  }
+  defer s.Close()
 
-    id, err := s.Store.Put(context.Background(),
-        domain.Artifact{Payload: bytes.NewReader([]byte("hello"))},
-        domain.PutOptions{Namespace: "demo"},
-    )
-    if err != nil {
-        log.Fatal(err)
-    }
+  id, err := s.Store.Put(context.Background(),
+    domain.Artifact{Payload: bytes.NewReader([]byte("hello"))},
+    domain.PutOptions{Namespace: "demo"},
+  )
+  if err != nil {
+    log.Fatal(err)
+  }
 
-    rh, _ := s.Store.Get(context.Background(), id, domain.GetOptions{})
-    defer rh.Close()
-    body, _ := io.ReadAll(rh)
-    log.Printf("read back: %s", body)
+  rh, _ := s.Store.Get(context.Background(), id, domain.GetOptions{})
+  defer rh.Close()
+  body, _ := io.ReadAll(rh)
+  log.Printf("read back: %s", body)
 }
 ```
 
