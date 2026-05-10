@@ -5,7 +5,6 @@ import (
 
 	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/index/sqlite"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
 )
@@ -68,64 +67,16 @@ type Scrinium struct {
 	closeErr  error
 }
 
-// indexWithExtensions is the optional capability some
-// StoreIndex backends expose for registering index extensions
-// (fsindex, future audit/full-text/etc.). sqlite implements
-// it; future backends that also support extensions just need
-// to expose the same Extensions() method.
-//
-// Lives here rather than in core to avoid the core ↔ index
-// import cycle that would result from declaring it as part of
-// core.StoreIndex. We type-assert against this interface in
-// Open and skip extension setup gracefully on backends that
-// don't support it.
-type indexWithExtensions interface {
-	Extensions() index.ExtensionRegistry
-}
-
-// indexWithExtensionList is the read-side capability for
-// enumerating registered extensions. sqlite returns its own
-// concrete ExtensionInfo type; we couple to it here because
-// pretending the type is generic would require either a
-// shared index.ExtensionInfo (not currently defined) or a
-// type-asserting interface that re-exposes the same shape
-// (more boilerplate than the import).
-//
-// When postgres adds an equivalent ListExtensions returning
-// its own type, we'll lift ExtensionInfo into the shared
-// index package and switch this to that type — small change
-// once the second concrete type exists.
-type indexWithExtensionList interface {
-	ListExtensions() []sqlite.ExtensionInfo
-}
-
-// ExtensionInfo is the public, scrinium-level view of a
-// registered index extension. Mirrors what backends expose;
-// surfaces (stats endpoints, debug pages) consume this rather
-// than reaching into the backend type.
-type ExtensionInfo struct {
-	Name          string
-	SchemaVersion int
-}
-
 // ListExtensions returns the registered index extensions.
-// Empty slice on backends that don't support extensions —
-// the surface presents "no extensions" rather than failing.
+// Empty slice on backends that don't support extension listing
+// — the surface presents "no extensions" rather than failing.
 //
 // The lookup is cheap (in-memory map on the backend) so we
 // don't cache; surfaces call this on every stats render.
-func (s *Scrinium) ListExtensions() []ExtensionInfo {
-	lister, ok := s.Index.(indexWithExtensionList)
+func (s *Scrinium) ListExtensions() []index.ExtensionInfo {
+	lister, ok := s.Index.(index.ExtensionLister)
 	if !ok {
 		return nil
 	}
-	src := lister.ListExtensions()
-	out := make([]ExtensionInfo, 0, len(src))
-	for _, e := range src {
-		out = append(out, ExtensionInfo{
-			Name:          e.Name,
-			SchemaVersion: e.SchemaVersion,
-		})
-	}
-	return out
+	return lister.ListExtensions()
 }

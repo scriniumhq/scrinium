@@ -195,3 +195,53 @@ var (
 	// explicit operation; callers must Scan and Delete to get it.
 	ErrEmptyPrefix = errors.New("scrinium/index: empty prefix in DeletePrefix")
 )
+
+// ExtensionInfo is the public, backend-agnostic descriptor of a
+// registered index extension. Surfaces (stats endpoints, debug
+// pages, examples) consume this rather than reaching into a
+// concrete backend type.
+//
+// Backends that report registered extensions return slices of
+// this type via ExtensionLister. The type is intentionally
+// flat — no behaviour, no pointers — so it can travel through
+// any layer without dragging dependencies.
+type ExtensionInfo struct {
+	// Name is the extension's stable identifier
+	// (IndexExtension.Name()).
+	Name string
+
+	// SchemaVersion is the persisted schema version for this
+	// extension on this backend, after the most recent successful
+	// Setup. Used to surface migration state.
+	SchemaVersion int
+}
+
+// ExtensionHost is the optional capability a StoreIndex backend
+// exposes when it supports registering host-side extensions.
+//
+// Backends that support extensions implement this; the rest are
+// transparently skipped by callers that type-assert it. Lives
+// here (not on core.StoreIndex) so the core package needs no
+// import of engine/index — the assertion happens at the wiring
+// layer instead.
+type ExtensionHost interface {
+	// Extensions returns the registry through which IndexExtension
+	// implementations are attached to this backend.
+	Extensions() ExtensionRegistry
+}
+
+// ExtensionLister is the optional capability a StoreIndex backend
+// exposes when it can enumerate currently-registered extensions.
+//
+// Distinct from ExtensionHost (the registration-side capability)
+// because read and write surfaces are conceptually independent —
+// a future read-only proxy backend might list without registering,
+// or a constrained backend might register without listing. In
+// practice today's sqlite backend implements both.
+//
+// Returns an empty slice (never nil) when no extensions are
+// registered. Order is unspecified — callers that need stable
+// listings sort by Name.
+type ExtensionLister interface {
+	ListExtensions() []ExtensionInfo
+}

@@ -57,10 +57,15 @@ type DaemonInfo struct {
 	Extensions []ExtensionInfo
 }
 
-// ExtensionInfo is the projection-side mirror of the
-// index/sqlite ExtensionInfo, kept here so projection has no
-// dependency on a specific backend. Daemons translate from
-// sqlite.ExtensionInfo at the call site.
+// ExtensionInfo is the projection-layer DTO for rendering
+// information about a registered index extension. It is a
+// pure render-time type — no behaviour, no dependencies on
+// engine/index — so the projection package stays a leaf in
+// the import graph.
+//
+// Callers that hold an index.ExtensionInfo (the contract type)
+// translate field-for-field at the call site: the shapes are
+// intentionally identical.
 type ExtensionInfo struct {
 	Name          string
 	SchemaVersion int

@@ -97,8 +97,6 @@ func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 		}
 	})
 
-	// 4. Register fsindex. Must happen before OpenStore so
-	//    the first IndexManifest dispatch already sees it.
 	//
 	//    Extension registration is a backend-specific feature
 	//    — sqlite supports it, postgres will, but the
@@ -106,7 +104,7 @@ func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 	//    it (lifting it requires defining what registries
 	//    mean across all future backends). We probe via
 	//    type-assertion: backends that support it implement
-	//    indexWithExtensions, others quietly skip.
+	//    index.ExtensionHost, others quietly skip.
 	//
 	//    Skipping has consequences — fsindex backfill no
 	//    longer accelerates View construction, falling back
@@ -114,7 +112,7 @@ func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 	//    on a backend without extension support; we'll
 	//    surface a clearer story when such a backend exists.
 	fsidx := fsindex.New()
-	if extIdx, ok := idx.(indexWithExtensions); ok {
+	if extIdx, ok := idx.(index.ExtensionHost); ok {
 		if err := extIdx.Extensions().Register(ctx, fsidx); err != nil {
 			return nil, fmt.Errorf("scrinium.Open: register fsindex: %w", err)
 		}

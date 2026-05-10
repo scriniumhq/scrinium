@@ -18,32 +18,31 @@ import (
 // than on core.StoreIndex — see ADR-49 for the rationale (avoids
 // a core ↔ index import cycle and respects backends that don't
 // support extensions).
+//
+// Implements index.ExtensionHost.
 func (i *Index) Extensions() index.ExtensionRegistry {
 	return &extensionRegistry{idx: i}
 }
 
-// ListExtensions returns the names of all currently registered
-// extensions, plus their persisted schema versions. Names appear
-// in unspecified order — callers wanting deterministic listings
-// should sort the result. Useful for diagnostics and stats
+// ListExtensions enumerates currently-registered extensions,
+// returning each one's name and persisted schema version. Names
+// appear in unspecified order — callers wanting deterministic
+// listings sort the result. Useful for diagnostics and stats
 // endpoints; not part of any contract surface.
 //
 // Returns an empty slice (never nil) when no extensions are
 // registered.
-type ExtensionInfo struct {
-	Name          string
-	SchemaVersion int
-}
-
-func (i *Index) ListExtensions() []ExtensionInfo {
+//
+// Implements index.ExtensionLister.
+func (i *Index) ListExtensions() []index.ExtensionInfo {
 	i.extMu.Lock()
 	defer i.extMu.Unlock()
 	if len(i.extByName) == 0 {
-		return []ExtensionInfo{}
+		return []index.ExtensionInfo{}
 	}
-	out := make([]ExtensionInfo, 0, len(i.extByName))
+	out := make([]index.ExtensionInfo, 0, len(i.extByName))
 	for name, ext := range i.extByName {
-		out = append(out, ExtensionInfo{
+		out = append(out, index.ExtensionInfo{
 			Name:          name,
 			SchemaVersion: ext.SchemaVersion(),
 		})

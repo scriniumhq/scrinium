@@ -90,7 +90,7 @@ func Init(ctx context.Context, cfg Config) (_ *Scrinium, recoveryKit []byte, ret
 
 	// 4. Register fsindex.
 	fsidx := fsindex.New()
-	if extIdx, ok := idx.(indexWithExtensions); ok {
+	if extIdx, ok := idx.(index.ExtensionHost); ok {
 		if err := extIdx.Extensions().Register(ctx, fsidx); err != nil {
 			return nil, nil, fmt.Errorf("scrinium.Init: register fsindex: %w", err)
 		}
