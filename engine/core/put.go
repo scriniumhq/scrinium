@@ -423,9 +423,10 @@ func (s *store) checkWritable() error {
 // enterWrite/enterAdmin — no exceptions, no clever locality.
 
 // enterRead is the canonical entry-preamble for read-path methods
-// (Get, Verify, Walk, Capacity, ConfigHistory, Unlock,
+// (Get, Verify, Walk, WalkSystem, Capacity, ConfigHistory,
 // ExportRecoveryKit). Combines context cancellation with the
-// priority-of-checks gate.
+// priority-of-checks gate. Unlock uses enterAdmin instead, since
+// Locked is its working state.
 func (s *store) enterRead(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
