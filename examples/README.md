@@ -16,16 +16,14 @@ Each example is a self-contained `main.go` you can `go run` directly.
 Each example creates a temporary store under `/tmp` (override with `--store=...`).
 
 ```bash
-cd examples
-
 # Smallest end-to-end: open → put → get → close.
-go run ./hello
+go run ./examples/hello
 
 # Ingest a directory tree.
-go run ./ingest --src=/path/to/files --store=/tmp/my-store
+go run ./examples/ingest --src=/path/to/files --store=/tmp/my-store
 
 # Browse what's inside a store.
-go run ./browse --store=/tmp/my-store
+go run ./examples/browse --store=/tmp/my-store
 ```
 
 ## What each example uses
@@ -37,13 +35,3 @@ also import the `domain` package for `Artifact`/`PutOptions`/`GetOptions` types.
 The side-effect imports for [`driver/localfs`](../driver/localfs) and
 [`index/sqlite`](../index/sqlite) live inside `scrinium` already, so examples
 do not need to import them separately.
-
-## What this module is
-
-`examples/` is a separate Go module so it can demonstrate the minimum set of
-imports needed for typical embedding tasks. The `replace` directive in `go.mod`
-points at the parent `scrinium/` engine; that means a fresh `git clone` builds
-the examples against the local source tree without any extra setup.
-
-For a tagged release, the host can drop the `replace` and pin a specific
-version of the engine.

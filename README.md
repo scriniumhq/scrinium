@@ -9,14 +9,13 @@ In development. The on-disk format and public API may change.
 
 ## Layout
 
-This repository is a Go workspace with three modules:
+Single Go module (`scrinium.dev`):
 
 ```
 scrinium/
-├── go.work                  # workspace
-│
-├── go.mod                   # engine module: scrinium.dev
+├── go.mod                   # scrinium.dev
 ├── *.go                     # high-level wrapper API: scrinium.Open / scrinium.Init
+│
 ├── engine/                  # the engine itself
 │   ├── core/                # Store implementation
 │   ├── domain/              # types (Manifest, Artifact, ...)
@@ -28,16 +27,14 @@ scrinium/
 │   ├── errs/, event/        # cross-cutting types
 │   └── internal/            # engine-private helpers
 │
-├── cmd/                     # reference binaries module
-│   ├── go.mod               # scrinium.dev/cmd
+├── cmd/                     # reference binaries
 │   ├── scrinium-fuse/       # FUSE mount (build tag: fuse)
 │   ├── scrinium-webdav/     # WebDAV server
 │   └── scrinium-webview/    # HTML browser
 │
-└── examples/                # example programs module
-    ├── go.mod               # scrinium.dev/examples
+└── examples/                # example programs
     ├── hello/               # smallest open + put + get
-    ├── ingest/               # batch ingest from a directory tree
+    ├── ingest/              # batch ingest from a directory tree
     └── browse/              # read-only inspector
 ```
 
@@ -87,23 +84,18 @@ See `examples/` for runnable variations (`go run ./hello`, `./ingest`, `./browse
 
 ## Building
 
-The repo uses a Go workspace, so `go build` and `go test` from the root
-operate across all three modules:
-
 ```bash
 go build ./...                  # build everything
 go test ./...                   # test everything (FUSE included on Linux/macOS)
 make ci                         # fmt + vet + test + fuzz-smoke
 ```
 
-For a single module:
+To run a single example or binary directly:
 
 ```bash
-cd cmd && go build ./...        # just the binaries
-cd examples && go run ./hello   # just an example
+go run ./examples/hello
+go run ./cmd/scrinium-webdav --store=/tmp/store --listen=:8080
 ```
-
-`make tidy` runs `go mod tidy` in each module separately.
 
 ## Reference binaries
 
