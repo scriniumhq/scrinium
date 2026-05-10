@@ -16,7 +16,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/pathx"
+	"scrinium.dev/internal/pathx"
 )
 
 // FSOps is the filesystem-shaped operations layer over a View.

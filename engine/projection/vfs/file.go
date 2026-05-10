@@ -9,7 +9,7 @@ import (
 
 	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/projection"
-	"scrinium.dev/pathx"
+	"scrinium.dev/internal/pathx"
 )
 
 // File is the open-handle interface VFS hands back from

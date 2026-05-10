@@ -13,8 +13,8 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/internal/testutil/storefx"
-	"scrinium.dev/testutil/driverfx"
-	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/internal/testutil/driverfx"
+	"scrinium.dev/internal/testutil/indexfx"
 )
 
 // scrubCapture collects every ScrubFailedPayload published by the

@@ -10,7 +10,7 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/testutil/projectionfx"
+	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // --- helpers ---

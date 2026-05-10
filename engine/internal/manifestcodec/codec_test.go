@@ -12,7 +12,7 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/manifestcodec"
 	"scrinium.dev/engine/internal/testutil/storefx"
-	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/internal/testutil/manifestfx"
 )
 
 var (

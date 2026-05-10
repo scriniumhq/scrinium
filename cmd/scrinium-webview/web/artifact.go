@@ -17,8 +17,8 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/humanize"
-	"scrinium.dev/pathx"
+	"scrinium.dev/internal/humanize"
+	"scrinium.dev/internal/pathx"
 )
 
 // SchemaDecoder is the contract for plugging schema-aware

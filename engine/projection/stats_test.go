@@ -8,7 +8,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/projection"
-	"scrinium.dev/testutil/projectionfx"
+	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // minimalView returns a View built on an empty FakeSource so

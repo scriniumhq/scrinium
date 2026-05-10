@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/testutil/projectionfx"
+	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // --- helpers ---

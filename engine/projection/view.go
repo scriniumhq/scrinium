@@ -16,7 +16,7 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/pathx"
+	"scrinium.dev/internal/pathx"
 )
 
 // View is the read side of the projection. It holds five

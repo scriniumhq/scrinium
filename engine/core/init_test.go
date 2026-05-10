@@ -16,8 +16,8 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
-	"scrinium.dev/testutil/driverfx"
-	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/internal/testutil/driverfx"
+	"scrinium.dev/internal/testutil/indexfx"
 )
 
 // --- InitStore happy path ---

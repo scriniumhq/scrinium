@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/internal/testutil/manifestfx"
 )
 
 // --- GetRefCount ---

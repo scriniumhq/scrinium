@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
-	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/internal/testutil/driverfx"
 )
 
 // --- ErrStoreNotFound at fresh Location ---

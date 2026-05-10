@@ -9,7 +9,7 @@ import (
 
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
-	"scrinium.dev/testutil/projectionfx"
+	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // All editing tests need an FSOps with the relevant policy bit

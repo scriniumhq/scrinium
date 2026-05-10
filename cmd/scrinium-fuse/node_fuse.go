@@ -12,12 +12,11 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"scrinium.dev/pathx"
-
 	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
+	"scrinium.dev/internal/pathx"
 )
 
 // rootNode is the inode at the FUSE mount point. It dispatches

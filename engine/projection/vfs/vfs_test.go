@@ -13,7 +13,7 @@ import (
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
 	"scrinium.dev/engine/projection/vfs"
-	"scrinium.dev/testutil/projectionfx"
+	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // newTestVFS builds a VFS over an in-memory FakeSource. The

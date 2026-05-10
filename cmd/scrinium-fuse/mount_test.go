@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"scrinium.dev/internal/testutil/projectionfx"
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/testutil/projectionfx"
 )
 
 // newTestRoot builds a rootNode wired against an in-memory

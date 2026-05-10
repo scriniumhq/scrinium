@@ -15,8 +15,8 @@ import (
 	"scrinium.dev/engine/internal/testutil/storefx"
 	scriniumzstd "scrinium.dev/engine/plugin/compress/zstd"
 	"scrinium.dev/engine/plugin/crypto/aesgcm"
-	"scrinium.dev/testutil/driverfx"
-	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/internal/testutil/driverfx"
+	"scrinium.dev/internal/testutil/indexfx"
 )
 
 var (

@@ -10,8 +10,8 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/testutil/eventfx"
-	"scrinium.dev/testutil/projectionfx"
+	"scrinium.dev/internal/testutil/eventfx"
+	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // --- by-session ---

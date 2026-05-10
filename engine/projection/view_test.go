@@ -10,8 +10,8 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
-	"scrinium.dev/testutil/manifestfx"
-	"scrinium.dev/testutil/projectionfx"
+	"scrinium.dev/internal/testutil/manifestfx"
+	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // makeManifest is a thin wrapper around manifestfx.Blob that

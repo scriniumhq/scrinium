@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/internal/testutil/manifestfx"
 )
 
 // --- IndexManifest ---

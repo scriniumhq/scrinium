@@ -11,7 +11,7 @@ import (
 
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
-	"scrinium.dev/pathx"
+	"scrinium.dev/internal/pathx"
 )
 
 // POSIX flag bits used for OpenFile semantics. Aliased to

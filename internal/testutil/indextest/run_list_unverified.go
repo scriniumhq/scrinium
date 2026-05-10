@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/internal/testutil/manifestfx"
 )
 
 // --- ListUnverified ---

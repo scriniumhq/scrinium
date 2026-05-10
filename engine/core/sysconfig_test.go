@@ -12,7 +12,7 @@ import (
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
-	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/internal/testutil/indexfx"
 )
 
 // mustWriteSysConfig writes a known StoreConfig through

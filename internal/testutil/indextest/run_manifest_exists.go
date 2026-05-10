@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/internal/testutil/manifestfx"
 )
 
 // --- ManifestExists ---
