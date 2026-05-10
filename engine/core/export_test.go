@@ -80,3 +80,11 @@ func WriteDriverFile(s Store, path string, data []byte) error {
 	}
 	return concrete.drv.Put(context.Background(), path, bytes.NewReader(data))
 }
+
+// RecoverOrphans is the test alias for the package-private
+// recoverOrphans function. Used by recovery_faulty_test.go to
+// drive the function with fake StoreIndex / faulty Driver values
+// directly, bypassing the full Init/Open path.
+func RecoverOrphans(ctx context.Context, drv driver.Driver, idx StoreIndex) (OrphanReport, error) {
+	return recoverOrphans(ctx, drv, idx)
+}
