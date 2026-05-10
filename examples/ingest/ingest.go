@@ -54,23 +54,23 @@ func main() {
 func run(srcDir, storeURI, namespace string) error {
 	ctx := context.Background()
 
-	// Open existing or create new. We probe by trying Open; if
-	// it fails because there's no descriptor yet, fall through
-	// to Init. Production code typically chooses one path
-	// explicitly — separating "init" and "ingest" subcommands.
+	// Open existing or create new via the OpenOrInit helper.
+	// OpenOrInit only falls through to Init when Open returned
+	// errs.ErrStoreNotFound (bridges to fs.ErrNotExist) — a
+	// typo'd URI or a permission error surfaces directly,
+	// avoiding the "silently created an empty store somewhere
+	// unexpected" trap. Production code typically chooses one
+	// path explicitly — separating "init" and "ingest"
+	// subcommands.
 	cfg := scrinium.DefaultConfig()
 	cfg.Store = storeURI
 
-	s, err := scrinium.Open(ctx, cfg)
+	s, _, created, err := scrinium.OpenOrInit(ctx, cfg)
 	if err != nil {
-		// Treat any Open failure as "not initialised" for this
-		// example. Real code should distinguish ErrStoreNotFound
-		// from genuine errors.
-		fmt.Fprintln(os.Stderr, "store not found, initialising")
-		s, _, err = scrinium.Init(ctx, cfg)
-		if err != nil {
-			return fmt.Errorf("init: %w", err)
-		}
+		return fmt.Errorf("open-or-init: %w", err)
+	}
+	if created {
+		fmt.Fprintln(os.Stderr, "initialised a new store")
 	}
 	defer func() {
 		if err := s.Close(); err != nil {

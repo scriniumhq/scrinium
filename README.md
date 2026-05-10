@@ -40,7 +40,7 @@ scrinium/
 
 ## Quick start
 
-The smallest program — open a fresh store, put one artifact, read it back:
+The smallest program — open or create a store, put one artifact, read it back:
 
 ```go
 package main
@@ -56,16 +56,21 @@ import (
 )
 
 func main() {
+  ctx := context.Background()
+
   cfg := scrinium.DefaultConfig()
   cfg.Store = "file:///tmp/my-store"
 
-  s, _, err := scrinium.Init(context.Background(), cfg)
+  // OpenOrInit opens the store if it exists, initialises it
+  // otherwise — and surfaces real errors (bad URI, permissions)
+  // instead of silently reinitialising on top.
+  s, _, _, err := scrinium.OpenOrInit(ctx, cfg)
   if err != nil {
     log.Fatal(err)
   }
   defer s.Close()
 
-  id, err := s.Store.Put(context.Background(),
+  id, err := s.Store.Put(ctx,
     domain.Artifact{Payload: bytes.NewReader([]byte("hello"))},
     domain.PutOptions{Namespace: "demo"},
   )
@@ -73,7 +78,7 @@ func main() {
     log.Fatal(err)
   }
 
-  rh, _ := s.Store.Get(context.Background(), id, domain.GetOptions{})
+  rh, _ := s.Store.Get(ctx, id, domain.GetOptions{})
   defer rh.Close()
   body, _ := io.ReadAll(rh)
   log.Printf("read back: %s", body)
@@ -116,10 +121,19 @@ go install scrinium.dev/cmd/scrinium-webdav@latest
 For applications that want to host Scrinium directly, use the top-level
 `scrinium` package:
 
-- `scrinium.Init(ctx, cfg)` — create a fresh store, returns `*Scrinium`
-  with everything wired (Store, Index, View, FSOps).
-- `scrinium.Open(ctx, cfg)` — open an existing store the same way.
+- `scrinium.OpenOrInit(ctx, cfg)` — open or create. Convenient for
+  examples and single-binary tools; returns a `created` flag so the
+  host knows when a recovery kit has been produced.
+- `scrinium.Open(ctx, cfg)` — open an existing store. Returns
+  `errs.ErrStoreNotFound` (which bridges to `fs.ErrNotExist`) if no
+  store has been initialised at the location.
+- `scrinium.Init(ctx, cfg)` — create a fresh store. Returns the
+  recovery kit on encrypted stores; the host MUST persist it.
 - `(*Scrinium).Close()` — wipe secrets, release resources.
+  Idempotent.
+
+Production daemons typically separate "init" and "serve" subcommands
+so an operator can audit when a brand-new store is being created.
 
 For full control over wiring, compose `engine/core`, `engine/projection`,
 and friends directly. The top-level package is a convenience over them.

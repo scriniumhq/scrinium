@@ -62,19 +62,21 @@ func run(storePath string) error {
 		}
 	}()
 
-	// Open existing store or create new. We probe by trying
-	// Open; if the store has not been initialised yet (no
-	// descriptor on disk), Open fails and we fall through to
-	// Init. Production code typically chooses one path
-	// explicitly — separating "init" and "run" subcommands.
+	// Open existing store or create a fresh one. OpenOrInit
+	// detects the not-initialised case via errors.Is(err,
+	// errs.ErrStoreNotFound) and runs Init only then; any
+	// other failure (bad URI, no permission, etc.) is surfaced
+	// without silently reinitialising on top. Production code
+	// typically chooses one path explicitly — separating "init"
+	// and "run" subcommands gives operators an audit trail.
 	cfg := scrinium.DefaultConfig()
 	cfg.Store = "file://" + dir
-	s, err := scrinium.Open(ctx, cfg)
+	s, _, created, err := scrinium.OpenOrInit(ctx, cfg)
 	if err != nil {
-		s, _, err = scrinium.Init(ctx, cfg)
-		if err != nil {
-			return fmt.Errorf("init: %w", err)
-		}
+		return fmt.Errorf("open-or-init: %w", err)
+	}
+	if created {
+		fmt.Println("(initialised a new store)")
 	}
 	defer func() {
 		if err := s.Close(); err != nil {
