@@ -63,32 +63,30 @@ func TestDialDriver_TildeBare(t *testing.T) {
 	}
 }
 
-// TestDialDriver_FileURI_TildeHost exercises file://~/path —
-// non-canonical but supported. Same rationale as above:
-// can't reliably override $HOME, so this only checks parser
-// rejects it cleanly when home lookup happens to succeed.
-func TestDialDriver_FileURI_TildeHost(t *testing.T) {
-	// file://~/<relative> — host="~", path="/<relative>".
-	// We can't assert the resolved absolute path matches
-	// anything specific without manipulating $HOME, so we
-	// just ensure the parser doesn't error before the
-	// filesystem call.
-	uri := "file://~/scrinium-dial-test-host"
-	d, err := driver.DialDriver(uri)
-	if err != nil {
-		// An error is acceptable here if the localfs.New step
-		// fails — directory creation under $HOME may not be
-		// permitted in some test environments. The point is
-		// the URI parser didn't reject the form.
-		if !strings.Contains(err.Error(), "localfs") &&
-			!strings.Contains(err.Error(), "permission") &&
-			!strings.Contains(err.Error(), "not exist") {
-			t.Errorf("expected localfs/permission error, got: %v", err)
-		}
-		return
+// TestDialDriver_FileURI_TildeHostRejected verifies the P1.12
+// removal is honoured: file://~/path used to expand the host slot
+// as a tilde alias. After P1.12 only file:///abs/path is accepted
+// and any other host (including "~" and ".") returns
+// ErrUnsupportedHost.
+func TestDialDriver_FileURI_TildeHostRejected(t *testing.T) {
+	_, err := driver.DialDriver("file://~/scrinium-dial-test-host")
+	if err == nil {
+		t.Fatal("DialDriver(file://~/...): want error, got nil")
 	}
-	if d == nil {
-		t.Fatal("DialDriver: nil driver")
+	if !strings.Contains(err.Error(), "host") {
+		t.Errorf("error %q does not mention 'host'", err)
+	}
+}
+
+// TestDialDriver_FileURI_DotHostRejected mirrors the above for the
+// other historical alias.
+func TestDialDriver_FileURI_DotHostRejected(t *testing.T) {
+	_, err := driver.DialDriver("file://./scrinium-dial-test-cwd")
+	if err == nil {
+		t.Fatal("DialDriver(file://./...): want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "host") {
+		t.Errorf("error %q does not mention 'host'", err)
 	}
 }
 
@@ -123,9 +121,8 @@ func TestDialDriver_Empty(t *testing.T) {
 }
 
 // TestDialDriver_FileURI_BadHost rejects file://something/path
-// where something is neither empty, "~", nor ".". The localfs
-// driver doesn't talk to remote hosts, so accepting this would
-// silently misroute.
+// where something is non-empty. The localfs driver doesn't talk
+// to remote hosts, so accepting this would silently misroute.
 func TestDialDriver_FileURI_BadHost(t *testing.T) {
 	_, err := driver.DialDriver("file://example.com/store")
 	if err == nil {

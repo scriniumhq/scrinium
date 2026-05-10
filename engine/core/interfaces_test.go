@@ -8,6 +8,12 @@ import (
 	"scrinium.dev/engine/event"
 )
 
+// This file is interface conformance smoke for the core package —
+// not integration in any operational sense. It used to live as
+// integration_test.go, which misled new readers into expecting
+// scenario tests; renamed to interfaces_test.go after the P1.13
+// audit so the filename matches the file's actual purpose.
+
 // TestEventBusSatisfiesPublisher checks that event.NewEventBus()
 // satisfies core.Publisher through structural conformance. This is
 // the link between the minimal stack (a Store without Curator) and

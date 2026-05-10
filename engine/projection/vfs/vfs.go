@@ -119,9 +119,9 @@ func CleanPath(name string) string {
 func (v *VFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
 	clean := CleanPath(name)
 	if isAtServiceRoot(clean, v.routingCfg) {
-		return WrapErrno(errs.ErrEditingDisabled)
+		return errs.ErrEditingDisabled
 	}
-	return WrapErr(v.fsops.Mkdir(clean, uint32(perm)))
+	return v.fsops.Mkdir(clean, uint32(perm))
 }
 
 // RemoveAll deletes a file or empty directory. Recursive
@@ -132,10 +132,10 @@ func (v *VFS) RemoveAll(ctx context.Context, name string) error {
 	clean := CleanPath(name)
 	if clean == "" {
 		// Refuse to remove the mount root.
-		return WrapErrno(errs.ErrEditingDisabled)
+		return errs.ErrEditingDisabled
 	}
 	if isAtServiceRoot(clean, v.routingCfg) {
-		return WrapErrno(errs.ErrEditingDisabled)
+		return errs.ErrEditingDisabled
 	}
 	// Try Unlink first (file). If the path is a directory,
 	// fall back to Rmdir.
@@ -144,9 +144,9 @@ func (v *VFS) RemoveAll(ctx context.Context, name string) error {
 		return nil
 	}
 	if errors.Is(err, errs.ErrIsADirectory) {
-		return WrapErr(v.fsops.Rmdir(clean))
+		return v.fsops.Rmdir(clean)
 	}
-	return WrapErr(err)
+	return err
 }
 
 // Rename moves a path. Cross-tree renames are not supported:
@@ -155,9 +155,9 @@ func (v *VFS) Rename(ctx context.Context, oldName, newName string) error {
 	oldClean := CleanPath(oldName)
 	newClean := CleanPath(newName)
 	if isAtServiceRoot(newClean, v.routingCfg) {
-		return WrapErrno(errs.ErrEditingDisabled)
+		return errs.ErrEditingDisabled
 	}
-	return WrapErr(v.fsops.Rename(ctx, oldClean, newClean))
+	return v.fsops.Rename(ctx, oldClean, newClean)
 }
 
 // --- read methods ---
@@ -174,13 +174,13 @@ func (v *VFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 		if errors.Is(err, projection.ErrRouteRejected) {
 			return nil, fs.ErrNotExist
 		}
-		return nil, WrapErr(err)
+		return nil, err
 	}
 	switch target.Kind {
 	case projection.RouteRoot:
 		fi, err := v.fsops.Stat(target.SubPath)
 		if err != nil {
-			return nil, WrapErr(err)
+			return nil, err
 		}
 		return projectionFileInfo{fi: fi}, nil
 	case projection.RouteServiceRoot:
@@ -188,7 +188,7 @@ func (v *VFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	case projection.RouteServiceTree:
 		node, err := serviceLookup(v.view, target.Tree, target.SubPath)
 		if err != nil {
-			return nil, WrapErr(err)
+			return nil, err
 		}
 		return projectionNodeInfo{node: node, fallbackTime: v.startedAt}, nil
 	case projection.RouteStatsFile:
@@ -210,7 +210,7 @@ func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileM
 		if errors.Is(err, projection.ErrRouteRejected) {
 			return nil, fs.ErrNotExist
 		}
-		return nil, WrapErr(err)
+		return nil, err
 	}
 
 	wantCreate := flag&syscallOCreate != 0
@@ -224,24 +224,24 @@ func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileM
 
 	case projection.RouteServiceRoot:
 		if wantWrite || wantCreate {
-			return nil, WrapErrno(errs.ErrEditingDisabled)
+			return nil, errs.ErrEditingDisabled
 		}
 		return newServiceDirFile(v, v.routingCfg.ServicePrefix, "", true), nil
 
 	case projection.RouteServiceTree:
 		if wantWrite || wantCreate {
-			return nil, WrapErrno(errs.ErrEditingDisabled)
+			return nil, errs.ErrEditingDisabled
 		}
 		node, err := serviceLookup(v.view, target.Tree, target.SubPath)
 		if err != nil {
-			return nil, WrapErr(err)
+			return nil, err
 		}
 		if node.FS.IsDir {
 			return newServiceDirFile(v, target.Tree, target.SubPath, false), nil
 		}
 		rh, err := serviceOpen(ctx, v.view, target.Tree, target.SubPath)
 		if err != nil {
-			return nil, WrapErr(err)
+			return nil, err
 		}
 		return &readHandleFile{
 			rh:    rh,
@@ -254,7 +254,7 @@ func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileM
 
 	case projection.RouteStatsFile:
 		if wantWrite || wantCreate {
-			return nil, WrapErrno(errs.ErrEditingDisabled)
+			return nil, errs.ErrEditingDisabled
 		}
 		body := v.statsBody()
 		return newBytesFile("stats", body, time.Now()), nil

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -434,12 +435,12 @@ func TestListObjectsWithModTime_StopWalk(t *testing.T) {
 	err := d.ListObjectsWithModTime(ctx, "", time.Time{}, func(m driver.ObjectMeta) error {
 		seen++
 		if seen == 2 {
-			return errs.ErrStopWalk
+			return fs.SkipAll
 		}
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("errs.ErrStopWalk should be swallowed, got %v", err)
+		t.Fatalf("fs.SkipAll should be swallowed, got %v", err)
 	}
 	if seen != 2 {
 		t.Fatalf("expected to stop at 2, saw %d", seen)

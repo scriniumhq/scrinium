@@ -32,14 +32,14 @@ func (v *VFS) openRoot(
 			return wrapWriteFile(f, subPath), nil
 		}
 		if !errors.Is(err, errs.ErrPathExists) || flag&syscallOExcl != 0 {
-			return nil, WrapErr(err)
+			return nil, err
 		}
 		// EEXIST without O_EXCL — fall through to open below.
 	}
 	// Stat first to decide file vs dir.
 	fi, err := v.fsops.Stat(subPath)
 	if err != nil {
-		return nil, WrapErr(err)
+		return nil, err
 	}
 	if fi.IsDir {
 		// Read-only dir handle for Readdir.
@@ -51,7 +51,7 @@ func (v *VFS) openRoot(
 	}
 	f, err := v.fsops.Open(ctx, subPath, mode)
 	if err != nil {
-		return nil, WrapErr(err)
+		return nil, err
 	}
 	return wrapFile(f, subPath, fi), nil
 }

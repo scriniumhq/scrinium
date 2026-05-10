@@ -33,7 +33,7 @@ func (d *rootDirFile) Readdir(count int) ([]os.FileInfo, error) {
 	var out []os.FileInfo
 	for fi, err := range d.v.fsops.Listdir("") {
 		if err != nil {
-			return nil, WrapErr(err)
+			return nil, err
 		}
 		if d.v.nameFilter != nil && d.v.nameFilter(fi.Name) {
 			continue
@@ -75,7 +75,7 @@ func (d *pathDirFile) Readdir(count int) ([]os.FileInfo, error) {
 	var out []os.FileInfo
 	for fi, err := range d.v.fsops.Listdir(d.subPath) {
 		if err != nil {
-			return nil, WrapErr(err)
+			return nil, err
 		}
 		if d.v.nameFilter != nil && d.v.nameFilter(fi.Name) {
 			continue
@@ -88,7 +88,7 @@ func (d *pathDirFile) Readdir(count int) ([]os.FileInfo, error) {
 func (d *pathDirFile) Stat() (os.FileInfo, error) {
 	fi, err := d.v.fsops.Stat(d.subPath)
 	if err != nil {
-		return nil, WrapErr(err)
+		return nil, err
 	}
 	return projectionFileInfo{fi: fi}, nil
 }
@@ -168,7 +168,7 @@ func (d *serviceDirFile) Readdir(count int) ([]os.FileInfo, error) {
 	var out []os.FileInfo
 	for n, err := range serviceList(d.v.view, d.tree, d.subPath) {
 		if err != nil {
-			return nil, WrapErr(err)
+			return nil, err
 		}
 		out = append(out, projectionNodeInfo{node: n, fallbackTime: d.v.startedAt})
 	}
@@ -181,7 +181,7 @@ func (d *serviceDirFile) Stat() (os.FileInfo, error) {
 	}
 	node, err := serviceLookup(d.v.view, d.tree, d.subPath)
 	if err != nil {
-		return nil, WrapErr(err)
+		return nil, err
 	}
 	return projectionNodeInfo{node: node, fallbackTime: d.v.startedAt}, nil
 }

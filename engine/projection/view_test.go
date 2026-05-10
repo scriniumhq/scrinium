@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"testing"
 	"time"
 
@@ -180,8 +181,8 @@ func TestGetByArtifact_Closed(t *testing.T) {
 	v.Close()
 
 	_, err := v.GetByArtifact("")
-	if !errors.Is(err, errs.ErrViewClosed) {
-		t.Errorf("expected ErrViewClosed, got %v", err)
+	if !errors.Is(err, os.ErrClosed) {
+		t.Errorf("expected os.ErrClosed, got %v", err)
 	}
 }
 

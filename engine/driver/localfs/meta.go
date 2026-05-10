@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 )
 
 // tombstoneSuffix is appended to paths whose original entry has been
@@ -95,7 +94,7 @@ func (d *Driver) List(ctx context.Context, prefix string) ([]string, error) {
 // across implementations).
 //
 // To stop iteration early without an error, the callback returns
-// errs.ErrStopWalk; the function returns nil to its caller.
+// fs.SkipAll; the function returns nil to its caller.
 //
 // Filtered out: tombstones and in-flight temp files (see List).
 // Directories are not reported.
@@ -180,8 +179,8 @@ func (d *Driver) ListObjectsWithModTime(
 		return nil
 	})
 
-	// errs.ErrStopWalk is the documented "stop without error" signal.
-	if errors.Is(walkErr, errs.ErrStopWalk) {
+	// fs.SkipAll is the documented "stop without error" signal.
+	if errors.Is(walkErr, fs.SkipAll) {
 		return nil
 	}
 	return walkErr

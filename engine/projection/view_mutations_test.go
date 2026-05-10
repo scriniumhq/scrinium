@@ -3,6 +3,7 @@ package projection_test
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -193,8 +194,8 @@ func TestAdd_OnClosedView(t *testing.T) {
 	v.Close()
 
 	err := v.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()))
-	if !errors.Is(err, errs.ErrViewClosed) {
-		t.Errorf("expected ErrViewClosed, got %v", err)
+	if !errors.Is(err, os.ErrClosed) {
+		t.Errorf("expected os.ErrClosed, got %v", err)
 	}
 }
 

@@ -5,16 +5,16 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"time"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/timefmt"
 )
 
 // ListByNamespace iterates over manifests whose namespace matches
 // the filter. The callback is invoked once per manifest in
-// (namespace, created_at) order; cancelling via errs.ErrStopWalk
+// (namespace, created_at) order; cancelling via fs.SkipAll
 // or any other error from the callback stops the iteration.
 //
 // Filter semantics match the contract of Walk in core.DataStore:
@@ -166,7 +166,7 @@ func (i *Index) ListUnverified(ctx context.Context, before time.Time, cb func(bl
 // iterateManifestRows is the shared cursor loop for callbacks that
 // take domain.Manifest. Centralised because three iteration sites
 // (ListByNamespace and the two future query variants) want the
-// same context check / ErrStopWalk / scan pattern.
+// same context check / fs.SkipAll / scan pattern.
 func iterateManifestRows(
 	ctx context.Context,
 	rows *sql.Rows,
@@ -181,7 +181,7 @@ func iterateManifestRows(
 			return fmt.Errorf("sqlite: scan manifest: %w", err)
 		}
 		if cbErr := cb(m); cbErr != nil {
-			if errors.Is(cbErr, errs.ErrStopWalk) {
+			if errors.Is(cbErr, fs.SkipAll) {
 				return nil
 			}
 			return cbErr
@@ -209,7 +209,7 @@ func iterateBlobRefRows(
 			return err
 		}
 		if cbErr := cb(ref); cbErr != nil {
-			if errors.Is(cbErr, errs.ErrStopWalk) {
+			if errors.Is(cbErr, fs.SkipAll) {
 				return nil
 			}
 			return cbErr

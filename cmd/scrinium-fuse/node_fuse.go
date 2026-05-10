@@ -791,8 +791,6 @@ func errnoFromError(err error) syscall.Errno {
 		return syscall.EROFS
 	case errors.Is(err, errs.ErrScratchQuota):
 		return syscall.ENOSPC
-	case errors.Is(err, errs.ErrViewClosed):
-		return syscall.EIO
 	case errors.Is(err, errs.ErrArtifactUnreadable):
 		return syscall.EIO
 	case errors.Is(err, errs.ErrSourceUnavailable):

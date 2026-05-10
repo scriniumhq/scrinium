@@ -582,6 +582,79 @@ func openMemIndex(t *testing.T) *Index {
 	return idx
 }
 
+// --- ListExtensions ---
+
+// TestIndex_ListExtensions verifies (*Index).ListExtensions returns
+// every registered extension's name and SchemaVersion. Introduced
+// after P0.6, when the method's return type was lifted from a
+// sqlite-local ExtensionInfo to index.ExtensionInfo (the contract
+// type backends share). Without a direct test, a regression in
+// either the return shape or the slice population would surface
+// only via the projection layer's stats renderer — too far from
+// the source.
+//
+// The test registers a small set of extensions with distinct
+// names and schemas, then asserts the listing reproduces all of
+// them. Order is unspecified per the ExtensionLister contract;
+// we verify by membership, not by index position.
+func TestIndex_ListExtensions(t *testing.T) {
+	idx := openMemIndex(t)
+	defer idx.Close()
+
+	exts := []*fakeExt{
+		{name: "scrinium.alpha", version: 1},
+		{name: "scrinium.beta", version: 3},
+		{name: "scrinium.gamma", version: 7},
+	}
+	for _, e := range exts {
+		if err := idx.Extensions().Register(context.Background(), e); err != nil {
+			t.Fatalf("Register %q: %v", e.name, err)
+		}
+	}
+
+	got := idx.ListExtensions()
+	if len(got) != len(exts) {
+		t.Fatalf("ListExtensions: got %d entries, want %d", len(got), len(exts))
+	}
+
+	// Build a name→version lookup for membership assertion. Order
+	// is unspecified per the ExtensionLister contract.
+	byName := make(map[string]int, len(got))
+	for _, info := range got {
+		byName[info.Name] = info.SchemaVersion
+	}
+	for _, want := range exts {
+		gotVer, ok := byName[want.name]
+		if !ok {
+			t.Errorf("ListExtensions: missing %q", want.name)
+			continue
+		}
+		if gotVer != want.version {
+			t.Errorf("ListExtensions[%q]: SchemaVersion = %d, want %d",
+				want.name, gotVer, want.version)
+		}
+	}
+}
+
+// TestIndex_ListExtensions_Empty: with no extensions registered
+// the listing must be a non-nil empty slice. Callers iterate
+// with range; nil and empty are equivalent there but the
+// ExtensionLister contract specifies non-nil to avoid surprising
+// reflective consumers (e.g. JSON encoders that distinguish
+// `null` from `[]`).
+func TestIndex_ListExtensions_Empty(t *testing.T) {
+	idx := openMemIndex(t)
+	defer idx.Close()
+
+	got := idx.ListExtensions()
+	if got == nil {
+		t.Error("ListExtensions on fresh Index: returned nil, want empty non-nil slice")
+	}
+	if len(got) != 0 {
+		t.Errorf("ListExtensions on fresh Index: got %d entries, want 0", len(got))
+	}
+}
+
 func makeBlobManifest(id domain.ArtifactID) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   id,

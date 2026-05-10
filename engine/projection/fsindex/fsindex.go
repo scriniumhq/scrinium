@@ -249,8 +249,9 @@ func (e *Extension) LookupByPath(path string) (domain.ArtifactID, bool, error) {
 }
 
 // WalkAll iterates every (artifactID, fsmeta JSON) pair in
-// lexicographic id order. Returning ErrStopWalk from cb (the
-// extensions sentinel index.ErrStopScan) ends the walk cleanly.
+// lexicographic id order. Returning fs.SkipAll from cb (the
+// extensions sentinel index.ErrStopScan also works) ends the
+// walk cleanly.
 //
 // Used by projection.View.backfill: one round-trip yields every
 // node's fs metadata.

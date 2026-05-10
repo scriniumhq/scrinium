@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"sort"
 	"strings"
@@ -803,7 +804,7 @@ func (v *View) treeFor(rv RootView) map[string]*viewNode {
 
 func (v *View) getInTree(tree map[string]*viewNode, path string) (Node, error) {
 	if v.closed.Load() {
-		return Node{}, errs.ErrViewClosed
+		return Node{}, os.ErrClosed
 	}
 	v.mu.RLock()
 	defer v.mu.RUnlock()
@@ -817,7 +818,7 @@ func (v *View) getInTree(tree map[string]*viewNode, path string) (Node, error) {
 func (v *View) listInTree(tree map[string]*viewNode, path string) NodeSeq {
 	return func(yield func(Node, error) bool) {
 		if v.closed.Load() {
-			yield(Node{}, errs.ErrViewClosed)
+			yield(Node{}, os.ErrClosed)
 			return
 		}
 		v.mu.RLock()
@@ -852,7 +853,7 @@ func (v *View) listInTree(tree map[string]*viewNode, path string) NodeSeq {
 func (v *View) walkInTree(tree map[string]*viewNode, prefix string) NodeSeq {
 	return func(yield func(Node, error) bool) {
 		if v.closed.Load() {
-			yield(Node{}, errs.ErrViewClosed)
+			yield(Node{}, os.ErrClosed)
 			return
 		}
 		v.mu.RLock()
@@ -894,7 +895,7 @@ func (v *View) openInTree(
 	opts domain.GetOptions,
 ) (core.ReadHandle, error) {
 	if v.closed.Load() {
-		return nil, errs.ErrViewClosed
+		return nil, os.ErrClosed
 	}
 	v.mu.RLock()
 	n, ok := tree[path]
@@ -915,7 +916,7 @@ func (v *View) openInTree(
 // --- Mutation methods ---
 
 // Close marks the View closed. Idempotent. Subsequent reads
-// return ErrViewClosed.
+// return os.ErrClosed.
 func (v *View) Close() error {
 	v.closed.Store(true)
 	return nil
@@ -925,12 +926,12 @@ func (v *View) Close() error {
 // path. Used by FSOps after Store.Put. Concurrent with reads;
 // holds the write lock.
 //
-// Returns ErrViewClosed if the View is closed. Otherwise nil —
+// Returns os.ErrClosed if the View is closed. Otherwise nil —
 // classification cannot fail for a valid manifest (the input
 // itself is what the source produced).
 func (v *View) Add(m domain.Manifest) error {
 	if v.closed.Load() {
-		return errs.ErrViewClosed
+		return os.ErrClosed
 	}
 	if !v.passesFilter(m) {
 		return nil
@@ -953,7 +954,7 @@ func (v *View) Add(m domain.Manifest) error {
 // Idempotent: Remove for an unknown ArtifactID is a no-op.
 func (v *View) Remove(id domain.ArtifactID) error {
 	if v.closed.Load() {
-		return errs.ErrViewClosed
+		return os.ErrClosed
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -1040,7 +1041,7 @@ func (v *View) removeFromByPath(id domain.ArtifactID, rec *artifactRecord) {
 // in by-path comes from the new manifest's resolver result.
 func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 	if v.closed.Load() {
-		return errs.ErrViewClosed
+		return os.ErrClosed
 	}
 	v.mu.Lock()
 	defer v.mu.Unlock()

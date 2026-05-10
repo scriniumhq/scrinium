@@ -3,7 +3,10 @@ package scrinium_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"hash"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,35 +14,47 @@ import (
 	"scrinium.dev"
 	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
-
-	// Importing scrinium already pulls in localfs and sqlite via
-	// its own side-effect imports, but tests sometimes verify
-	// schemes are actually wired. The double-import is a no-op
-	// at runtime.
-	_ "scrinium.dev/engine/driver/localfs"
-	_ "scrinium.dev/engine/index/sqlite"
+	"scrinium.dev/engine/driver/localfs"
+	"scrinium.dev/engine/index/sqlite"
 )
 
-// initStorePlain initialises an empty Plain-DEK store at dir
-// so scrinium.Open can pick it up. Tests that need a fresh
-// store call this before scrinium.Open.
+// initStorePlain initialises an empty Plain-DEK store at dir so
+// scrinium.Open can pick it up. Tests that need a fresh store call
+// this before scrinium.Open.
+//
+// Driver and index are constructed inline rather than through
+// thin wrappers — `localfs.New(dir)` and `sqlite.NewStore(ctx, path)`
+// are the canonical ways to obtain them, and an extra layer named
+// "openLocalDriver" doesn't earn its keep.
+//
+// The hash registry is built inline too. We can't use
+// storefx.Hashes() here because storefx lives under
+// engine/internal/, which is private to the engine subtree (the
+// scrinium top-level package is outside it and Go's internal-
+// package rules forbid the import). Building the registry inline
+// — sha256 only — is sufficient for top-level smoke tests; tests
+// that need richer hash support live inside engine/ and have
+// storefx access there.
 func initStorePlain(t *testing.T, dir string) {
 	t.Helper()
 	ctx := context.Background()
 
-	drv, err := openLocalDriver(dir)
+	drv, err := localfs.New(dir)
 	if err != nil {
-		t.Fatalf("init: open driver: %v", err)
+		t.Fatalf("init: localfs.New: %v", err)
 	}
-	idx, err := openLocalIndex(ctx, filepath.Join(dir, "index.db"))
+	idx, err := sqlite.NewStore(ctx, filepath.Join(dir, "index.db"))
 	if err != nil {
-		t.Fatalf("init: open index: %v", err)
+		t.Fatalf("init: sqlite.NewStore: %v", err)
 	}
 	defer idx.Close()
 
+	hashes := core.NewHashRegistry().
+		Register("sha256", func() hash.Hash { return sha256.New() })
+
 	if _, _, err := core.InitStore(ctx, drv,
 		core.WithStoreIndex(idx),
-		core.WithHashRegistry(testHashRegistry()),
+		core.WithHashRegistry(hashes),
 	); err != nil {
 		t.Fatalf("init: %v", err)
 	}
@@ -162,7 +177,7 @@ func TestOpen_DefaultsIndex(t *testing.T) {
 	defer s.Close()
 
 	idxPath := filepath.Join(dir, "index.db")
-	if _, err := readFile(idxPath); err != nil {
+	if _, err := os.ReadFile(idxPath); err != nil {
 		t.Errorf("expected sqlite at %q: %v", idxPath, err)
 	}
 }
@@ -232,7 +247,7 @@ func TestInit_CreatesDirectory(t *testing.T) {
 	}
 	defer s.Close()
 
-	if _, err := readFile(filepath.Join(storeDir, "index.db")); err != nil {
+	if _, err := os.ReadFile(filepath.Join(storeDir, "index.db")); err != nil {
 		t.Errorf("expected index.db in %q: %v", storeDir, err)
 	}
 }

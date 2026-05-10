@@ -3,22 +3,11 @@ package uriresolve
 import (
 	"errors"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestResolveLocalPath(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("home: %v", err)
-	}
-
 	tests := []struct {
 		name    string
 		raw     string
@@ -31,17 +20,17 @@ func TestResolveLocalPath(t *testing.T) {
 			want: "/abs/path",
 		},
 		{
-			name: "tilde",
-			raw:  "file://~/relative",
-			want: filepath.Join(home, "relative"),
+			name:    "unsupported-tilde-host",
+			raw:     "file://~/relative",
+			wantErr: ErrUnsupportedHost,
 		},
 		{
-			name: "cwd-relative",
-			raw:  "file://./relative",
-			want: filepath.Join(cwd, "relative"),
+			name:    "unsupported-cwd-host",
+			raw:     "file://./relative",
+			wantErr: ErrUnsupportedHost,
 		},
 		{
-			name:    "unsupported-host",
+			name:    "unsupported-domain-host",
 			raw:     "file://example.com/path",
 			wantErr: ErrUnsupportedHost,
 		},

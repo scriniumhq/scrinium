@@ -3,12 +3,12 @@ package indextest
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"strings"
 	"testing"
 	"time"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 
@@ -159,12 +159,12 @@ func runListByNamespace(t *testing.T, f Factory) {
 		err := idx.ListByNamespace(context.Background(), "ns", func(m domain.Manifest) error {
 			seen++
 			if seen == 2 {
-				return errs.ErrStopWalk
+				return fs.SkipAll
 			}
 			return nil
 		})
 		if err != nil {
-			t.Fatalf("ErrStopWalk must be swallowed by the iterator, got %v", err)
+			t.Fatalf("fs.SkipAll must be swallowed by the iterator, got %v", err)
 		}
 		if seen != 2 {
 			t.Fatalf("expected to stop at 2, saw %d", seen)

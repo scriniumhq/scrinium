@@ -21,12 +21,15 @@ func init() {
 // Forms accepted:
 //
 //   - sqlite:///abs/path/to.db        canonical absolute
-//   - sqlite://~/relative.db          tilde via host="~"
-//   - sqlite://./relative.db          cwd-relative via host="."
 //   - sqlite://:memory:               in-memory database
 //
 // The :memory: form is special-cased so tests don't have to
 // resolve a path that doesn't exist.
+//
+// Earlier revisions accepted sqlite://~/path and sqlite://./path
+// as non-canonical aliases. Both abused the URI host slot to carry
+// a relative-path prefix and were removed in P1.12 (mirrors the
+// file:// scheme's cleanup for the same reasons).
 //
 // Query parameters: not currently honoured. SQLite tunables
 // (busy_timeout, journal_mode, synchronous) use NewStore's
@@ -47,7 +50,7 @@ func openSQLiteURI(ctx context.Context, u *url.URL, opts ...index.IndexOption) (
 	if err != nil {
 		switch {
 		case errors.Is(err, uriresolve.ErrUnsupportedHost):
-			return nil, fmt.Errorf("sqlite: sqlite:// host %q not supported (use sqlite:///path or sqlite://~/path)", u.Host)
+			return nil, fmt.Errorf("sqlite: sqlite:// host %q not supported (use sqlite:///path)", u.Host)
 		case errors.Is(err, uriresolve.ErrEmptyPath):
 			return nil, fmt.Errorf("sqlite: sqlite:// URI has empty path")
 		default:

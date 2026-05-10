@@ -337,7 +337,19 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 	emit("baseline HeapAlloc: %s", humanize.Bytes(int64(baseline.HeapAlloc)))
 
 	// --- Put loop ---
-	ids := make([]domain.ArtifactID, 0, 3)
+	//
+	// Track three sampled positions (first, mid, last) by saving
+	// (idx, id) pairs rather than just ids. The idx lets us
+	// regenerate the deterministic payload via makePayload(idx, size)
+	// at Get time and byte-compare; this catches a class of bugs
+	// (decryption silently producing zero-length or junk output)
+	// that a length-only check would miss.
+	type sample struct {
+		idx int
+		id  domain.ArtifactID
+	}
+	samples := make([]sample, 0, 3)
+
 	emit("Put: starting %d artifacts", n)
 	startPut := time.Now()
 	for i := 0; i < n; i++ {
@@ -349,7 +361,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
 		if i == 0 || i == n/2 || i == n-1 {
-			ids = append(ids, id)
+			samples = append(samples, sample{idx: i, id: id})
 		}
 		if (i+1)%reportEvery == 0 {
 			reportProgress("Put", i+1, n, startPut)
@@ -370,25 +382,31 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 	}
 	emit("Walk: %d rows confirmed", walkCount)
 
-	// --- Sample Get round-trip ---
-	for i, id := range ids {
-		rh, err := s.Get(ctx, id, domain.GetOptions{})
+	// --- Sample Get round-trip with byte verification ---
+	//
+	// makePayload(idx, size) is deterministic: calling it with the
+	// same idx at Get time reproduces the exact bytes that were
+	// originally Put. Compare full payloads — not just lengths —
+	// so a decrypt that silently produces zero-filled output (or
+	// truncates, or shifts bytes) is caught here rather than
+	// surfacing far downstream.
+	for _, sm := range samples {
+		rh, err := s.Get(ctx, sm.id, domain.GetOptions{})
 		if err != nil {
-			t.Fatalf("Get sample #%d: %v", i, err)
+			t.Fatalf("Get sample idx=%d (id=%q): %v", sm.idx, sm.id, err)
 		}
 		got, err := io.ReadAll(rh)
 		_ = rh.Close()
 		if err != nil {
-			t.Fatalf("ReadAll sample #%d: %v", i, err)
+			t.Fatalf("ReadAll sample idx=%d: %v", sm.idx, err)
 		}
-		// We don't check exact bytes (that would require
-		// reproducing makePayload's input index for each of
-		// the three sampled positions) — we just confirm the
-		// Get path completes and returns the expected size.
-		if len(got) != payloadSize {
-			t.Errorf("sample #%d: got %d bytes, want %d", i, len(got), payloadSize)
+		want := makePayload(sm.idx, payloadSize)
+		if !bytes.Equal(got, want) {
+			t.Errorf("sample idx=%d: payload mismatch (got %d bytes, want %d)",
+				sm.idx, len(got), len(want))
 		}
 	}
+	emit("Get: all %d samples matched (bytes verified)", len(samples))
 
 	// --- Heap ceiling ---
 	runtime.GC()

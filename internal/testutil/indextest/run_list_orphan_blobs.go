@@ -2,10 +2,10 @@ package indextest
 
 import (
 	"context"
+	"io/fs"
 	"testing"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 
@@ -82,12 +82,12 @@ func runListOrphanBlobs(t *testing.T, f Factory) {
 		err := idx.ListOrphanBlobs(context.Background(), func(ref string) error {
 			seen++
 			if seen == 2 {
-				return errs.ErrStopWalk
+				return fs.SkipAll
 			}
 			return nil
 		})
 		if err != nil {
-			t.Fatalf("ErrStopWalk must be swallowed, got %v", err)
+			t.Fatalf("fs.SkipAll must be swallowed, got %v", err)
 		}
 		if seen != 2 {
 			t.Fatalf("expected stop at 2, saw %d", seen)

@@ -101,10 +101,29 @@ type stubRegistry struct{}
 
 func (stubRegistry) Register(ctx context.Context, ext IndexExtension) error { return nil }
 
+// stubLister satisfies index.ExtensionLister. The interface was
+// introduced in P0.6 alongside index.ExtensionInfo to give
+// backends a way to enumerate registered extensions without
+// re-exposing internal maps. Any future read-only proxy backend
+// would implement this independently of ExtensionHost.
+type stubLister struct{}
+
+func (stubLister) ListExtensions() []ExtensionInfo { return nil }
+
+// stubHost satisfies index.ExtensionHost. The interface was
+// introduced in P0.6 to let core (which must not import
+// engine/index/sqlite) type-assert "this StoreIndex supports
+// extension registration" generically.
+type stubHost struct{}
+
+func (stubHost) Extensions() ExtensionRegistry { return stubRegistry{} }
+
 var (
 	_ IndexExtension    = stubExtension{}
 	_ ExtensionStore    = stubStore{}
 	_ ExtensionRegistry = stubRegistry{}
+	_ ExtensionLister   = stubLister{}
+	_ ExtensionHost     = stubHost{}
 )
 
 // TestEventArgs_ZeroValueIsValid — the zero EventArgs is the

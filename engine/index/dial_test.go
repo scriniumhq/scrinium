@@ -85,16 +85,31 @@ func TestDialIndex_Empty(t *testing.T) {
 	}
 }
 
-// TestDialIndex_SQLiteRelative verifies sqlite://./path form.
-func TestDialIndex_SQLiteRelative(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(dir)
-
-	idx, err := index.DialIndex(context.Background(), "sqlite://./idx.db")
-	if err != nil {
-		t.Fatalf("DialIndex: %v", err)
+// TestDialIndex_SQLiteRelativeRejected verifies the P1.12
+// removal is honoured for the sqlite scheme: sqlite://./path
+// (and sqlite://~/path) used to expand the host slot. After
+// P1.12 only sqlite:///abs/path is accepted; any other host
+// is rejected with an ErrUnsupportedHost wrap.
+func TestDialIndex_SQLiteRelativeRejected(t *testing.T) {
+	_, err := index.DialIndex(context.Background(), "sqlite://./idx.db")
+	if err == nil {
+		t.Fatal("DialIndex(sqlite://./...): want error, got nil")
 	}
-	defer idx.Close()
+	if !strings.Contains(err.Error(), "host") {
+		t.Errorf("error %q does not mention 'host'", err)
+	}
+}
+
+// TestDialIndex_SQLiteTildeRejected mirrors the above for the
+// tilde alias.
+func TestDialIndex_SQLiteTildeRejected(t *testing.T) {
+	_, err := index.DialIndex(context.Background(), "sqlite://~/idx.db")
+	if err == nil {
+		t.Fatal("DialIndex(sqlite://~/...): want error, got nil")
+	}
+	if !strings.Contains(err.Error(), "host") {
+		t.Errorf("error %q does not mention 'host'", err)
+	}
 }
 
 // TestDialIndex_SQLiteBadHost rejects sqlite://example.com/db.

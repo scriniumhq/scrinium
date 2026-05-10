@@ -16,9 +16,9 @@ import (
 	"scrinium.dev/engine/internal/testutil/storefx"
 )
 
-// TestM14_FullLifecycle_DiskBacked is the end-to-end smoke test
-// for milestone M1.4. It exercises the full lifecycle of a Store
-// through real on-disk artifacts:
+// TestStore_FullLifecycle_DiskBacked is the end-to-end smoke test
+// for the full Store lifecycle. It exercises every public-facing
+// transition through real on-disk artifacts:
 //
 //  1. InitStore creates store.json (descriptor, §10.1.3),
 //     system.config/current (pointer, §10.1.4), the system.config
@@ -29,7 +29,7 @@ import (
 //     active config — descriptor and system.config both survived.
 //  5. errs.ErrConfigMismatch on a reopen with a conflicting
 //     immutable parameter.
-func TestM14_FullLifecycle_DiskBacked(t *testing.T) {
+func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 	ctx := t.Context()
 	location := t.TempDir()
 	indexPath := filepath.Join(t.TempDir(), "index.db")
