@@ -8,6 +8,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
@@ -76,25 +77,30 @@ func (s *store) maintenanceMode() domain.MaintenanceMode {
 
 // checkOperational returns the first sentinel that blocks read or
 // write according to the priority-of-checks order documented in
-// 2. Internals/01 Topology §1.4. M1.4 does not implement the
-// Bootstrapping / Locked / Corrupted transitions yet (they arrive
-// with the crypto pipeline in M2 and the descriptor consensus in
-// M2.2), so this method handles Offline and ReadOnly only — for
-// Capacity-style cheap reads. Mutating-only checks (ReadOnly
-// blocks Put/Delete) live with those methods when they land in
-// M1.4.
+// 2. Internals/01 Topology §1.4. Closed-store comes first — once
+// Close is called, no other state matters.
+//
+// M1.4 does not implement the Bootstrapping / Corrupted transitions
+// yet (they arrive with the descriptor consensus in M2.2). Locked
+// is implemented for encrypted stores. ReadOnly + mutating-op is
+// checked one layer up by checkWritable.
 func (s *store) checkOperational() error {
 	s.stateMu.RLock()
+	closed := s.closed
 	state := s.state
 	mode := s.maintenance
 	s.stateMu.RUnlock()
 
 	// Priority order per docs/2. Internals/01 §1.4 "Check priority":
-	//   1. Corrupted   — API physically unreadable, overrides everything.
+	//   0. Closed      — store has been shut down. Highest priority:
+	//                    no other state is meaningful past Close.
+	//   1. Corrupted   — API physically unreadable, overrides everything else.
 	//   2. Offline     — explicit administrative block, overrides crypto.
 	//   3. Bootstrapping — initialisation in flight.
-	//   4. Locked      — passphrase required.
-	// ReadOnly + mutating-op is checked one layer up by checkWritable.
+	//   4. Locked      — passphrase required (encrypted store only).
+	if closed {
+		return os.ErrClosed
+	}
 	if state == domain.StateCorrupted {
 		return errs.ErrStoreCorrupted
 	}

@@ -1,6 +1,9 @@
 package errs
 
-import "errors"
+import (
+	"errors"
+	"io/fs"
+)
 
 // Artifact-level operations: lookup, namespace policy, retention,
 // deletion. See docs/2. Internals/02 §2.2 (Delete flow), §2.4
@@ -8,8 +11,12 @@ import "errors"
 
 // ErrArtifactNotFound — no manifest with the given ArtifactID
 // exists in the Store, or it is a ManifestTypePack (an internal
-// type that does not exist for the client).
-var ErrArtifactNotFound = errors.New("scrinium: artifact not found")
+// type that does not exist for the client). Bridges to
+// fs.ErrNotExist for host code that handles missing artifacts
+// the same way as missing files.
+var ErrArtifactNotFound = newBridgedSentinel(
+	"scrinium: artifact not found", fs.ErrNotExist,
+)
 
 // ErrDeletionForbidden — Delete on a Store with
 // DeletionPolicy: NoDelete.

@@ -1,6 +1,9 @@
 package errs
 
-import "errors"
+import (
+	"errors"
+	"io/fs"
+)
 
 // Store lifecycle: states (Bootstrapping/Locked/...) and the
 // init/open transitions. See docs/2. Internals/01 §1.4 for the
@@ -12,24 +15,35 @@ import "errors"
 var ErrStoreNotReady = errors.New("scrinium: store not ready")
 
 // ErrStoreNotFound — OpenStore: no store.json in the Location.
-// Distinct from ErrArtifactNotFound (an artifact inside an open
-// Store).
-var ErrStoreNotFound = errors.New("scrinium: store not found")
+// Bridges to fs.ErrNotExist so a host can errors.Is(err,
+// fs.ErrNotExist) when probing for an existing store. Distinct
+// from ErrArtifactNotFound (an artifact inside an open Store).
+var ErrStoreNotFound = newBridgedSentinel(
+	"scrinium: store not found", fs.ErrNotExist,
+)
 
 // ErrStoreAlreadyExists — InitStore without WithForceReinit on top
-// of an existing Store.
-var ErrStoreAlreadyExists = errors.New("scrinium: store already exists")
+// of an existing Store. Bridges to fs.ErrExist.
+var ErrStoreAlreadyExists = newBridgedSentinel(
+	"scrinium: store already exists", fs.ErrExist,
+)
 
 // ErrStoreCorrupted — every descriptor replica is corrupted, or
 // the StoreIndex is corrupted. The Store is in StateCorrupted.
 var ErrStoreCorrupted = errors.New("scrinium: store corrupted")
 
-// ErrLocked — the operation was invoked in StateLocked. Unlock is
-// required.
+// ErrLocked — the operation was invoked in StateLocked on an
+// encrypted store. Unlock is required. NOT used for closed stores
+// — those return os.ErrClosed; conflating the two confused
+// Plain-store users into searching for a passphrase.
 var ErrLocked = errors.New("scrinium: store locked")
 
 // ErrStoreReadOnly — MaintenanceModeReadOnly + a mutating operation.
-var ErrStoreReadOnly = errors.New("scrinium: store read-only")
+// Bridges to fs.ErrPermission so generic "is this a permission
+// problem?" checks at host layer return true.
+var ErrStoreReadOnly = newBridgedSentinel(
+	"scrinium: store read-only", fs.ErrPermission,
+)
 
 // ErrStoreOffline — MaintenanceModeOffline.
 var ErrStoreOffline = errors.New("scrinium: store offline")

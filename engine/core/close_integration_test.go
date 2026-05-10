@@ -2,9 +2,10 @@ package core_test
 
 import (
 	"context"
+	"errors"
+	"os"
 	"testing"
 
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/internal/testutil/storefx"
 )
 
@@ -14,45 +15,57 @@ import (
 // crypto stack) and exercise Close end-to-end. They complement
 // the unit-level tests in close_test.go (same package, tests the
 // internal *store struct fields directly).
+//
+// What "closed" means: Close is a terminal condition surfaced as
+// os.ErrClosed by every operation gated on checkOperational. It
+// is distinct from StateLocked, which is reserved for an encrypted
+// store awaiting Unlock. Conflating the two confused Plain-store
+// users into hunting for a passphrase that did not exist; we now
+// keep them separate.
 
-// TestClose_PlainStore_NoOpButTransitions verifies Close on a
-// Plain Store completes without error and leaves State=Locked.
-func TestClose_PlainStore_NoOpButTransitions(t *testing.T) {
+// TestClose_PlainStore_BlocksWithErrClosed verifies Close on a
+// Plain Store completes without error, and that subsequent
+// operations refuse with os.ErrClosed (not ErrLocked — there is
+// no passphrase to acquire).
+func TestClose_PlainStore_BlocksWithErrClosed(t *testing.T) {
 	s, _ := storefx.InitPlain(t)
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if s.State() != domain.StateLocked {
-		t.Errorf("Plain Store after Close: state %v, want Locked", s.State())
+
+	// Capacity is the canonical lightweight read; it goes through
+	// checkOperational and is the cleanest probe for "is the store
+	// reachable?".
+	_, err := s.Capacity(context.Background())
+	if !errors.Is(err, os.ErrClosed) {
+		t.Errorf("Capacity after Close: got %v, want os.ErrClosed", err)
 	}
 }
 
-// TestClose_EncryptedUnlocked_ReturnsToLocked verifies Close on
-// an Unlocked encrypted Store wipes the DEK (state-observable
-// via subsequent operation refusal) and transitions to Locked.
-func TestClose_EncryptedUnlocked_ReturnsToLocked(t *testing.T) {
+// TestClose_EncryptedUnlocked_BlocksWithErrClosed verifies that
+// closing an Unlocked encrypted Store wipes the DEK and surfaces
+// os.ErrClosed, NOT ErrLocked. ErrLocked would imply a re-Unlock
+// is possible — but Close is terminal, the Store is dead.
+func TestClose_EncryptedUnlocked_BlocksWithErrClosed(t *testing.T) {
 	s, _ := storefx.InitEncrypted(t, "hunter2")
-
-	// Sanity: starts Unlocked.
-	if s.State() != domain.StateUnlocked {
-		t.Fatalf("pre-Close: state %v, want Unlocked", s.State())
-	}
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	if s.State() != domain.StateLocked {
-		t.Errorf("post-Close: state %v, want Locked", s.State())
+	_, err := s.Capacity(context.Background())
+	if !errors.Is(err, os.ErrClosed) {
+		t.Errorf("Capacity after Close: got %v, want os.ErrClosed", err)
 	}
 }
 
 // TestClose_AfterClose_OperationsRefuseGracefully verifies that
-// after Close, encryption-dependent operations behave as on a
-// Locked Store rather than panicking. We don't pin down the
-// exact error (implementation-defined per AdminStore.Close
-// doc), only that it returns an error and does not panic.
+// after Close, encryption-dependent operations refuse with
+// os.ErrClosed rather than panicking on wiped state.
+// ExportRecoveryKit is a useful probe: it touches secret material
+// that Close has wiped, so any missing-Closed-gate would show up
+// either as a panic or as success returning a zero/garbage kit.
 func TestClose_AfterClose_OperationsRefuseGracefully(t *testing.T) {
 	s, _ := storefx.InitEncrypted(t, "hunter2")
 
@@ -60,16 +73,14 @@ func TestClose_AfterClose_OperationsRefuseGracefully(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// ExportRecoveryKit on a Locked Store refuses; after Close
-	// (state == Locked) the same refusal is the expected
-	// behaviour.
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("ExportRecoveryKit panicked after Close: %v", r)
 		}
 	}()
-	if _, err := s.ExportRecoveryKit(context.Background()); err == nil {
-		t.Errorf("ExportRecoveryKit after Close: want error, got nil")
+	_, err := s.ExportRecoveryKit(context.Background())
+	if !errors.Is(err, os.ErrClosed) {
+		t.Errorf("ExportRecoveryKit after Close: got %v, want os.ErrClosed", err)
 	}
 }
 

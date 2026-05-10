@@ -2,11 +2,14 @@ package core
 
 import (
 	"bytes"
+	"errors"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/errs"
 )
 
 // --- Test scaffolding ---
@@ -120,7 +123,14 @@ func TestClose_NoCapabilityToken_NoPanic(t *testing.T) {
 
 // --- State transition ---
 
-func TestClose_TransitionsToLocked(t *testing.T) {
+// --- Closed flag ---
+
+// TestClose_MarksClosed verifies Close sets s.closed regardless
+// of the prior state. Close does NOT transition state itself —
+// "closed" is its own terminal condition (surfaced as os.ErrClosed
+// by checkOperational), distinct from StateLocked which means
+// "encrypted store, awaiting Unlock".
+func TestClose_MarksClosed(t *testing.T) {
 	cases := []struct {
 		name string
 		from domain.StoreState
@@ -138,11 +148,42 @@ func TestClose_TransitionsToLocked(t *testing.T) {
 			if err := s.Close(); err != nil {
 				t.Fatalf("Close: %v", err)
 			}
-			if got := s.State(); got != domain.StateLocked {
-				t.Errorf("state after Close: got %v, want Locked", got)
-			}
 			if !s.closed {
 				t.Errorf("s.closed: want true after Close")
+			}
+		})
+	}
+}
+
+// TestClose_OperationsReturnErrClosed verifies the new
+// post-Close behaviour: any operation gated on checkOperational
+// returns os.ErrClosed, not ErrLocked. Plain (unencrypted) stores
+// previously returned ErrLocked here, which sent users hunting
+// for a passphrase that did not exist.
+func TestClose_OperationsReturnErrClosed(t *testing.T) {
+	cases := []struct {
+		name string
+		from domain.StoreState
+	}{
+		{"PlainStore", domain.StateUnlocked},
+		{"EncryptedStoreUnlocked", domain.StateUnlocked},
+		{"EncryptedStoreStillLocked", domain.StateLocked},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newTestStore()
+			s.state = tc.from
+
+			if err := s.Close(); err != nil {
+				t.Fatalf("Close: %v", err)
+			}
+			err := s.checkOperational()
+			if !errors.Is(err, os.ErrClosed) {
+				t.Errorf("checkOperational after Close: got %v, want os.ErrClosed", err)
+			}
+			if errors.Is(err, errs.ErrLocked) {
+				t.Errorf("checkOperational after Close: returns ErrLocked; " +
+					"that should be reserved for pre-Unlock encrypted stores")
 			}
 		})
 	}

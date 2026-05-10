@@ -10,7 +10,6 @@ import (
 	"fmt"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
 )
 
 // Capacity returns aggregated storage info. Best-effort in M1.4:
@@ -28,15 +27,14 @@ import (
 //     on Capacity. Real numbers arrive in M2 once StoreIndex
 //     grows a sized-summary method.
 //
+// Goes through enterRead, so Capacity refuses on closed,
+// corrupted, offline, bootstrapping, or (encrypted) locked
+// stores with the appropriate sentinel; operators can still
+// inspect static metadata through State / Capabilities.
 // The method honours ctx cancellation between the two operations.
-// Offline Stores reject Capacity (operators can still inspect
-// through State / Capabilities).
 func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
-	if err := ctx.Err(); err != nil {
+	if err := s.enterRead(ctx); err != nil {
 		return domain.StorageInfo{}, err
-	}
-	if s.maintenanceMode() == domain.MaintenanceModeOffline {
-		return domain.StorageInfo{}, errs.ErrStoreOffline
 	}
 
 	out := domain.StorageInfo{

@@ -46,6 +46,13 @@ import (
 // Unlock. State checks happen BEFORE provider invocation, so an
 // already-Unlocked Store does not prompt the user.
 func (s *store) unlockEncrypted(ctx context.Context) error {
+	// enterAdmin applies the closed/corrupted/offline/bootstrapping
+	// gate but allows Locked through — the whole point of Unlock is
+	// to leave Locked. Specific Unlocked-vs-Locked logic stays in
+	// the state switch below.
+	if err := s.enterAdmin(ctx); err != nil {
+		return err
+	}
 	s.cryptoMu.Lock()
 	defer s.cryptoMu.Unlock()
 
@@ -120,12 +127,11 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 //   - provider not configured    → ErrPassphraseRequired
 //   - maintenance != None        → ErrStoreReadOnly / ErrStoreOffline
 func (s *store) setPassphraseImpl(ctx context.Context) error {
-	s.cryptoMu.Lock()
-	defer s.cryptoMu.Unlock()
-
-	if err := s.checkWritable(); err != nil {
+	if err := s.enterWrite(ctx); err != nil {
 		return err
 	}
+	s.cryptoMu.Lock()
+	defer s.cryptoMu.Unlock()
 	// SetPassphrase rewrites the descriptor (Sequence+1) into both
 	// replicas. In Degraded the replicas are already out of sync —
 	// piling another write on top is unsafe until Auto-Heal reaches
@@ -199,12 +205,11 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 //   - provider not configured            → ErrPassphraseRequired
 //   - maintenance != None                → ErrStoreReadOnly / ErrStoreOffline
 func (s *store) rotateKEKImpl(ctx context.Context) error {
-	s.cryptoMu.Lock()
-	defer s.cryptoMu.Unlock()
-
-	if err := s.checkWritable(); err != nil {
+	if err := s.enterWrite(ctx); err != nil {
 		return err
 	}
+	s.cryptoMu.Lock()
+	defer s.cryptoMu.Unlock()
 	// RotateKEK rewrites the descriptor (Sequence+1) into both
 	// replicas. In Degraded the replicas are already out of sync —
 	// piling another write on top is unsafe until Auto-Heal reaches
@@ -298,10 +303,9 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 //   - state not in {Unlocked, Degraded} → state error
 //   - DEKEncrypted false                → ErrPassphraseRequired
 func (s *store) exportRecoveryKitImpl(ctx context.Context) ([]byte, error) {
-	if err := ctx.Err(); err != nil {
+	if err := s.enterRead(ctx); err != nil {
 		return nil, err
 	}
-
 	s.cryptoMu.Lock()
 	defer s.cryptoMu.Unlock()
 
