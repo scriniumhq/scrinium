@@ -1,6 +1,8 @@
 package scrinium
 
 import (
+	"sync"
+
 	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/index/sqlite"
@@ -56,6 +58,14 @@ type Scrinium struct {
 	// instance presents in stats and uses as a tiebreaker.
 	// Generated at Open or Init time.
 	MountSession string
+
+	// closeOnce makes Close idempotent. The first call shuts
+	// resources down and stores the joined error in closeErr;
+	// subsequent calls return that same error without doing
+	// anything. This matches the io.Closer convention used by
+	// *os.File, *sql.DB, and most stdlib closers.
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // indexWithExtensions is the optional capability some

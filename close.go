@@ -10,45 +10,64 @@ import (
 // chance to close before we return. Multiple errors are joined
 // via errors.Join so callers can errors.Is/As any of them.
 //
-// Calling Close more than once is a programming error: it
-// would attempt to close already-closed resources. Surfaces
-// must own the lifecycle and call Close exactly once.
+// Close is idempotent: the first call performs the shutdown,
+// subsequent calls return the same error without doing
+// anything. This matches the io.Closer convention used across
+// the stdlib (*os.File, *sql.DB) — a `defer s.Close()` paired
+// with an explicit s.Close() in the main path is safe.
 //
-// Order matters: Store.Close goes BEFORE Index.Close because
-// Store still references Index for any in-flight operation
-// teardown, and Store.Close is the step that wipes secrets
-// (DEK, capability token, default StaticKeyResolver) — we
-// want those gone before we tear down anything else.
+// Close is also tolerant of partially-constructed Scrinium
+// values: any nil resource is skipped. This allows tests and
+// supervisors that abort partway through Open to call Close
+// without a nil-pointer panic.
+//
+// Order matters for the resources that ARE present:
+//
+//   - View first: stops backfill goroutines so they aren't
+//     reading from a Store that's about to be closed.
+//   - FSIndex next: clears its reference to the StoreIndex
+//     so any stray post-close GetByID calls fail cleanly
+//     ("not registered") instead of touching a closed handle.
+//   - Store next: wipes secrets (DEK, capability token,
+//     default StaticKeyResolver). We want secrets gone before
+//     the index is torn down (sqlite teardown can flush dirty
+//     pages — minor, but the principle is "secrets first").
+//   - Index last: releases the sqlite handle (or future PG
+//     connection pool). Leaked DB handles keep the file
+//     locked on Windows and waste fds elsewhere.
+//
+// The Driver (localfs) holds nothing closable.
 func (s *Scrinium) Close() error {
-	var errs []error
+	s.closeOnce.Do(func() {
+		var errs []error
 
-	// View.Close stops backfill goroutines and marks the View
-	// terminated. Errors here are surfaced like the others —
-	// failure to release a goroutine matters for tests and
-	// long-running supervisors.
-	if err := s.View.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("view close: %w", err))
-	}
+		if s.View != nil {
+			if err := s.View.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("view close: %w", err))
+			}
+		}
 
-	// Store.Close wipes secrets (DEK, capability token,
-	// default StaticKeyResolver) and transitions to Locked.
-	// Idempotent. Errors are surfaced but do not block
-	// subsequent shutdown steps.
-	if err := s.Store.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("store close: %w", err))
-	}
+		if s.FSIndex != nil {
+			if err := s.FSIndex.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("fsindex close: %w", err))
+			}
+		}
 
-	// Index Close releases the sqlite handle (or future PG
-	// connection pool). Errors here matter — leaked DB handles
-	// keep the file locked on Windows and waste fds elsewhere.
-	if err := s.Index.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("index close: %w", err))
-	}
+		if s.Store != nil {
+			if err := s.Store.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("store close: %w", err))
+			}
+		}
 
-	// The Driver (localfs) holds nothing closable.
+		if s.Index != nil {
+			if err := s.Index.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("index close: %w", err))
+			}
+		}
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-	return nil
+		if len(errs) > 0 {
+			s.closeErr = errors.Join(errs...)
+		}
+	})
+	return s.closeErr
 }
