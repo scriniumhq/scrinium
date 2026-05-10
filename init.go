@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/google/uuid"
-
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
@@ -148,7 +147,7 @@ func Init(ctx context.Context, cfg Config) (_ *Scrinium, recoveryKit []byte, ret
 	})
 
 	// 7. Mount session.
-	mountSession := "mount-" + uuid.New().String()
+	mountSession := domain.NewMountSessionID()
 
 	// 8. Scratch directory.
 	//

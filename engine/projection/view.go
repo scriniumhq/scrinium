@@ -77,7 +77,7 @@ type View struct {
 	pathLosers map[string][]loserEntry
 
 	// For Stats: track unique sessions and namespaces seen.
-	seenSessions   map[string]struct{}
+	seenSessions   map[domain.SessionID]struct{}
 	seenNamespaces map[string]struct{}
 
 	source ProjectionSource
@@ -161,7 +161,7 @@ func NewView(ctx context.Context, source ProjectionSource, opts ...ViewOption) (
 		pathOwner:  make(map[string]domain.ArtifactID),
 		pathLosers: make(map[string][]loserEntry),
 
-		seenSessions:   make(map[string]struct{}),
+		seenSessions:   make(map[domain.SessionID]struct{}),
 		seenNamespaces: make(map[string]struct{}),
 	}
 
@@ -563,7 +563,7 @@ type SearchResult struct {
 	ArtifactID  domain.ArtifactID
 	Path        string // by-path placement; empty if orphaned
 	Namespace   string
-	SessionID   string
+	SessionID   domain.SessionID
 	CreatedAt   time.Time
 	MIME        string // from fsmeta when present
 	MatchReason string // "path" | "namespace" | "id"
@@ -660,7 +660,7 @@ type RelatedArtifact struct {
 	ArtifactID domain.ArtifactID
 	Path       string // by-path placement; empty if orphaned
 	Namespace  string
-	SessionID  string
+	SessionID  domain.SessionID
 	CreatedAt  time.Time
 }
 
@@ -1288,7 +1288,7 @@ func bySessionPath(m domain.Manifest) string {
 	// scalability, but in practice session counts stay tiny
 	// (one per process restart) and the sharding only
 	// obscured the listing for human inspection.
-	sid := m.SessionID
+	sid := string(m.SessionID)
 	if sid == "" {
 		// Defensive: callers gate this with m.SessionID != ""
 		// before invoking, but guard against drift.
@@ -1299,11 +1299,12 @@ func bySessionPath(m domain.Manifest) string {
 
 // sessionShard returns the first-segment shard for a SessionID.
 // Used by syntheticPath; format mirrors bySessionPath's prefix.
-func sessionShard(sid string) string {
-	if len(sid) < 4 {
-		return "_short/" + sid
+func sessionShard(sid domain.SessionID) string {
+	s := string(sid)
+	if len(s) < 4 {
+		return "_short/" + s
 	}
-	return sid[:2] + "/" + sid[2:4] + "/" + sid
+	return s[:2] + "/" + s[2:4] + "/" + s
 }
 
 // shortID returns the first 16 hex characters of the hash part of

@@ -29,7 +29,7 @@ func writeInlineSystemArtifact(
 	idx StoreIndex,
 	hashes domain.HashRegistry,
 	namespace string,
-	sessionID string,
+	sessionID domain.SessionID,
 	payload []byte,
 	hashAlgo string,
 ) (domain.ArtifactID, error) {

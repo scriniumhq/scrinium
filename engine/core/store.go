@@ -47,7 +47,7 @@ type DataStore interface {
 	// RollbackSession is a group rollback of every artifact carrying
 	// the given SessionID. It is idempotent: when interrupted, a
 	// repeat call resumes the cleanup.
-	RollbackSession(ctx context.Context, sessionID string) error
+	RollbackSession(ctx context.Context, sessionID domain.SessionID) error
 
 	// Iteration and introspection.
 

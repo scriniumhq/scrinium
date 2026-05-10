@@ -24,7 +24,7 @@ func buildWebStatsData(
 	cap *domain.StorageInfo,
 	exts []web.StatsExtension,
 	startedAt time.Time,
-	mountSession string,
+	mountSession domain.SessionID,
 	cfg Config,
 ) web.StatsData {
 	stats := view.Stats
@@ -34,7 +34,7 @@ func buildWebStatsData(
 			Source:       string(view.Source),
 			StartedAt:    startedAt,
 			Uptime:       formatStatsUptime(time.Since(startedAt)),
-			MountSession: mountSession,
+			MountSession: string(mountSession),
 			StorePath:    cfg.Daemon.Store,
 		},
 		View: web.StatsView{

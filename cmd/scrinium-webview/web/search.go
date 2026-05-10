@@ -84,7 +84,7 @@ func (h *Handler) serveSearch(w http.ResponseWriter, r *http.Request) {
 					URL:         h.prefix + "/_artifact/" + string(sr.ArtifactID),
 					Path:        sr.Path,
 					Namespace:   sr.Namespace,
-					SessionID:   sr.SessionID,
+					SessionID:   string(sr.SessionID),
 					CreatedAt:   sr.CreatedAt.UTC().Format(time.RFC3339),
 					MIME:        sr.MIME,
 					MatchReason: sr.MatchReason,

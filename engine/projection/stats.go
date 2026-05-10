@@ -26,7 +26,7 @@ type DaemonInfo struct {
 	// MountSession is the per-process session id assigned to
 	// every artifact this daemon writes. Useful when
 	// inspecting "what did this mount produce so far".
-	MountSession string
+	MountSession domain.SessionID
 
 	// StorePath is the on-disk root the daemon was launched
 	// against. Helps when multiple daemons run on one host.

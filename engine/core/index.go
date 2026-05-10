@@ -102,7 +102,7 @@ type StoreIndex interface {
 
 	// GetBySession returns every ArtifactID with the given
 	// SessionID. Used by RollbackSession.
-	GetBySession(ctx context.Context, sessionID string) ([]domain.ArtifactID, error)
+	GetBySession(ctx context.Context, sessionID domain.SessionID) ([]domain.ArtifactID, error)
 
 	// Verification and maintenance.
 

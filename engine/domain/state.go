@@ -96,6 +96,6 @@ type PackedEntry struct {
 
 	ContentHash    ContentHash
 	Namespace      string
-	SessionID      string
+	SessionID      SessionID
 	PipelineParams []byte
 }

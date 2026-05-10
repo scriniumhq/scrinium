@@ -610,7 +610,7 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		{Label: "ArtifactID", Value: string(m.ArtifactID), Mono: true},
 		{Label: "Type", Value: string(m.Type)},
 		{Label: "Namespace", Value: orDash(m.Namespace)},
-		{Label: "SessionID", Value: orDash(m.SessionID), Mono: m.SessionID != ""},
+		{Label: "SessionID", Value: orDash(string(m.SessionID)), Mono: m.SessionID != ""},
 		{Label: "CreatedAt", Value: m.CreatedAt.UTC().Format(time.RFC3339)},
 		{Label: "RetentionUntil", Value: formatTimeOrDash(m.RetentionUntil)},
 	}
@@ -667,7 +667,7 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 				URL:       h.prefix + "/_artifact/" + string(ra.ArtifactID),
 				Path:      ra.Path,
 				Namespace: ra.Namespace,
-				SessionID: ra.SessionID,
+				SessionID: string(ra.SessionID),
 				CreatedAt: ra.CreatedAt.UTC().Format(time.RFC3339),
 				IsOrphan:  ra.Path == "",
 			}
@@ -720,7 +720,7 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	}{
 		Type:           m.Type,
 		Namespace:      m.Namespace,
-		SessionID:      m.SessionID,
+		SessionID:      string(m.SessionID),
 		CreatedAt:      m.CreatedAt,
 		ContentHash:    m.ContentHash,
 		OriginalSize:   m.OriginalSize,

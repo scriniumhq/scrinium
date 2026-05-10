@@ -46,7 +46,7 @@ type FSOps struct {
 	defaultGID  uint32
 
 	editing      EditingPolicy
-	mountSession string
+	mountSession domain.SessionID
 	namespace    string
 	readOnly     bool
 
@@ -189,7 +189,7 @@ type fsOpsOptions struct {
 	defaultUID   uint32
 	defaultGID   uint32
 	editing      EditingPolicy
-	mountSession string
+	mountSession domain.SessionID
 	namespace    string
 	readOnly     bool
 }
@@ -236,7 +236,7 @@ func WithEditingPolicy(p EditingPolicy) FSOpsOption {
 // WithMountSession sets the SessionID stamped onto every Put
 // performed through FSOps in this mount. Empty means "no
 // session" — artifacts will not appear in by-session.
-func WithMountSession(sid string) FSOpsOption {
+func WithMountSession(sid domain.SessionID) FSOpsOption {
 	return func(o *fsOpsOptions) { o.mountSession = sid }
 }
 

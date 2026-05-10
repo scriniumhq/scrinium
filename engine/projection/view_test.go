@@ -19,7 +19,7 @@ import (
 // overrides the fields a typical projection test cares about.
 // Local to this file because the override pattern is small and
 // every other call-site has its own preferences.
-func makeManifest(id, ns, sid string, size int64, createdAt time.Time) domain.Manifest {
+func makeManifest(id, ns string, sid domain.SessionID, size int64, createdAt time.Time) domain.Manifest {
 	m := manifestfx.Blob(id, "sha256-"+repeatChar('b', 64))
 	m.Namespace = ns
 	m.SessionID = sid

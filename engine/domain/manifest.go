@@ -76,7 +76,7 @@ type Manifest struct {
 
 	Type      ManifestType
 	Namespace string
-	SessionID string
+	SessionID SessionID
 	CreatedAt time.Time
 
 	ContentHash  ContentHash

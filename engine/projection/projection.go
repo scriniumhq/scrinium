@@ -102,7 +102,7 @@ type ArtifactFacet struct {
 	ContentHash domain.ContentHash
 	BlobRef     domain.BlobRef
 	Namespace   string
-	SessionID   string
+	SessionID   domain.SessionID
 	CreatedAt   time.Time
 	Type        domain.ManifestType
 	Metadata    json.RawMessage
@@ -165,7 +165,7 @@ const (
 // during backfill. All non-zero conditions combine by AND.
 type ViewFilter struct {
 	Namespace string
-	SessionID string
+	SessionID domain.SessionID
 	Prefix    string
 }
 

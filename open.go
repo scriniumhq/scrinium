@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/google/uuid"
-
 	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
@@ -181,7 +179,7 @@ func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 	})
 
 	// 7. Mount session — boot-unique tiebreaker.
-	mountSession := "mount-" + uuid.New().String()
+	mountSession := domain.NewMountSessionID()
 
 	// 8. Scratch directory.
 	//

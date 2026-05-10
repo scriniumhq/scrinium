@@ -164,11 +164,12 @@ func (i *Index) LookupPacked(ctx context.Context, artifactID domain.ArtifactID) 
 // future ExternalRef manifests have no blobs row.
 func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	var (
-		artifactID, mtype, namespace, sessionID string
-		createdAt                               string
-		blobRef, retentionUntil                 sql.NullString
-		contentHash                             sql.NullString
-		originalSize                            sql.NullInt64
+		artifactID, mtype, namespace string
+		sessionID                    domain.SessionID
+		createdAt                    string
+		blobRef, retentionUntil      sql.NullString
+		contentHash                  sql.NullString
+		originalSize                 sql.NullInt64
 	)
 	if err := rows.Scan(
 		&artifactID, &mtype, &namespace, &sessionID,

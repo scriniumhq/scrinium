@@ -90,7 +90,7 @@ type SearchResult struct {
 	ArtifactID  domain.ArtifactID
 	Path        string
 	Namespace   string
-	SessionID   string
+	SessionID   domain.SessionID
 	CreatedAt   time.Time
 	MIME        string
 	MatchReason string // "path" | "namespace" | "id"
@@ -105,7 +105,7 @@ type RelatedArtifact struct {
 	ArtifactID domain.ArtifactID
 	Path       string // by-path placement; empty if orphaned
 	Namespace  string
-	SessionID  string
+	SessionID  domain.SessionID
 	CreatedAt  time.Time
 }
 

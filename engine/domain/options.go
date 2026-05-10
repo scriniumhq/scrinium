@@ -21,7 +21,7 @@ type RoutingHints struct {
 
 // PutOptions is the call context for Store.Put.
 type PutOptions struct {
-	SessionID      string
+	SessionID      SessionID
 	Namespace      string
 	ExternalURI    string
 	BlobType       BlobType

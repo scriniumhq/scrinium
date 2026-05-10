@@ -81,7 +81,7 @@ func run(srcDir, storeURI, namespace string) error {
 	// One SessionID per ingest run. RollbackSession on this
 	// id wipes everything we wrote in this run — useful for
 	// failed batches.
-	sessionID := "ingest-" + uuid.New().String()
+	sessionID := domain.SessionID("ingest-" + uuid.New().String())
 	fmt.Printf("session: %s\n", sessionID)
 
 	var (

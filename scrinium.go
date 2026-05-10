@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
@@ -56,7 +57,7 @@ type Scrinium struct {
 	// MountSession is the boot-unique identifier this Scrinium
 	// instance presents in stats and uses as a tiebreaker.
 	// Generated at Open or Init time.
-	MountSession string
+	MountSession domain.SessionID
 
 	// closeOnce makes Close idempotent. The first call shuts
 	// resources down and stores the joined error in closeErr;

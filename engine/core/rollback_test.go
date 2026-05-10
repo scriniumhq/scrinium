@@ -19,7 +19,7 @@ func putWithSession(t *testing.T, s core.Store, sid, ns, payload string) domain.
 	t.Helper()
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: strings.NewReader(payload)},
-		domain.PutOptions{SessionID: sid, Namespace: ns})
+		domain.PutOptions{SessionID: domain.SessionID(sid), Namespace: ns})
 	if err != nil {
 		t.Fatalf("Put(sid=%q): %v", sid, err)
 	}
@@ -32,7 +32,7 @@ func putWithRetention(t *testing.T, s core.Store, sid, ns, payload string, until
 	t.Helper()
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: strings.NewReader(payload)},
-		domain.PutOptions{SessionID: sid, Namespace: ns, RetentionUntil: until})
+		domain.PutOptions{SessionID: domain.SessionID(sid), Namespace: ns, RetentionUntil: until})
 	if err != nil {
 		t.Fatalf("Put(sid=%q, retention): %v", sid, err)
 	}

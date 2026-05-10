@@ -219,7 +219,7 @@ func TestPut_RejectsTooLongSessionID(t *testing.T) {
 	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
-		domain.PutOptions{SessionID: strings.Repeat("a", 256)})
+		domain.PutOptions{SessionID: domain.SessionID(strings.Repeat("a", 256))})
 	if !errors.Is(err, errs.ErrSessionIDTooLong) {
 		t.Fatalf("expected errs.ErrSessionIDTooLong, got %v", err)
 	}
@@ -512,7 +512,7 @@ func TestPut_Inline_NoDedupForInline(t *testing.T) {
 	for _, sid := range []string{"a", "b"} {
 		_, err := s.Put(context.Background(),
 			payload(content),
-			domain.PutOptions{Namespace: "ns", SessionID: sid})
+			domain.PutOptions{Namespace: "ns", SessionID: domain.SessionID(sid)})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -82,7 +82,7 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 		Namespace:     m.Namespace,
 		Pipeline:      pipelineToJSON(m.Pipeline),
 		SchemaVersion: SchemaVersion,
-		SessionID:     m.SessionID,
+		SessionID:     string(m.SessionID),
 		Type:          string(m.Type),
 	}
 	if m.OriginalSize != 0 {
@@ -127,7 +127,7 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 	m := domain.Manifest{
 		Type:        domain.ManifestType(b.Type),
 		Namespace:   b.Namespace,
-		SessionID:   b.SessionID,
+		SessionID:   domain.SessionID(b.SessionID),
 		ContentHash: domain.ContentHash(b.ContentHash),
 		BlobRef:     domain.BlobRef(b.BlobRef),
 		ExternalURI: b.ExternalURI,
