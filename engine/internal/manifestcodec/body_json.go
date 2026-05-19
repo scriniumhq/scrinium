@@ -55,6 +55,7 @@ type jsonPipelineStage struct {
 	Algorithm string `json:"algorithm"`
 	Hash      string `json:"hash"`
 	IV        string `json:"iv,omitempty"`
+	KeyID     string `json:"key_id,omitempty"`
 }
 
 type jsonSystemFlags struct {
@@ -182,6 +183,7 @@ func pipelineToJSON(stages []domain.PipelineStage) []jsonPipelineStage {
 		js := jsonPipelineStage{
 			Algorithm: s.Algorithm,
 			Hash:      s.Hash,
+			KeyID:     s.KeyID,
 		}
 		if len(s.IV) > 0 {
 			js.IV = base64.StdEncoding.EncodeToString(s.IV)
@@ -200,6 +202,7 @@ func pipelineFromJSON(stages []jsonPipelineStage) []domain.PipelineStage {
 		ps := domain.PipelineStage{
 			Algorithm: s.Algorithm,
 			Hash:      s.Hash,
+			KeyID:     s.KeyID,
 		}
 		if s.IV != "" {
 			raw, err := base64.StdEncoding.DecodeString(s.IV)

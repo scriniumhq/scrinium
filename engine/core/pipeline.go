@@ -127,6 +127,7 @@ func (pp *putPipeline) finalize(formatHash func(string, []byte) string) (
 			Algorithm: st.algorithm,
 			Hash:      formatHash(pp.hashAlgo, st.hasher.Sum(nil)),
 			IV:        res.IV,
+			KeyID:     res.KeyID,
 		})
 	}
 	return contentHash, blobRef, stages

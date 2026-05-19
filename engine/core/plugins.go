@@ -53,6 +53,13 @@ type TransformResult struct {
 	// manifest.Pipeline[i].IV. nil for non-crypto plugins.
 	IV []byte
 
+	// KeyID — the identifier of the DEK used to encrypt this
+	// stage's output. Written to manifest.Pipeline[i].KeyID;
+	// consulted on read by the Decoder to look up candidate keys
+	// through the KeyResolver. Empty for non-crypto stages and
+	// for crypto plugins constructed with a pinned DEK.
+	KeyID string
+
 	// Entropy — Shannon entropy of the output stream (for
 	// compressors). Used to decide whether to skip compressing
 	// uncompressible input.
