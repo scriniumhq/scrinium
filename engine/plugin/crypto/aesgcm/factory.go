@@ -20,19 +20,38 @@ const (
 	ivBytes  = 12
 )
 
-// factory is the AES-GCM TransformerFactory. It holds the AEAD
-// primitive built from the DEK so that per-operation Encoders and
-// Decoders do not pay the AES-key-schedule cost on construction.
+// factory is the pinned-DEK AES-GCM TransformerFactory. It holds
+// the AEAD primitive built from a single key passed to New, so
+// per-operation Encoders and Decoders do not pay the AES key
+// schedule cost on construction. Use NewWithResolver for the
+// multi-key path (rotation, multi-tenant, crypto-shredding).
 type factory struct {
 	aead cipher.AEAD
 }
 
-// New constructs an AES-256-GCM TransformerFactory bound to key.
-// Returns nil and an error if key length is not 32 bytes.
+// New constructs a pinned-DEK AES-256-GCM TransformerFactory bound
+// to key. Returns nil and an error if key length is not 32 bytes.
+//
+// Pinned-DEK factories do NOT write a KeyID into pipeline stages
+// and do NOT consult the StoreIndex's KeyResolver on read — they
+// always use the key fixed at construction. This is the legacy
+// single-key wiring; new code should prefer NewWithResolver.
 func New(key []byte) (core.TransformerFactory, error) {
 	if len(key) != keyBytes {
 		return nil, fmt.Errorf("%w (got %d)", ErrInvalidKeyLength, len(key))
 	}
+	aead, err := buildAEAD(key)
+	if err != nil {
+		return nil, err
+	}
+	return &factory{aead: aead}, nil
+}
+
+// buildAEAD wraps the standard-library AES-GCM construction with
+// the project's invariant checks. Shared by the pinned-DEK and
+// resolver-DEK factories: both need exactly the same primitive
+// per key, only the moment of construction differs.
+func buildAEAD(key []byte) (cipher.AEAD, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, fmt.Errorf("aesgcm: aes.NewCipher: %w", err)
@@ -47,7 +66,7 @@ func New(key []byte) (core.TransformerFactory, error) {
 		// constant.
 		return nil, fmt.Errorf("aesgcm: unexpected nonce size %d", aead.NonceSize())
 	}
-	return &factory{aead: aead}, nil
+	return aead, nil
 }
 
 // NewEncoder creates a fresh per-operation Encoder. The IV is
