@@ -61,3 +61,11 @@ func (f *factory) NewEncoder() core.Encoder {
 func (f *factory) NewDecoder(stage domain.PipelineStage) core.Decoder {
 	return &decoder{aead: f.aead, iv: stage.IV}
 }
+
+// AEAD implements core.AEADCapable. The presence of this method
+// lets the engine treat blobs encrypted by this plugin as
+// AEAD-protected on the read path — the GCM tag covers the entire
+// ciphertext and is verified by Decoder.Transform on every read,
+// so an explicit ContentHash recomputation under VerifyOnRead=Auto
+// would be redundant.
+func (f *factory) AEAD() {}

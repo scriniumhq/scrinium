@@ -18,7 +18,7 @@ import (
 
 // asKeyProvider converts a core.KeyResolver into a
 // manifestcodec.KeyProvider, taking care of the typed-nil trap:
-// passing a nil *staticKeyResolver to an interface parameter
+// passing a nil *staticKeyResolver to anj*&$m$Pp61*BkoH8 interface parameter
 // produces a non-nil interface value (with a type but no data),
 // and DecodeFileEncrypted's `if keys == nil` would miss it.
 // Treating "nil resolver" as "no provider" mirrors the spec:
@@ -112,14 +112,15 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 	}
 
 	// 5. Layout dispatch (BlobManifest only).
+	var inner ReadHandle
 	switch manifest.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
 		// Bytes already in memory inside the manifest. No driver
 		// call; the handle is a thin wrapper around bytes.Reader.
-		return &inlineReadHandle{
+		inner = &inlineReadHandle{
 			manifest: manifest,
 			reader:   bytes.NewReader(manifest.InlineBlob),
-		}, nil
+		}
 
 	case domain.LayoutTarget:
 		// PhysicalAddress is sourced from the index — the
@@ -136,13 +137,13 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 		if err != nil {
 			return nil, fmt.Errorf("core.Get: resolve blob path: %w", err)
 		}
-		return &targetReadHandle{
+		inner = &targetReadHandle{
 			manifest: manifest,
 			drv:      s.drv,
 			blobPath: addr.Path,
 			ctx:      ctx,
 			store:    s,
-		}, nil
+		}
 
 	case domain.LayoutExternalRef:
 		return nil, fmt.Errorf("%w: core.Get on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
@@ -150,6 +151,23 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 	default:
 		return nil, fmt.Errorf("core.Get: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
 	}
+
+	// 6. VerifyOnRead policy.
+	//
+	// Empty pipeline + plain media is the canonical case where the
+	// engine itself is the only line of defence against silent bit
+	// rot; AEAD-protected blobs and media with native checksums are
+	// auto-skipped (see shouldVerifyOnRead). ForceEnabled wraps
+	// unconditionally; Disabled skips even on plain media.
+	cfg := s.snapshotConfig()
+	if shouldVerifyOnRead(cfg.VerifyOnRead, manifest.Pipeline, s.drv.Capabilities(), s.transformers) {
+		wrapped, err := newVerifyingReadHandle(inner, s)
+		if err != nil {
+			return nil, err
+		}
+		return wrapped, nil
+	}
+	return inner, nil
 
 	// no Curator routing (opts.AllowColdRead is a Curator-layer flag
 	// per docs/4. API Reference/03 §3.1 — without a Curator it has no

@@ -67,7 +67,23 @@ type TransformerFactory interface {
 	NewDecoder(stage domain.PipelineStage) Decoder
 }
 
-// TransformerRegistry is the registry of transformation factories
+// AEADCapable is the anonymous capability interface a
+// TransformerFactory implements when its Encoder/Decoder pair is
+// an authenticated encryption with associated data (AEAD)
+// primitive. The engine detects this via type assertion to skip
+// redundant ContentHash recomputation on Get when the on-disk
+// bytes are already covered by an AEAD tag — see the VerifyOnRead
+// policy and docs/3. Reference/11 Configuration.
+//
+// The method is intentionally a marker: any non-trivial payload
+// would lock the contract to a specific algorithm shape, while
+// detection only needs a yes/no signal. Plugin implementations
+// add an empty AEAD() method to opt in.
+type AEADCapable interface {
+	AEAD()
+}
+
+// TransformerRegistry is the registry of transformation factoriesj
 // keyed by algorithm identifier (for example, "zstd", "aes-gcm").
 // The identifier appears in the manifest in pipeline[].algorithm.
 type TransformerRegistry interface {
