@@ -1,5 +1,5 @@
 // Package manifestcrypto provides AES-256-GCM authenticated
-// encryption for manifest bodies in MetadataOnly and Envelope
+// encryption for manifest bodies in Sealed and Paranoid
 // modes per docs/2. Internals/03 §3.3.
 //
 // The package wraps Go's stdlib AES-GCM with a fixed-size DEK

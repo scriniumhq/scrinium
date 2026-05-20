@@ -5,7 +5,7 @@
 // File layout per §7.1:
 //
 //	[0..3]      magic: \x00SC1 (JSON), \x00SC2 (Binary, deferred)
-//	[4]         crypto flag: 0x00 Plain, 0x01 MetadataOnly, 0x02 Envelope
+//	[4]         crypto flag: 0x00 Plain, 0x01 Sealed, 0x02 Paranoid
 //	if crypto != 0x00:
 //	  [5]       KeyID length L (0..255)
 //	  [6..6+L]  KeyID bytes (UTF-8; absent when L == 0)
@@ -13,7 +13,7 @@
 //
 // Currently:
 //   - JSON Plain is fully supported.
-//   - JSON MetadataOnly and Envelope: header is parsed and
+//   - JSON Sealed and Paranoid: header is parsed and
 //     written, body encryption arrives in M2.3.2/M2.3.3.
 //   - Binary (\x00SC2, MsgPack) returns ErrUnsupportedEncoding.
 //
@@ -70,8 +70,8 @@ func EncodeFile(m domain.Manifest, encoding domain.ManifestEncoding, crypto doma
 	// Header-only: M2.3.1 produces the §7.1 header for any
 	// crypto mode but still emits the body as plain JSON. Real
 	// body encryption arrives in M2.3.3 through a separate
-	// signature (EncodeFileEncrypted). Until then, MetadataOnly
-	// and Envelope produce headers that announce encryption but
+	// signature (EncodeFileEncrypted). Until then, Sealed
+	// and Paranoid produce headers that announce encryption but
 	// carry plaintext bodies — useful only for header-level tests.
 	// Public callers that pass non-Plain crypto here get
 	// ErrUnsupportedCrypto, preserving the M1.4 behaviour.
@@ -130,7 +130,7 @@ func DecodeFile(data []byte) (domain.Manifest, error) {
 //
 // Encoding dispatches on crypto:
 //   - Plain: EncodeFile (dek, keyID ignored).
-//   - MetadataOnly / Envelope: EncodeFileEncrypted with the
+//   - Sealed / Paranoid: EncodeFileEncrypted with the
 //     supplied dek and keyID. Empty dek with non-Plain crypto
 //     is rejected.
 //

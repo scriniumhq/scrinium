@@ -601,7 +601,7 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 // --- OpenStore: non-Plain ManifestCrypto pending M2.3 ---
 
 // TestOpenStore_NonPlainManifestCryptoOpens verifies that
-// OpenStore accepts MetadataOnly and Envelope configurations.
+// OpenStore accepts Sealed and Paranoid configurations.
 // The body-encryption path itself is exercised by Put/Get
 // integration tests; this test only checks that OpenStore no
 // longer refuses such configurations.
@@ -611,8 +611,8 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 // stays scoped to ManifestCrypto.
 func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
 	for _, crypto := range []domain.ManifestCrypto{
-		domain.ManifestCryptoMetadataOnly,
-		domain.ManifestCryptoEnvelope,
+		domain.ManifestCryptoSealed,
+		domain.ManifestCryptoParanoid,
 	} {
 		t.Run(string(crypto), func(t *testing.T) {
 			drv := driverfx.LocalFS(t)
@@ -806,8 +806,8 @@ func TestInitStore_PlainGeneratesPlaintextDEK(t *testing.T) {
 // DEK is refused at InitStore.
 func TestInitStore_NonPlainCryptoWithoutPassphrase(t *testing.T) {
 	for _, mc := range []domain.ManifestCrypto{
-		domain.ManifestCryptoMetadataOnly,
-		domain.ManifestCryptoEnvelope,
+		domain.ManifestCryptoSealed,
+		domain.ManifestCryptoParanoid,
 	} {
 		t.Run(string(mc), func(t *testing.T) {
 			drv := driverfx.LocalFS(t)

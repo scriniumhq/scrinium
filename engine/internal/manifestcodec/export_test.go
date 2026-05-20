@@ -15,7 +15,7 @@ var (
 )
 
 const (
-	CryptoPlainFlag        = cryptoPlain
-	CryptoMetadataOnlyFlag = cryptoMetadataOnly
-	CryptoEnvelopeFlag     = cryptoEnvelope
+	CryptoPlainFlag    = cryptoPlain
+	CryptoSealedFlag   = cryptoSealed
+	CryptoParanoidFlag = cryptoParanoid
 )

@@ -41,24 +41,24 @@ func TestWriteHeader_DefaultEncodingMapsToJSON(t *testing.T) {
 	}
 }
 
-func TestWriteHeader_EnvelopeDefaultKeyIDIs6Bytes(t *testing.T) {
+func TestWriteHeader_ParanoidDefaultKeyIDIs6Bytes(t *testing.T) {
 	got, err := manifestcodec.WriteHeader(manifestcodec.FileHeader{
 		Encoding: domain.ManifestEncodingJSON,
-		Crypto:   domain.ManifestCryptoEnvelope,
+		Crypto:   domain.ManifestCryptoParanoid,
 	})
 	if err != nil {
 		t.Fatalf("WriteHeader: %v", err)
 	}
-	want := []byte{0x00, 'S', 'C', '1', manifestcodec.CryptoEnvelopeFlag, 0x00}
+	want := []byte{0x00, 'S', 'C', '1', manifestcodec.CryptoParanoidFlag, 0x00}
 	if !bytes.Equal(got, want) {
-		t.Errorf("Envelope default-KeyID header: got %x, want %x", got, want)
+		t.Errorf("Paranoid default-KeyID header: got %x, want %x", got, want)
 	}
 }
 
-func TestWriteHeader_MetadataOnlyWithKeyID(t *testing.T) {
+func TestWriteHeader_SealedWithKeyID(t *testing.T) {
 	got, err := manifestcodec.WriteHeader(manifestcodec.FileHeader{
 		Encoding: domain.ManifestEncodingJSON,
-		Crypto:   domain.ManifestCryptoMetadataOnly,
+		Crypto:   domain.ManifestCryptoSealed,
 		KeyID:    "tenant-a",
 	})
 	if err != nil {
@@ -66,12 +66,12 @@ func TestWriteHeader_MetadataOnlyWithKeyID(t *testing.T) {
 	}
 	want := []byte{
 		0x00, 'S', 'C', '1',
-		manifestcodec.CryptoMetadataOnlyFlag,
+		manifestcodec.CryptoSealedFlag,
 		8, // KeyID length
 		't', 'e', 'n', 'a', 'n', 't', '-', 'a',
 	}
 	if !bytes.Equal(got, want) {
-		t.Errorf("MetadataOnly+KeyID header: got %x, want %x", got, want)
+		t.Errorf("Sealed+KeyID header: got %x, want %x", got, want)
 	}
 }
 
@@ -90,7 +90,7 @@ func TestWriteHeader_RejectsTooLongKeyID(t *testing.T) {
 	long := strings.Repeat("a", 256)
 	_, err := manifestcodec.WriteHeader(manifestcodec.FileHeader{
 		Encoding: domain.ManifestEncodingJSON,
-		Crypto:   domain.ManifestCryptoEnvelope,
+		Crypto:   domain.ManifestCryptoParanoid,
 		KeyID:    long,
 	})
 	if err == nil {
@@ -102,7 +102,7 @@ func TestWriteHeader_AcceptsMaximumKeyID(t *testing.T) {
 	max := strings.Repeat("k", domain.MaxKeyIDLength)
 	got, err := manifestcodec.WriteHeader(manifestcodec.FileHeader{
 		Encoding: domain.ManifestEncodingJSON,
-		Crypto:   domain.ManifestCryptoEnvelope,
+		Crypto:   domain.ManifestCryptoParanoid,
 		KeyID:    max,
 	})
 	if err != nil {
@@ -119,7 +119,7 @@ func TestWriteHeader_RejectsInvalidUTF8(t *testing.T) {
 	bad := string([]byte{0x80})
 	_, err := manifestcodec.WriteHeader(manifestcodec.FileHeader{
 		Encoding: domain.ManifestEncodingJSON,
-		Crypto:   domain.ManifestCryptoEnvelope,
+		Crypto:   domain.ManifestCryptoParanoid,
 		KeyID:    bad,
 	})
 	if err == nil {
@@ -168,10 +168,10 @@ func TestReadHeader_PlainRoundTrip(t *testing.T) {
 	}
 }
 
-func TestReadHeader_MetadataOnlyRoundTrip(t *testing.T) {
+func TestReadHeader_SealedRoundTrip(t *testing.T) {
 	src := manifestcodec.FileHeader{
 		Encoding: domain.ManifestEncodingJSON,
-		Crypto:   domain.ManifestCryptoMetadataOnly,
+		Crypto:   domain.ManifestCryptoSealed,
 		KeyID:    "tenant-a",
 	}
 	raw, _ := manifestcodec.WriteHeader(src)
@@ -188,10 +188,10 @@ func TestReadHeader_MetadataOnlyRoundTrip(t *testing.T) {
 	}
 }
 
-func TestReadHeader_EnvelopeDefaultKeyIDRoundTrip(t *testing.T) {
+func TestReadHeader_ParanoidDefaultKeyIDRoundTrip(t *testing.T) {
 	src := manifestcodec.FileHeader{
 		Encoding: domain.ManifestEncodingJSON,
-		Crypto:   domain.ManifestCryptoEnvelope,
+		Crypto:   domain.ManifestCryptoParanoid,
 		// KeyID empty — default-key path.
 	}
 	raw, _ := manifestcodec.WriteHeader(src)
@@ -243,7 +243,7 @@ func TestReadHeader_RejectsUnknownCryptoFlag(t *testing.T) {
 
 func TestReadHeader_RejectsTruncatedBeforeKeyIDLength(t *testing.T) {
 	// Encrypted flag but only 5 bytes (no length byte).
-	bad := []byte{0x00, 'S', 'C', '1', manifestcodec.CryptoEnvelopeFlag}
+	bad := []byte{0x00, 'S', 'C', '1', manifestcodec.CryptoParanoidFlag}
 	_, _, err := manifestcodec.ReadHeader(bad)
 	if err == nil {
 		t.Fatal("expected truncation error")
@@ -253,7 +253,7 @@ func TestReadHeader_RejectsTruncatedBeforeKeyIDLength(t *testing.T) {
 func TestReadHeader_RejectsTruncatedInsideKeyID(t *testing.T) {
 	// Length byte says 8, but only 4 KeyID bytes follow.
 	bad := []byte{
-		0x00, 'S', 'C', '1', manifestcodec.CryptoEnvelopeFlag,
+		0x00, 'S', 'C', '1', manifestcodec.CryptoParanoidFlag,
 		8,
 		'a', 'b', 'c', 'd',
 	}
@@ -265,7 +265,7 @@ func TestReadHeader_RejectsTruncatedInsideKeyID(t *testing.T) {
 
 func TestReadHeader_RejectsInvalidUTF8KeyID(t *testing.T) {
 	bad := []byte{
-		0x00, 'S', 'C', '1', manifestcodec.CryptoEnvelopeFlag,
+		0x00, 'S', 'C', '1', manifestcodec.CryptoParanoidFlag,
 		3,
 		0x80, 0x80, 0x80, // continuation bytes, no start byte
 	}
@@ -284,8 +284,8 @@ func TestCryptoFlag_AllValues(t *testing.T) {
 	}{
 		{"", manifestcodec.CryptoPlainFlag},
 		{domain.ManifestCryptoPlain, manifestcodec.CryptoPlainFlag},
-		{domain.ManifestCryptoMetadataOnly, manifestcodec.CryptoMetadataOnlyFlag},
-		{domain.ManifestCryptoEnvelope, manifestcodec.CryptoEnvelopeFlag},
+		{domain.ManifestCryptoSealed, manifestcodec.CryptoSealedFlag},
+		{domain.ManifestCryptoParanoid, manifestcodec.CryptoParanoidFlag},
 	}
 	for _, tc := range cases {
 		got, err := manifestcodec.CryptoFlag(tc.in)
@@ -305,8 +305,8 @@ func TestCryptoFromFlag_AllValues(t *testing.T) {
 		want domain.ManifestCrypto
 	}{
 		{manifestcodec.CryptoPlainFlag, domain.ManifestCryptoPlain},
-		{manifestcodec.CryptoMetadataOnlyFlag, domain.ManifestCryptoMetadataOnly},
-		{manifestcodec.CryptoEnvelopeFlag, domain.ManifestCryptoEnvelope},
+		{manifestcodec.CryptoSealedFlag, domain.ManifestCryptoSealed},
+		{manifestcodec.CryptoParanoidFlag, domain.ManifestCryptoParanoid},
 	}
 	for _, tc := range cases {
 		got, err := manifestcodec.CryptoFromFlag(tc.in)
@@ -328,9 +328,9 @@ func TestCryptoFromFlag_AllValues(t *testing.T) {
 func FuzzWriteReadHeader(f *testing.F) {
 	// Seed corpus: a few interesting cases.
 	f.Add(uint8(0), uint8(0), "")                       // Plain
-	f.Add(uint8(0), uint8(1), "tenant-a")               // MetadataOnly + KeyID
-	f.Add(uint8(0), uint8(2), "")                       // Envelope default key
-	f.Add(uint8(0), uint8(2), strings.Repeat("k", 255)) // Envelope max KeyID
+	f.Add(uint8(0), uint8(1), "tenant-a")               // Sealed + KeyID
+	f.Add(uint8(0), uint8(2), "")                       // Paranoid default key
+	f.Add(uint8(0), uint8(2), strings.Repeat("k", 255)) // Paranoid max KeyID
 
 	f.Fuzz(func(t *testing.T, encMagicVariant, cryptoVariant uint8, keyID string) {
 		// Map random uint8s to legal enum values; out-of-range
@@ -348,9 +348,9 @@ func FuzzWriteReadHeader(f *testing.F) {
 		case 0:
 			crypto = domain.ManifestCryptoPlain
 		case 1:
-			crypto = domain.ManifestCryptoMetadataOnly
+			crypto = domain.ManifestCryptoSealed
 		case 2:
-			crypto = domain.ManifestCryptoEnvelope
+			crypto = domain.ManifestCryptoParanoid
 		default:
 			// Out-of-range — writeHeader should refuse.
 			_, err := manifestcodec.WriteHeader(manifestcodec.FileHeader{

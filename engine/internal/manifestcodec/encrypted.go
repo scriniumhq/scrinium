@@ -1,6 +1,6 @@
 package manifestcodec
 
-// encrypted.go — MetadataOnly and Envelope crypto modes per
+// encrypted.go — Sealed and Paranoid crypto modes per
 // docs/2. Internals/07 §7.4. EncodeFileEncrypted /
 // DecodeFileEncrypted are the public entry points; the
 // encode/decode helpers per-mode and the multi-DEK fallback
@@ -43,10 +43,10 @@ func EncodeFileEncrypted(
 	var body []byte
 
 	switch crypto {
-	case domain.ManifestCryptoMetadataOnly:
-		body, err = encodeMetadataOnly(m, dek, header)
-	case domain.ManifestCryptoEnvelope:
-		body, err = encodeEnvelope(m, dek, header)
+	case domain.ManifestCryptoSealed:
+		body, err = encodeSealed(m, dek, header)
+	case domain.ManifestCryptoParanoid:
+		body, err = encodeParanoid(m, dek, header)
 	default:
 		// cryptoFlag in writeHeader already filtered unknowns;
 		// reaching here would mean a producer mismatch between
@@ -120,24 +120,24 @@ func DecodeFileEncrypted(data []byte, keys KeyProvider) (domain.Manifest, error)
 	body := data[bodyOffset:]
 
 	switch header.Crypto {
-	case domain.ManifestCryptoMetadataOnly:
-		return decodeMetadataOnly(body, candidates, headerBytes)
-	case domain.ManifestCryptoEnvelope:
-		return decodeEnvelope(body, candidates, headerBytes)
+	case domain.ManifestCryptoSealed:
+		return decodeSealed(body, candidates, headerBytes)
+	case domain.ManifestCryptoParanoid:
+		return decodeParanoid(body, candidates, headerBytes)
 	default:
 		return domain.Manifest{}, errs.ErrUnsupportedCrypto
 	}
 }
 
-// --- MetadataOnly: encrypt only the metadata block ---
+// --- Sealed: encrypt only the metadata block ---
 
-// encodeMetadataOnly produces the body bytes for MetadataOnly:
+// encodeSealed produces the body bytes for Sealed:
 // JSON of the manifest with the metadata field replaced by a
 // base64-wrapped AEAD ciphertext.
-func encodeMetadataOnly(m domain.Manifest, dek, aad []byte) ([]byte, error) {
+func encodeSealed(m domain.Manifest, dek, aad []byte) ([]byte, error) {
 	// Encrypt the raw metadata bytes. Empty metadata is allowed —
 	// we still seal the empty plaintext so the on-disk shape is
-	// uniform (every MetadataOnly manifest has a non-empty
+	// uniform (every Sealed manifest has a non-empty
 	// metadata field that is base64 of a 28-byte minimum
 	// ciphertext).
 	plaintext := []byte(m.Metadata)
@@ -158,10 +158,10 @@ func encodeMetadataOnly(m domain.Manifest, dek, aad []byte) ([]byte, error) {
 	return marshalBodyJSON(encrypted)
 }
 
-// decodeMetadataOnly parses MetadataOnly body bytes, decrypts
+// decodeSealed parses Sealed body bytes, decrypts
 // the metadata field, and returns a manifest with plaintext
 // metadata.
-func decodeMetadataOnly(body []byte, candidates [][]byte, aad []byte) (domain.Manifest, error) {
+func decodeSealed(body []byte, candidates [][]byte, aad []byte) (domain.Manifest, error) {
 	m, err := unmarshalBodyJSON(body)
 	if err != nil {
 		return domain.Manifest{}, err
@@ -192,21 +192,21 @@ func decodeMetadataOnly(body []byte, candidates [][]byte, aad []byte) (domain.Ma
 	return m, nil
 }
 
-// --- Envelope: encrypt the entire body ---
+// --- Paranoid: encrypt the entire body ---
 
-func encodeEnvelope(m domain.Manifest, dek, aad []byte) ([]byte, error) {
+func encodeParanoid(m domain.Manifest, dek, aad []byte) ([]byte, error) {
 	plain, err := marshalBodyJSON(m)
 	if err != nil {
 		return nil, err
 	}
 	ciphertext, err := manifestcrypto.Seal(plain, dek, aad)
 	if err != nil {
-		return nil, fmt.Errorf("manifestcodec: seal envelope: %w", err)
+		return nil, fmt.Errorf("manifestcodec: seal Paranoid: %w", err)
 	}
 	return ciphertext, nil
 }
 
-func decodeEnvelope(body []byte, candidates [][]byte, aad []byte) (domain.Manifest, error) {
+func decodeParanoid(body []byte, candidates [][]byte, aad []byte) (domain.Manifest, error) {
 	plaintext, err := tryDecrypt(body, candidates, aad)
 	if err != nil {
 		return domain.Manifest{}, err

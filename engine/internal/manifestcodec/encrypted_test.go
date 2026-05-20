@@ -42,16 +42,16 @@ func resolverWith(keyID string, dek []byte) *staticKeyProvider {
 	return &staticKeyProvider{byKeyID: map[string][][]byte{keyID: {dek}}}
 }
 
-// --- MetadataOnly round-trip ---
+// --- Sealed round-trip ---
 
-func TestMetadataOnly_RoundTrip(t *testing.T) {
+func TestSealed_RoundTrip(t *testing.T) {
 	dek := freshDEK(t)
 	src := sampleManifest()
 	src.Metadata = json.RawMessage(`{"tenant":"acme","tags":["a","b"]}`)
 
 	bs, err := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
-		domain.ManifestCryptoMetadataOnly, dek, "")
+		domain.ManifestCryptoSealed, dek, "")
 	if err != nil {
 		t.Fatalf("EncodeFileEncrypted: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestMetadataOnly_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestMetadataOnly_SystemFieldsArePlaintext(t *testing.T) {
+func TestSealed_SystemFieldsArePlaintext(t *testing.T) {
 	dek := freshDEK(t)
 	src := sampleManifest()
 	src.Namespace = "tenant-a/orders"
@@ -81,27 +81,27 @@ func TestMetadataOnly_SystemFieldsArePlaintext(t *testing.T) {
 
 	bs, _ := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
-		domain.ManifestCryptoMetadataOnly, dek, "")
+		domain.ManifestCryptoSealed, dek, "")
 
 	// Without any decryption, body should still contain the
 	// namespace string in plaintext (system fields stay open).
 	if !bytes.Contains(bs, []byte("tenant-a/orders")) {
-		t.Error("MetadataOnly should leave Namespace in plaintext on disk")
+		t.Error("Sealed should leave Namespace in plaintext on disk")
 	}
 	// And the metadata content must NOT be visible.
 	if bytes.Contains(bs, []byte("do-not-leak")) {
-		t.Error("MetadataOnly leaked metadata to plaintext")
+		t.Error("Sealed leaked metadata to plaintext")
 	}
 }
 
-func TestMetadataOnly_EmptyMetadata(t *testing.T) {
+func TestSealed_EmptyMetadata(t *testing.T) {
 	dek := freshDEK(t)
 	src := sampleManifest()
 	src.Metadata = nil
 
 	bs, err := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
-		domain.ManifestCryptoMetadataOnly, dek, "")
+		domain.ManifestCryptoSealed, dek, "")
 	if err != nil {
 		t.Fatalf("EncodeFileEncrypted: %v", err)
 	}
@@ -114,11 +114,11 @@ func TestMetadataOnly_EmptyMetadata(t *testing.T) {
 	}
 }
 
-func TestMetadataOnly_TamperedHeaderFailsDecryption(t *testing.T) {
+func TestSealed_TamperedHeaderFailsDecryption(t *testing.T) {
 	dek := freshDEK(t)
 	bs, _ := manifestcodec.EncodeFileEncrypted(
 		sampleManifest(), domain.ManifestEncodingJSON,
-		domain.ManifestCryptoMetadataOnly, dek, "tenant-a")
+		domain.ManifestCryptoSealed, dek, "tenant-a")
 
 	// Find the KeyID byte and flip one bit. The 'a' in
 	// "tenant-a" is right after the 1-byte length.
@@ -135,13 +135,13 @@ func TestMetadataOnly_TamperedHeaderFailsDecryption(t *testing.T) {
 	}
 }
 
-func TestMetadataOnly_TamperedCiphertext(t *testing.T) {
+func TestSealed_TamperedCiphertext(t *testing.T) {
 	dek := freshDEK(t)
 	bs, _ := manifestcodec.EncodeFileEncrypted(
 		sampleManifest(), domain.ManifestEncodingJSON,
-		domain.ManifestCryptoMetadataOnly, dek, "")
+		domain.ManifestCryptoSealed, dek, "")
 
-	// MetadataOnly stores ciphertext as base64 inside a JSON
+	// Sealed stores ciphertext as base64 inside a JSON
 	// string. Find the JSON metadata key and replace one
 	// character of the base64 with another base64-valid one.
 	idx := bytes.Index(bs, []byte(`"metadata":"`))
@@ -163,16 +163,16 @@ func TestMetadataOnly_TamperedCiphertext(t *testing.T) {
 	}
 }
 
-// --- Envelope round-trip ---
+// --- Paranoid round-trip ---
 
-func TestEnvelope_RoundTrip(t *testing.T) {
+func TestParanoid_RoundTrip(t *testing.T) {
 	dek := freshDEK(t)
 	src := sampleManifest()
 	src.Namespace = "secret/ns"
 
 	bs, err := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, dek, "")
+		domain.ManifestCryptoParanoid, dek, "")
 	if err != nil {
 		t.Fatalf("EncodeFileEncrypted: %v", err)
 	}
@@ -186,33 +186,33 @@ func TestEnvelope_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestEnvelope_SystemFieldsAreEncrypted(t *testing.T) {
+func TestParanoid_SystemFieldsAreEncrypted(t *testing.T) {
 	dek := freshDEK(t)
 	src := sampleManifest()
 	src.Namespace = "tenant-a/secret"
 
 	bs, _ := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, dek, "")
+		domain.ManifestCryptoParanoid, dek, "")
 
-	// Envelope hides everything in body, including Namespace.
+	// Paranoid hides everything in body, including Namespace.
 	if bytes.Contains(bs, []byte("tenant-a/secret")) {
-		t.Error("Envelope leaked Namespace to plaintext")
+		t.Error("Paranoid leaked Namespace to plaintext")
 	}
 }
 
-func TestEnvelope_NondeterministicArtifactID(t *testing.T) {
+func TestParanoid_NondeterministicArtifactID(t *testing.T) {
 	dek := freshDEK(t)
 	src := sampleManifest()
 
 	a, _ := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, dek, "")
+		domain.ManifestCryptoParanoid, dek, "")
 	b, _ := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, dek, "")
+		domain.ManifestCryptoParanoid, dek, "")
 	if bytes.Equal(a, b) {
-		t.Fatal("Envelope must produce different bytes per call (fresh IV)")
+		t.Fatal("Paranoid must produce different bytes per call (fresh IV)")
 	}
 }
 
@@ -241,7 +241,7 @@ func TestDecodeFileEncrypted_RotationCandidates(t *testing.T) {
 
 	bs, _ := manifestcodec.EncodeFileEncrypted(
 		sampleManifest(), domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, oldDEK, "")
+		domain.ManifestCryptoParanoid, oldDEK, "")
 
 	// Provide [newDEK, oldDEK] — the second one wins.
 	resolver := &staticKeyProvider{byKeyID: map[string][][]byte{
@@ -271,7 +271,7 @@ func TestEncodeFileEncrypted_RejectsPlain(t *testing.T) {
 func TestEncodeFileEncrypted_RejectsEmptyDEK(t *testing.T) {
 	_, err := manifestcodec.EncodeFileEncrypted(
 		sampleManifest(), domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, nil, "")
+		domain.ManifestCryptoParanoid, nil, "")
 	if err == nil {
 		t.Fatal("empty DEK must be rejected")
 	}
@@ -281,7 +281,7 @@ func TestDecodeFileEncrypted_NilResolverOnEncrypted(t *testing.T) {
 	dek := freshDEK(t)
 	bs, _ := manifestcodec.EncodeFileEncrypted(
 		sampleManifest(), domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, dek, "")
+		domain.ManifestCryptoParanoid, dek, "")
 
 	_, err := manifestcodec.DecodeFileEncrypted(bs, nil)
 	if !errors.Is(err, errs.ErrKeyNotFound) {
@@ -293,7 +293,7 @@ func TestDecodeFileEncrypted_EmptyKeyList(t *testing.T) {
 	dek := freshDEK(t)
 	bs, _ := manifestcodec.EncodeFileEncrypted(
 		sampleManifest(), domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, dek, "default")
+		domain.ManifestCryptoParanoid, dek, "default")
 
 	// Resolver knows about a different KeyID; for "default" it
 	// returns an empty slice.
@@ -310,7 +310,7 @@ func TestDecodeFileEncrypted_AllCandidatesWrong(t *testing.T) {
 	dek := freshDEK(t)
 	bs, _ := manifestcodec.EncodeFileEncrypted(
 		sampleManifest(), domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, dek, "")
+		domain.ManifestCryptoParanoid, dek, "")
 
 	wrongA := freshDEK(t)
 	wrongB := freshDEK(t)
@@ -329,7 +329,7 @@ func TestEncodeFileEncrypted_KeyIDPropagatesToHeader(t *testing.T) {
 	dek := freshDEK(t)
 	bs, err := manifestcodec.EncodeFileEncrypted(
 		sampleManifest(), domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, dek, "tenant-42")
+		domain.ManifestCryptoParanoid, dek, "tenant-42")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,13 +351,13 @@ func TestEncodeFileEncrypted_BodyDiffersFromPlain(t *testing.T) {
 
 	plain, _ := manifestcodec.EncodeFile(
 		src, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
-	envelope, _ := manifestcodec.EncodeFileEncrypted(
+	Paranoid, _ := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
-		domain.ManifestCryptoEnvelope, dek, "")
+		domain.ManifestCryptoParanoid, dek, "")
 
 	// Bodies (after header) must differ — Plain is JSON,
-	// Envelope is ciphertext.
-	if bytes.Equal(plain[5:], envelope[6:]) {
-		t.Error("Envelope body bytes accidentally match Plain")
+	// Paranoid is ciphertext.
+	if bytes.Equal(plain[5:], Paranoid[6:]) {
+		t.Error("Paranoid body bytes accidentally match Plain")
 	}
 }

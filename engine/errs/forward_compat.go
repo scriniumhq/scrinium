@@ -26,7 +26,7 @@ import "errors"
 var ErrUnsupportedEncoding = errors.New("scrinium: unsupported manifest encoding")
 
 // ErrUnsupportedCrypto — the manifest header carries a
-// ManifestCrypto value (Plain, MetadataOnly, Envelope, or a
+// ManifestCrypto value (Plain, Sealed, Paranoid, or a
 // future addition) that this binary does not implement, or
 // StoreConfig.ManifestCrypto names such a value.
 var ErrUnsupportedCrypto = errors.New("scrinium: unsupported manifest crypto")

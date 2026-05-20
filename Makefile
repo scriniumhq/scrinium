@@ -158,7 +158,7 @@ else
 	SCRINIUM_SMOKE=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./engine/core/
 endif
 
-# Encrypted smoke: round-trip on a Store with Envelope manifests.
+# Encrypted smoke: round-trip on a Store with Paranoid manifests.
 # Smaller default N than `make smoke` (10k vs 100k) — encrypted
 # Put adds AES-GCM overhead per manifest, so the run-time-per-
 # artifact is meaningfully higher; 10k is enough to demonstrate

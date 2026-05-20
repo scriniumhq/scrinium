@@ -58,11 +58,11 @@ func TestPut_PlainStillWorks(t *testing.T) {
 	}
 }
 
-// --- Put with MetadataOnly ---
+// --- Put with Sealed ---
 
-func TestPut_MetadataOnly_Succeeds(t *testing.T) {
-	s := initEncryptedWithCrypto(t, domain.ManifestCryptoMetadataOnly)
-	a, _ := payloadReader("metadata-only payload")
+func TestPut_Sealed_Succeeds(t *testing.T) {
+	s := initEncryptedWithCrypto(t, domain.ManifestCryptoSealed)
+	a, _ := payloadReader("sealed payload")
 	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
@@ -72,11 +72,11 @@ func TestPut_MetadataOnly_Succeeds(t *testing.T) {
 	}
 }
 
-// --- Put with Envelope ---
+// --- Put with Paranoid ---
 
-func TestPut_Envelope_Succeeds(t *testing.T) {
-	s := initEncryptedWithCrypto(t, domain.ManifestCryptoEnvelope)
-	a, _ := payloadReader("envelope payload")
+func TestPut_Paranoid_Succeeds(t *testing.T) {
+	s := initEncryptedWithCrypto(t, domain.ManifestCryptoParanoid)
+	a, _ := payloadReader("Paranoid payload")
 	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
@@ -89,7 +89,7 @@ func TestPut_Envelope_Succeeds(t *testing.T) {
 // --- Put on encrypted Store while Locked ---
 
 func TestPut_EncryptedManifestRejectedWhenLocked(t *testing.T) {
-	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
+	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
 	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 	// Open WITHOUT AutoUnlock: Store is in StateLocked.
 	s := r.Open(t,
@@ -104,10 +104,10 @@ func TestPut_EncryptedManifestRejectedWhenLocked(t *testing.T) {
 	}
 }
 
-// --- MetadataOnly: system fields stay in plaintext on disk ---
+// --- Sealed: system fields stay in plaintext on disk ---
 
-func TestPut_MetadataOnly_NamespaceVisibleOnDisk(t *testing.T) {
-	s := initEncryptedWithCrypto(t, domain.ManifestCryptoMetadataOnly)
+func TestPut_Sealed_NamespaceVisibleOnDisk(t *testing.T) {
+	s := initEncryptedWithCrypto(t, domain.ManifestCryptoSealed)
 	a, _ := payloadReader("payload")
 	a.Metadata = json.RawMessage(`{"secret":"do-not-leak"}`)
 
@@ -119,17 +119,17 @@ func TestPut_MetadataOnly_NamespaceVisibleOnDisk(t *testing.T) {
 	// Read raw manifest file from disk and check field visibility.
 	bytesOnDisk := readManifestRaw(t, s, id)
 	if !bytes.Contains(bytesOnDisk, []byte("tenant-a")) {
-		t.Error("MetadataOnly should leave Namespace in plaintext on disk")
+		t.Error("Sealed should leave Namespace in plaintext on disk")
 	}
 	if bytes.Contains(bytesOnDisk, []byte("do-not-leak")) {
-		t.Error("MetadataOnly leaked metadata to plaintext")
+		t.Error("Sealed leaked metadata to plaintext")
 	}
 }
 
-// --- Envelope: even Namespace is hidden ---
+// --- Paranoid: even Namespace is hidden ---
 
-func TestPut_Envelope_NamespaceHiddenOnDisk(t *testing.T) {
-	s := initEncryptedWithCrypto(t, domain.ManifestCryptoEnvelope)
+func TestPut_Paranoid_NamespaceHiddenOnDisk(t *testing.T) {
+	s := initEncryptedWithCrypto(t, domain.ManifestCryptoParanoid)
 	a, _ := payloadReader("payload")
 
 	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "tenant-secret"})
@@ -139,7 +139,7 @@ func TestPut_Envelope_NamespaceHiddenOnDisk(t *testing.T) {
 
 	bytesOnDisk := readManifestRaw(t, s, id)
 	if bytes.Contains(bytesOnDisk, []byte("tenant-secret")) {
-		t.Error("Envelope leaked Namespace to plaintext on disk")
+		t.Error("Paranoid leaked Namespace to plaintext on disk")
 	}
 }
 
@@ -175,9 +175,9 @@ func readManifestRaw(t *testing.T, s core.Store, id domain.ArtifactID) []byte {
 
 // --- End-to-end Put → Get ---
 
-func TestPutGet_MetadataOnly_RoundTrip(t *testing.T) {
-	s := initEncryptedWithCrypto(t, domain.ManifestCryptoMetadataOnly)
-	a, raw := payloadReader("metadata-only end-to-end")
+func TestPutGet_Sealed_RoundTrip(t *testing.T) {
+	s := initEncryptedWithCrypto(t, domain.ManifestCryptoSealed)
+	a, raw := payloadReader("sealed end-to-end")
 	a.Metadata = json.RawMessage(`{"tag":"value"}`)
 
 	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
@@ -200,9 +200,9 @@ func TestPutGet_MetadataOnly_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestPutGet_Envelope_RoundTrip(t *testing.T) {
-	s := initEncryptedWithCrypto(t, domain.ManifestCryptoEnvelope)
-	a, raw := payloadReader("envelope end-to-end")
+func TestPutGet_Paranoid_RoundTrip(t *testing.T) {
+	s := initEncryptedWithCrypto(t, domain.ManifestCryptoParanoid)
+	a, raw := payloadReader("Paranoid end-to-end")
 
 	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "secret"})
 	if err != nil {
@@ -228,7 +228,7 @@ func TestPutGet_Envelope_RoundTrip(t *testing.T) {
 // Store cannot read an encrypted manifest: the codec asks for
 // keys, the resolver is nil, and ErrKeyNotFound surfaces.
 func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
-	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
+	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
 	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 
 	// Open with AutoUnlock first to write a manifest.
@@ -260,10 +260,10 @@ func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
 	}
 }
 
-// --- Envelope blob dedup invariant ---
+// --- Paranoid blob dedup invariant ---
 
-// TestPutEnvelope_BlobDedupAcrossManifests verifies the §3.3
-// invariant: in Envelope mode N writes of the same payload
+// TestPutParanoid_BlobDedupAcrossManifests verifies the §3.3
+// invariant: in Paranoid mode N writes of the same payload
 // produce N distinct ArtifactIDs (manifest non-determinism)
 // but exactly ONE blob with ref_count = N.
 //
@@ -272,8 +272,8 @@ func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
 // TestDelete_SharedBlobKeepsRefCount: count blob files on disk,
 // delete in order, observe that the blob survives until the
 // last referrer.
-func TestPutEnvelope_BlobDedupAcrossManifests(t *testing.T) {
-	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
+func TestPutParanoid_BlobDedupAcrossManifests(t *testing.T) {
+	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
 	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 	root := r.Root()
 
@@ -283,7 +283,7 @@ func TestPutEnvelope_BlobDedupAcrossManifests(t *testing.T) {
 		core.WithConfig(cfg),
 	)
 
-	const samePayload = "envelope dedup payload"
+	const samePayload = "Paranoid dedup payload"
 	ids := make([]domain.ArtifactID, 0, 3)
 	for i := 0; i < 3; i++ {
 		a, _ := payloadReader(samePayload)
@@ -298,7 +298,7 @@ func TestPutEnvelope_BlobDedupAcrossManifests(t *testing.T) {
 	for i := 0; i < len(ids); i++ {
 		for j := i + 1; j < len(ids); j++ {
 			if ids[i] == ids[j] {
-				t.Fatalf("Envelope must produce distinct ArtifactIDs per Put, got identical at %d/%d: %s",
+				t.Fatalf("Paranoid must produce distinct ArtifactIDs per Put, got identical at %d/%d: %s",
 					i, j, ids[i])
 			}
 		}
@@ -373,12 +373,12 @@ func (r *fixedKeyIDResolver) DefaultKeyID() string { return r.keyID }
 // changes the file hash and therefore the ArtifactID;
 // loadManifest catches the mismatch BEFORE attempting decryption.
 //
-// Distinct from TestMetadataOnly_TamperedHeaderFailsDecryption,
+// Distinct from TestSealed_TamperedHeaderFailsDecryption,
 // which exercises the AAD path inside the codec. This test
 // stops earlier — at VerifyArtifactID — and confirms the
 // stronger "ArtifactID locks the file as a whole" invariant.
 func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
-	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
+	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
 	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 
 	// AutoUnlock so the engine has a DEK; then we override the
@@ -473,7 +473,7 @@ func manifestPathFor(t *testing.T, id domain.ArtifactID) string {
 	return "manifests/" + hex[:2] + "/" + hex[2:4] + "/" + idStr
 }
 
-// --- Walk on Envelope Store works without decrypting ---
+// --- Walk on Paranoid Store works without decrypting ---
 
 // alwaysFailingResolver returns errors for any GetKeys call.
 // Used to prove that a code path does NOT consult the resolver.
@@ -484,8 +484,8 @@ func (alwaysFailingResolver) GetKeys(_ string) ([][]byte, error) {
 }
 func (alwaysFailingResolver) DefaultKeyID() string { return "" }
 
-// TestWalk_EnvelopeStoreWalksWithoutDecryption verifies the §3.5
-// invariant: in Envelope mode, Namespace is encrypted inside the
+// TestWalk_ParanoidStoreWalksWithoutDecryption verifies the §3.5
+// invariant: in Paranoid mode, Namespace is encrypted inside the
 // manifest file but stored in plaintext in StoreIndex. Walk
 // therefore returns matches by querying the index alone, never
 // reading or decrypting manifest bodies.
@@ -494,8 +494,8 @@ func (alwaysFailingResolver) DefaultKeyID() string { return "" }
 // then reopening with a sabotaged resolver that errors on every
 // GetKeys call. Walk must still succeed and return the expected
 // row count.
-func TestWalk_EnvelopeStoreWalksWithoutDecryption(t *testing.T) {
-	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoEnvelope}
+func TestWalk_ParanoidStoreWalksWithoutDecryption(t *testing.T) {
+	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
 	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 
 	// Phase 1: Put with the auto-promoted resolver.
@@ -506,7 +506,7 @@ func TestWalk_EnvelopeStoreWalksWithoutDecryption(t *testing.T) {
 	)
 	const n = 5
 	for i := 0; i < n; i++ {
-		a, _ := payloadReader(fmt.Sprintf("envelope payload %d", i))
+		a, _ := payloadReader(fmt.Sprintf("Paranoid payload %d", i))
 		if _, err := s1.Put(context.Background(), a,
 			domain.PutOptions{Namespace: "ns"}); err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
@@ -535,7 +535,7 @@ func TestWalk_EnvelopeStoreWalksWithoutDecryption(t *testing.T) {
 		count++
 		return nil
 	}); err != nil {
-		t.Fatalf("Walk on Envelope Store with broken resolver: %v\n"+
+		t.Fatalf("Walk on Paranoid Store with broken resolver: %v\n"+
 			"Walk must NOT decrypt manifest bodies — namespace lookup is index-only", err)
 	}
 	if count != n {

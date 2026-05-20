@@ -64,7 +64,7 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 	}
 
 	// Decode dispatches on the file header: Plain bypass any
-	// resolver, encrypted (MetadataOnly / Envelope) consult the
+	// resolver, encrypted (Sealed / Paranoid) consult the
 	// snapshotted keyResolver. The snapshot is taken under
 	// cryptoMu and held only across the pointer copy — the
 	// resolver itself is an immutable interface, no deeper copy
@@ -91,7 +91,7 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 // no Pipeline (so no inverse decoder chain); no encryption (so
 // no KeyResolver lookup); no Curator routing (opts.AllowColdRead
 // ignored — it is a Curator-layer flag). TOC, Pack, ExternalRef,
-// MetadataOnly/Envelope crypto are deferred to later milestones
+// Sealed/Paranoid crypto are deferred to later milestones
 // and return explicit errors when reached.
 func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (ReadHandle, error) {
 	if err := s.enterRead(ctx); err != nil {

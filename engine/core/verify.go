@@ -15,7 +15,7 @@ import (
 // Verify performs a full integrity check of an artifact:
 //
 //  1. loadManifest, which itself verifies ArtifactID = hash(file
-//     bytes) and decrypts the body for MetadataOnly/Envelope via
+//     bytes) and decrypts the body for Sealed/Paranoid via
 //     the configured KeyResolver.
 //  2. Re-hash the blob plaintext bytes, comparing to
 //     manifest.ContentHash. On divergence emits EventScrubFailed

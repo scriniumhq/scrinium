@@ -48,7 +48,7 @@ func FuzzDecodeFile(f *testing.F) {
 	f.Add([]byte{0x00, 'S', 'C', '1', 0x00, '{'})
 	// Seed: valid header, body is the empty JSON object.
 	f.Add([]byte{0x00, 'S', 'C', '1', 0x00, '{', '}'})
-	// Seed: valid header, crypto flag is non-zero (MetadataOnly).
+	// Seed: valid header, crypto flag is non-zero (Sealed).
 	f.Add([]byte{0x00, 'S', 'C', '1', 0x01})
 	// Seed: valid encoded manifest with one byte flipped at the
 	// crypto-flag position — exercises the crypto check on what

@@ -138,7 +138,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Refuse encrypted-manifest configs without a passphrase ---
 	//
-	// MetadataOnly and Envelope only make sense alongside a
+	// Sealed and Paranoid only make sense alongside a
 	// wrapped DEK: encrypting manifests against a plaintext key
 	// stored in store.json provides no protection, just
 	// operational pain. Caught here at InitStore so the user

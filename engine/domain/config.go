@@ -38,12 +38,18 @@ const (
 )
 
 // ManifestCrypto controls manifest protection. Immutable.
+//
+// On-disk byte representation (header crypto flag) is stable
+// across rename history: Sealed is byte 0x01, Paranoid is 0x02.
+// Old in-flight configs containing the previous names
+// ("Sealed", "Paranoid") are accepted by UnmarshalJSON for
+// backwards compatibility — see manifest_crypto.go.
 type ManifestCrypto string
 
 const (
-	ManifestCryptoPlain        ManifestCrypto = "Plain"
-	ManifestCryptoMetadataOnly ManifestCrypto = "MetadataOnly"
-	ManifestCryptoEnvelope     ManifestCrypto = "Envelope"
+	ManifestCryptoPlain    ManifestCrypto = "Plain"
+	ManifestCryptoSealed   ManifestCrypto = "Sealed"
+	ManifestCryptoParanoid ManifestCrypto = "Paranoid"
 )
 
 // DeletionPolicy is the deletion policy.

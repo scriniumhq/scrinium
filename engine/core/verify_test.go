@@ -216,8 +216,8 @@ func readBlobRef(t *testing.T, s core.Store, id domain.ArtifactID) domain.BlobRe
 
 func TestVerify_EncryptedManifest_Succeeds(t *testing.T) {
 	for _, crypto := range []domain.ManifestCrypto{
-		domain.ManifestCryptoMetadataOnly,
-		domain.ManifestCryptoEnvelope,
+		domain.ManifestCryptoSealed,
+		domain.ManifestCryptoParanoid,
 	} {
 		t.Run(string(crypto), func(t *testing.T) {
 			drv := driverfx.LocalFS(t)

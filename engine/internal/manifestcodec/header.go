@@ -21,10 +21,15 @@ var (
 )
 
 // Crypto flags from docs §7.1.
+//
+// Byte values are stable across the ADR-55 rename:
+// cryptoSealed is the on-disk flag that used to be
+// cryptoSealed; cryptoParanoid replaces cryptoParanoid.
+// Old manifests on disk read transparently.
 const (
-	cryptoPlain        = 0x00
-	cryptoMetadataOnly = 0x01
-	cryptoEnvelope     = 0x02
+	cryptoPlain    = 0x00
+	cryptoSealed   = 0x01
+	cryptoParanoid = 0x02
 )
 
 // SchemaVersion is the only on-disk version this package writes
@@ -184,10 +189,10 @@ func cryptoFlag(c domain.ManifestCrypto) (byte, error) {
 	switch c {
 	case "", domain.ManifestCryptoPlain:
 		return cryptoPlain, nil
-	case domain.ManifestCryptoMetadataOnly:
-		return cryptoMetadataOnly, nil
-	case domain.ManifestCryptoEnvelope:
-		return cryptoEnvelope, nil
+	case domain.ManifestCryptoSealed:
+		return cryptoSealed, nil
+	case domain.ManifestCryptoParanoid:
+		return cryptoParanoid, nil
 	default:
 		return 0, errs.ErrUnsupportedCrypto
 	}
@@ -198,10 +203,10 @@ func cryptoFromFlag(flag byte) (domain.ManifestCrypto, error) {
 	switch flag {
 	case cryptoPlain:
 		return domain.ManifestCryptoPlain, nil
-	case cryptoMetadataOnly:
-		return domain.ManifestCryptoMetadataOnly, nil
-	case cryptoEnvelope:
-		return domain.ManifestCryptoEnvelope, nil
+	case cryptoSealed:
+		return domain.ManifestCryptoSealed, nil
+	case cryptoParanoid:
+		return domain.ManifestCryptoParanoid, nil
 	default:
 		return "", errs.ErrUnsupportedCrypto
 	}

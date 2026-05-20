@@ -54,8 +54,8 @@ func StoreKeyResolver(s Store) KeyResolver {
 
 // ReadDriverFile reads a file from the Store's underlying Driver.
 // Tests use this to inspect raw on-disk manifest bytes —
-// in particular to verify that MetadataOnly leaves system fields
-// in plaintext while Envelope hides them.
+// in particular to verify that Sealed leaves system fields
+// in plaintext while Paranoid hides them.
 func ReadDriverFile(s Store, path string) ([]byte, error) {
 	concrete, ok := s.(*store)
 	if !ok {

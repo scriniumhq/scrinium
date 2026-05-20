@@ -1,6 +1,6 @@
 // Package descriptor reads and writes the Store descriptor file
 // (store.json). Per §10.1.3 the descriptor carries Store identity
-// and the cryptographic envelope: StoreID, schema_version, sequence,
+// and the cryptographic Paranoid: StoreID, schema_version, sequence,
 // DEK, dek_encrypted, kdf_params.
 //
 // Projection parameters (PathTopology, ManifestStorage, etc.) live

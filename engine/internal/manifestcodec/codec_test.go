@@ -189,7 +189,7 @@ func TestEncodeFile_RejectsBinaryEncoding(t *testing.T) {
 
 func TestEncodeFile_RejectsNonPlainCrypto(t *testing.T) {
 	_, err := manifestcodec.EncodeFile(sampleManifest(),
-		domain.ManifestEncodingJSON, domain.ManifestCryptoEnvelope)
+		domain.ManifestEncodingJSON, domain.ManifestCryptoParanoid)
 	if !errors.Is(err, errs.ErrUnsupportedCrypto) {
 		t.Fatalf("expected errs.ErrUnsupportedCrypto, got %v", err)
 	}
@@ -218,8 +218,8 @@ func TestDecodeFile_RejectsBinaryMagic(t *testing.T) {
 	}
 }
 
-func TestDecodeFile_RejectsEnvelopeFlag(t *testing.T) {
-	// Well-formed Envelope header (default-key, no KeyID) followed
+func TestDecodeFile_RejectsParanoidFlag(t *testing.T) {
+	// Well-formed Paranoid header (default-key, no KeyID) followed
 	// by bytes that would be the encrypted body. M2.3.1 parses the
 	// header and refuses any non-Plain crypto at the body decode
 	// step, before touching the body.

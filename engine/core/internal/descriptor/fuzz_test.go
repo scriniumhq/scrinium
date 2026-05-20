@@ -35,7 +35,7 @@ func FuzzUnmarshal(f *testing.F) {
 	f.Add([]byte(`{"store_id":"x","schema_version":99,"sequence":1}`))
 
 	// Seed: dek_encrypted true but empty dek/kdf — exercises the
-	// crypto-envelope validation.
+	// crypto-Paranoid validation.
 	f.Add([]byte(`{"store_id":"x","schema_version":1,"sequence":1,"dek_encrypted":true}`))
 
 	// Seed: dek_encrypted with kdf_params — exercises the nested

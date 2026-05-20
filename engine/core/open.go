@@ -50,12 +50,12 @@ import (
 //     StateUnlocked.
 //     - DEKEncrypted=true without WithAutoUnlock: skip
 //     Orphan Scan (the index walk needs the DEK in M2.3+
-//     for Envelope manifests; until then it would still
+//     for Paranoid manifests; until then it would still
 //     succeed for Plain manifests, but we treat the state
 //     uniformly), transition to StateLocked. The next
 //     Store.Unlock call completes bootstrap.
 //
-// MetadataOnly and Envelope manifest crypto are still rejected
+// Sealed and Paranoid manifest crypto are still rejected
 // pending M2.3. The split between "encrypted DEK" (this pack)
 // and "encrypted manifests" (next milestone) is deliberate:
 // they are independent axes of the configuration and a Store

@@ -103,7 +103,7 @@ func validateImmutableConfig(cfg domain.StoreConfig) error {
 		return errs.ErrInvalidConfig
 	}
 	switch cfg.ManifestCrypto {
-	case domain.ManifestCryptoPlain, domain.ManifestCryptoMetadataOnly, domain.ManifestCryptoEnvelope:
+	case domain.ManifestCryptoPlain, domain.ManifestCryptoSealed, domain.ManifestCryptoParanoid:
 	default:
 		return errs.ErrInvalidConfig
 	}

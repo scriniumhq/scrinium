@@ -21,7 +21,7 @@ const Path = "store.json"
 
 // Descriptor is the on-disk shape of store.json per §10.1.3.
 //
-// Holds Store identity and the cryptographic envelope. Projection
+// Holds Store identity and the cryptographic Paranoid. Projection
 // parameters (PathTopology, ManifestStorage, ManifestEncoding,
 // ManifestCrypto, ContentHasher, DeletionPolicyLock) live in the
 // system.config artifact pointed to by system.config/current

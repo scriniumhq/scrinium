@@ -13,7 +13,7 @@ import (
 // admin_config.go — AdminStore methods that read or mutate
 // system.config: UpdateConfig and ConfigHistory. Companion to
 // crypto_admin.go (which holds the AdminStore methods that touch
-// the descriptor's crypto envelope).
+// the descriptor's crypto Paranoid).
 //
 // The `Config()` accessor stays on store_impl.go alongside the
 // other trivial getters (`State`, `Capabilities`); it is a one-line

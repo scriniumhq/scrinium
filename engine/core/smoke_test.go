@@ -248,7 +248,7 @@ func newDiskStore(t *testing.T) (core.Store, string) {
 // manifests and a passphrase-protected DEK. Returns the open Store
 // (already AutoUnlocked, ready for Put/Get) and its root path.
 //
-// The smoke variant uses Envelope; pass MetadataOnly to exercise
+// The smoke variant uses Paranoid; pass Sealed to exercise
 // the partial-encryption path. Both modes need WithPassphrase +
 // WithAutoUnlock so the smoke loop never has to prompt.
 func newEncryptedDiskStore(t *testing.T, crypto domain.ManifestCrypto) (core.Store, string) {
@@ -294,10 +294,10 @@ func newEncryptedDiskStore(t *testing.T, crypto domain.ManifestCrypto) (core.Sto
 // enough to demonstrate stability and catch per-artifact key-
 // material accumulation.
 //
-// Uses Envelope mode rather than MetadataOnly. Envelope is the
+// Uses Paranoid mode rather than Sealed. Paranoid is the
 // more demanding of the two (entire body encrypted, IV-driven
-// non-determinism on Put), so passing here implies MetadataOnly
-// also works. A separate MetadataOnly-specific smoke would only
+// non-determinism on Put), so passing here implies Sealed
+// also works. A separate Sealed-specific smoke would only
 // be warranted if a future divergence in the two paths emerges.
 //
 // Gated by SCRINIUM_SMOKE_ENCRYPTED=1 to keep smoke runs of the
@@ -322,13 +322,13 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 			n = parsed
 		}
 	}
-	emit("config: N=%d, crypto=Envelope, payload=%dB, heap-ceiling=%s",
+	emit("config: N=%d, crypto=Paranoid, payload=%dB, heap-ceiling=%s",
 		n, payloadSize, humanize.Bytes(heapDeltaCeiling))
 
-	// Disk-backed Store, encrypted with Envelope. Same factory
+	// Disk-backed Store, encrypted with Paranoid. Same factory
 	// as the Plain smoke would have used, with the additional
 	// crypto knobs.
-	s, _ := newEncryptedDiskStore(t, domain.ManifestCryptoEnvelope)
+	s, _ := newEncryptedDiskStore(t, domain.ManifestCryptoParanoid)
 	ctx := context.Background()
 
 	runtime.GC()

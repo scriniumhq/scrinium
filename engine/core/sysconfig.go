@@ -30,7 +30,7 @@ const (
 //
 // Per §10.1.4 the pointer file is the single source of truth for
 // the active StoreConfig; the descriptor (store.json) carries only
-// identity and crypto envelope.
+// identity and crypto Paranoid.
 func writeSystemConfig(
 	ctx context.Context,
 	drv driver.Driver,
