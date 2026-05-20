@@ -91,7 +91,7 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 		return nil, fmt.Errorf("core.ConfigHistory: %w", err)
 	}
 
-	// WalkSystem yields manifest rows from the index — namespace,
+	// ListByNamespace yields manifest rows from the index — namespace,
 	// CreatedAt, ArtifactID — but NOT the inline payload (which
 	// lives only in the manifest file on disk; the index has no
 	// column for it). Each entry therefore needs a second hop:
@@ -103,7 +103,7 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 		createdAt time.Time
 	}
 	var entries []entry
-	walkErr := s.WalkSystem(ctx, domain.NamespaceSystemConfig, func(m domain.Manifest) error {
+	listErr := s.index.ListByNamespace(ctx, domain.NamespaceSystemConfig, func(m domain.Manifest) error {
 		cfg, err := loadSystemConfigByID(ctx, s.drv, s.hashes, m.ArtifactID)
 		if err != nil {
 			return fmt.Errorf("decode %s: %w", m.ArtifactID, err)
@@ -115,8 +115,8 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 		})
 		return nil
 	})
-	if walkErr != nil {
-		return nil, fmt.Errorf("core.ConfigHistory: walk: %w", walkErr)
+	if listErr != nil {
+		return nil, fmt.Errorf("core.ConfigHistory: list by namespace: %w", listErr)
 	}
 
 	slices.SortStableFunc(entries, func(a, b entry) int {

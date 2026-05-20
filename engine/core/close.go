@@ -39,10 +39,6 @@ func (s *store) Close() error {
 		manifestcrypto.Wipe(s.dek)
 	}
 	s.dek = nil
-	if len(s.capabilityToken) > 0 {
-		manifestcrypto.Wipe(s.capabilityToken)
-	}
-	s.capabilityToken = nil
 	resolver := s.keyResolver
 	s.cryptoMu.Unlock()
 

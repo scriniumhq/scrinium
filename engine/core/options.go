@@ -46,17 +46,16 @@ type StoreOption func(*storeOptions)
 type storeOptions struct {
 	// Fields are populated in M1+ as the corresponding With*
 	// functions are wired up.
-	forceReinit     bool
-	purgeOnReinit   bool
-	cfg             *domain.StoreConfig
-	storeIndex      StoreIndex
-	publisher       Publisher
-	hashRegistry    domain.HashRegistry
-	readRegistry    TransformerRegistry
-	keyResolver     KeyResolver
-	passphrase      PassphraseProvider
-	autoUnlock      bool
-	capabilityToken []byte
+	forceReinit   bool
+	purgeOnReinit bool
+	cfg           *domain.StoreConfig
+	storeIndex    StoreIndex
+	publisher     Publisher
+	hashRegistry  domain.HashRegistry
+	readRegistry  TransformerRegistry
+	keyResolver   KeyResolver
+	passphrase    PassphraseProvider
+	autoUnlock    bool
 }
 
 // WithForceReinit allows InitStore to run on top of an existing
@@ -123,10 +122,4 @@ func WithPassphrase(provider PassphraseProvider) StoreOption {
 // in StateLocked.
 func WithAutoUnlock() StoreOption {
 	return func(o *storeOptions) { o.autoUnlock = true }
-}
-
-// WithCapabilityToken provides a token for elevated permissions
-// (such as access to system.* through WalkSystem).
-func WithCapabilityToken(token []byte) StoreOption {
-	return func(o *storeOptions) { o.capabilityToken = token }
 }

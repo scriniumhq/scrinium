@@ -214,44 +214,6 @@ func TestStore_Walk_CtxCancelled(t *testing.T) {
 	}
 }
 
-// --- WalkSystem ---
-
-func TestStore_WalkSystem_AcceptsAllFourReserved(t *testing.T) {
-	s := newStore(t)
-	for _, ns := range []string{
-		"system.transit",
-		"system.manifests",
-		"system.state",
-		"system.config",
-	} {
-		err := s.WalkSystem(context.Background(), ns, func(m domain.Manifest) error {
-			return nil
-		})
-		if err != nil {
-			t.Errorf("WalkSystem(%q): %v", ns, err)
-		}
-	}
-}
-
-func TestStore_WalkSystem_RejectsNonReserved(t *testing.T) {
-	s := newStore(t)
-	for _, ns := range []string{
-		"",                   // empty
-		"*",                  // wildcard
-		"users",              // user namespace
-		"system.unknown",     // unknown system namespace
-		"system.transit.foo", // sub-prefix, not exact
-	} {
-		err := s.WalkSystem(context.Background(), ns, func(m domain.Manifest) error {
-			t.Fatalf("callback must not run for %q", ns)
-			return nil
-		})
-		if !errors.Is(err, errs.ErrReservedNamespace) {
-			t.Errorf("WalkSystem(%q): expected errs.ErrReservedNamespace, got %v", ns, err)
-		}
-	}
-}
-
 // --- Stub methods awaiting future milestones ---
 //
 // Defensive net: every method listed here is a deliberate stub

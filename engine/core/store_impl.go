@@ -65,11 +65,10 @@ type store struct {
 	transformers TransformerRegistry
 	keyResolver  KeyResolver
 
-	// Capability token for system.* access. nil disables WalkSystem
-	// only when authorisation enforcement is wired in M2+. M1.4
-	// treats the token as opt-in metadata: presence does not yet
-	// restrict, absence does not yet block.
-	capabilityToken []byte
+	// SystemStore facade. Initialised once at construction; nil
+	// only in unit tests that build a *store by hand without
+	// going through the full constructor.
+	system *systemStore
 
 	// Crypto state. cryptoMu guards the trio (descriptor, dek,
 	// passphraseProvider) because Unlock / SetPassphrase /
