@@ -33,26 +33,6 @@ func (s *store) Walk(ctx context.Context, namespace string, cb func(domain.Manif
 	return s.index.ListByNamespace(ctx, namespace, cb)
 }
 
-// WalkSystem iterates over manifests inside one of the four
-// reserved system namespaces. See docs/4. API Reference/04 §4.2.
-// Allowed namespaces: system.transit, system.manifests,
-// system.state, system.config.
-//
-// Capability-token enforcement is opt-in by docs and TBD by
-// implementation; M1.4 honours the namespace-syntax rules but
-// does not yet block calls based on token contents. Tracking:
-// 4. API Reference/01 §1.3.1 (WithCapabilityToken) and the
-// related authorisation work in M2.
-func (s *store) WalkSystem(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {
-	if err := s.enterRead(ctx); err != nil {
-		return err
-	}
-	if !isSystemNamespace(namespace) {
-		return errs.ErrReservedNamespace
-	}
-	return s.index.ListByNamespace(ctx, namespace, cb)
-}
-
 // validateUserNamespace enforces the contract of Walk's namespace
 // argument. See docs §4.1.
 func validateUserNamespace(ns string) error {
@@ -65,19 +45,4 @@ func validateUserNamespace(ns string) error {
 		return errs.ErrReservedNamespace
 	}
 	return nil
-}
-
-// isSystemNamespace reports whether the given string is one of the
-// four reserved system namespace names. Wildcard ("*") and empty
-// ("") are deliberately excluded — see docs §4.2 for the
-// rationale.
-func isSystemNamespace(ns string) bool {
-	switch ns {
-	case domain.NamespaceSystemTransit,
-		domain.NamespaceSystemManifests,
-		domain.NamespaceSystemState,
-		domain.NamespaceSystemConfig:
-		return true
-	}
-	return false
 }

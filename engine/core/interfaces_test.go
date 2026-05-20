@@ -46,7 +46,6 @@ func TestStoreOptionsApply(t *testing.T) {
 		core.WithKeyResolver(core.NewStaticKeyResolver([]byte("k"))),
 		core.WithPassphrase(nil),
 		core.WithAutoUnlock(),
-		core.WithCapabilityToken([]byte("token")),
 	}
 	for i, opt := range opts {
 		if opt == nil {

@@ -53,12 +53,9 @@ type DataStore interface {
 
 	// Walk iterates over user manifests. namespace = "*" — every user
 	// namespace; an empty string — only the default one.
-	// system.* is unreachable through Walk.
+	// system.* is unreachable through Walk; system artifacts live
+	// behind AdminStore.System() per ADR-57.
 	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
-
-	// WalkSystem iterates over system manifests (the system.*
-	// namespace). It requires a CapabilityToken.
-	WalkSystem(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
 
 	// Capacity returns aggregated storage metrics.
 	Capacity(ctx context.Context) (domain.StorageInfo, error)
@@ -152,6 +149,13 @@ type AdminStore interface {
 	// The intended caller is the host application's
 	// graceful-shutdown path.
 	Close() error
+
+	// System returns the facade for engine-internal service
+	// artifacts (configuration, agent cursors, index snapshots,
+	// etc.). Reached only through AdminStore, so DataStore
+	// consumers cannot see system state. See ADR-57 and
+	// docs/3 Reference/01 Core/01 Types.md.
+	System() SystemStore
 }
 
 // Store is the union of DataStore and AdminStore. Returned by

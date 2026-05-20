@@ -190,11 +190,11 @@ func buildStore(
 		hashes:             o.hashRegistry,
 		transformers:       o.readRegistry,
 		keyResolver:        o.keyResolver,
-		capabilityToken:    o.capabilityToken,
 		desc:               desc,
 		dek:                dek,
 		passphraseProvider: o.passphrase,
 	}
+	s.system = newSystemStore(drv, idx, o.hashRegistry, cfg)
 	return s, nil
 }
 

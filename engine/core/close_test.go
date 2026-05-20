@@ -30,9 +30,8 @@ func (r *fakeKeyResolver) close()                           { r.closed.Store(tru
 // publisher — Close does not touch any of them.
 func newTestStore() *store {
 	return &store{
-		state:           domain.StateUnlocked,
-		dek:             []byte{1, 2, 3, 4, 5, 6, 7, 8},
-		capabilityToken: []byte{0xAA, 0xBB, 0xCC, 0xDD},
+		state: domain.StateUnlocked,
+		dek:   []byte{1, 2, 3, 4, 5, 6, 7, 8},
 	}
 }
 
@@ -71,23 +70,6 @@ func TestClose_WipesDEK(t *testing.T) {
 	}
 }
 
-func TestClose_WipesCapabilityToken(t *testing.T) {
-	s := newTestStore()
-	original := append([]byte(nil), s.capabilityToken...)
-	tokRef := s.capabilityToken
-
-	if err := s.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
-	}
-
-	if s.capabilityToken != nil {
-		t.Errorf("s.capabilityToken: want nil after Close, got %v", s.capabilityToken)
-	}
-	if !allZero(tokRef) {
-		t.Errorf("capability token bytes should be zeroed, got %v (was %v)", tokRef, original)
-	}
-}
-
 // --- Edge cases: nil/empty fields ---
 
 func TestClose_NilDEK_NoPanic(t *testing.T) {
@@ -112,9 +94,8 @@ func TestClose_EmptyDEK_NoPanic(t *testing.T) {
 
 func TestClose_NoCapabilityToken_NoPanic(t *testing.T) {
 	s := &store{
-		state:           domain.StateUnlocked,
-		dek:             []byte{1, 2, 3},
-		capabilityToken: nil,
+		state: domain.StateUnlocked,
+		dek:   []byte{1, 2, 3},
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on nil token: %v", err)
