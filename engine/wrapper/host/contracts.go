@@ -1,11 +1,25 @@
-package curator
+package host
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"scrinium.dev/engine/domain"
 )
+
+// --- Surfaces ---
+
+// TransitStore is the surface decorators (bundler, chunker, etc.)
+// see for working with HostStorage. Curator passes it through
+// WrapperDeps (defined in wrapper/multistore). Mirror of the
+// minimal CRUD set on the transit area — no admin operations.
+type TransitStore interface {
+	Write(ctx context.Context, blobRef string, r io.Reader) (path string, err error)
+	Read(ctx context.Context, blobRef string) (io.ReadCloser, error)
+	Has(ctx context.Context, blobRef string) bool
+	Remove(ctx context.Context, blobRef string) error
+}
 
 // HostStorage is the full HostStorage contract — the transit
 // buffer on a fast local disk used by Curator for deferred writes
@@ -15,10 +29,9 @@ import (
 // to decorators via WrapperDeps) with the administrative surface
 // (HostAdmin, used by Curator itself).
 //
-// Implementation lives in curator/host (package host) and is
-// constructed internally by Curator from a driver.Driver and
-// HostStorageConfig — host-applications never instantiate this
-// type directly.
+// Implementation lives in this package; constructed internally by
+// Curator from a driver.Driver and HostStorageConfig —
+// host-applications never instantiate this type directly.
 type HostStorage interface {
 	TransitStore
 	HostAdmin

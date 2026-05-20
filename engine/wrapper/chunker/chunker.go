@@ -11,6 +11,10 @@
 // ArtifactID (the TOC manifest), Get returns the reassembled stream,
 // and Walk presents TOC manifests like ordinary artifacts.
 //
+// Moved from engine/curator/chunker per ADR-53: wrappers are a
+// peer concept to Curator (a multi-store orchestrator) and live
+// under engine/wrapper/.
+//
 // TODO(M5.2): CDC-based chunker wrapper.
 package chunker
 
@@ -18,8 +22,8 @@ import (
 	"fmt"
 
 	"scrinium.dev/engine/core"
-	"scrinium.dev/engine/curator"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/wrapper/multistore"
 )
 
 // ChunkerConfig holds the slicing parameters. The algorithm
@@ -48,7 +52,7 @@ type ChunkerConfig struct {
 // self-contained.
 //
 // TODO(M5.2): CDC-based chunker wrapper.
-func New(cfg ChunkerConfig) curator.WrapperFactory {
+func New(cfg ChunkerConfig) multistore.WrapperFactory {
 	return &factory{cfg: cfg}
 }
 
@@ -56,6 +60,6 @@ type factory struct {
 	cfg ChunkerConfig
 }
 
-func (f *factory) Wrap(store core.DataStore, deps curator.WrapperDeps) (core.DataStore, error) {
+func (f *factory) Wrap(store core.DataStore, deps multistore.WrapperDeps) (core.DataStore, error) {
 	return nil, fmt.Errorf("%w: chunker.Wrap", errs.ErrNotImplemented)
 }

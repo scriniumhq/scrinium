@@ -1,8 +1,9 @@
 // Package curator is the orchestrator at layer L3. It unites
-// several Stores under a single management surface: routing,
-// transit buffering (HostStorage), cross-store deduplication,
-// transparent decorators (bundler, chunker), and background
-// services (Scrub, Snapshot).
+// several Stores under a single management surface: routing
+// (cf. wrapper/multistore), transit buffering (wrapper/host),
+// cross-store deduplication, transparent decorators
+// (wrapper/bundler, wrapper/chunker), and background services
+// (Scrub, Snapshot).
 //
 // Curator is optional: the minimal stack (Driver + Store +
 // StoreIndex) works without it. Curator implements core.DataStore —
@@ -10,13 +11,17 @@
 // RotateKEK, SetMaintenanceMode) do not exist at the Curator level
 // and are performed per-store via Curator.Store(id).
 //
-// Subpackages:
-//   - curator/bundler — small-blob packing decorator for .pack
-//     volumes.
-//   - curator/chunker — CDC chunker decorator.
-//   - curator/host — internal HostStorage package. It has no public
-//     API; configuration goes through curator.WithHostStorage.
+// Layout per ADR-53:
 //
-// DAG: curator imports core, driver, event. It does not import
-// agent, maintenance, or projection.
+//   - engine/curator (this package) — Curator interface, options,
+//     events. Becomes the standalone-service stub when the network
+//     surface lands in M6.
+//   - engine/wrapper/multistore — multi-store wrapping, routing
+//     types, MultistoreIndex, WrapperFactory/WrapperDeps.
+//   - engine/wrapper/host — HostStorage and its policy types.
+//   - engine/wrapper/bundler — small-blob packing decorator.
+//   - engine/wrapper/chunker — CDC chunker decorator.
+//
+// DAG: curator imports core, driver, event, wrapper/multistore,
+// wrapper/host. Wrappers never import curator.
 package curator

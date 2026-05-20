@@ -8,12 +8,14 @@
 // driver.Driver and HostStorageConfig — host-applications never
 // instantiate this type directly.
 //
-// The contracts (HostStorage, HostAdmin, QuarantineFilter,
-// QuarantinedItem) live in the parent curator package — see
-// curator/host_contracts.go. This split avoids the cycle that
-// would arise once this package's implementation imports curator
-// for HostStorageStats and the surrounding wiring: contracts go
-// up the DAG, implementation goes down.
+// Contracts (HostStorage, HostAdmin, TransitStore, QuarantineFilter,
+// QuarantinedItem) and configuration types (HostStorageConfig,
+// HostStorageStats, the policy enums) live in this package
+// alongside the implementation: prior to ADR-53 they were split
+// between curator/host and the parent curator package, which
+// forced a host → curator cycle once decorators reached for
+// TransitStore. Co-locating the surface and the values that flow
+// through it keeps the package self-contained.
 //
 // TODO(M4.2): HostStorage transit and drain to remote.
 package host

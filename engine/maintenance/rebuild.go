@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"scrinium.dev/engine/core"
-	"scrinium.dev/engine/curator"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/wrapper/host"
 )
 
 // RebuildSource is the strategy for picking a source when
@@ -44,7 +44,7 @@ type RebuildConfig struct {
 	// Local or Replicated. When omitted in those modes:
 	//   - Local → ErrHostStorageRequired during Validate;
 	//   - Replicated → fallback to Remote.
-	HostStorage curator.TransitStore
+	HostStorage host.TransitStore
 
 	// BatchSize is the number of manifests per IndexManifest
 	// transaction. Default 1000. A larger value is faster but
