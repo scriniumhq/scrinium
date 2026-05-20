@@ -17,18 +17,25 @@ import (
 //  1. loadManifest, which itself verifies ArtifactID = hash(file
 //     bytes) and decrypts the body for MetadataOnly/Envelope via
 //     the configured KeyResolver.
-//  2. Re-hash the blob bytes, compare to manifest.ContentHash.
-//     On divergence emits EventScrubFailed and returns
-//     errs.ErrCorruptedBlob.
+//  2. Re-hash the blob plaintext bytes, comparing to
+//     manifest.ContentHash. On divergence emits EventScrubFailed
+//     and returns errs.ErrCorruptedBlob.
+//
+// Both regular blobs (on-disk bytes == plaintext) and Pipeline-
+// transformed blobs (zstd, AES-GCM, ...) are supported: the
+// inverse Decoder chain runs the on-disk bytes through every
+// stage before the hash is computed. An AEAD tag mismatch inside
+// the chain surfaces as errs.ErrCorruptedBlob as well — for an
+// admin operation, "decryption tag did not match" and "plaintext
+// hash did not match" are the same fault category (the blob is
+// not whole).
 //
 // Manifest encryption is transparent here — the integration
 // happens entirely in loadManifest.
 //
-// Currently supports BlobManifest with Inline and Target layouts,
-// no Pipeline transforms. TOC, Pack, ExternalRef return explicit
-// "not yet implemented" errors. Pipeline-transformed blobs (zstd
-// compression, AES-GCM plugin from M2.1) require inverse-decoder
-// verification and are tracked in the backlog.
+// Currently supports BlobManifest with Inline and Target layouts.
+// TOC, Pack, ExternalRef return explicit "not yet implemented"
+// errors via the dispatchManifestType / layout switch paths.
 func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 	if err := s.enterRead(ctx); err != nil {
 		return err
@@ -46,16 +53,6 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 		return err
 	}
 
-	if len(manifest.Pipeline) > 0 {
-		// Verifying a Pipeline-transformed blob requires
-		// inverting the decoder chain (read on-disk bytes,
-		// run them through the inverse stages, hash the
-		// plaintext, compare to ContentHash). That path is
-		// not yet wired — Verify currently only validates
-		// blobs whose on-disk bytes equal their plaintext.
-		return fmt.Errorf("core.Verify: Pipeline-transformed blob verification not yet implemented")
-	}
-
 	if err := s.verifyBlobHash(ctx, manifest); err != nil {
 		s.publish(EventScrubFailed, ScrubFailedPayload{
 			ArtifactID: id,
@@ -66,10 +63,19 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 	return nil
 }
 
-// verifyBlobHash re-hashes blob bytes and compares against
-// manifest.ContentHash. The algorithm is taken from the
+// verifyBlobHash re-hashes blob plaintext bytes and compares
+// against manifest.ContentHash. The algorithm is taken from the
 // ContentHash prefix (not the current StoreConfig) so historical
 // artifacts written under a previous hasher still verify.
+//
+// The function unifies the pipeline-less and pipeline-bearing
+// paths through buildGetReader: when manifest.Pipeline is empty
+// the helper returns the underlying reader as-is, so the
+// non-pipeline case pays no extra cost. For pipeline-bearing
+// blobs the inverse Decoder chain is applied; any decode-side
+// failure (AEAD tag mismatch, decompressor error) is folded into
+// errs.ErrCorruptedBlob — see the Verify doc comment for the
+// rationale.
 func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 	algo, want, err := s.hashes.Parse(string(m.ContentHash))
 	if err != nil {
@@ -80,11 +86,63 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 		return fmt.Errorf("core.Verify: hasher: %w", err)
 	}
 
+	// Step 1 — obtain a reader over the on-disk (ciphertext-
+	// shaped) bytes. Inline reads from the manifest; Target
+	// reads through the Driver.
+	ciphertext, err := s.openBlobBytes(ctx, m)
+	if err != nil {
+		return err
+	}
+
+	// Step 2 — invert the Pipeline. Empty Pipeline returns the
+	// underlying reader unchanged. Closing the plaintext reader
+	// closes the underlying ciphertext reader.
+	plaintext, err := s.buildGetReader(m.Pipeline, ciphertext)
+	if err != nil {
+		// buildGetReader closed `ciphertext` on its failure path.
+		return fmt.Errorf("core.Verify: build pipeline: %w", err)
+	}
+
+	// Step 3 — stream-hash. Pipeline errors (AEAD tag mismatch,
+	// decompressor failures) surface here; map them to
+	// ErrCorruptedBlob so the admin-side category is uniform.
+	_, copyErr := io.Copy(hasher, plaintext)
+	closeErr := plaintext.Close()
+	if copyErr != nil {
+		// Distinguish corruption from infrastructure failures:
+		// a decoder-side error (decryption, decompression) is
+		// corruption; a raw I/O error (driver hiccup) is not.
+		// We can't introspect the inner chain reliably; the
+		// conservative split treats anything but context errors
+		// as corruption.
+		if errors.Is(copyErr, context.Canceled) ||
+			errors.Is(copyErr, context.DeadlineExceeded) {
+			return copyErr
+		}
+		return errors.Join(errs.ErrCorruptedBlob, copyErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("core.Verify: close blob reader: %w", closeErr)
+	}
+
+	if !bytes.Equal(hasher.Sum(nil), want) {
+		return errs.ErrCorruptedBlob
+	}
+	return nil
+}
+
+// openBlobBytes returns an io.ReadCloser over the on-disk (or
+// in-manifest) bytes of an artifact's blob, without any pipeline
+// decoding applied. Closing the returned reader releases any
+// underlying driver-side resources; for the Inline case Close is
+// a no-op.
+//
+// LayoutExternalRef is rejected here — Verify does not yet know
+// how to fetch external URIs.
+func (s *store) openBlobBytes(ctx context.Context, m domain.Manifest) (io.ReadCloser, error) {
 	switch m.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
-		if _, err := hasher.Write(m.InlineBlob); err != nil {
-			return fmt.Errorf("core.Verify: hash inline: %w", err)
-		}
+		return io.NopCloser(bytes.NewReader(m.InlineBlob)), nil
 
 	case domain.LayoutTarget:
 		// PhysicalAddress is sourced from the index — see the
@@ -93,30 +151,21 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 		// the current PathTopology would compute.
 		addr, err := s.index.Resolve(ctx, string(m.BlobRef))
 		if err != nil {
-			return fmt.Errorf("core.Verify: resolve blob path: %w", err)
+			return nil, fmt.Errorf("core.Verify: resolve blob path: %w", err)
 		}
 		rc, err := s.drv.Get(ctx, addr.Path)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
-				return errs.ErrCorruptedBlob
+				return nil, errs.ErrCorruptedBlob
 			}
-			return fmt.Errorf("core.Verify: get blob: %w", err)
+			return nil, fmt.Errorf("core.Verify: get blob: %w", err)
 		}
-		_, copyErr := io.Copy(hasher, rc)
-		_ = rc.Close()
-		if copyErr != nil {
-			return fmt.Errorf("core.Verify: hash blob: %w", copyErr)
-		}
+		return rc, nil
 
 	case domain.LayoutExternalRef:
-		return fmt.Errorf("%w: core.Verify on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
+		return nil, fmt.Errorf("%w: core.Verify on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
 
 	default:
-		return fmt.Errorf("core.Verify: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
+		return nil, fmt.Errorf("core.Verify: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
 	}
-
-	if !bytes.Equal(hasher.Sum(nil), want) {
-		return errs.ErrCorruptedBlob
-	}
-	return nil
 }
