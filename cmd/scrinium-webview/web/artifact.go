@@ -318,7 +318,7 @@ func formatHexDump(data []byte) string {
 func previewMIME(m domain.Manifest) string {
 	mimeType := ""
 	name := ""
-	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
+	if fs, ok, err := fsmeta.Decode(domain.EffectiveExt(m)); err == nil && ok {
 		mimeType = fs.MIME
 		name = pathx.LastSegment(fs.Path)
 	}
@@ -683,20 +683,28 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	//      → render through the decoder; on error, fall back
 	//      to JSON with the error noted.
 	//   3. Otherwise → pretty JSON view, no kind highlighted.
-	if len(m.Metadata) > 0 {
+	// Schema rendering targets the host's payload — Usr after
+	// the ADR-54 split, with a fallback to the legacy Metadata
+	// field for Sealed/Paranoid manifests that still go through
+	// the pre-migration crypto path.
+	schemaPayload := m.Usr
+	if len(schemaPayload) == 0 {
+		schemaPayload = m.Metadata
+	}
+	if len(schemaPayload) > 0 {
 		var peek schemaPeek
-		_ = json.Unmarshal(m.Metadata, &peek) // best-effort
+		_ = json.Unmarshal(schemaPayload, &peek) // best-effort
 		data.SchemaKind = peek.Kind
 		if dec, ok := h.decoders[peek.Kind]; ok && peek.Kind != "" {
-			rendered, err := dec.Render(m.Metadata)
+			rendered, err := dec.Render(schemaPayload)
 			if err != nil {
 				data.SchemaError = err.Error()
-				data.SchemaJSON = prettyJSON(m.Metadata)
+				data.SchemaJSON = prettyJSON(schemaPayload)
 			} else {
 				data.SchemaHTML = rendered
 			}
 		} else {
-			data.SchemaJSON = prettyJSON(m.Metadata)
+			data.SchemaJSON = prettyJSON(schemaPayload)
 		}
 	}
 
@@ -716,7 +724,9 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		ExternalURI    string                 `json:"external_uri,omitempty"`
 		RetentionUntil time.Time              `json:"retention_until,omitempty"`
 		KeyID          string                 `json:"key_id,omitempty"`
-		Metadata       json.RawMessage        `json:"metadata,omitempty"`
+		Ext            json.RawMessage        `json:"ext,omitempty"`
+		Usr            json.RawMessage        `json:"usr,omitempty"`
+		Metadata       json.RawMessage        `json:"metadata,omitempty"` // Deprecated bridge — removed in R2b-iii.
 	}{
 		Type:           m.Type,
 		Namespace:      m.Namespace,
@@ -730,6 +740,8 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		ExternalURI:    m.ExternalURI,
 		RetentionUntil: m.RetentionUntil,
 		KeyID:          m.KeyID,
+		Ext:            m.Ext,
+		Usr:            m.Usr,
 		Metadata:       m.Metadata,
 	}, "", "  ")
 	if err == nil {

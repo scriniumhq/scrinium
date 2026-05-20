@@ -232,8 +232,11 @@ func TestDecodeFile_RejectsParanoidFlag(t *testing.T) {
 
 func TestDecodeFile_RejectsUnknownBodyField(t *testing.T) {
 	// Build a normal file then append a body with an extra key.
-	// Easier: hand-craft.
-	body := `{"blob_ref":"sha256-x","layout_header":{"blob_storage":"Target"},"namespace":"","pipeline":[],"schema_version":1,"session_id":"","type":"blob","unknown_xyz":"oops","created_at":"2026-04-01T12:00:00Z"}`
+	// Easier: hand-craft. Per ADR-54 the body has the
+	// {sys, ext, usr, inline_blob} top-level shape; we inject
+	// an unknown_xyz at the top level here. An unknown nested
+	// inside sys is covered by a separate test.
+	body := `{"sys":{"blob_ref":"sha256-x","created_at":"2026-04-01T12:00:00Z","layout_header":{"blob_storage":"Target"},"namespace":"","pipeline":[],"schema_version":1,"session_id":"","type":"blob"},"unknown_xyz":"oops"}`
 	bs := append([]byte{0x00, 'S', 'C', '1', 0x00}, body...)
 	_, err := manifestcodec.DecodeFile(bs)
 	if err == nil {
@@ -242,7 +245,7 @@ func TestDecodeFile_RejectsUnknownBodyField(t *testing.T) {
 }
 
 func TestDecodeFile_RejectsFutureSchemaVersion(t *testing.T) {
-	body := `{"blob_ref":"sha256-x","layout_header":{"blob_storage":"Target"},"namespace":"","pipeline":[],"schema_version":99,"session_id":"","type":"blob","created_at":"2026-04-01T12:00:00Z"}`
+	body := `{"sys":{"blob_ref":"sha256-x","created_at":"2026-04-01T12:00:00Z","layout_header":{"blob_storage":"Target"},"namespace":"","pipeline":[],"schema_version":99,"session_id":"","type":"blob"}}`
 	bs := append([]byte{0x00, 'S', 'C', '1', 0x00}, body...)
 	_, err := manifestcodec.DecodeFile(bs)
 	if !errors.Is(err, errs.ErrUnsupportedSchemaVersion) {

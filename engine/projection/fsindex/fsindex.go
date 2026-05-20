@@ -97,21 +97,22 @@ func (e *Extension) Apply(ctx context.Context, store index.ExtensionStore, kind 
 
 // applyIndexed stores the fsmeta payload (bytes verbatim) plus a
 // reverse-index entry for path lookup. Manifests that don't
-// carry an fsmeta payload (foreign schema, system artifacts) are
+// carry a fsmeta payload (foreign schema, system artifacts) are
 // silently skipped — the extension only indexes what it
 // understands.
 func (e *Extension) applyIndexed(store index.ExtensionStore, args index.EventArgs) error {
-	fs, ok, err := fsmeta.Decode(args.Manifest.Metadata)
+	extBytes := domain.EffectiveExt(args.Manifest)
+	fs, ok, err := fsmeta.Decode(extBytes)
 	if err != nil {
-		// Decode errors mean the metadata claims to be fsmeta
+		// Decode errors mean the ext block claims to be fsmeta
 		// (right marker) but is structurally broken. We log via
 		// returning — the surrounding tx will roll back. Strict
 		// mode is the contract per ADR-49.
-		return fmt.Errorf("fsindex: decode metadata for %q: %w",
+		return fmt.Errorf("fsindex: decode ext for %q: %w",
 			args.ArtifactID, err)
 	}
 	if !ok {
-		// Foreign schema or no metadata — not our concern.
+		// Foreign schema or no fsmeta — not our concern.
 		return nil
 	}
 
@@ -121,7 +122,7 @@ func (e *Extension) applyIndexed(store index.ExtensionStore, args index.EventArg
 	// actually carries; we don't re-encode `fs` because that
 	// would lose forward-compatibility with future fsmeta
 	// versions that add fields fsindex doesn't understand).
-	if err := store.Put(tableByID, id, []byte(args.Manifest.Metadata)); err != nil {
+	if err := store.Put(tableByID, id, []byte(extBytes)); err != nil {
 		return fmt.Errorf("fsindex: put byID: %w", err)
 	}
 
@@ -213,11 +214,11 @@ func (e *Extension) GetByID(id domain.ArtifactID) (json.RawMessage, bool, error)
 	return json.RawMessage(value), true, nil
 }
 
-// Metadata implements projection.MetadataSource (declared in the
+// Ext implements projection.ExtSource (declared in the
 // projection package). Same shape as GetByID — separate method
-// kept so projection can reference an interface without taking a
-// concrete dependency on fsindex.
-func (e *Extension) Metadata(id domain.ArtifactID) (json.RawMessage, bool, error) {
+// kept so projection can reference an interface without taking
+// a concrete dependency on fsindex.
+func (e *Extension) Ext(id domain.ArtifactID) (json.RawMessage, bool, error) {
 	return e.GetByID(id)
 }
 

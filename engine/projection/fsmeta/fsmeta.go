@@ -192,7 +192,7 @@ func Decode(raw json.RawMessage) (FileSystem, bool, error) {
 // hot path and a single bad artifact must not fail backfill.
 // Surfacing such errors is the ingester's job at write time.
 func Resolver(m domain.Manifest) (string, bool) {
-	fs, ok, err := Decode(m.Metadata)
+	fs, ok, err := Decode(domain.EffectiveExt(m))
 	if err != nil || !ok {
 		return "", false
 	}

@@ -501,7 +501,7 @@ func (o *FSOps) fileInfoFromNode(n Node) FileInfo {
 	// the only available source.
 	if n.Artifact != nil {
 		fi.ArtifactID = n.Artifact.ArtifactID
-		if fs, ok, err := fsmeta.Decode(n.Artifact.Metadata); err == nil && ok {
+		if fs, ok, err := fsmeta.Decode(n.Artifact.Ext); err == nil && ok {
 			fi.Mode = fs.Mode
 			fi.UID = fs.UID
 			fi.GID = fs.GID
@@ -892,7 +892,7 @@ func (o *FSOps) prepareEditingScratch(ctx context.Context, path string) (*writeF
 	// mutated fields plus path.
 	var inherited fsmeta.FileSystem
 	if n.Artifact != nil {
-		if fs, ok, _ := fsmeta.Decode(n.Artifact.Metadata); ok {
+		if fs, ok, _ := fsmeta.Decode(n.Artifact.Ext); ok {
 			inherited = fs
 		}
 	}
@@ -1204,8 +1204,10 @@ func (f *writeFile) Close() error {
 	id, err := f.fsops.store.Put(
 		context.Background(),
 		domain.Artifact{
-			Payload:  f.handle,
-			Metadata: metadata,
+			Payload: f.handle,
+			// fsmeta is engine-extension data per ADR-54 — Ext
+			// block, not Usr (host-opaque).
+			Ext: metadata,
 		},
 		domain.PutOptions{
 			SessionID: f.fsops.mountSession,

@@ -179,7 +179,9 @@ func (f *FakeSource) Put(
 		ContentHash:  hash,
 		BlobRef:      domain.BlobRef(hash),
 		OriginalSize: int64(len(payload)),
-		Metadata:     a.Metadata,
+		Ext:          a.Ext,
+		Usr:          a.Usr,
+		Metadata:     a.Metadata, // Bridge during ADR-54 migration.
 	}
 
 	f.mu.Lock()

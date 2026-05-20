@@ -105,7 +105,13 @@ type ArtifactFacet struct {
 	SessionID   domain.SessionID
 	CreatedAt   time.Time
 	Type        domain.ManifestType
-	Metadata    json.RawMessage
+
+	// Ext carries the engine-extension metadata block (fsmeta
+	// and friends — keys the engine reads through its own
+	// decoders). Per ADR-54 the Usr block is intentionally not
+	// surfaced at facet level; host applications consume Usr
+	// through a different read path.
+	Ext json.RawMessage
 }
 
 // StorageFacet carries placement data within a Curator stack.
@@ -179,22 +185,22 @@ type viewOptions struct {
 	filter   ViewFilter
 	bus      event.EventBus
 
-	// metadataSource is an optional bulk source of manifest
+	// extSource is an optional bulk source of manifest
 	// metadata used by backfill to skip per-manifest
-	// Source.Get round-trips. Set via WithMetadataSource or
+	// Source.Get round-trips. Set via WithExtSource or
 	// WithFSIndex (the latter is a typed convenience for the
 	// common projection/fsindex case).
-	metadataSource MetadataSource
+	extSource ExtSource
 }
 
-// MetadataSource is the contract View backfill uses to fetch
+// ExtSource is the contract View backfill uses to fetch
 // manifest metadata in bulk. Source.Walk normally returns
 // stripped manifests (the index is the routing layer, not the
-// content store) — without a MetadataSource, View has to round-
+// content store) — without a ExtSource, View has to round-
 // trip Source.Get for every manifest just to recover Metadata,
 // which is N+1.
 //
-// A MetadataSource — typically an index extension that
+// An ExtSource — typically an index extension that
 // persisted metadata at write time — answers Metadata(id) in
 // O(log N) from local storage. View.backfill skips the
 // per-manifest Get when one is configured.
@@ -203,34 +209,34 @@ type viewOptions struct {
 // json.RawMessage that Manifest.Metadata held at write time.
 // View consumers (FSOps and friends) decode into whatever
 // schema they care about (fsmeta, email, archive).
-type MetadataSource interface {
-	// Metadata returns the metadata bytes for the given
-	// artifact id. (raw, true, nil) — found; (nil, false, nil)
-	// — not present; the third return is reserved for
+type ExtSource interface {
+	// Ext returns the ext-block bytes for the given artifact
+	// id. (raw, true, nil) — found; (nil, false, nil) — not
+	// present; the third return is reserved for
 	// infrastructure errors (DB I/O failure).
-	Metadata(id domain.ArtifactID) (json.RawMessage, bool, error)
+	Ext(id domain.ArtifactID) (json.RawMessage, bool, error)
 }
 
-// WithMetadataSource installs a bulk metadata source for
+// WithExtSource installs a bulk metadata source for
 // backfill. When set, View.backfill consults the source instead
 // of round-tripping Source.Get for each manifest. A miss
 // (artifact not indexed by the source) falls back to Source.Get
 // transparently — the option is a performance hint, not a
 // correctness requirement.
-func WithMetadataSource(ms MetadataSource) ViewOption {
-	return func(o *viewOptions) { o.metadataSource = ms }
+func WithExtSource(ms ExtSource) ViewOption {
+	return func(o *viewOptions) { o.extSource = ms }
 }
 
 // WithFSIndex is a typed convenience for the projection/fsindex
 // case: pass the registered *fsindex.Extension and it doubles as
-// a MetadataSource. Equivalent to WithMetadataSource(fsidx).
+// a ExtSource. Equivalent to WithExtSource(fsidx).
 //
 // Implemented at the package level via an interface to avoid
 // taking a hard dependency on projection/fsindex from
 // projection — fsindex imports projection's fsmeta, so a back-
 // edge would cycle.
-func WithFSIndex(fsidx MetadataSource) ViewOption {
-	return WithMetadataSource(fsidx)
+func WithFSIndex(fsidx ExtSource) ViewOption {
+	return WithExtSource(fsidx)
 }
 
 // WithPathResolver registers the path-extraction function. Without

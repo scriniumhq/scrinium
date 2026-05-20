@@ -111,5 +111,34 @@ type Manifest struct {
 	KeyID          string
 
 	SystemFlags ManifestSystemFlags
-	Metadata    json.RawMessage
+
+	Ext json.RawMessage
+	Usr json.RawMessage
+
+	// Deprecated: split into Ext/Usr per ADR-54. Removed in R2b.
+	Metadata json.RawMessage
+}
+
+// EffectiveExt returns the engine-extension metadata for a
+// manifest, with a bridge that falls back to the deprecated
+// Metadata field for Sealed/Paranoid artifacts whose
+// encrypt/decrypt path has not yet migrated to the ext/usr
+// split (R2b-ii). Plain manifests written after R2b-i always
+// populate Ext directly; legacy encrypted manifests round-trip
+// through Metadata for now.
+//
+// Removed in R2b-iii when Sealed/Paranoid stop using Metadata.
+func EffectiveExt(m Manifest) json.RawMessage {
+	if len(m.Ext) > 0 {
+		return m.Ext
+	}
+	return m.Metadata
+}
+
+// EffectiveUsr returns the host-application metadata for a
+// manifest. No bridge: Usr is populated only when the host
+// passes Artifact.Usr explicitly, which Sealed/Paranoid reject
+// (see core.Put) during the R2b migration window.
+func EffectiveUsr(m Manifest) json.RawMessage {
+	return m.Usr
 }
