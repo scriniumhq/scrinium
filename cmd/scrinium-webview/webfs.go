@@ -70,7 +70,7 @@ func (b *webBackingFS) OpenArtifact(ctx context.Context, id domain.ArtifactID) (
 	m := rh.Manifest()
 	name := ""
 	mimeType := ""
-	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
+	if fs, ok, err := fsmeta.Decode(m.Ext); err == nil && ok {
 		name = pathpkg.Base(fs.Path)
 		mimeType = fs.MIME
 	}

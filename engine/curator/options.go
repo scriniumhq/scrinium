@@ -91,7 +91,8 @@ func WithRoutingFunc(fn RoutingFunc) CuratorOption {
 }
 
 // WithMetadataRouter provides the function that reconstructs
-// RoutingHints from Manifest.Metadata at deferred-Drain time.
+// RoutingHints from the manifest fields (Namespace, Ext, Usr)
+// at deferred-Drain time.
 func WithMetadataRouter(fn MetadataRouter) CuratorOption {
 	return func(o *curatorOptions) { o.metaRouter = fn }
 }

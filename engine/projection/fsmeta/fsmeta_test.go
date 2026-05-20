@@ -247,15 +247,15 @@ func TestDecode_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestDecode_EmptyMetadata(t *testing.T) {
-	// Empty metadata is the common "no schema" case. Not an error.
+func TestDecode_EmptyExt(t *testing.T) {
+	// Empty ext is the common "no schema" case. Not an error.
 	for _, raw := range []json.RawMessage{nil, {}, json.RawMessage("")} {
 		fs, ok, err := fsmeta.Decode(raw)
 		if err != nil {
-			t.Errorf("expected no error for empty metadata, got %v", err)
+			t.Errorf("expected no error for empty ext, got %v", err)
 		}
 		if ok {
-			t.Errorf("expected ok=false for empty metadata")
+			t.Errorf("expected ok=false for empty ext")
 		}
 		if fs.Path != "" {
 			t.Errorf("expected zero FileSystem, got %+v", fs)
@@ -264,9 +264,9 @@ func TestDecode_EmptyMetadata(t *testing.T) {
 }
 
 func TestDecode_ForeignSchema(t *testing.T) {
-	// Metadata in a different schema must produce (zero, false,
-	// nil) — not an error. Coexistence with other schemas is part
-	// of the contract.
+	// An ext payload in a different schema must produce
+	// (zero, false, nil) — not an error. Coexistence with
+	// other schemas is part of the contract.
 	cases := [][]byte{
 		[]byte(`{"kind":"email/v1","subject":"hi","from":"a@b"}`),
 		[]byte(`{"author":"alice","title":"x"}`),
@@ -361,7 +361,7 @@ func TestResolver_Found(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	m := domain.Manifest{Metadata: raw}
+	m := domain.Manifest{Ext: raw}
 	path, ok := fsmeta.Resolver(m)
 	if !ok {
 		t.Fatalf("expected ok=true")
@@ -372,7 +372,7 @@ func TestResolver_Found(t *testing.T) {
 }
 
 func TestResolver_EmptyMetadata(t *testing.T) {
-	m := domain.Manifest{Metadata: nil}
+	m := domain.Manifest{Ext: nil}
 	path, ok := fsmeta.Resolver(m)
 	if ok {
 		t.Errorf("expected ok=false, got path=%q", path)
@@ -380,7 +380,7 @@ func TestResolver_EmptyMetadata(t *testing.T) {
 }
 
 func TestResolver_ForeignSchema(t *testing.T) {
-	m := domain.Manifest{Metadata: []byte(`{"kind":"email/v1","subject":"hi"}`)}
+	m := domain.Manifest{Ext: []byte(`{"kind":"email/v1","subject":"hi"}`)}
 	path, ok := fsmeta.Resolver(m)
 	if ok {
 		t.Errorf("expected ok=false for foreign schema, got path=%q", path)
@@ -393,7 +393,7 @@ func TestResolver_SwallowsDecodeErrors(t *testing.T) {
 	// requirement: a single bad artifact must not break the View
 	// backfill.
 	raw := []byte(`{"kind":"` + fsmeta.Marker + `","path":"/leading"}`)
-	m := domain.Manifest{Metadata: raw}
+	m := domain.Manifest{Ext: raw}
 	path, ok := fsmeta.Resolver(m)
 	if ok {
 		t.Errorf("expected ok=false for invalid path, got path=%q", path)

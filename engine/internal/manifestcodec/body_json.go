@@ -1,11 +1,12 @@
 package manifestcodec
 
 // body_json.go — deterministic JSON body encoding per docs/2.
-// Internals/07 §7.5. The struct types here pin the on-disk
-// JSON shape; field declaration order in jsonBody mirrors the
-// alphabetical JSON-tag order so encoding/json's
-// declaration-order emission already produces sorted output
-// (TestEncodeFile_DeterministicOrder guards the contract).
+// Internals/07 §7.2 + §7.5. The body has top-level fields
+// (sys, ext, usr, inline_blob) with sys carrying every system
+// field defined by §7.2. Determinism: top-level and sys-level
+// fields are declared in alphabetical JSON-tag order so
+// encoding/json's declaration-order emission produces sorted
+// output without round-tripping through a map.
 
 import (
 	"bytes"
@@ -21,22 +22,27 @@ import (
 
 // --- Body JSON encoding (deterministic, sorted keys, RFC 3339) ---
 
-// jsonBody is the on-disk shape of a manifest body. Field tags
-// fix the JSON keys; field order in the struct mirrors the
-// alphabetical order of those tags so encoding/json's
-// declaration-order emission already produces the deterministic
-// output §7.5 requires — no round-trip-through-map needed.
-//
-// Optional fields use omitempty + pointer-where-needed so that
-// unset values do not appear in the output.
+// jsonBody is the on-disk top-level shape of a manifest body.
+// Per ADR-54 the body has three named blocks (sys, ext, usr)
+// plus an optional inline_blob. Field declaration order matches
+// alphabetical JSON-tag order so the output is deterministic
+// without map-round-tripping.
 type jsonBody struct {
+	Ext        json.RawMessage `json:"ext,omitempty"`
+	InlineBlob string          `json:"inline_blob,omitempty"` // base64
+	Sys        jsonSys         `json:"sys"`
+	Usr        json.RawMessage `json:"usr,omitempty"`
+}
+
+// jsonSys is the on-disk shape of the sys block. Holds every
+// system-level field. Optional fields use omitempty +
+// pointer-where-needed so unset values do not appear in output.
+type jsonSys struct {
 	BlobRef       string              `json:"blob_ref"`
 	ContentHash   string              `json:"content_hash,omitempty"`
 	CreatedAt     string              `json:"created_at"`
 	ExternalURI   string              `json:"external_uri,omitempty"`
-	InlineBlob    string              `json:"inline_blob,omitempty"` // base64
 	LayoutHeader  jsonLayoutHeader    `json:"layout_header"`
-	Metadata      json.RawMessage     `json:"metadata,omitempty"`
 	Namespace     string              `json:"namespace"`
 	OriginalSize  *int64              `json:"original_size,omitempty"`
 	Pipeline      []jsonPipelineStage `json:"pipeline"`
@@ -64,39 +70,39 @@ type jsonSystemFlags struct {
 }
 
 // marshalBodyJSON produces deterministic JSON bytes per §7.5:
-// alphabetical key order, no whitespace. Determinism is achieved
-// without a round-trip through map[string]json.RawMessage because
-// jsonBody declares its fields in JSON-tag-alphabetical order;
-// encoding/json emits struct fields in declaration order, so the
-// output is already sorted at the top level. Nested structs
-// (jsonLayoutHeader, jsonPipelineStage, jsonSystemFlags) likewise
-// declare their fields in order. TestEncodeFile_DeterministicOrder
-// guards the contract.
+// alphabetical key order, no whitespace. Determinism comes from
+// declaring fields in alphabetical-by-JSON-tag order at both
+// the top level and within jsonSys; encoding/json emits in
+// declaration order. TestEncodeFile_KeysAreAlphabetical guards
+// the contract.
 func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 	body := jsonBody{
-		BlobRef:       string(m.BlobRef),
-		ContentHash:   string(m.ContentHash),
-		CreatedAt:     timefmt.Format(m.CreatedAt),
-		ExternalURI:   m.ExternalURI,
-		LayoutHeader:  jsonLayoutHeader{BlobStorage: m.LayoutHeader.BlobStorage},
-		Metadata:      m.Metadata,
-		Namespace:     m.Namespace,
-		Pipeline:      pipelineToJSON(m.Pipeline),
-		SchemaVersion: SchemaVersion,
-		SessionID:     string(m.SessionID),
-		Type:          string(m.Type),
+		Ext: m.Ext,
+		Usr: m.Usr,
+		Sys: jsonSys{
+			BlobRef:       string(m.BlobRef),
+			ContentHash:   string(m.ContentHash),
+			CreatedAt:     timefmt.Format(m.CreatedAt),
+			ExternalURI:   m.ExternalURI,
+			LayoutHeader:  jsonLayoutHeader{BlobStorage: m.LayoutHeader.BlobStorage},
+			Namespace:     m.Namespace,
+			Pipeline:      pipelineToJSON(m.Pipeline),
+			SchemaVersion: SchemaVersion,
+			SessionID:     string(m.SessionID),
+			Type:          string(m.Type),
+		},
 	}
 	if m.OriginalSize != 0 {
-		body.OriginalSize = new(m.OriginalSize)
+		body.Sys.OriginalSize = new(m.OriginalSize)
 	}
 	if len(m.InlineBlob) > 0 {
 		body.InlineBlob = base64.StdEncoding.EncodeToString(m.InlineBlob)
 	}
 	if !m.RetentionUntil.IsZero() {
-		body.RetentionTime = timefmt.Format(m.RetentionUntil)
+		body.Sys.RetentionTime = timefmt.Format(m.RetentionUntil)
 	}
 	if m.SystemFlags.TOCOffset != 0 || m.SystemFlags.TOCSize != 0 {
-		body.System = &jsonSystemFlags{
+		body.Sys.System = &jsonSystemFlags{
 			TOCOffset: m.SystemFlags.TOCOffset,
 			TOCSize:   m.SystemFlags.TOCSize,
 		}
@@ -105,10 +111,11 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 	return json.Marshal(&body)
 }
 
-// unmarshalBodyJSON parses body bytes and returns a domain.Manifest.
-// Forgives input field order (any order is allowed; only the
-// *output* of marshalBodyJSON is sorted). Rejects unknown fields
-// to catch typos in hand-edited manifests.
+// unmarshalBodyJSON parses body bytes and returns a
+// domain.Manifest. Forgives input field order (any order is
+// allowed; only the *output* of marshalBodyJSON is sorted).
+// Rejects unknown fields to catch typos in hand-edited
+// manifests.
 func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 	var b jsonBody
 	dec := json.NewDecoder(bytes.NewReader(body))
@@ -120,26 +127,27 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 		return domain.Manifest{}, errors.New("manifestcodec: trailing content after body")
 	}
 
-	if b.SchemaVersion != SchemaVersion {
+	if b.Sys.SchemaVersion != SchemaVersion {
 		return domain.Manifest{}, fmt.Errorf("%w: got %d, want %d",
-			errs.ErrUnsupportedSchemaVersion, b.SchemaVersion, SchemaVersion)
+			errs.ErrUnsupportedSchemaVersion, b.Sys.SchemaVersion, SchemaVersion)
 	}
 
 	m := domain.Manifest{
-		Type:        domain.ManifestType(b.Type),
-		Namespace:   b.Namespace,
-		SessionID:   domain.SessionID(b.SessionID),
-		ContentHash: domain.ContentHash(b.ContentHash),
-		BlobRef:     domain.BlobRef(b.BlobRef),
-		ExternalURI: b.ExternalURI,
-		Metadata:    b.Metadata,
+		Type:        domain.ManifestType(b.Sys.Type),
+		Namespace:   b.Sys.Namespace,
+		SessionID:   domain.SessionID(b.Sys.SessionID),
+		ContentHash: domain.ContentHash(b.Sys.ContentHash),
+		BlobRef:     domain.BlobRef(b.Sys.BlobRef),
+		ExternalURI: b.Sys.ExternalURI,
+		Ext:         b.Ext,
+		Usr:         b.Usr,
 		LayoutHeader: domain.LayoutHeader{
-			BlobStorage: b.LayoutHeader.BlobStorage,
+			BlobStorage: b.Sys.LayoutHeader.BlobStorage,
 		},
-		Pipeline: pipelineFromJSON(b.Pipeline),
+		Pipeline: pipelineFromJSON(b.Sys.Pipeline),
 	}
-	if b.OriginalSize != nil {
-		m.OriginalSize = *b.OriginalSize
+	if b.Sys.OriginalSize != nil {
+		m.OriginalSize = *b.Sys.OriginalSize
 	}
 	if b.InlineBlob != "" {
 		raw, err := base64.StdEncoding.DecodeString(b.InlineBlob)
@@ -148,24 +156,24 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 		}
 		m.InlineBlob = raw
 	}
-	if b.CreatedAt != "" {
-		t, err := timefmt.Parse(b.CreatedAt)
+	if b.Sys.CreatedAt != "" {
+		t, err := timefmt.Parse(b.Sys.CreatedAt)
 		if err != nil {
 			return domain.Manifest{}, fmt.Errorf("manifestcodec: created_at: %w", err)
 		}
 		m.CreatedAt = t
 	}
-	if b.RetentionTime != "" {
-		t, err := timefmt.Parse(b.RetentionTime)
+	if b.Sys.RetentionTime != "" {
+		t, err := timefmt.Parse(b.Sys.RetentionTime)
 		if err != nil {
 			return domain.Manifest{}, fmt.Errorf("manifestcodec: retention_until: %w", err)
 		}
 		m.RetentionUntil = t
 	}
-	if b.System != nil {
+	if b.Sys.System != nil {
 		m.SystemFlags = domain.ManifestSystemFlags{
-			TOCOffset: b.System.TOCOffset,
-			TOCSize:   b.System.TOCSize,
+			TOCOffset: b.Sys.System.TOCOffset,
+			TOCSize:   b.Sys.System.TOCSize,
 		}
 	}
 	return m, nil

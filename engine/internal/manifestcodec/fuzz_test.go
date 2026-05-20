@@ -137,9 +137,12 @@ func manifestEquivalent(a, b domain.Manifest) bool {
 			return false
 		}
 	}
-	// Metadata is json.RawMessage. Trim whitespace before comparing —
-	// canonical encoding may compact it.
-	if !bytes.Equal(bytes.TrimSpace(a.Metadata), bytes.TrimSpace(b.Metadata)) {
+	// Ext and Usr are json.RawMessage. Trim whitespace before
+	// comparing — canonical encoding may compact them.
+	if !bytes.Equal(bytes.TrimSpace(a.Ext), bytes.TrimSpace(b.Ext)) {
+		return false
+	}
+	if !bytes.Equal(bytes.TrimSpace(a.Usr), bytes.TrimSpace(b.Usr)) {
 		return false
 	}
 	return true

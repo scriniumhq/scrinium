@@ -154,7 +154,7 @@ func (i *Index) LookupPacked(ctx context.Context, artifactID domain.ArtifactID) 
 // scanManifestRow scans one manifests-table row into a partial
 // domain.Manifest. Used by Walk-style methods. Returns a Manifest
 // with the fields we actually persist; the rest (Pipeline,
-// LayoutHeader, InlineBlob, Metadata, etc.) are absent — the
+// LayoutHeader, InlineBlob, Ext, Usr, etc.) are absent — the
 // caller reconstructs them from the manifest file on disk if
 // needed. This is intentional: the index is the cheap routing
 // layer, not the source of truth for manifest content.

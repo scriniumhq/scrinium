@@ -1,5 +1,5 @@
 // Package fsindex is an index extension that persists the fsmeta
-// payload of every artifact whose Manifest.Metadata uses the
+// payload of every artifact whose Manifest.Ext uses the
 // filesystem schema. It hangs off StoreIndex via the index
 // extensions infrastructure (see 3. Contracts/06).
 //
@@ -9,7 +9,7 @@
 //     restart the View needs to rebuild its filesystem trees
 //     from indexed metadata; without fsindex it would fall
 //     back to N+1 round-trips through Source.Get to re-read
-//     each manifest's Metadata. fsindex persists those bytes
+//     each manifest's Ext. fsindex persists those bytes
 //     once at write time, so backfill is a single bulk scan.
 //
 //   - Direct path lookup. Hosts that want to translate a

@@ -203,7 +203,8 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		Pipeline:       pipelineStages,
 		InlineBlob:     inlineBytes,
 		RetentionUntil: opts.RetentionUntil,
-		Metadata:       a.Metadata,
+		Ext:            a.Ext,
+		Usr:            a.Usr,
 	}
 	// Snapshot crypto state for non-Plain manifest encryption.
 	// Held briefly under cryptoMu, then released so a parallel
@@ -501,8 +502,11 @@ func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	if len(opts.SessionID) > domain.MaxSessionIDLen {
 		return errs.ErrSessionIDTooLong
 	}
-	if len(a.Metadata) > domain.MaxMetadataSize {
-		return errs.ErrMetadataTooLarge
+	if len(a.Ext) > domain.MaxExtSize {
+		return errs.ErrExtTooLarge
+	}
+	if len(a.Usr) > domain.MaxUsrSize {
+		return errs.ErrUsrTooLarge
 	}
 	return nil
 }

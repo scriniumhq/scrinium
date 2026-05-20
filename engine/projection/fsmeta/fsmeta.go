@@ -14,7 +14,7 @@ import (
 // payload whose Kind does not match.
 const Marker = "scrinium.fs/v1"
 
-// FileSystem is the parsed payload of Manifest.Metadata for the
+// FileSystem is the parsed payload of Manifest.Ext for the
 // filesystem schema. Only Path is mandatory; the rest fall back
 // to FSOps defaults (or Manifest.CreatedAt for ModTime) when zero.
 type FileSystem struct {
@@ -117,7 +117,7 @@ func (fs *FileSystem) UnmarshalJSON(data []byte) error {
 }
 
 // Encode validates a FileSystem and serialises it for use as
-// Manifest.Metadata. Kind is filled in automatically: callers may
+// Manifest.Ext. Kind is filled in automatically: callers may
 // leave it empty.
 //
 // Returns an error wrapping errs.ErrInvalidPath when Path fails
@@ -137,7 +137,7 @@ func Encode(fs FileSystem) (json.RawMessage, error) {
 	return out, nil
 }
 
-// Decode interprets raw Manifest.Metadata. The triple return
+// Decode interprets raw Manifest.Ext. The triple return
 // (FileSystem, ok, error) lets callers distinguish three
 // outcomes:
 //
@@ -192,7 +192,7 @@ func Decode(raw json.RawMessage) (FileSystem, bool, error) {
 // hot path and a single bad artifact must not fail backfill.
 // Surfacing such errors is the ingester's job at write time.
 func Resolver(m domain.Manifest) (string, bool) {
-	fs, ok, err := Decode(m.Metadata)
+	fs, ok, err := Decode(m.Ext)
 	if err != nil || !ok {
 		return "", false
 	}

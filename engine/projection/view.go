@@ -198,25 +198,25 @@ func (v *View) allTrees() []map[string]*viewNode {
 //
 // Two paths exist:
 //
-//   - Fast path (a MetadataSource is configured). Source.Walk
-//     gives us the stripped manifests; we top them up by calling
-//     metadataSource.Metadata(id) — an O(log N) lookup against a
-//     local index extension that persisted Metadata at write
-//     time. No round-trip to Source.Get per manifest.
+//   - Fast path (an ExtSource is configured). Source.Walk
+//     gives us the stripped manifests; we top them up by
+//     calling extSource.Ext(id) — an O(log N) lookup against
+//     a local index extension that persisted the ext block at
+//     write time. No round-trip to Source.Get per manifest.
 //
-//   - Slow path (no MetadataSource). We round-trip Source.Get
-//     for every manifest to recover Metadata. This is N+1 by
-//     construction; acceptable for tests with FakeSource (which
-//     keeps full manifests in memory anyway, so Get is cheap)
-//     and for backfills small enough that latency doesn't
-//     matter. Daemons with large stores configure
-//     WithMetadataSource (or WithFSIndex) to take the fast path.
+//   - Slow path (no ExtSource). We round-trip Source.Get for
+//     every manifest to recover Ext. This is N+1 by
+//     construction; acceptable for tests with FakeSource
+//     (which keeps full manifests in memory anyway, so Get is
+//     cheap) and for backfills small enough that latency
+//     doesn't matter. Daemons with large stores configure
+//     WithExtSource (or WithFSIndex) to take the fast path.
 func (v *View) backfill(ctx context.Context) error {
 	cb := func(m domain.Manifest) error {
 		if !v.passesFilter(m) {
 			return nil
 		}
-		v.populateMetadata(ctx, &m)
+		v.populateExt(ctx, &m)
 		v.indexArtifact(m, true /*duringBackfill*/)
 		return nil
 	}
@@ -226,21 +226,21 @@ func (v *View) backfill(ctx context.Context) error {
 	return nil
 }
 
-// populateMetadata fills m.Metadata (and a couple of cheap
-// neighbouring fields) from the configured fast path or, failing
-// that, from Source.Get. Mutates m in place.
+// populateExt fills m.Ext (and a couple of cheap neighbouring
+// fields) from the configured fast path or, failing that, from
+// Source.Get. Mutates m in place.
 //
 // Errors from either path are intentionally swallowed — backfill
-// must finish even if one manifest's metadata fetch fails (the
+// must finish even if one manifest's ext fetch fails (the
 // resolver will then treat it as orphaned, the standard
 // missing-path behaviour). A noisy "best effort" log line could
 // be added behind the bus once we wire it.
-func (v *View) populateMetadata(ctx context.Context, m *domain.Manifest) {
-	// Fast path: bulk MetadataSource lookup, no Source round-trip.
-	if v.opts.metadataSource != nil {
-		raw, ok, err := v.opts.metadataSource.Metadata(m.ArtifactID)
+func (v *View) populateExt(ctx context.Context, m *domain.Manifest) {
+	// Fast path: bulk ExtSource lookup, no Source round-trip.
+	if v.opts.extSource != nil {
+		raw, ok, err := v.opts.extSource.Ext(m.ArtifactID)
 		if err == nil && ok && len(raw) > 0 {
-			m.Metadata = raw
+			m.Ext = raw
 			return
 		}
 		// Miss or error — fall through to Source.Get. A miss is
@@ -251,9 +251,9 @@ func (v *View) populateMetadata(ctx context.Context, m *domain.Manifest) {
 
 	// Slow path: round-trip Source.Get for the full manifest.
 	// Walk-style sources (core.Store-backed) usually return a
-	// stripped manifest from the index — Metadata, layout,
-	// inline blob, etc. are absent. Resolvers like fsmeta need
-	// Metadata to produce a path.
+	// stripped manifest from the index — Ext, layout, inline
+	// blob, etc. are absent. Resolvers like fsmeta need Ext to
+	// produce a path.
 	//
 	// FakeSource and similar in-memory test stubs already return
 	// complete manifests; doing a Get on top is a cheap no-op.
@@ -263,11 +263,11 @@ func (v *View) populateMetadata(ctx context.Context, m *domain.Manifest) {
 	}
 	full := rh.Manifest()
 	rh.Close()
-	// Preserve any fields Walk had set that Get's manifest may
-	// lack (rare in practice — Get is the authoritative source —
-	// but cheap to be safe).
-	if len(full.Metadata) > 0 {
-		m.Metadata = full.Metadata
+	// Prefer the canonical Ext block; fall back to the legacy
+	// Metadata field for Sealed/Paranoid manifests whose crypto
+	// path has not migrated yet.
+	if extBytes := full.Ext; len(extBytes) > 0 {
+		m.Ext = extBytes
 	}
 	if full.ContentHash != "" {
 		m.ContentHash = full.ContentHash
@@ -639,7 +639,7 @@ func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) 
 		CreatedAt:   rec.manifest.CreatedAt,
 		MatchReason: reason,
 	}
-	if fs, ok, err := fsmeta.Decode(rec.manifest.Metadata); err == nil && ok {
+	if fs, ok, err := fsmeta.Decode(rec.manifest.Ext); err == nil && ok {
 		r.MIME = fs.MIME
 	}
 	return r
@@ -1078,7 +1078,7 @@ func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 //
 // FilesystemFacet carries only the schema-agnostic fields: Name,
 // Path, Size, ModTime, IsDir. POSIX attributes (mode/uid/gid)
-// live in fsmeta.FileSystem inside Manifest.Metadata and are
+// live in fsmeta.FileSystem inside Manifest.Ext and are
 // materialised by FSOps at the transport boundary.
 //
 // ModTime here is seeded from m.CreatedAt as a baseline; FSOps
@@ -1180,7 +1180,7 @@ func artifactFacetFrom(m domain.Manifest) *ArtifactFacet {
 		SessionID:   m.SessionID,
 		CreatedAt:   m.CreatedAt,
 		Type:        m.Type,
-		Metadata:    m.Metadata,
+		Ext:         m.Ext,
 	}
 }
 
@@ -1253,7 +1253,7 @@ func byDatePath(m domain.Manifest) string {
 // same fsmeta basename collide; that's accepted — the by-date
 // tree is a diagnostic aid, not an authoritative storage layout.
 func byDateLabel(m domain.Manifest) string {
-	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
+	if fs, ok, err := fsmeta.Decode(m.Ext); err == nil && ok {
 		base := pathx.LastSegment(fs.Path)
 		if base != "" {
 			return base

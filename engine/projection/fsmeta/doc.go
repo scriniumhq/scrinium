@@ -1,5 +1,5 @@
 // Package fsmeta is the standard filesystem schema for
-// Manifest.Metadata. It defines a structure that maps each artifact
+// Manifest.Ext. It defines a structure that maps each artifact
 // to a POSIX-shaped node (path, mode, owner, mtime, MIME) and the
 // encoder/decoder/resolver that ingester and projection-side
 // components use to read it.

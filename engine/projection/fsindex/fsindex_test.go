@@ -32,7 +32,7 @@ func newRegisteredFSIndex(t *testing.T) (*sqlite.Index, *fsindex.Extension) {
 	return idx, ext
 }
 
-// makeFSManifest returns a Manifest with fsmeta-shaped Metadata
+// makeFSManifest returns a Manifest with fsmeta-shaped Ext
 // at the given path, plus a mode for diversity.
 func makeFSManifest(t *testing.T, id domain.ArtifactID, path string) domain.Manifest {
 	t.Helper()
@@ -52,7 +52,7 @@ func makeFSManifest(t *testing.T, id domain.ArtifactID, path string) domain.Mani
 		OriginalSize: 100,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		Metadata:     raw,
+		Ext:          raw,
 	}
 }
 
@@ -70,7 +70,7 @@ func makeForeignManifest(t *testing.T, id domain.ArtifactID) domain.Manifest {
 		OriginalSize: 50,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		Metadata:     raw,
+		Ext:          raw,
 	}
 }
 
@@ -159,14 +159,14 @@ func TestApply_Indexed_NoMetadata_Skipped(t *testing.T) {
 		OriginalSize: 10,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		// Metadata is nil
+		// Ext is nil
 	}
 	if err := idx.IndexManifest(ctx, m, physAddr(), nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 	_, ok, _ := ext.GetByID("bare-1")
 	if ok {
-		t.Error("manifest with nil Metadata indexed; expected skip")
+		t.Error("manifest with nil Ext indexed; expected skip")
 	}
 }
 
@@ -312,7 +312,7 @@ func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
 		OriginalSize: 10,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		Metadata:     bad,
+		Ext:          bad,
 	}
 	err := idx.IndexManifest(ctx, m, physAddr(), nil, nil)
 	if err == nil {

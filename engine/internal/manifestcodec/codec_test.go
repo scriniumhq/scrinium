@@ -3,6 +3,7 @@ package manifestcodec_test
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -47,6 +48,47 @@ func TestEncodeDecodeFile_RoundTrip(t *testing.T) {
 	}
 	if !got.CreatedAt.Equal(src.CreatedAt) {
 		t.Errorf("CreatedAt: got %v, want %v", got.CreatedAt, src.CreatedAt)
+	}
+}
+
+func TestEncodeDecodeFile_RoundTrip_WithExtAndUsr(t *testing.T) {
+	src := sampleManifest()
+	src.Ext = json.RawMessage(`{"kind":"scrinium.fs/v1","path":"a.txt"}`)
+	src.Usr = json.RawMessage(`{"tenant":"acme","tags":["x","y"]}`)
+
+	bs, err := manifestcodec.EncodeFile(src, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if err != nil {
+		t.Fatalf("EncodeFile: %v", err)
+	}
+
+	got, err := manifestcodec.DecodeFile(bs)
+	if err != nil {
+		t.Fatalf("DecodeFile: %v", err)
+	}
+	if !bytes.Equal([]byte(got.Ext), []byte(src.Ext)) {
+		t.Errorf("ext round-trip: got %s, want %s", got.Ext, src.Ext)
+	}
+	if !bytes.Equal([]byte(got.Usr), []byte(src.Usr)) {
+		t.Errorf("usr round-trip: got %s, want %s", got.Usr, src.Usr)
+	}
+}
+
+func TestEncodeFile_Plain_BothBlocksVisibleOnDisk(t *testing.T) {
+	// Plain mode keeps everything in plaintext. Both ext and
+	// usr payloads must appear in the on-disk bytes.
+	src := sampleManifest()
+	src.Ext = json.RawMessage(`{"ext-marker":"ext-content"}`)
+	src.Usr = json.RawMessage(`{"usr-marker":"usr-content"}`)
+
+	bs, err := manifestcodec.EncodeFile(src, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if err != nil {
+		t.Fatalf("EncodeFile: %v", err)
+	}
+	if !bytes.Contains(bs, []byte("ext-content")) {
+		t.Error("Plain should leave ext in plaintext on disk")
+	}
+	if !bytes.Contains(bs, []byte("usr-content")) {
+		t.Error("Plain should leave usr in plaintext on disk")
 	}
 }
 
@@ -232,8 +274,11 @@ func TestDecodeFile_RejectsParanoidFlag(t *testing.T) {
 
 func TestDecodeFile_RejectsUnknownBodyField(t *testing.T) {
 	// Build a normal file then append a body with an extra key.
-	// Easier: hand-craft.
-	body := `{"blob_ref":"sha256-x","layout_header":{"blob_storage":"Target"},"namespace":"","pipeline":[],"schema_version":1,"session_id":"","type":"blob","unknown_xyz":"oops","created_at":"2026-04-01T12:00:00Z"}`
+	// Easier: hand-craft. Per ADR-54 the body has the
+	// {sys, ext, usr, inline_blob} top-level shape; we inject
+	// an unknown_xyz at the top level here. An unknown nested
+	// inside sys is covered by a separate test.
+	body := `{"sys":{"blob_ref":"sha256-x","created_at":"2026-04-01T12:00:00Z","layout_header":{"blob_storage":"Target"},"namespace":"","pipeline":[],"schema_version":1,"session_id":"","type":"blob"},"unknown_xyz":"oops"}`
 	bs := append([]byte{0x00, 'S', 'C', '1', 0x00}, body...)
 	_, err := manifestcodec.DecodeFile(bs)
 	if err == nil {
@@ -242,7 +287,7 @@ func TestDecodeFile_RejectsUnknownBodyField(t *testing.T) {
 }
 
 func TestDecodeFile_RejectsFutureSchemaVersion(t *testing.T) {
-	body := `{"blob_ref":"sha256-x","layout_header":{"blob_storage":"Target"},"namespace":"","pipeline":[],"schema_version":99,"session_id":"","type":"blob","created_at":"2026-04-01T12:00:00Z"}`
+	body := `{"sys":{"blob_ref":"sha256-x","created_at":"2026-04-01T12:00:00Z","layout_header":{"blob_storage":"Target"},"namespace":"","pipeline":[],"schema_version":99,"session_id":"","type":"blob"}}`
 	bs := append([]byte{0x00, 'S', 'C', '1', 0x00}, body...)
 	_, err := manifestcodec.DecodeFile(bs)
 	if !errors.Is(err, errs.ErrUnsupportedSchemaVersion) {
@@ -346,7 +391,7 @@ func TestEncodeFile_ArtifactIDNotInBody(t *testing.T) {
 // --- Manifest size limit (domain.MaxManifestSize) ---
 
 func TestEncodeFile_ManifestTooLarge(t *testing.T) {
-	// Inflate Metadata to a JSON string of MaxManifestSize bytes.
+	// Inflate Ext to a JSON string of MaxManifestSize bytes.
 	// The body always adds the other fields on top, so the final
 	// file is guaranteed to exceed the limit. The payload uses
 	// only 'x' bytes — no JSON escaping inflates the count.
@@ -358,7 +403,7 @@ func TestEncodeFile_ManifestTooLarge(t *testing.T) {
 	huge[len(huge)-1] = '"'
 
 	m := sampleManifest()
-	m.Metadata = huge
+	m.Ext = huge
 
 	_, err := manifestcodec.EncodeFile(m,
 		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
@@ -379,7 +424,7 @@ func TestEncodeFile_ManifestUnderLimit_OK(t *testing.T) {
 	huge[len(huge)-1] = '"'
 
 	m := sampleManifest()
-	m.Metadata = huge
+	m.Ext = huge
 
 	bs, err := manifestcodec.EncodeFile(m,
 		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)

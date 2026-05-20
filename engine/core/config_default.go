@@ -61,7 +61,7 @@ func applyConfigDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 		cfg.TombstoneGracePeriod = 24 * time.Hour
 	}
 	// InlineBlobLimit, RetentionPeriod, EagerFetchLimit,
-	// MetadataTransformer, Pipeline, KDFParams: zero values are
+	// Pipeline, KDFParams: zero values are
 	// legitimate "feature off" or "use plugin defaults" signals.
 	// We do NOT override them.
 	return cfg

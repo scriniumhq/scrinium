@@ -319,7 +319,7 @@ func TestVFS_NameFilter_OmitsFromListing(t *testing.T) {
 // embedded in fsmeta.
 func mkManifest(path, namespace, payload string) domain.Manifest {
 	id := domain.ArtifactID(strings.ReplaceAll(path, "/", "_") + "_id")
-	meta, _ := fsmeta.Encode(fsmeta.FileSystem{
+	extMeta, _ := fsmeta.Encode(fsmeta.FileSystem{
 		Kind: fsmeta.Marker,
 		Path: path,
 		Mode: 0o644,
@@ -328,7 +328,7 @@ func mkManifest(path, namespace, payload string) domain.Manifest {
 		ArtifactID:   id,
 		Type:         domain.ManifestTypeBlob,
 		Namespace:    namespace,
-		Metadata:     meta,
+		Ext:          extMeta,
 		OriginalSize: int64(len(payload)),
 	}
 }

@@ -38,8 +38,8 @@ func initEncryptedWithCrypto(t *testing.T, crypto domain.ManifestCrypto) core.St
 func payloadReader(s string) (a domain.Artifact, raw []byte) {
 	raw = []byte(s)
 	a = domain.Artifact{
-		Payload:  bytes.NewReader(raw),
-		Metadata: json.RawMessage(`{"tag":"x"}`),
+		Payload: bytes.NewReader(raw),
+		Usr:     json.RawMessage(`{"tag":"x"}`),
 	}
 	return
 }
@@ -109,7 +109,7 @@ func TestPut_EncryptedManifestRejectedWhenLocked(t *testing.T) {
 func TestPut_Sealed_NamespaceVisibleOnDisk(t *testing.T) {
 	s := initEncryptedWithCrypto(t, domain.ManifestCryptoSealed)
 	a, _ := payloadReader("payload")
-	a.Metadata = json.RawMessage(`{"secret":"do-not-leak"}`)
+	a.Usr = json.RawMessage(`{"secret":"do-not-leak"}`)
 
 	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "tenant-a"})
 	if err != nil {
@@ -122,7 +122,7 @@ func TestPut_Sealed_NamespaceVisibleOnDisk(t *testing.T) {
 		t.Error("Sealed should leave Namespace in plaintext on disk")
 	}
 	if bytes.Contains(bytesOnDisk, []byte("do-not-leak")) {
-		t.Error("Sealed leaked metadata to plaintext")
+		t.Error("Sealed leaked usr metadata to plaintext")
 	}
 }
 
@@ -178,7 +178,7 @@ func readManifestRaw(t *testing.T, s core.Store, id domain.ArtifactID) []byte {
 func TestPutGet_Sealed_RoundTrip(t *testing.T) {
 	s := initEncryptedWithCrypto(t, domain.ManifestCryptoSealed)
 	a, raw := payloadReader("sealed end-to-end")
-	a.Metadata = json.RawMessage(`{"tag":"value"}`)
+	a.Usr = json.RawMessage(`{"tag":"value"}`)
 
 	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
 	if err != nil {

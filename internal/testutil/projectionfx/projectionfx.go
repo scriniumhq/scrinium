@@ -179,7 +179,8 @@ func (f *FakeSource) Put(
 		ContentHash:  hash,
 		BlobRef:      domain.BlobRef(hash),
 		OriginalSize: int64(len(payload)),
-		Metadata:     a.Metadata,
+		Ext:          a.Ext,
+		Usr:          a.Usr,
 	}
 
 	f.mu.Lock()
@@ -362,7 +363,7 @@ func AddFsmetaPath(m *domain.Manifest, path string) error {
 	if err != nil {
 		return err
 	}
-	m.Metadata = raw
+	m.Ext = raw
 	return nil
 }
 

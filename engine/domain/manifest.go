@@ -7,13 +7,20 @@ import (
 )
 
 // Artifact is the abstraction at the system boundary (input/output).
-// It consists of a byte stream (Payload) and a business context
-// (Metadata). The engine treats Metadata as an opaque blob —
-// parsing tags and paths is strictly the responsibility of the host
-// application.
+// It consists of a byte stream (Payload) and two metadata blocks
+// per ADR-54:
+//
+//   - Ext: Scrinium-extension data the engine itself reads
+//     (fsmeta and friends).
+//   - Usr: opaque host-application data — tags, business
+//     attributes; the engine never inspects them.
+//
+// Each block has a 64 KiB limit (MaxExtSize, MaxUsrSize).
 type Artifact struct {
-	Payload  io.Reader
-	Metadata json.RawMessage
+	Payload io.Reader
+
+	Ext json.RawMessage
+	Usr json.RawMessage
 }
 
 // ManifestType is the role of a Manifest.
@@ -100,5 +107,7 @@ type Manifest struct {
 	KeyID          string
 
 	SystemFlags ManifestSystemFlags
-	Metadata    json.RawMessage
+
+	Ext json.RawMessage
+	Usr json.RawMessage
 }

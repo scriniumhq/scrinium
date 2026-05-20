@@ -74,7 +74,7 @@ func (p projectionNodeInfo) MIME() string {
 	if p.node.Artifact == nil {
 		return ""
 	}
-	fs, ok, err := fsmeta.Decode(p.node.Artifact.Metadata)
+	fs, ok, err := fsmeta.Decode(p.node.Artifact.Ext)
 	if err != nil || !ok {
 		return ""
 	}
