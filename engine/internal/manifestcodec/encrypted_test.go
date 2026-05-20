@@ -47,7 +47,8 @@ func resolverWith(keyID string, dek []byte) *staticKeyProvider {
 func TestSealed_RoundTrip(t *testing.T) {
 	dek := freshDEK(t)
 	src := sampleManifest()
-	src.Metadata = json.RawMessage(`{"tenant":"acme","tags":["a","b"]}`)
+	src.Ext = json.RawMessage(`{"fsmeta":{"path":"a.txt"}}`)
+	src.Usr = json.RawMessage(`{"tenant":"acme","tags":["a","b"]}`)
 
 	bs, err := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
@@ -61,9 +62,13 @@ func TestSealed_RoundTrip(t *testing.T) {
 		t.Fatalf("DecodeFileEncrypted: %v", err)
 	}
 
-	if !bytes.Equal([]byte(got.Metadata), []byte(src.Metadata)) {
-		t.Errorf("metadata round-trip: got %s, want %s",
-			string(got.Metadata), string(src.Metadata))
+	if !bytes.Equal([]byte(got.Ext), []byte(src.Ext)) {
+		t.Errorf("ext round-trip: got %s, want %s",
+			string(got.Ext), string(src.Ext))
+	}
+	if !bytes.Equal([]byte(got.Usr), []byte(src.Usr)) {
+		t.Errorf("usr round-trip: got %s, want %s",
+			string(got.Usr), string(src.Usr))
 	}
 	if got.Namespace != src.Namespace {
 		t.Errorf("Namespace: got %q, want %q", got.Namespace, src.Namespace)
@@ -77,27 +82,32 @@ func TestSealed_SystemFieldsArePlaintext(t *testing.T) {
 	dek := freshDEK(t)
 	src := sampleManifest()
 	src.Namespace = "tenant-a/orders"
-	src.Metadata = json.RawMessage(`{"secret":"do-not-leak"}`)
+	src.Ext = json.RawMessage(`{"ext-secret":"do-not-leak-ext"}`)
+	src.Usr = json.RawMessage(`{"usr-secret":"do-not-leak-usr"}`)
 
 	bs, _ := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
 		domain.ManifestCryptoSealed, dek, "")
 
 	// Without any decryption, body should still contain the
-	// namespace string in plaintext (system fields stay open).
+	// namespace string in plaintext (sys block stays open).
 	if !bytes.Contains(bs, []byte("tenant-a/orders")) {
 		t.Error("Sealed should leave Namespace in plaintext on disk")
 	}
-	// And the metadata content must NOT be visible.
-	if bytes.Contains(bs, []byte("do-not-leak")) {
-		t.Error("Sealed leaked metadata to plaintext")
+	// And the ext/usr contents must NOT be visible.
+	if bytes.Contains(bs, []byte("do-not-leak-ext")) {
+		t.Error("Sealed leaked ext to plaintext")
+	}
+	if bytes.Contains(bs, []byte("do-not-leak-usr")) {
+		t.Error("Sealed leaked usr to plaintext")
 	}
 }
 
-func TestSealed_EmptyMetadata(t *testing.T) {
+func TestSealed_EmptyExtAndUsr(t *testing.T) {
 	dek := freshDEK(t)
 	src := sampleManifest()
-	src.Metadata = nil
+	src.Ext = nil
+	src.Usr = nil
 
 	bs, err := manifestcodec.EncodeFileEncrypted(
 		src, domain.ManifestEncodingJSON,
@@ -109,15 +119,27 @@ func TestSealed_EmptyMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeFileEncrypted: %v", err)
 	}
-	if len(got.Metadata) != 0 {
-		t.Errorf("metadata: expected empty, got %s", string(got.Metadata))
+	if len(got.Ext) != 0 {
+		t.Errorf("ext: expected empty, got %s", string(got.Ext))
+	}
+	if len(got.Usr) != 0 {
+		t.Errorf("usr: expected empty, got %s", string(got.Usr))
 	}
 }
 
 func TestSealed_TamperedHeaderFailsDecryption(t *testing.T) {
 	dek := freshDEK(t)
+	// Sealed only seals ext/usr/inline_blob — sys stays in
+	// plaintext. A manifest with all three blocks empty has no
+	// ciphertext and therefore no AAD anchor that would catch
+	// a header tamper at the codec layer (ArtifactID does that
+	// at the core layer). The test sets Usr so there is a
+	// sealed block whose AAD binds the header.
+	src := sampleManifest()
+	src.Usr = json.RawMessage(`{"tenant":"acme"}`)
+
 	bs, _ := manifestcodec.EncodeFileEncrypted(
-		sampleManifest(), domain.ManifestEncodingJSON,
+		src, domain.ManifestEncodingJSON,
 		domain.ManifestCryptoSealed, dek, "tenant-a")
 
 	// Find the KeyID byte and flip one bit. The 'a' in
@@ -137,19 +159,22 @@ func TestSealed_TamperedHeaderFailsDecryption(t *testing.T) {
 
 func TestSealed_TamperedCiphertext(t *testing.T) {
 	dek := freshDEK(t)
+	src := sampleManifest()
+	src.Usr = json.RawMessage(`{"tenant":"acme"}`)
+
 	bs, _ := manifestcodec.EncodeFileEncrypted(
-		sampleManifest(), domain.ManifestEncodingJSON,
+		src, domain.ManifestEncodingJSON,
 		domain.ManifestCryptoSealed, dek, "")
 
-	// Sealed stores ciphertext as base64 inside a JSON
-	// string. Find the JSON metadata key and replace one
-	// character of the base64 with another base64-valid one.
-	idx := bytes.Index(bs, []byte(`"metadata":"`))
+	// Sealed stores each sealed block as base64 inside a JSON
+	// string. Find the usr key (set above) and flip one
+	// base64 character to break the AEAD tag.
+	idx := bytes.Index(bs, []byte(`"usr":"`))
 	if idx < 0 {
-		t.Skip("metadata key not found at expected JSON position")
+		t.Fatal("usr key not found at expected JSON position")
 	}
 	// First base64 character after the opening quote.
-	pos := idx + len(`"metadata":"`)
+	pos := idx + len(`"usr":"`)
 	tampered := append([]byte{}, bs...)
 	if tampered[pos] == 'A' {
 		tampered[pos] = 'B'
