@@ -30,10 +30,22 @@ const MaxSessionIDLen = 255
 // exceeded.
 const MaxKeyIDLength = 255
 
-// MaxMetadataSize is the maximum byte size of the Manifest
-// Metadata block. 64 KiB.
-// Returns errs.ErrMetadataTooLarge when exceeded.
-// Metadata is for tags and paths, not for documents.
+// MaxExtSize is the maximum byte size of the Manifest Ext
+// block (extension data the engine itself reads — fsmeta, etc).
+// 64 KiB. Returns errs.ErrExtTooLarge when exceeded.
+const MaxExtSize = 64 * 1024
+
+// MaxUsrSize is the maximum byte size of the Manifest Usr block
+// (opaque host-application data). 64 KiB. Returns
+// errs.ErrUsrTooLarge when exceeded.
+const MaxUsrSize = 64 * 1024
+
+// MaxMetadataSize is the pre-ADR-54 single-block limit. Kept
+// during the migration so core's Put validation continues to
+// reject oversized inputs; removed in R2b together with the
+// Metadata field itself.
+//
+// Deprecated: use MaxExtSize / MaxUsrSize.
 const MaxMetadataSize = 64 * 1024
 
 // MaxManifestSize is the maximum byte size of a serialised

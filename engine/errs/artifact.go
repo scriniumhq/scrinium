@@ -44,7 +44,19 @@ var ErrSessionIDTooLong = errors.New("scrinium: session ID too long")
 // guards against a mass deletion of sessionless artifacts.
 var ErrEmptySessionID = errors.New("scrinium: empty session ID")
 
+// ErrExtTooLarge — Artifact.Ext > MaxExtSize (64 KB). Ext is the
+// engine-readable extension block (fsmeta and friends).
+var ErrExtTooLarge = errors.New("scrinium: ext metadata too large")
+
+// ErrUsrTooLarge — Artifact.Usr > MaxUsrSize (64 KB). Usr is the
+// opaque host-application block.
+var ErrUsrTooLarge = errors.New("scrinium: usr metadata too large")
+
 // ErrMetadataTooLarge — Artifact.Metadata > 64 KB.
+//
+// Deprecated: split into ErrExtTooLarge / ErrUsrTooLarge per
+// ADR-54. Kept during the migration; removed in R2b together
+// with the Metadata field.
 var ErrMetadataTooLarge = errors.New("scrinium: metadata too large")
 
 // ErrManifestTooLarge — serialised Manifest > 1 MB.

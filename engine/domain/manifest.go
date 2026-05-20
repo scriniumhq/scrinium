@@ -7,12 +7,23 @@ import (
 )
 
 // Artifact is the abstraction at the system boundary (input/output).
-// It consists of a byte stream (Payload) and a business context
-// (Metadata). The engine treats Metadata as an opaque blob —
-// parsing tags and paths is strictly the responsibility of the host
-// application.
+// It consists of a byte stream (Payload) and two metadata blocks:
+// Ext for Scrinium-extension data (fsmeta and friends — keys the
+// engine itself reads), and Usr for opaque host-application data
+// (tags, business attributes — the engine never inspects them).
+//
+// Metadata is the pre-ADR-54 single-block field. It is kept here
+// during the migration so the JSON codec and projection layer
+// continue to compile; new call sites should use Ext and/or Usr.
+// Removal happens in R2b when the codec is reshaped to the
+// {sys, ext, usr} layout.
 type Artifact struct {
-	Payload  io.Reader
+	Payload io.Reader
+
+	Ext json.RawMessage
+	Usr json.RawMessage
+
+	// Deprecated: split into Ext/Usr per ADR-54. Removed in R2b.
 	Metadata json.RawMessage
 }
 
