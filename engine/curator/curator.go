@@ -6,6 +6,8 @@ import (
 
 	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/wrapper/host"
+	"scrinium.dev/engine/wrapper/multistore"
 )
 
 // Curator is the L3 facade. It implements core.DataStore, adds
@@ -16,7 +18,7 @@ type Curator interface {
 
 	// MultistoreIndex returns the global index when one has been
 	// registered. It is usually nil with a single Target Store.
-	MultistoreIndex() MultistoreIndex
+	MultistoreIndex() multistore.MultistoreIndex
 
 	// Store returns a registered Target Store by ID with the full
 	// core.Store interface, including administrative methods.
@@ -28,17 +30,7 @@ type Curator interface {
 	Close(ctx context.Context) error
 
 	// Stats returns a snapshot of the local transit-buffer state.
-	Stats(ctx context.Context) (HostStorageStats, error)
-}
-
-// HostStorageStats is the current physical state of the transit
-// buffer. The values are a snapshot at the moment of the request.
-type HostStorageStats struct {
-	TransitBytes    int64 // bytes in transit (excluding quarantine)
-	TransitFiles    int   // number of files awaiting Drain
-	QuarantineBytes int64 // bytes in system.transit/quarantine/
-	QuarantineFiles int   // number of files in quarantine
-	MaxTransitBytes int64 // hard limit from configuration
+	Stats(ctx context.Context) (host.HostStorageStats, error)
 }
 
 // --- Event constants ---

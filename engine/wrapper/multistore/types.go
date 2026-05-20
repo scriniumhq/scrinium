@@ -1,15 +1,12 @@
-package curator
+package multistore
 
 import (
-	"context"
-	"io"
-	"time"
-
 	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/wrapper/host"
 )
 
-// --- Policy types ---
+// --- Policy enums ---
 
 // WriteStrategy is the strategy for writing into a Target Store
 // through Curator.
@@ -77,48 +74,7 @@ const (
 	OnUnavailableQueued     OnUnavailable = "Queued"
 )
 
-// EvictionPolicy is the eviction policy of HostStorage.
-type EvictionPolicy string
-
-const (
-	EvictionPolicyLRU      EvictionPolicy = "LRU"
-	EvictionPolicyTTL      EvictionPolicy = "TTL"
-	EvictionPolicyPressure EvictionPolicy = "Pressure"
-)
-
-// OnHostStorageFull controls behaviour when the HostStorage hard
-// limit is hit.
-type OnHostStorageFull string
-
-const (
-	OnHostStorageFullBlock        OnHostStorageFull = "Block"
-	OnHostStorageFullDirectStream OnHostStorageFull = "DirectStream"
-	OnHostStorageFullReject       OnHostStorageFull = "Reject"
-)
-
-// OnDrainNoTarget controls behaviour when the Router returns 0
-// targets at Drain time.
-type OnDrainNoTarget string
-
-const (
-	OnDrainNoTargetRetain     OnDrainNoTarget = "Retain"
-	OnDrainNoTargetQuarantine OnDrainNoTarget = "Quarantine"
-)
-
 // --- Configurations ---
-
-// HostStorageConfig is the configuration of the transit buffer.
-// WorkspaceDir is required.
-type HostStorageConfig struct {
-	EvictionPolicy    EvictionPolicy
-	OnHostStorageFull OnHostStorageFull
-	OnDrainNoTarget   OnDrainNoTarget
-	SoftLimitBytes    int64
-	HardLimitBytes    int64
-	EventCooldown     time.Duration
-	DrainInterval     time.Duration
-	WorkspaceDir      string
-}
 
 // StoreRegistrationConfig are the parameters of registering a
 // Target Store with Curator via WithStore.
@@ -187,18 +143,6 @@ type WrapperFactory interface {
 // is responsible for checking this and returning an error if it
 // requires HostStorage.
 type WrapperDeps struct {
-	HostStorage TransitStore
+	HostStorage host.TransitStore
 	Publisher   core.Publisher
-}
-
-// --- HostStorage public surface ---
-
-// TransitStore is the surface decorators see for working with
-// HostStorage. Passed through WrapperDeps. The full HostStorage
-// contract (TransitStore + HostAdmin) is internal to curator/.
-type TransitStore interface {
-	Write(ctx context.Context, blobRef string, r io.Reader) (path string, err error)
-	Read(ctx context.Context, blobRef string) (io.ReadCloser, error)
-	Has(ctx context.Context, blobRef string) bool
-	Remove(ctx context.Context, blobRef string) error
 }

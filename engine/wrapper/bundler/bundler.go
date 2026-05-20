@@ -8,8 +8,11 @@
 // Packing is transparent to the client: Put returns a regular
 // ArtifactID, and Get knows how to range-read out of the pack.
 //
+// Moved from engine/curator/bundler per ADR-53: wrappers are a
+// peer concept to Curator (a multi-store orchestrator) and live
+// under engine/wrapper/.
+//
 // TODO(M4.4): blob bundling for many-small-files workloads.
-// In M0 — the WrapperFactory contract
 package bundler
 
 import (
@@ -18,8 +21,8 @@ import (
 	"time"
 
 	"scrinium.dev/engine/core"
-	"scrinium.dev/engine/curator"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/wrapper/multistore"
 )
 
 // BundlerConfig holds the batch-sealing parameters. Triggers are
@@ -60,7 +63,7 @@ type Wrapper interface {
 // factory's Wrap returns an error if deps.HostStorage == nil.
 //
 // TODO(M4.4): bundling read path.
-func New(cfg BundlerConfig) curator.WrapperFactory {
+func New(cfg BundlerConfig) multistore.WrapperFactory {
 	return &factory{cfg: cfg}
 }
 
@@ -68,6 +71,6 @@ type factory struct {
 	cfg BundlerConfig
 }
 
-func (f *factory) Wrap(store core.DataStore, deps curator.WrapperDeps) (core.DataStore, error) {
+func (f *factory) Wrap(store core.DataStore, deps multistore.WrapperDeps) (core.DataStore, error) {
 	return nil, fmt.Errorf("%w: bundler.Wrap", errs.ErrNotImplemented)
 }

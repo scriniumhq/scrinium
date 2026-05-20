@@ -1,4 +1,4 @@
-package curator
+package multistore
 
 import (
 	"context"
@@ -6,13 +6,15 @@ import (
 	"scrinium.dev/engine/domain"
 )
 
-// MultistoreIndex is the aggregating index at the Curator level.
-// A wrapper over several domain.StoreIndexes; needed only when there
-// are multiple Stores. With a single Store, Curator works with the
-// StoreIndex directly.
+// MultistoreIndex is the aggregating index at the multistore
+// level. A wrapper over several domain.StoreIndexes; needed only
+// when there are multiple Stores. With a single Store, callers
+// work with the StoreIndex directly.
 //
 // Eventually consistent by nature — fully derivable from the
 // physical state of the underlying StoreIndexes.
+//
+// ctx threading is added in chunk R6 (F-110).
 type MultistoreIndex interface {
 	// ResolveArtifact returns the list of Stores in which the
 	// artifact is registered. Used when reading through Curator.

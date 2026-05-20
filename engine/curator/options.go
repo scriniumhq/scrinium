@@ -8,6 +8,8 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/wrapper/host"
+	"scrinium.dev/engine/wrapper/multistore"
 )
 
 // CuratorOption is an option for the Curator constructor (New).
@@ -18,9 +20,9 @@ type curatorOptions struct {
 	stores        []registeredStore
 	backups       []registeredBackup
 	hostStorage   *hostStorageRegistration
-	multistoreIdx MultistoreIndex
-	routingFunc   RoutingFunc
-	metaRouter    MetadataRouter
+	multistoreIdx multistore.MultistoreIndex
+	routingFunc   multistore.RoutingFunc
+	metaRouter    multistore.MetadataRouter
 	eventBus      event.EventBus
 	scrubCfg      *agent.ScrubConfig
 	snapshotCfg   *agent.SnapshotConfig
@@ -29,26 +31,26 @@ type curatorOptions struct {
 type registeredStore struct {
 	id       string
 	store    core.Store
-	cfg      StoreRegistrationConfig
-	wrappers []WrapperFactory
+	cfg      multistore.StoreRegistrationConfig
+	wrappers []multistore.WrapperFactory
 }
 
 type registeredBackup struct {
 	targetID string
 	store    core.Store
-	cfg      BackupConfig
-	wrappers []WrapperFactory
+	cfg      multistore.BackupConfig
+	wrappers []multistore.WrapperFactory
 }
 
 type hostStorageRegistration struct {
 	drv driver.Driver
-	cfg HostStorageConfig
+	cfg host.HostStorageConfig
 }
 
 // WithStore registers a Target Store with Curator. Decorators are
 // applied "outside in": the first wrapper is closest to the
 // client, the last is closest to the underlying store.
-func WithStore(id string, store core.Store, cfg StoreRegistrationConfig, wrappers ...WrapperFactory) CuratorOption {
+func WithStore(id string, store core.Store, cfg multistore.StoreRegistrationConfig, wrappers ...multistore.WrapperFactory) CuratorOption {
 	return func(o *curatorOptions) {
 		o.stores = append(o.stores, registeredStore{
 			id: id, store: store, cfg: cfg, wrappers: wrappers,
@@ -60,7 +62,7 @@ func WithStore(id string, store core.Store, cfg StoreRegistrationConfig, wrapper
 // Decorators are applied as in WithStore. Note: chunker.Wrapper
 // on a Backup is forbidden by the Rules Engine (see
 // docs/4. API Reference/05 Configuration §5.5).
-func WithBackup(targetID string, store core.Store, cfg BackupConfig, wrappers ...WrapperFactory) CuratorOption {
+func WithBackup(targetID string, store core.Store, cfg multistore.BackupConfig, wrappers ...multistore.WrapperFactory) CuratorOption {
 	return func(o *curatorOptions) {
 		o.backups = append(o.backups, registeredBackup{
 			targetID: targetID, store: store, cfg: cfg, wrappers: wrappers,
@@ -72,7 +74,7 @@ func WithBackup(targetID string, store core.Store, cfg BackupConfig, wrappers ..
 // buffer. One per Curator. Without HostStorage the Local/Replicated/
 // HostBuffered strategies and the bundler/chunker decorators are not
 // available.
-func WithHostStorage(localDrv driver.Driver, cfg HostStorageConfig) CuratorOption {
+func WithHostStorage(localDrv driver.Driver, cfg host.HostStorageConfig) CuratorOption {
 	return func(o *curatorOptions) {
 		o.hostStorage = &hostStorageRegistration{drv: localDrv, cfg: cfg}
 	}
@@ -80,20 +82,20 @@ func WithHostStorage(localDrv driver.Driver, cfg HostStorageConfig) CuratorOptio
 
 // WithMultistoreIndex provides the global-index implementation.
 // Usually not required with a single Target Store.
-func WithMultistoreIndex(idx MultistoreIndex) CuratorOption {
+func WithMultistoreIndex(idx multistore.MultistoreIndex) CuratorOption {
 	return func(o *curatorOptions) { o.multistoreIdx = idx }
 }
 
 // WithRoutingFunc provides the function that selects Target Stores
 // at write time.
-func WithRoutingFunc(fn RoutingFunc) CuratorOption {
+func WithRoutingFunc(fn multistore.RoutingFunc) CuratorOption {
 	return func(o *curatorOptions) { o.routingFunc = fn }
 }
 
 // WithMetadataRouter provides the function that reconstructs
 // RoutingHints from the manifest fields (Namespace, Ext, Usr)
 // at deferred-Drain time.
-func WithMetadataRouter(fn MetadataRouter) CuratorOption {
+func WithMetadataRouter(fn multistore.MetadataRouter) CuratorOption {
 	return func(o *curatorOptions) { o.metaRouter = fn }
 }
 
