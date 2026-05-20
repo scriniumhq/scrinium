@@ -77,13 +77,9 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 // errs.ErrCorruptedBlob — see the Verify doc comment for the
 // rationale.
 func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
-	algo, want, err := s.hashes.Parse(string(m.ContentHash))
+	_, want, hasher, err := s.parseContentHash(m.ContentHash)
 	if err != nil {
-		return fmt.Errorf("core.Verify: parse ContentHash: %w", err)
-	}
-	hasher, err := s.hashes.NewHasher(algo)
-	if err != nil {
-		return fmt.Errorf("core.Verify: hasher: %w", err)
+		return fmt.Errorf("core.Verify: %w", err)
 	}
 
 	// Step 1 — obtain a reader over the on-disk (ciphertext-

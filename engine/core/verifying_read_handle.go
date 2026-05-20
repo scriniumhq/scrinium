@@ -63,15 +63,10 @@ func newVerifyingReadHandle(inner ReadHandle, s *store) (ReadHandle, error) {
 	if m.ContentHash == "" {
 		return inner, nil
 	}
-	algo, want, err := s.hashes.Parse(string(m.ContentHash))
+	algo, want, hasher, err := s.parseContentHash(m.ContentHash)
 	if err != nil {
 		_ = inner.Close()
-		return nil, fmt.Errorf("core.Get: parse ContentHash: %w", err)
-	}
-	hasher, err := s.hashes.NewHasher(algo)
-	if err != nil {
-		_ = inner.Close()
-		return nil, fmt.Errorf("core.Get: hasher %q: %w", algo, err)
+		return nil, fmt.Errorf("core.Get: %w", err)
 	}
 	limit := int64(-1)
 	if m.OriginalSize > 0 {
