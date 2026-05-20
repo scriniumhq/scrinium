@@ -106,10 +106,9 @@ type StoreConfig struct {
 	PackAlignment    PackAlignmentPolicy
 	EagerFetchLimit  int64
 
-	Pipeline            []string
-	ContentHasher       ContentHashAlgorithm
-	MetadataTransformer string
-	VerifyOnRead        VerifyOnReadPolicy
+	Pipeline      []string
+	ContentHasher ContentHashAlgorithm
+	VerifyOnRead  VerifyOnReadPolicy
 
 	DeletionPolicy       DeletionPolicy
 	DeletionPolicyLock   bool

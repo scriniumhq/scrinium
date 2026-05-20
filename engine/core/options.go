@@ -100,8 +100,7 @@ func WithHashRegistry(r domain.HashRegistry) StoreOption {
 }
 
 // WithReadRegistry provides the registry of transformation plugins.
-// Required when StoreConfig.Pipeline is non-empty or
-// MetadataTransformer is set.
+// Required when StoreConfig.Pipeline is non-empty.
 func WithReadRegistry(r TransformerRegistry) StoreOption {
 	return func(o *storeOptions) { o.readRegistry = r }
 }
