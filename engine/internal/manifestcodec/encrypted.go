@@ -191,12 +191,6 @@ func encodeSealed(m domain.Manifest, dek, header []byte) ([]byte, error) {
 		sealed.InlineBlob = nil
 	}
 
-	// Pre-R2b-iii bridge: legacy Metadata field is cleared in
-	// Sealed output. With the three-block scheme there is no
-	// place for it on disk; callers that still set m.Metadata
-	// see it silently dropped here. Removed in R2b-iii.
-	sealed.Metadata = nil
-
 	return marshalBodyJSON(sealed)
 }
 
@@ -296,16 +290,7 @@ func wrapBase64AsJSONString(raw []byte) json.RawMessage {
 // --- Paranoid: encrypt the entire body ---
 
 func encodeParanoid(m domain.Manifest, dek, aad []byte) ([]byte, error) {
-	// Paranoid uses the same jsonBody shape as Plain — every
-	// block (sys, ext, usr, inline_blob) is serialised in
-	// plaintext and the full result is sealed as one AEAD
-	// block. The legacy Metadata bridge field is cleared so it
-	// does not leak into the ciphertext; nothing on the read
-	// side expects it any longer.
-	sealed := m
-	sealed.Metadata = nil
-
-	plain, err := marshalBodyJSON(sealed)
+	plain, err := marshalBodyJSON(m)
 	if err != nil {
 		return nil, err
 	}

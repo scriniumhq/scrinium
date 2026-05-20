@@ -205,13 +205,6 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		RetentionUntil: opts.RetentionUntil,
 		Ext:            a.Ext,
 		Usr:            a.Usr,
-		// Bridge: Sealed/Paranoid still encrypt through
-		// Manifest.Metadata until R2b-ii/iii. The field carries
-		// the host's legacy payload when a non-Plain crypto mode
-		// is active; on Plain it is preserved as a transparent
-		// pass-through for callers that have not yet migrated to
-		// Ext/Usr.
-		Metadata: a.Metadata,
 	}
 	// Snapshot crypto state for non-Plain manifest encryption.
 	// Held briefly under cryptoMu, then released so a parallel
@@ -514,13 +507,6 @@ func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	}
 	if len(a.Usr) > domain.MaxUsrSize {
 		return errs.ErrUsrTooLarge
-	}
-	// Bridge: legacy Metadata field still validated against the
-	// pre-ADR-54 limit until Sealed/Paranoid stop using it
-	// (R2b-iii). Hosts that have not migrated to Ext/Usr keep
-	// getting ErrMetadataTooLarge on oversized payloads.
-	if len(a.Metadata) > domain.MaxMetadataSize {
-		return errs.ErrMetadataTooLarge
 	}
 	return nil
 }

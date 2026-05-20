@@ -181,7 +181,6 @@ func (f *FakeSource) Put(
 		OriginalSize: int64(len(payload)),
 		Ext:          a.Ext,
 		Usr:          a.Usr,
-		Metadata:     a.Metadata, // Bridge during ADR-54 migration.
 	}
 
 	f.mu.Lock()
@@ -364,7 +363,7 @@ func AddFsmetaPath(m *domain.Manifest, path string) error {
 	if err != nil {
 		return err
 	}
-	m.Metadata = raw
+	m.Ext = raw
 	return nil
 }
 

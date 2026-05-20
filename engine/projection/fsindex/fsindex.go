@@ -101,8 +101,7 @@ func (e *Extension) Apply(ctx context.Context, store index.ExtensionStore, kind 
 // silently skipped — the extension only indexes what it
 // understands.
 func (e *Extension) applyIndexed(store index.ExtensionStore, args index.EventArgs) error {
-	extBytes := domain.EffectiveExt(args.Manifest)
-	fs, ok, err := fsmeta.Decode(extBytes)
+	fs, ok, err := fsmeta.Decode(args.Manifest.Ext)
 	if err != nil {
 		// Decode errors mean the ext block claims to be fsmeta
 		// (right marker) but is structurally broken. We log via
@@ -122,7 +121,7 @@ func (e *Extension) applyIndexed(store index.ExtensionStore, args index.EventArg
 	// actually carries; we don't re-encode `fs` because that
 	// would lose forward-compatibility with future fsmeta
 	// versions that add fields fsindex doesn't understand).
-	if err := store.Put(tableByID, id, []byte(extBytes)); err != nil {
+	if err := store.Put(tableByID, id, []byte(args.Manifest.Ext)); err != nil {
 		return fmt.Errorf("fsindex: put byID: %w", err)
 	}
 
@@ -154,7 +153,7 @@ func (e *Extension) applyDeleted(store index.ExtensionStore, args index.EventArg
 	}
 
 	// Decode the stored payload to recover the path. We don't
-	// trust args.Manifest.Metadata here — for deletion the
+	// trust args.Manifest.Ext here — for deletion the
 	// backend passes a zero Manifest.
 	fs, ok, err := fsmeta.Decode(raw)
 	if err != nil {

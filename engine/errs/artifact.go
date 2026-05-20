@@ -52,12 +52,5 @@ var ErrExtTooLarge = errors.New("scrinium: ext metadata too large")
 // opaque host-application block.
 var ErrUsrTooLarge = errors.New("scrinium: usr metadata too large")
 
-// ErrMetadataTooLarge — Artifact.Metadata > 64 KB.
-//
-// Deprecated: split into ErrExtTooLarge / ErrUsrTooLarge per
-// ADR-54. Kept during the migration; removed in R2b together
-// with the Metadata field.
-var ErrMetadataTooLarge = errors.New("scrinium: metadata too large")
-
 // ErrManifestTooLarge — serialised Manifest > 1 MB.
 var ErrManifestTooLarge = errors.New("scrinium: manifest too large")

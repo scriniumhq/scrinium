@@ -7,24 +7,20 @@ import (
 )
 
 // Artifact is the abstraction at the system boundary (input/output).
-// It consists of a byte stream (Payload) and two metadata blocks:
-// Ext for Scrinium-extension data (fsmeta and friends — keys the
-// engine itself reads), and Usr for opaque host-application data
-// (tags, business attributes — the engine never inspects them).
+// It consists of a byte stream (Payload) and two metadata blocks
+// per ADR-54:
 //
-// Metadata is the pre-ADR-54 single-block field. It is kept here
-// during the migration so the JSON codec and projection layer
-// continue to compile; new call sites should use Ext and/or Usr.
-// Removal happens in R2b when the codec is reshaped to the
-// {sys, ext, usr} layout.
+//   - Ext: Scrinium-extension data the engine itself reads
+//     (fsmeta and friends).
+//   - Usr: opaque host-application data — tags, business
+//     attributes; the engine never inspects them.
+//
+// Each block has a 64 KiB limit (MaxExtSize, MaxUsrSize).
 type Artifact struct {
 	Payload io.Reader
 
 	Ext json.RawMessage
 	Usr json.RawMessage
-
-	// Deprecated: split into Ext/Usr per ADR-54. Removed in R2b.
-	Metadata json.RawMessage
 }
 
 // ManifestType is the role of a Manifest.
@@ -114,31 +110,4 @@ type Manifest struct {
 
 	Ext json.RawMessage
 	Usr json.RawMessage
-
-	// Deprecated: split into Ext/Usr per ADR-54. Removed in R2b.
-	Metadata json.RawMessage
-}
-
-// EffectiveExt returns the engine-extension metadata for a
-// manifest, with a bridge that falls back to the deprecated
-// Metadata field for Sealed/Paranoid artifacts whose
-// encrypt/decrypt path has not yet migrated to the ext/usr
-// split (R2b-ii). Plain manifests written after R2b-i always
-// populate Ext directly; legacy encrypted manifests round-trip
-// through Metadata for now.
-//
-// Removed in R2b-iii when Sealed/Paranoid stop using Metadata.
-func EffectiveExt(m Manifest) json.RawMessage {
-	if len(m.Ext) > 0 {
-		return m.Ext
-	}
-	return m.Metadata
-}
-
-// EffectiveUsr returns the host-application metadata for a
-// manifest. No bridge: Usr is populated only when the host
-// passes Artifact.Usr explicitly, which Sealed/Paranoid reject
-// (see core.Put) during the R2b migration window.
-func EffectiveUsr(m Manifest) json.RawMessage {
-	return m.Usr
 }

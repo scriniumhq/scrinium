@@ -16,8 +16,8 @@ import (
 
 // --- helpers ---
 
-// countingMetadataSource records every call to Metadata so tests
-// can assert the fast-path was actually taken.
+// countingExtSource records every call to Ext so tests can
+// assert the fast-path was actually taken.
 type countingExtSource struct {
 	store map[domain.ArtifactID]json.RawMessage
 	calls atomic.Int32
@@ -39,7 +39,7 @@ func (c *countingExtSource) Ext(id domain.ArtifactID) (json.RawMessage, bool, er
 	return raw, ok, nil
 }
 
-// strippedManifest returns a Manifest with Metadata cleared,
+// strippedManifest returns a Manifest with Ext cleared,
 // simulating what an index-backed Walk produces.
 func strippedManifest(id domain.ArtifactID, namespace string) domain.Manifest {
 	return domain.Manifest{
@@ -51,7 +51,7 @@ func strippedManifest(id domain.ArtifactID, namespace string) domain.Manifest {
 		OriginalSize: 100,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		// Metadata intentionally nil.
+		// Ext intentionally nil.
 	}
 }
 
@@ -77,7 +77,7 @@ func TestBackfill_FastPath_UsesExtSource(t *testing.T) {
 
 	for i, path := range []string{"a.txt", "b.txt", "c.txt"} {
 		id := domain.ArtifactID([]byte{'i', 'd', '0' + byte(i)})
-		// Walk-side: stripped (no Metadata).
+		// Walk-side: stripped (no Ext).
 		src.Add(strippedManifest(id, "files"), nil)
 		// Fast-path side: full metadata.
 		ms.put(id, encodeFSMeta(t, path))
@@ -105,12 +105,12 @@ func TestBackfill_FastPath_UsesExtSource(t *testing.T) {
 // ExtSource doesn't have a record (e.g. artifact written
 // before the extension was registered), backfill silently falls
 // back to Source.Get and the View still ends up with the
-// metadata for that manifest.
+// ext block for that manifest.
 func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	src := projectionfx.New()
 	ms := newCountingExtSource()
 
-	// One artifact in MetadataSource with full metadata.
+	// One artifact in ExtSource with full ext payload.
 	idHit := domain.ArtifactID("hit")
 	src.Add(domain.Manifest{
 		ArtifactID:   idHit,
@@ -120,13 +120,13 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		Metadata:     encodeFSMeta(t, "in-source.txt"),
+		Ext:          encodeFSMeta(t, "in-source.txt"),
 	}, nil)
 	ms.put(idHit, encodeFSMeta(t, "in-source.txt"))
 
-	// Another artifact NOT in MetadataSource. FakeSource keeps
-	// the full manifest in-memory; the slow-path Get returns it,
-	// recovering Metadata for the View.
+	// Another artifact NOT in ExtSource. FakeSource keeps the
+	// full manifest in-memory; the slow-path Get returns it,
+	// recovering Ext for the View.
 	idMiss := domain.ArtifactID("miss")
 	src.Add(domain.Manifest{
 		ArtifactID:   idMiss,
@@ -136,7 +136,7 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		Metadata:     encodeFSMeta(t, "fallback.txt"),
+		Ext:          encodeFSMeta(t, "fallback.txt"),
 	}, nil)
 	// Intentionally NOT calling ms.put for idMiss.
 
@@ -166,12 +166,12 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 // backwards-compatible slow path: with no ExtSource
 // configured, View round-trips Source.Get for each manifest. We
 // detect this by injecting a Get error and observing that the
-// resolver doesn't see Metadata (path resolution fails, but the
+// resolver doesn't see Ext (path resolution fails, but the
 // artifact still ends up indexed by id in by-artifact).
 func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 	src := projectionfx.New()
 
-	// Strip Metadata from the Walk-side manifest so the resolver
+	// Strip Ext from the Walk-side manifest so the resolver
 	// can't produce a path without Get's help.
 	id := domain.ArtifactID("only-walk")
 	src.Add(strippedManifest(id, "files"), nil)
@@ -183,14 +183,14 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 
 	v, err := projection.NewView(context.Background(), src,
 		projection.WithPathResolver(fsmeta.Resolver),
-		// No WithMetadataSource here.
+		// No WithExtSource here.
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
 
-	// Path resolution failed (no Metadata reached the resolver),
-	// so the artifact must be absent from by-path.
+	// Path resolution failed (no Ext reached the resolver), so
+	// the artifact must be absent from by-path.
 	if _, err := v.GetByPath("only-walk"); err == nil {
 		t.Error("artifact unexpectedly indexed under by-path")
 	}

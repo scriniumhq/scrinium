@@ -38,8 +38,8 @@ func initEncryptedWithCrypto(t *testing.T, crypto domain.ManifestCrypto) core.St
 func payloadReader(s string) (a domain.Artifact, raw []byte) {
 	raw = []byte(s)
 	a = domain.Artifact{
-		Payload:  bytes.NewReader(raw),
-		Metadata: json.RawMessage(`{"tag":"x"}`),
+		Payload: bytes.NewReader(raw),
+		Usr:     json.RawMessage(`{"tag":"x"}`),
 	}
 	return
 }

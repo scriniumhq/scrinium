@@ -27,16 +27,9 @@ import (
 // plus an optional inline_blob. Field declaration order matches
 // alphabetical JSON-tag order so the output is deterministic
 // without map-round-tripping.
-//
-// Sealed/Paranoid bridge: the Metadata field stays in jsonBody
-// during the ADR-54 migration so the encrypted modes (which
-// still encrypt through Manifest.Metadata) continue to
-// round-trip. Removed in R2b-iii together with the legacy
-// Manifest.Metadata field.
 type jsonBody struct {
 	Ext        json.RawMessage `json:"ext,omitempty"`
 	InlineBlob string          `json:"inline_blob,omitempty"` // base64
-	Metadata   json.RawMessage `json:"metadata,omitempty"`    // Deprecated: bridge for Sealed/Paranoid; removed in R2b-iii.
 	Sys        jsonSys         `json:"sys"`
 	Usr        json.RawMessage `json:"usr,omitempty"`
 }
@@ -84,9 +77,8 @@ type jsonSystemFlags struct {
 // the contract.
 func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 	body := jsonBody{
-		Ext:      m.Ext,
-		Metadata: m.Metadata,
-		Usr:      m.Usr,
+		Ext: m.Ext,
+		Usr: m.Usr,
 		Sys: jsonSys{
 			BlobRef:       string(m.BlobRef),
 			ContentHash:   string(m.ContentHash),
@@ -149,7 +141,6 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 		ExternalURI: b.Sys.ExternalURI,
 		Ext:         b.Ext,
 		Usr:         b.Usr,
-		Metadata:    b.Metadata,
 		LayoutHeader: domain.LayoutHeader{
 			BlobStorage: b.Sys.LayoutHeader.BlobStorage,
 		},

@@ -29,7 +29,7 @@ import (
 // about.
 //
 // Marker is the schema's "kind" field as it appears in
-// Manifest.Metadata (e.g. "scrinium.fs/v1"). Render produces an
+// Manifest.Usr (e.g. "scrinium.fs/v1"). Render produces an
 // HTML fragment for the specific schema; the web pkg slots it
 // into the artifact page's "Schema" section.
 //
@@ -55,7 +55,7 @@ func (h *Handler) RegisterDecoder(d SchemaDecoder) {
 }
 
 // schemaPeek is the minimal shape we read from
-// Manifest.Metadata to dispatch on schema kind. Both
+// Manifest.Usr to dispatch on schema kind. Both
 // scrinium.fs/v1 and any future schema must include a "kind"
 // field; decoders without one fall through to the JSON view.
 type schemaPeek struct {
@@ -318,7 +318,7 @@ func formatHexDump(data []byte) string {
 func previewMIME(m domain.Manifest) string {
 	mimeType := ""
 	name := ""
-	if fs, ok, err := fsmeta.Decode(domain.EffectiveExt(m)); err == nil && ok {
+	if fs, ok, err := fsmeta.Decode(m.Ext); err == nil && ok {
 		mimeType = fs.MIME
 		name = pathx.LastSegment(fs.Path)
 	}
@@ -675,36 +675,29 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		}
 	}
 
-	// Schema rendering. Three branches:
+	// Schema rendering targets the engine-extension block (Ext
+	// per ADR-54) where fsmeta and similar schemas live. Three
+	// branches:
 	//
-	//   1. Metadata is empty → no Schema section. Template
-	//      renders nothing.
-	//   2. Metadata has a "kind" matching a registered decoder
-	//      → render through the decoder; on error, fall back
-	//      to JSON with the error noted.
+	//   1. Ext is empty → no Schema section.
+	//   2. Ext has a "kind" matching a registered decoder →
+	//      render through the decoder; on error, fall back to
+	//      JSON with the error noted.
 	//   3. Otherwise → pretty JSON view, no kind highlighted.
-	// Schema rendering targets the host's payload — Usr after
-	// the ADR-54 split, with a fallback to the legacy Metadata
-	// field for Sealed/Paranoid manifests that still go through
-	// the pre-migration crypto path.
-	schemaPayload := m.Usr
-	if len(schemaPayload) == 0 {
-		schemaPayload = m.Metadata
-	}
-	if len(schemaPayload) > 0 {
+	if len(m.Ext) > 0 {
 		var peek schemaPeek
-		_ = json.Unmarshal(schemaPayload, &peek) // best-effort
+		_ = json.Unmarshal(m.Ext, &peek) // best-effort
 		data.SchemaKind = peek.Kind
 		if dec, ok := h.decoders[peek.Kind]; ok && peek.Kind != "" {
-			rendered, err := dec.Render(schemaPayload)
+			rendered, err := dec.Render(m.Ext)
 			if err != nil {
 				data.SchemaError = err.Error()
-				data.SchemaJSON = prettyJSON(schemaPayload)
+				data.SchemaJSON = prettyJSON(m.Ext)
 			} else {
 				data.SchemaHTML = rendered
 			}
 		} else {
-			data.SchemaJSON = prettyJSON(schemaPayload)
+			data.SchemaJSON = prettyJSON(m.Ext)
 		}
 	}
 
@@ -726,7 +719,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		KeyID          string                 `json:"key_id,omitempty"`
 		Ext            json.RawMessage        `json:"ext,omitempty"`
 		Usr            json.RawMessage        `json:"usr,omitempty"`
-		Metadata       json.RawMessage        `json:"metadata,omitempty"` // Deprecated bridge — removed in R2b-iii.
 	}{
 		Type:           m.Type,
 		Namespace:      m.Namespace,
@@ -742,7 +734,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		KeyID:          m.KeyID,
 		Ext:            m.Ext,
 		Usr:            m.Usr,
-		Metadata:       m.Metadata,
 	}, "", "  ")
 	if err == nil {
 		data.RawJSON = string(raw)

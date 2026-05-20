@@ -139,7 +139,7 @@ func run(srcDir, storeURI, namespace string) error {
 		}
 
 		id, err := s.Store.Put(ctx,
-			domain.Artifact{Payload: f, Metadata: md},
+			domain.Artifact{Payload: f, Ext: md},
 			domain.PutOptions{
 				SessionID: sessionID,
 				Namespace: namespace,

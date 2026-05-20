@@ -225,17 +225,17 @@ func TestPut_RejectsTooLongSessionID(t *testing.T) {
 	}
 }
 
-func TestPut_RejectsHugeMetadata(t *testing.T) {
+func TestPut_RejectsHugeExt(t *testing.T) {
 	s, _ := storefx.InitWithRoot(t)
 	huge := bytes.Repeat([]byte(`a`), 64*1024+1)
 	_, err := s.Put(context.Background(),
 		domain.Artifact{
-			Payload:  strings.NewReader("ok"),
-			Metadata: append([]byte(`"`), append(huge, '"')...),
+			Payload: strings.NewReader("ok"),
+			Ext:     append([]byte(`"`), append(huge, '"')...),
 		},
 		domain.PutOptions{})
-	if !errors.Is(err, errs.ErrMetadataTooLarge) {
-		t.Fatalf("expected errs.ErrMetadataTooLarge, got %v", err)
+	if !errors.Is(err, errs.ErrExtTooLarge) {
+		t.Fatalf("expected errs.ErrExtTooLarge, got %v", err)
 	}
 }
 

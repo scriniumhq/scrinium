@@ -198,18 +198,18 @@ func (v *View) allTrees() []map[string]*viewNode {
 //
 // Two paths exist:
 //
-//   - Fast path (a ExtSource is configured). Source.Walk
-//     gives us the stripped manifests; we top them up by calling
-//     metadataSource.Metadata(id) — an O(log N) lookup against a
-//     local index extension that persisted Metadata at write
-//     time. No round-trip to Source.Get per manifest.
+//   - Fast path (an ExtSource is configured). Source.Walk
+//     gives us the stripped manifests; we top them up by
+//     calling extSource.Ext(id) — an O(log N) lookup against
+//     a local index extension that persisted the ext block at
+//     write time. No round-trip to Source.Get per manifest.
 //
-//   - Slow path (no ExtSource). We round-trip Source.Get
-//     for every manifest to recover Metadata. This is N+1 by
-//     construction; acceptable for tests with FakeSource (which
-//     keeps full manifests in memory anyway, so Get is cheap)
-//     and for backfills small enough that latency doesn't
-//     matter. Daemons with large stores configure
+//   - Slow path (no ExtSource). We round-trip Source.Get for
+//     every manifest to recover Ext. This is N+1 by
+//     construction; acceptable for tests with FakeSource
+//     (which keeps full manifests in memory anyway, so Get is
+//     cheap) and for backfills small enough that latency
+//     doesn't matter. Daemons with large stores configure
 //     WithExtSource (or WithFSIndex) to take the fast path.
 func (v *View) backfill(ctx context.Context) error {
 	cb := func(m domain.Manifest) error {
@@ -266,7 +266,7 @@ func (v *View) populateExt(ctx context.Context, m *domain.Manifest) {
 	// Prefer the canonical Ext block; fall back to the legacy
 	// Metadata field for Sealed/Paranoid manifests whose crypto
 	// path has not migrated yet.
-	if extBytes := domain.EffectiveExt(full); len(extBytes) > 0 {
+	if extBytes := full.Ext; len(extBytes) > 0 {
 		m.Ext = extBytes
 	}
 	if full.ContentHash != "" {
@@ -639,7 +639,7 @@ func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) 
 		CreatedAt:   rec.manifest.CreatedAt,
 		MatchReason: reason,
 	}
-	if fs, ok, err := fsmeta.Decode(rec.manifest.Metadata); err == nil && ok {
+	if fs, ok, err := fsmeta.Decode(rec.manifest.Ext); err == nil && ok {
 		r.MIME = fs.MIME
 	}
 	return r
@@ -1078,7 +1078,7 @@ func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 //
 // FilesystemFacet carries only the schema-agnostic fields: Name,
 // Path, Size, ModTime, IsDir. POSIX attributes (mode/uid/gid)
-// live in fsmeta.FileSystem inside Manifest.Metadata and are
+// live in fsmeta.FileSystem inside Manifest.Ext and are
 // materialised by FSOps at the transport boundary.
 //
 // ModTime here is seeded from m.CreatedAt as a baseline; FSOps
@@ -1171,11 +1171,6 @@ func newDirNode(name, path string, modTime time.Time) *viewNode {
 }
 
 // artifactFacetFrom builds the Node.Artifact facet from a manifest.
-//
-// Ext is populated through domain.EffectiveExt so consumers see a
-// single block regardless of whether the manifest was written via
-// the new Ext path (Plain) or the legacy Metadata bridge
-// (Sealed/Paranoid in flight). The bridge collapses in R2b-iii.
 func artifactFacetFrom(m domain.Manifest) *ArtifactFacet {
 	return &ArtifactFacet{
 		ArtifactID:  m.ArtifactID,
@@ -1185,7 +1180,7 @@ func artifactFacetFrom(m domain.Manifest) *ArtifactFacet {
 		SessionID:   m.SessionID,
 		CreatedAt:   m.CreatedAt,
 		Type:        m.Type,
-		Ext:         domain.EffectiveExt(m),
+		Ext:         m.Ext,
 	}
 }
 
@@ -1258,7 +1253,7 @@ func byDatePath(m domain.Manifest) string {
 // same fsmeta basename collide; that's accepted — the by-date
 // tree is a diagnostic aid, not an authoritative storage layout.
 func byDateLabel(m domain.Manifest) string {
-	if fs, ok, err := fsmeta.Decode(m.Metadata); err == nil && ok {
+	if fs, ok, err := fsmeta.Decode(m.Ext); err == nil && ok {
 		base := pathx.LastSegment(fs.Path)
 		if base != "" {
 			return base

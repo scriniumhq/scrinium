@@ -477,16 +477,16 @@ func (o *FSOps) openInRoot(ctx context.Context, path string) (core.ReadHandle, e
 // fileInfoFromNode converts a Node into a FileInfo, applying
 // FSOps defaults to fields the artifact left zero.
 //
-// For file nodes, FSOps reads fsmeta from the Manifest.Metadata
-// directly — the View itself is schema-agnostic and does not
-// surface fsmeta.Mode/UID/GID/ModTime through FilesystemFacet.
-// FSOps is the layer that knows about the filesystem schema and
-// applies defaults at the boundary where they have to be visible
-// to FUSE/WebDAV.
+// For file nodes, FSOps reads fsmeta from Manifest.Ext directly
+// — the View itself is schema-agnostic and does not surface
+// fsmeta.Mode/UID/GID/ModTime through FilesystemFacet. FSOps is
+// the layer that knows about the filesystem schema and applies
+// defaults at the boundary where they have to be visible to
+// FUSE/WebDAV.
 //
 // Decode errors are silently swallowed: the same hot-path policy
-// as fsmeta.Resolver inside View. A single bad metadata payload
-// must not poison Stat/Listdir for the whole tree.
+// as fsmeta.Resolver inside View. A single bad ext payload must
+// not poison Stat/Listdir for the whole tree.
 func (o *FSOps) fileInfoFromNode(n Node) FileInfo {
 	fi := FileInfo{
 		Name:    n.FS.Name,

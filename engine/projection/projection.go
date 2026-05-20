@@ -193,22 +193,22 @@ type viewOptions struct {
 	extSource ExtSource
 }
 
-// ExtSource is the contract View backfill uses to fetch
-// manifest metadata in bulk. Source.Walk normally returns
-// stripped manifests (the index is the routing layer, not the
-// content store) — without a ExtSource, View has to round-
-// trip Source.Get for every manifest just to recover Metadata,
-// which is N+1.
+// ExtSource is the contract View backfill uses to fetch the
+// engine-extension block (Manifest.Ext) in bulk. Source.Walk
+// normally returns stripped manifests (the index is the
+// routing layer, not the content store) — without an
+// ExtSource, View has to round-trip Source.Get for every
+// manifest just to recover Ext, which is N+1.
 //
-// An ExtSource — typically an index extension that
-// persisted metadata at write time — answers Metadata(id) in
-// O(log N) from local storage. View.backfill skips the
-// per-manifest Get when one is configured.
+// An ExtSource — typically an index extension that persisted
+// the ext block at write time — answers Ext(id) in O(log N)
+// from local storage. View.backfill skips the per-manifest Get
+// when one is configured.
 //
 // The interface is schema-agnostic: the source returns the raw
-// json.RawMessage that Manifest.Metadata held at write time.
-// View consumers (FSOps and friends) decode into whatever
-// schema they care about (fsmeta, email, archive).
+// json.RawMessage that Manifest.Ext held at write time. View
+// consumers (FSOps and friends) decode into whatever schema
+// they care about (fsmeta, email, archive).
 type ExtSource interface {
 	// Ext returns the ext-block bytes for the given artifact
 	// id. (raw, true, nil) — found; (nil, false, nil) — not

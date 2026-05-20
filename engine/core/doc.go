@@ -3,9 +3,10 @@
 // A self-contained CAS engine: it accepts Artifacts, runs them
 // through a configurable Pipeline, places them on a backend through
 // a Driver, and keeps accounting in a StoreIndex. It operates on
-// cryptographic identifiers (ContentHash, BlobRef, ArtifactID) and
-// has no knowledge of business metadata (Metadata is an opaque
-// json.RawMessage).
+// cryptographic identifiers (ContentHash, BlobRef, ArtifactID).
+// The two metadata blocks per ADR-54 (Ext for engine extensions
+// like fsmeta, Usr for opaque host data) are passed through but
+// never interpreted by the core.
 //
 // The Store contract is split into three interfaces:
 //   - DataStore — operations on artifacts (Put, Get, Delete, Walk,

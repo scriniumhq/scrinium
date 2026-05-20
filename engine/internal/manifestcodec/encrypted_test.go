@@ -188,6 +188,100 @@ func TestSealed_TamperedCiphertext(t *testing.T) {
 	}
 }
 
+func TestSealed_CrossBlockSwapFails(t *testing.T) {
+	// Per ADR-54 the AAD for each Sealed sub-block is the file
+	// header concatenated with a block tag ("ext"/"usr"/...).
+	// Swapping a ciphertext from one field into another must
+	// fail decryption — the AAD doesn't match.
+	//
+	// We pad the two payloads to the same length so their
+	// base64 encodings are the same length too, which makes the
+	// in-place swap a simple byte copy without changing the JSON
+	// surrounding structure.
+	dek := freshDEK(t)
+	src := sampleManifest()
+	src.Ext = json.RawMessage(`{"a":"ext-data-AAAA"}`)
+	src.Usr = json.RawMessage(`{"a":"usr-data-BBBB"}`)
+	if len(src.Ext) != len(src.Usr) {
+		t.Fatalf("test setup: payload lengths differ (%d vs %d)",
+			len(src.Ext), len(src.Usr))
+	}
+
+	bs, err := manifestcodec.EncodeFileEncrypted(
+		src, domain.ManifestEncodingJSON,
+		domain.ManifestCryptoSealed, dek, "")
+	if err != nil {
+		t.Fatalf("EncodeFileEncrypted: %v", err)
+	}
+
+	// Locate the two encrypted-string fields in the body. They
+	// appear as `"ext":"<b64>",...,"usr":"<b64>",...`. We capture
+	// the start/end of each base64 ciphertext span — once, before
+	// any mutation — so the swap is purely positional.
+	extKey := []byte(`"ext":"`)
+	usrKey := []byte(`"usr":"`)
+	extStart := bytes.Index(bs, extKey)
+	usrStart := bytes.Index(bs, usrKey)
+	if extStart < 0 || usrStart < 0 {
+		t.Fatalf("ext or usr field not found in body: %s", bs)
+	}
+	extCTStart := extStart + len(extKey)
+	usrCTStart := usrStart + len(usrKey)
+	extCTEnd := extCTStart + bytes.IndexByte(bs[extCTStart:], '"')
+	usrCTEnd := usrCTStart + bytes.IndexByte(bs[usrCTStart:], '"')
+
+	extCT := append([]byte{}, bs[extCTStart:extCTEnd]...)
+	usrCT := append([]byte{}, bs[usrCTStart:usrCTEnd]...)
+	if len(extCT) != len(usrCT) {
+		t.Fatalf("base64 ciphertext lengths differ (%d vs %d) — "+
+			"test relies on equal-length payloads",
+			len(extCT), len(usrCT))
+	}
+
+	// Swap them positionally.
+	tampered := append([]byte{}, bs...)
+	copy(tampered[extCTStart:extCTEnd], usrCT)
+	copy(tampered[usrCTStart:usrCTEnd], extCT)
+
+	// Sanity: the byte at the previously-ext position must now
+	// be the first byte of usrCT, and vice versa. Catches the
+	// "swap was a no-op because the two ciphertexts were
+	// accidentally equal" failure mode.
+	if tampered[extCTStart] != usrCT[0] || tampered[usrCTStart] != extCT[0] {
+		t.Fatal("test setup: swap produced no change (ciphertexts identical?)")
+	}
+
+	_, err = manifestcodec.DecodeFileEncrypted(tampered, resolverWith("", dek))
+	if !errors.Is(err, errs.ErrDecryptionFailed) {
+		t.Fatalf("expected ErrDecryptionFailed on cross-block swap, got %v", err)
+	}
+}
+
+func TestSealed_HidesInlineBlob(t *testing.T) {
+	dek := freshDEK(t)
+	src := sampleManifest()
+	src.LayoutHeader = domain.LayoutHeader{BlobStorage: domain.LayoutInline}
+	src.InlineBlob = []byte("inline-secret-payload")
+
+	bs, _ := manifestcodec.EncodeFileEncrypted(
+		src, domain.ManifestEncodingJSON,
+		domain.ManifestCryptoSealed, dek, "")
+
+	if bytes.Contains(bs, []byte("inline-secret-payload")) {
+		t.Error("Sealed leaked inline_blob to plaintext")
+	}
+
+	// Round-trip recovers the plaintext.
+	got, err := manifestcodec.DecodeFileEncrypted(bs, resolverWith("", dek))
+	if err != nil {
+		t.Fatalf("DecodeFileEncrypted: %v", err)
+	}
+	if !bytes.Equal(got.InlineBlob, src.InlineBlob) {
+		t.Errorf("inline_blob round-trip: got %q, want %q",
+			got.InlineBlob, src.InlineBlob)
+	}
+}
+
 // --- Paranoid round-trip ---
 
 func TestParanoid_RoundTrip(t *testing.T) {
@@ -208,6 +302,50 @@ func TestParanoid_RoundTrip(t *testing.T) {
 	}
 	if got.Namespace != src.Namespace {
 		t.Errorf("Namespace round-trip: got %q, want %q", got.Namespace, src.Namespace)
+	}
+}
+
+func TestParanoid_RoundTrip_WithExtAndUsr(t *testing.T) {
+	dek := freshDEK(t)
+	src := sampleManifest()
+	src.Namespace = "secret/ns"
+	src.Ext = json.RawMessage(`{"kind":"scrinium.fs/v1","path":"a.txt"}`)
+	src.Usr = json.RawMessage(`{"tenant":"acme"}`)
+
+	bs, err := manifestcodec.EncodeFileEncrypted(
+		src, domain.ManifestEncodingJSON,
+		domain.ManifestCryptoParanoid, dek, "")
+	if err != nil {
+		t.Fatalf("EncodeFileEncrypted: %v", err)
+	}
+
+	got, err := manifestcodec.DecodeFileEncrypted(bs, resolverWith("", dek))
+	if err != nil {
+		t.Fatalf("DecodeFileEncrypted: %v", err)
+	}
+	if !bytes.Equal([]byte(got.Ext), []byte(src.Ext)) {
+		t.Errorf("ext round-trip: got %s, want %s", got.Ext, src.Ext)
+	}
+	if !bytes.Equal([]byte(got.Usr), []byte(src.Usr)) {
+		t.Errorf("usr round-trip: got %s, want %s", got.Usr, src.Usr)
+	}
+}
+
+func TestParanoid_HidesExtAndUsr(t *testing.T) {
+	dek := freshDEK(t)
+	src := sampleManifest()
+	src.Ext = json.RawMessage(`{"ext-secret":"hidden-ext"}`)
+	src.Usr = json.RawMessage(`{"usr-secret":"hidden-usr"}`)
+
+	bs, _ := manifestcodec.EncodeFileEncrypted(
+		src, domain.ManifestEncodingJSON,
+		domain.ManifestCryptoParanoid, dek, "")
+
+	if bytes.Contains(bs, []byte("hidden-ext")) {
+		t.Error("Paranoid leaked ext to plaintext")
+	}
+	if bytes.Contains(bs, []byte("hidden-usr")) {
+		t.Error("Paranoid leaked usr to plaintext")
 	}
 }
 

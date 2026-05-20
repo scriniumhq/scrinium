@@ -40,14 +40,6 @@ const MaxExtSize = 64 * 1024
 // errs.ErrUsrTooLarge when exceeded.
 const MaxUsrSize = 64 * 1024
 
-// MaxMetadataSize is the pre-ADR-54 single-block limit. Kept
-// during the migration so core's Put validation continues to
-// reject oversized inputs; removed in R2b together with the
-// Metadata field itself.
-//
-// Deprecated: use MaxExtSize / MaxUsrSize.
-const MaxMetadataSize = 64 * 1024
-
 // MaxManifestSize is the maximum byte size of a serialised
 // Manifest. 1 MiB.
 // Returns errs.ErrManifestTooLarge when exceeded.

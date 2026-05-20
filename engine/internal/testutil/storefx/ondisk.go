@@ -61,7 +61,7 @@ func (d OnDisk) ManifestExists(id domain.ArtifactID) bool {
 
 // ReadManifest decodes the manifest file at id. Used to inspect
 // fields that Walk does not return (LayoutHeader, InlineBlob,
-// Pipeline, Metadata) — the index is a routing layer, not a
+// Pipeline, Ext, Usr) — the index is a routing layer, not a
 // source of truth for manifest content.
 //
 // Calls t.Fatalf on read or decode failure.
