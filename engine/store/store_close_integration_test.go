@@ -13,7 +13,7 @@ import (
 //
 // These tests stand up a Store via storefx (full Driver + Index +
 // crypto stack) and exercise Close end-to-end. They complement
-// the unit-level tests in close_test.go (same package, tests the
+// the unit-level tests in store_close_test.go (same package, tests the
 // internal *store struct fields directly).
 //
 // What "closed" means: Close is a terminal condition surfaced as

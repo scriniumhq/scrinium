@@ -1,7 +1,7 @@
 package store
 
 // lifecycle.go — descriptor-related helpers shared by InitStore
-// (init.go) and OpenStore (open.go). Splitting the constructors
+// (lfiecycle_init.go) and OpenStore (lifecycle_open.go). Splitting the constructors
 // into their own files keeps each one navigable; the common
 // machinery — building a *store, healing replicas, refreshing the
 // descriptor cache, bootstrap-time Unlock — lives here so neither

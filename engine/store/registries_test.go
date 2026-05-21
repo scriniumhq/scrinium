@@ -188,7 +188,7 @@ func TestStaticKeyResolver_InputCopy(t *testing.T) {
 
 // Smoke test for the lifecycle stubs got removed in M1.3 pack 3:
 // both InitStore and OpenStore are real now. Behaviour is covered
-// by core_test integration tests in init_test.go.
+// by core_test integration tests in lfiecycle_init_test.go.
 
 // Compile-time sanity: io is imported and used.
 var _ io.Reader = (*nopReader)(nil)

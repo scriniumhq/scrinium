@@ -15,7 +15,7 @@ import (
 	"scrinium.dev/engine/store"
 )
 
-// localScrubCapture mirrors verify_test.go's scrubCapture for use
+// localScrubCapture mirrors store_verify_test.go's scrubCapture for use
 // inside this file. The original is unexported; duplicating the
 // shape keeps the two test files independent (the verify-suite
 // can move under a different build tag in the future without
