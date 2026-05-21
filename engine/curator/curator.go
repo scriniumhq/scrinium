@@ -4,26 +4,26 @@ import (
 	"context"
 	"time"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
 	"scrinium.dev/engine/wrapper/multistore"
 )
 
-// Curator is the L3 facade. It implements core.DataStore, adds
+// Curator is the L3 facade. It implements store.DataStore, adds
 // access to registered Stores, transit management, and graceful
 // shutdown.
 type Curator interface {
-	core.DataStore
+	store.DataStore
 
 	// MultistoreIndex returns the global index when one has been
 	// registered. It is usually nil with a single Target Store.
 	MultistoreIndex() multistore.MultistoreIndex
 
 	// Store returns a registered Target Store by ID with the full
-	// core.Store interface, including administrative methods.
+	// store.Store interface, including administrative methods.
 	// Returns ErrStoreNotRegistered for an unknown ID.
-	Store(id string) (core.Store, error)
+	Store(id string) (store.Store, error)
 
 	// Close stops every background process in order: Flush bundler →
 	// Drain HostStorage → stop agents → wait for active Get calls.

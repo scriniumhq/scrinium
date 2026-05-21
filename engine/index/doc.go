@@ -1,4 +1,4 @@
-// Package index contains implementations of core.StoreIndex and
+// Package index contains implementations of store.StoreIndex and
 // curator.MultistoreIndex.
 //
 // Subpackages:

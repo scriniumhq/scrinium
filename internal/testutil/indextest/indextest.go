@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/store"
 )
 
 // Factory describes one StoreIndex implementation under test.
@@ -18,7 +18,7 @@ type Factory struct {
 	// New returns a fresh, empty StoreIndex. Each subtest gets its
 	// own instance — implementations should rely on t.Cleanup for
 	// teardown and never share state across subtests.
-	New func(t *testing.T) core.StoreIndex
+	New func(t *testing.T) store.StoreIndex
 }
 
 // Run executes the full conformance suite against f.
@@ -55,7 +55,7 @@ func Run(t *testing.T, f Factory) {
 // ListByNamespace into a slice for table-style assertions. It is
 // used by every run_X.go that needs to inspect the iteration
 // order or contents of ListByNamespace results.
-func collectByNamespace(t *testing.T, idx core.StoreIndex, ns string) []domain.Manifest {
+func collectByNamespace(t *testing.T, idx store.StoreIndex, ns string) []domain.Manifest {
 	t.Helper()
 	var got []domain.Manifest
 	err := idx.ListByNamespace(context.Background(), ns, func(m domain.Manifest) error {

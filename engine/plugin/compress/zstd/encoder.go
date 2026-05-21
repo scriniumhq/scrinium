@@ -7,7 +7,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/store"
 )
 
 // encoder is the per-operation Encoder for zstd.
@@ -78,8 +78,8 @@ func (e *encoder) Transform(r io.Reader) io.Reader {
 // Result returns the recorded metrics. Called by the runner after
 // EOF on the wrapped reader. Entropy is always 0 (Bypass
 // heuristics deferred — see type comment).
-func (e *encoder) Result() core.TransformResult {
-	return core.TransformResult{
+func (e *encoder) Result() store.TransformResult {
+	return store.TransformResult{
 		OutputSize: e.outputSize.Load(),
 	}
 }

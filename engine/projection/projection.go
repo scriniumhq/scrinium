@@ -24,21 +24,21 @@ import (
 	"iter"
 	"time"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/store"
 )
 
 // --- Source ---
 
 // ProjectionSource is the minimal contract for an artifact source
-// supplying a View. Satisfied by core.DataStore and curator.Curator
+// supplying a View. Satisfied by store.DataStore and curator.Curator
 // without additional code. Extended abilities (StorageFacet
 // population) are detected on the View side via a type assertion
 // when needed — keeps curator out of projection's import graph.
 type ProjectionSource interface {
 	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
-	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (core.ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (store.ReadHandle, error)
 }
 
 // SourceKind labels the type of source backing a View. Governs
@@ -46,7 +46,7 @@ type ProjectionSource interface {
 type SourceKind string
 
 const (
-	// SourceKindStore — a single core.DataStore. StorageFacet is
+	// SourceKindStore — a single store.DataStore. StorageFacet is
 	// always nil.
 	SourceKindStore SourceKind = "store"
 

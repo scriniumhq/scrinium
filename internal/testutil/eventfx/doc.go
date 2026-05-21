@@ -1,4 +1,4 @@
-// Package eventfx supplies a Recorder — a core.Publisher that
+// Package eventfx supplies a Recorder — a store.Publisher that
 // captures every published event in memory — for tests that
 // assert event behaviour.
 //

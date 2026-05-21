@@ -1,4 +1,4 @@
-// Package sqlite is the reference implementation of core.StoreIndex
+// Package sqlite is the reference implementation of store.StoreIndex
 // backed by SQLite.
 //
 // Two concrete SQLite drivers are supported via build tags. Without

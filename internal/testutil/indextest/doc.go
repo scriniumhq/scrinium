@@ -1,5 +1,5 @@
 // Package indextest is the shared conformance suite for
-// implementations of core.StoreIndex.
+// implementations of store.StoreIndex.
 //
 // Every implementation (engine/index/sqlite, future engine/index/postgres,
 // future in-memory backends) is expected to register a Factory

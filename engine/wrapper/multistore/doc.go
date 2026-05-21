@@ -1,5 +1,5 @@
-// Package multistore wraps multiple core.Store instances behind a
-// single core.DataStore surface: write-side routing, read-side
+// Package multistore wraps multiple store.Store instances behind a
+// single store.DataStore surface: write-side routing, read-side
 // fallback, optional cross-store dedup, and the global
 // MultistoreIndex. Per ADR-53 this lives in engine/wrapper/ — a
 // peer of bundler/ and chunker/, not a sub-package of curator/ —

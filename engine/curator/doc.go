@@ -6,7 +6,7 @@
 // (Scrub, Snapshot).
 //
 // Curator is optional: the minimal stack (Driver + Store +
-// StoreIndex) works without it. Curator implements core.DataStore —
+// StoreIndex) works without it. Curator implements store.DataStore —
 // the user-facing artifact API; administrative operations (Unlock,
 // RotateKEK, SetMaintenanceMode) do not exist at the Curator level
 // and are performed per-store via Curator.Store(id).

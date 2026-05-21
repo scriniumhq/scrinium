@@ -8,7 +8,7 @@ import (
 	"io"
 	"sync/atomic"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/store"
 )
 
 // encoder is the per-operation Encoder. AES-GCM cannot stream the
@@ -67,8 +67,8 @@ func (e *encoder) Transform(r io.Reader) io.Reader {
 
 // Result returns OutputSize and the IV chosen at Transform time.
 // Called by the runner after EOF.
-func (e *encoder) Result() core.TransformResult {
-	return core.TransformResult{
+func (e *encoder) Result() store.TransformResult {
+	return store.TransformResult{
 		OutputSize: e.outputSize.Load(),
 		IV:         e.iv,
 	}

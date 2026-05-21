@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/store"
 )
 
 // ErrInvalidKeyLength is returned by New when key is not 32 bytes.
@@ -36,7 +36,7 @@ type factory struct {
 // and do NOT consult the StoreIndex's KeyResolver on read — they
 // always use the key fixed at construction. This is the legacy
 // single-key wiring; new code should prefer NewWithResolver.
-func New(key []byte) (core.TransformerFactory, error) {
+func New(key []byte) (store.TransformerFactory, error) {
 	if len(key) != keyBytes {
 		return nil, fmt.Errorf("%w (got %d)", ErrInvalidKeyLength, len(key))
 	}
@@ -72,17 +72,17 @@ func buildAEAD(key []byte) (cipher.AEAD, error) {
 // NewEncoder creates a fresh per-operation Encoder. The pinned-DEK
 // path ignores ec: the key is fixed at factory construction and the
 // stage records an empty KeyID.
-func (f *factory) NewEncoder(_ core.EncodeContext) core.Encoder {
+func (f *factory) NewEncoder(_ store.EncodeContext) store.Encoder {
 	return &encoder{aead: f.aead}
 }
 
 // NewDecoder creates a fresh per-operation Decoder bound to the
 // IV recorded in stage.IV at write time.
-func (f *factory) NewDecoder(stage domain.PipelineStage) core.Decoder {
+func (f *factory) NewDecoder(stage domain.PipelineStage) store.Decoder {
 	return &decoder{aead: f.aead, iv: stage.IV}
 }
 
-// AEAD implements core.AEADCapable. The presence of this method
+// AEAD implements store.AEADCapable. The presence of this method
 // lets the engine treat blobs encrypted by this plugin as
 // AEAD-protected on the read path — the GCM tag covers the entire
 // ciphertext and is verified by Decoder.Transform on every read,

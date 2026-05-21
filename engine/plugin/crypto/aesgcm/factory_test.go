@@ -7,10 +7,10 @@ import (
 	"io"
 	"testing"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/plugin/crypto/aesgcm"
+	"scrinium.dev/engine/store"
 )
 
 func mustKey(t *testing.T) []byte {
@@ -31,7 +31,7 @@ func TestAESGCM_RoundTrip(t *testing.T) {
 
 	payload := []byte("Scrinium is a content-addressable store.")
 
-	enc := factory.NewEncoder(core.EncodeContext{})
+	enc := factory.NewEncoder(store.EncodeContext{})
 	ct, err := io.ReadAll(enc.Transform(bytes.NewReader(payload)))
 	if err != nil {
 		t.Fatalf("encode: %v", err)
@@ -65,7 +65,7 @@ func TestAESGCM_WrongKeyFailsAEAD(t *testing.T) {
 	factory1, _ := aesgcm.New(mustKey(t))
 	factory2, _ := aesgcm.New(mustKey(t))
 
-	enc := factory1.NewEncoder(core.EncodeContext{})
+	enc := factory1.NewEncoder(store.EncodeContext{})
 	ct, _ := io.ReadAll(enc.Transform(bytes.NewReader([]byte("secret"))))
 	iv := enc.Result().IV
 
@@ -82,7 +82,7 @@ func TestAESGCM_WrongKeyFailsAEAD(t *testing.T) {
 func TestAESGCM_TamperedCiphertextFailsAEAD(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
 
-	enc := factory.NewEncoder(core.EncodeContext{})
+	enc := factory.NewEncoder(store.EncodeContext{})
 	ct, _ := io.ReadAll(enc.Transform(bytes.NewReader(
 		bytes.Repeat([]byte{'x'}, 1024))))
 	iv := enc.Result().IV
@@ -101,7 +101,7 @@ func TestAESGCM_TamperedCiphertextFailsAEAD(t *testing.T) {
 func TestAESGCM_WrongIVFailsAEAD(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
 
-	enc := factory.NewEncoder(core.EncodeContext{})
+	enc := factory.NewEncoder(store.EncodeContext{})
 	ct, _ := io.ReadAll(enc.Transform(bytes.NewReader([]byte("payload"))))
 	wrongIV := make([]byte, 12)
 	for i := range wrongIV {
@@ -129,7 +129,7 @@ func TestAESGCM_FactoryReusableAcrossOperations(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
 
 	for i := 0; i < 5; i++ {
-		enc := factory.NewEncoder(core.EncodeContext{})
+		enc := factory.NewEncoder(store.EncodeContext{})
 		ct, _ := io.ReadAll(enc.Transform(bytes.NewReader(
 			[]byte("payload " + string(rune('a'+i))))))
 		iv := enc.Result().IV

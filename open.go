@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
 	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/engine/store"
 
 	// Side-effect imports register the URI dialers. Adding new
 	// schemes is a matter of importing the relevant packages
@@ -39,7 +39,7 @@ import (
 //     when cfg.Index is empty and store is file://).
 //  4. Register fsindex extension. Must precede OpenStore so
 //     the very first IndexManifest call dispatches into it.
-//  5. core.OpenStore with hash registry. If
+//  5. store.OpenStore with hash registry. If
 //     cfg.PassphraseFile is set, the store is opened with a
 //     passphrase provider that reads the file; this transitions
 //     an encrypted Store from Locked to Unlocked.
@@ -131,14 +131,14 @@ func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 	if err != nil {
 		return nil, fmt.Errorf("scrinium.Open: %w", err)
 	}
-	storeOpts := []core.StoreOption{
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(defaultHashRegistry()),
+	storeOpts := []store.StoreOption{
+		store.WithStoreIndex(idx),
+		store.WithHashRegistry(defaultHashRegistry()),
 	}
 	if pp != nil {
-		storeOpts = append(storeOpts, core.WithPassphrase(pp))
+		storeOpts = append(storeOpts, store.WithPassphrase(pp))
 	}
-	store, err := core.OpenStore(ctx, drv, storeOpts...)
+	store, err := store.OpenStore(ctx, drv, storeOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("scrinium.Open: open store: %w", err)
 	}
@@ -352,6 +352,6 @@ func clearScratchDirIfExists(dir string) {
 // registered. Every Scrinium binary uses sha256 today; pluggable
 // when an actual second hash arrives.
 func defaultHashRegistry() domain.HashRegistry {
-	return core.NewHashRegistry().
+	return store.NewHashRegistry().
 		Register("sha256", func() hash.Hash { return sha256.New() })
 }

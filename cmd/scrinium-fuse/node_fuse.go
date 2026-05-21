@@ -12,10 +12,10 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/pathx"
 )
 
@@ -704,11 +704,11 @@ func (h *scriniumFileHandle) Release(ctx context.Context) syscall.Errno {
 	return 0
 }
 
-// readHandleFile wraps a core.ReadHandle for read-only service
+// readHandleFile wraps a store.ReadHandle for read-only service
 // tree opens. Simpler than scriniumFileHandle — no Write/Flush.
 type readHandleFile struct {
 	mu sync.Mutex
-	rh core.ReadHandle
+	rh store.ReadHandle
 }
 
 var (

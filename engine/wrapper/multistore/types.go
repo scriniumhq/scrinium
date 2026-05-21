@@ -1,8 +1,8 @@
 package multistore
 
 import (
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
 )
 
@@ -134,7 +134,7 @@ type MetadataRouter func(m domain.Manifest) domain.RoutingHints
 // HostStorage and Publisher through a standard contract, not via
 // public objects.
 type WrapperFactory interface {
-	Wrap(store core.DataStore, deps WrapperDeps) (core.DataStore, error)
+	Wrap(store store.DataStore, deps WrapperDeps) (store.DataStore, error)
 }
 
 // WrapperDeps are the dependencies provided by Curator to a
@@ -144,5 +144,5 @@ type WrapperFactory interface {
 // requires HostStorage.
 type WrapperDeps struct {
 	HostStorage host.TransitStore
-	Publisher   core.Publisher
+	Publisher   store.Publisher
 }

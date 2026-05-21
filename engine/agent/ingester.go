@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/store"
 )
 
 // IngestMode is the operating mode of the Ingester.
@@ -70,7 +70,7 @@ type Ingester interface {
 // StateFile is set.
 func NewIngester(
 	source driver.Driver,
-	target core.DataStore,
+	target store.DataStore,
 	bus event.EventBus,
 	cfg IngesterConfig,
 ) (Ingester, error) {

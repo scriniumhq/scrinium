@@ -40,12 +40,12 @@ import (
 	"scrinium.dev/engine/errs"
 )
 
-// KeyProvider is the minimum slice of core.KeyResolver that
+// KeyProvider is the minimum slice of store.KeyResolver that
 // DecodeFileEncrypted needs. Defining it locally lets manifestcodec
 // stay independent of core (the package DAG is core ←
 // manifestcodec, not the other way).
 //
-// Production callers pass a *core.KeyResolver, which satisfies
+// Production callers pass a *store.KeyResolver, which satisfies
 // this interface implicitly. Tests can substitute a hand-rolled
 // resolver.
 type KeyProvider interface {

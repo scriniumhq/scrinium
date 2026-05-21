@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/indextest"
 )
 
@@ -20,7 +20,7 @@ import (
 func TestConformance(t *testing.T) {
 	indextest.Run(t, indextest.Factory{
 		Name: "sqlite-memory",
-		New: func(t *testing.T) core.StoreIndex {
+		New: func(t *testing.T) store.StoreIndex {
 			t.Helper()
 			idx, err := NewStore(context.Background(), ":memory:")
 			if err != nil {

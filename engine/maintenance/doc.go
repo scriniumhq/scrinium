@@ -2,7 +2,7 @@
 // administrative agents: RebuildIndexAgent, MigrateIndexAgent,
 // VerificationAgent, MoveStoreAgent.
 //
-// Each one implements core.MaintenanceAgent (see core/plugins.go).
+// Each one implements store.MaintenanceAgent (see core/plugins.go).
 // They are launched strictly explicitly (CLI/API), never
 // automatically. Exclusivity is guaranteed through a lease in
 // system.state/maintenance/lease.

@@ -17,7 +17,7 @@ import (
 // (namespace, created_at) order; cancelling via fs.SkipAll
 // or any other error from the callback stops the iteration.
 //
-// Filter semantics match the contract of Walk in core.DataStore:
+// Filter semantics match the contract of Walk in store.DataStore:
 //   - "*"          — every user namespace; system.* is excluded
 //   - ""           — only the default (empty) namespace
 //   - <other>      — exactly that namespace

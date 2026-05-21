@@ -3,11 +3,11 @@ package scrinium
 import (
 	"sync"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
+	"scrinium.dev/engine/store"
 )
 
 // Scrinium holds the long-lived resources every Scrinium-backed
@@ -32,12 +32,12 @@ type Scrinium struct {
 
 	// Store is the high-level CAS store. Surfaces use it for
 	// Put/Get and for capacity queries (stats endpoints).
-	Store core.Store
+	Store store.Store
 
 	// Index is the metadata index. Surfaces rarely touch this
 	// directly; it's exposed for diagnostics like the
 	// extension list rendered in stats.
-	Index core.StoreIndex
+	Index store.StoreIndex
 
 	// View is the read-side projection of the store: trees by
 	// path, by date, etc. Both FUSE and WebDAV adapters route

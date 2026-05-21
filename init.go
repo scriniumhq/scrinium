@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"os"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
 	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/engine/store"
 )
 
 // Init creates a fresh Scrinium store at the location described
@@ -26,7 +26,7 @@ import (
 //  3. Resolve and open index (sqlite by default for file://
 //     stores).
 //  4. Register fsindex extension.
-//  5. core.InitStore — writes the descriptor + system.config.
+//  5. store.InitStore — writes the descriptor + system.config.
 //     If cfg.PassphraseFile is set, the store is created
 //     encrypted and a recovery kit is produced.
 //  6. Build View + FSOps to deliver a ready-to-use runtime.
@@ -104,14 +104,14 @@ func Init(ctx context.Context, cfg Config) (_ *Scrinium, recoveryKit []byte, ret
 	if err != nil {
 		return nil, nil, fmt.Errorf("scrinium.Init: %w", err)
 	}
-	storeOpts := []core.StoreOption{
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(defaultHashRegistry()),
+	storeOpts := []store.StoreOption{
+		store.WithStoreIndex(idx),
+		store.WithHashRegistry(defaultHashRegistry()),
 	}
 	if pp != nil {
-		storeOpts = append(storeOpts, core.WithPassphrase(pp))
+		storeOpts = append(storeOpts, store.WithPassphrase(pp))
 	}
-	store, kit, err := core.InitStore(ctx, drv, storeOpts...)
+	store, kit, err := store.InitStore(ctx, drv, storeOpts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("scrinium.Init: %w", err)
 	}

@@ -55,7 +55,7 @@ const (
 // PipelineStage is a single transformation stage in the Pipeline.
 //
 // KeyID is populated for crypto stages whose plugin resolves its
-// DEK through a core.KeyResolver. On Put the Encoder records the
+// DEK through a store.KeyResolver. On Put the Encoder records the
 // KeyID the engine resolved (ResolveWriteKey) and passed via
 // EncodeContext; on Get the Decoder looks up candidate keys for
 // the recorded KeyID. The field is empty for non-crypto stages

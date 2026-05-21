@@ -1,6 +1,6 @@
 // Package systemstoretest is the shared conformance suite for
 // SystemStore implementations. Any type that implements
-// core.SystemStore (currently the engine's default in-process
+// store.SystemStore (currently the engine's default in-process
 // implementation; future network-attached and in-memory variants
 // will use the same suite) is tested here.
 //
@@ -33,16 +33,16 @@ import (
 	"sort"
 	"testing"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/store"
 )
 
 // Factory builds a fresh SystemStore for one subtest. Cleanup is
 // responsible for tearing down everything the SystemStore touches
 // (driver dir, index).
 type Factory struct {
-	New func(t *testing.T) (ss core.SystemStore, idx core.StoreIndex, cleanup func())
+	New func(t *testing.T) (ss store.SystemStore, idx store.StoreIndex, cleanup func())
 }
 
 // Run executes the full conformance suite against the factory.
@@ -222,7 +222,7 @@ func testWithoutIndexSkips(t *testing.T, f Factory) {
 	ctx := context.Background()
 	body := []byte("snapshot-payload-1234")
 
-	if err := ss.Put(ctx, "index_snapshot/2026-04-01", bytes.NewReader(body), core.WithoutIndex()); err != nil {
+	if err := ss.Put(ctx, "index_snapshot/2026-04-01", bytes.NewReader(body), store.WithoutIndex()); err != nil {
 		t.Fatalf("Put with WithoutIndex: %v", err)
 	}
 

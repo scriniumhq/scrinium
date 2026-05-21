@@ -7,7 +7,7 @@ import (
 	"io"
 	"sync/atomic"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/store"
 )
 
 // resolverEncoder is the per-operation Encoder for the
@@ -21,7 +21,7 @@ import (
 // pinned-DEK encoder: buffer input, Seal once, expose ciphertext
 // through io.Pipe.
 type resolverEncoder struct {
-	resolver core.KeyResolver
+	resolver store.KeyResolver
 	keyID    string // chosen by the engine, fixed at construction
 
 	iv         []byte
@@ -84,13 +84,13 @@ func (e *resolverEncoder) Transform(r io.Reader) io.Reader {
 // constructed with. The Pipeline runner copies KeyID into
 // manifest.Pipeline[i].KeyID so the Decoder can look up the same
 // key on read.
-func (e *resolverEncoder) Result() core.TransformResult {
-	return core.TransformResult{
+func (e *resolverEncoder) Result() store.TransformResult {
+	return store.TransformResult{
 		OutputSize: e.outputSize.Load(),
 		IV:         e.iv,
 		KeyID:      e.keyID,
 	}
 }
 
-// Compile-time assertion: resolverEncoder is a core.Encoder.
-var _ core.Encoder = (*resolverEncoder)(nil)
+// Compile-time assertion: resolverEncoder is a store.Encoder.
+var _ store.Encoder = (*resolverEncoder)(nil)

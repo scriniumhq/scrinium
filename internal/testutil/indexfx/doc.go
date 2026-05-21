@@ -12,6 +12,6 @@
 //
 // In-package tests of engine/index/sqlite use their own helpers
 // because they need access to the package-private *Index type
-// that this package can't expose through the core.StoreIndex
+// that this package can't expose through the store.StoreIndex
 // interface.
 package indexfx
