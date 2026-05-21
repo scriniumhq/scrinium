@@ -52,6 +52,28 @@ const (
 	ManifestCryptoParanoid ManifestCrypto = "Paranoid"
 )
 
+// EncryptedDedup controls deduplication of ENCRYPTED blobs. Immutable.
+//
+// It has no effect on Plain (unencrypted) blobs: their dedup key is
+// always (ContentHash, OriginalSize) per ADR-29. For an encrypting
+// store it governs whether two writes of the same plaintext under
+// the same key can collapse to one physical blob. See ADR-58.
+type EncryptedDedup string
+
+const (
+	// EncryptedDedupDisabled — random IV per write. The same
+	// plaintext yields different ciphertext, a different BlobRef,
+	// a different address: encrypted blobs never deduplicate. Full
+	// AEAD semantics, no equality leak. Default for an encrypting
+	// store.
+	EncryptedDedupDisabled EncryptedDedup = "Disabled"
+	// EncryptedDedupConvergent — IV = KDF(ContentHash, KeyID). One
+	// plaintext under one key yields one ciphertext, one BlobRef:
+	// encrypted blobs deduplicate, at the cost of leaking content
+	// equality to a storage observer. Wired in R8 (ADR-58).
+	EncryptedDedupConvergent EncryptedDedup = "Convergent"
+)
+
 // DeletionPolicy is the deletion policy.
 type DeletionPolicy string
 
@@ -103,6 +125,7 @@ type StoreConfig struct {
 	BlobStorage      BlobStorage
 	ManifestEncoding ManifestEncoding
 	ManifestCrypto   ManifestCrypto
+	EncryptedDedup   EncryptedDedup
 	PackAlignment    PackAlignmentPolicy
 	EagerFetchLimit  int64
 

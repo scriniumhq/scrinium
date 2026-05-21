@@ -41,20 +41,23 @@ func (i *Index) Resolve(ctx context.Context, blobRef string) (domain.PhysicalAdd
 }
 
 // ExistsByContent is the deduplication primitive. It looks up a
-// blob by the composite key (content_hash, original_size). The
-// pair, not just the hash alone, because two distinct files of
-// different sizes may share a hash prefix collision in pathological
-// inputs — a defensive choice the format makes globally.
+// blob by the composite key (content_hash, original_size,
+// crypto_identity) — ADR-58. The size guards against pathological
+// hash-prefix collisions across files of different lengths; the
+// crypto-identity guards against collapsing two physically distinct
+// encrypted blobs (different key, or Plain vs encrypted) that happen
+// to share a plaintext ContentHash. For Plain blobs crypto is empty
+// and the key degrades to the historical pair.
 //
 // Returns (blobRef, true, nil) when found; ("", false, nil) when
 // absent; and ("", false, err) for unexpected failures.
-func (i *Index) ExistsByContent(ctx context.Context, hash domain.ContentHash, originalSize int64) (string, bool, error) {
+func (i *Index) ExistsByContent(ctx context.Context, hash domain.ContentHash, originalSize int64, crypto domain.CryptoIdentity) (string, bool, error) {
 	const stmt = `
 		SELECT blob_ref FROM blobs
-		WHERE content_hash = ? AND original_size = ?
+		WHERE content_hash = ? AND original_size = ? AND crypto_identity = ?
 		LIMIT 1`
 	var ref string
-	err := i.db.QueryRowContext(ctx, stmt, string(hash), originalSize).Scan(&ref)
+	err := i.db.QueryRowContext(ctx, stmt, string(hash), originalSize, string(crypto)).Scan(&ref)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return "", false, nil

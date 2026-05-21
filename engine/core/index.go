@@ -53,10 +53,13 @@ type StoreIndex interface {
 	// Resolve returns the physical address for a BlobRef.
 	Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error)
 
-	// ExistsByContent is an exact check by the composite key
-	// (ContentHash, OriginalSize). The deduplication key for regular
-	// blobs.
-	ExistsByContent(ctx context.Context, hash domain.ContentHash, originalSize int64) (blobRef string, exists bool, err error)
+	// ExistsByContent is an exact check by the composite dedup key
+	// (ContentHash, OriginalSize, CryptoIdentity) for regular blobs.
+	// CryptoIdentity is empty for Plain blobs, in which case the key
+	// degrades to the historical (ContentHash, OriginalSize) — see
+	// ADR-58. A hit means a byte-reproducible duplicate exists; the
+	// caller may drop its staging blob and reference the survivor.
+	ExistsByContent(ctx context.Context, hash domain.ContentHash, originalSize int64, crypto domain.CryptoIdentity) (blobRef string, exists bool, err error)
 
 	// ExistsByHash is the check by ContentHash with tombstone
 	// distinction. Used by chunker.Wrapper for chunk deduplication.
