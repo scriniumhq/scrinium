@@ -69,9 +69,10 @@ func buildAEAD(key []byte) (cipher.AEAD, error) {
 	return aead, nil
 }
 
-// NewEncoder creates a fresh per-operation Encoder. The IV is
-// generated lazily on the first Transform call.
-func (f *factory) NewEncoder() core.Encoder {
+// NewEncoder creates a fresh per-operation Encoder. The pinned-DEK
+// path ignores ec: the key is fixed at factory construction and the
+// stage records an empty KeyID.
+func (f *factory) NewEncoder(_ core.EncodeContext) core.Encoder {
 	return &encoder{aead: f.aead}
 }
 

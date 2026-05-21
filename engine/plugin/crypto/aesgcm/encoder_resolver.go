@@ -11,19 +11,20 @@ import (
 )
 
 // resolverEncoder is the per-operation Encoder for the
-// resolver-backed factory. It resolves the DEK lazily on first
-// Transform; the KeyID surfaced in Result is the resolver's
-// DefaultKeyID() at that moment.
+// resolver-backed factory. The engine chooses the write KeyID once
+// (KeyResolver.ResolveWriteKey) and passes it at construction via
+// EncodeContext; the encoder resolves the DEK for that KeyID on
+// first Transform and surfaces the same KeyID in Result.
 //
 // AES-GCM cannot stream its tag — it is appended after the entire
-// plaintext has been processed — so the implementation mirrors
-// the pinned-DEK encoder: buffer input, Seal once, expose
-// ciphertext through io.Pipe.
+// plaintext has been processed — so the implementation mirrors the
+// pinned-DEK encoder: buffer input, Seal once, expose ciphertext
+// through io.Pipe.
 type resolverEncoder struct {
 	resolver core.KeyResolver
+	keyID    string // chosen by the engine, fixed at construction
 
 	iv         []byte
-	keyID      string
 	outputSize atomic.Int64
 	started    bool
 }
@@ -40,21 +41,16 @@ func (e *resolverEncoder) Transform(r io.Reader) io.Reader {
 	go func() {
 		defer pw.Close()
 
-		// Snapshot the default KeyID and resolve a single AEAD
-		// primitive. We take only the first candidate: the
-		// write side has no notion of "try alternatives" —
-		// DefaultKeyID() is by definition the one to use.
-		keyID := ""
-		if e.resolver != nil {
-			keyID = e.resolver.DefaultKeyID()
-		}
-		aeads, err := resolveAEADs(e.resolver, keyID)
+		// The engine already picked the write KeyID and handed it
+		// to us via EncodeContext. We fetch the DEK candidates for
+		// it and use the first — the write side never tries
+		// alternatives (that is a read-path concern).
+		aeads, err := resolveAEADs(e.resolver, e.keyID)
 		if err != nil {
 			_ = pw.CloseWithError(err)
 			return
 		}
 		aead := aeads[0]
-		e.keyID = keyID
 
 		plaintext, err := io.ReadAll(r)
 		if err != nil {
@@ -84,8 +80,8 @@ func (e *resolverEncoder) Transform(r io.Reader) io.Reader {
 	return pr
 }
 
-// Result returns OutputSize, IV, and the KeyID resolved at
-// Transform time. The Pipeline runner copies KeyID into
+// Result returns OutputSize, IV, and the KeyID this encoder was
+// constructed with. The Pipeline runner copies KeyID into
 // manifest.Pipeline[i].KeyID so the Decoder can look up the same
 // key on read.
 func (e *resolverEncoder) Result() core.TransformResult {

@@ -111,6 +111,13 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 
 	hashAlgo := string(cfg.ContentHasher)
 
+	// ADR-58: the engine owns write-key choice. Resolve the KeyID
+	// once and thread it into the blob Pipeline (EncodeContext) and
+	// the manifest-body crypto below, so a blob and its manifest
+	// are encrypted under the same KeyID. The default
+	// StaticKeyResolver ignores the namespace and returns "".
+	writeKeyID := s.resolveWriteKeyID(opts.Namespace)
+
 	useInlineFallback := cfg.BlobStorage == domain.BlobStorageInlineFallback &&
 		cfg.InlineBlobLimit > 0
 	inlineLimit := cfg.InlineBlobLimit
@@ -158,7 +165,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 			// back in front of the remaining Payload.
 			combined := io.MultiReader(bytes.NewReader(head), a.Payload)
 			contentHash, blobRef, originalSize, pipelineStages, blobAddr, err =
-				s.streamThroughPipeline(ctx, cfg, hashAlgo, combined)
+				s.streamThroughPipeline(ctx, cfg, hashAlgo, writeKeyID, combined)
 			if err != nil {
 				return "", err
 			}
@@ -168,7 +175,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		// (which may be empty — runner handles that).
 		var err error
 		contentHash, blobRef, originalSize, pipelineStages, blobAddr, err =
-			s.streamThroughPipeline(ctx, cfg, hashAlgo, a.Payload)
+			s.streamThroughPipeline(ctx, cfg, hashAlgo, writeKeyID, a.Payload)
 		if err != nil {
 			return "", err
 		}
@@ -226,7 +233,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 				cfg.ManifestCrypto)
 		}
 		dekSnapshot = append([]byte{}, s.dek...)
-		keyID = s.keyResolver.DefaultKeyID()
+		keyID = writeKeyID
 		s.cryptoMu.Unlock()
 		defer manifestcrypto.Wipe(dekSnapshot)
 	}
@@ -291,6 +298,7 @@ func (s *store) streamThroughPipeline(
 	ctx context.Context,
 	cfg domain.StoreConfig,
 	hashAlgo string,
+	writeKeyID string,
 	input io.Reader,
 ) (
 	contentHash domain.ContentHash,
@@ -302,7 +310,7 @@ func (s *store) streamThroughPipeline(
 ) {
 	stagingPath := s.makeStagingPath()
 
-	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline)
+	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, EncodeContext{KeyID: writeKeyID})
 	if err != nil {
 		return "", "", 0, nil, domain.PhysicalAddress{}, fmt.Errorf("core.Put: %w", err)
 	}
@@ -382,6 +390,23 @@ func (s *store) snapshotConfig() domain.StoreConfig {
 	s.cfgMu.RLock()
 	defer s.cfgMu.RUnlock()
 	return s.activeConfig
+}
+
+// resolveWriteKeyID asks the KeyResolver which KeyID a new artifact
+// in this namespace should be encrypted under (ADR-58). The
+// resolver reference is snapshotted under cryptoMu but ResolveWriteKey
+// is called without the lock held — it must be cheap and must not
+// block (a map lookup), so a long-running custom resolver cannot
+// stall a parallel Unlock/RotateKEK. Returns "" when no resolver is
+// configured (unencrypted store).
+func (s *store) resolveWriteKeyID(namespace string) string {
+	s.cryptoMu.Lock()
+	r := s.keyResolver
+	s.cryptoMu.Unlock()
+	if r == nil {
+		return ""
+	}
+	return r.ResolveWriteKey(KeyContext{Namespace: namespace})
 }
 
 // checkWritable extends checkOperational with the ReadOnly check.

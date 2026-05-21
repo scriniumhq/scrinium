@@ -355,8 +355,8 @@ func TestPutParanoid_BlobDedupAcrossManifests(t *testing.T) {
 
 // fixedKeyIDResolver is a test-only KeyResolver that hands the
 // same DEK out for every KeyID and returns a non-empty
-// DefaultKeyID so the manifest header carries KeyID bytes we can
-// tamper with.
+// ResolveWriteKey result) so the manifest header carries KeyID
+// bytes we can tamper with.
 type fixedKeyIDResolver struct {
 	keyID string
 	dek   []byte
@@ -365,7 +365,7 @@ type fixedKeyIDResolver struct {
 func (r *fixedKeyIDResolver) GetKeys(_ string) ([][]byte, error) {
 	return [][]byte{append([]byte{}, r.dek...)}, nil
 }
-func (r *fixedKeyIDResolver) DefaultKeyID() string { return r.keyID }
+func (r *fixedKeyIDResolver) ResolveWriteKey(keyContext core.KeyContext) string { return r.keyID }
 
 // TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest verifies
 // the §3.4 invariant: ArtifactID = hash(file bytes including
@@ -382,8 +382,8 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 
 	// AutoUnlock so the engine has a DEK; then we override the
-	// auto-promoted resolver with one whose DefaultKeyID is
-	// non-empty so the file header carries a KeyID we can
+	// auto-promoted resolver with one whose ResolveWriteKey result
+	// is non-empty so the file header carries a KeyID we can
 	// tamper with. The DEK has to match what the engine
 	// unwrapped — we read it indirectly through the resolver
 	// the auto-promotion installed.
@@ -400,11 +400,11 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	dek := keys[0]
 
 	// Reopen with a custom resolver that uses the same DEK but
-	// publishes "tenant-X" as DefaultKeyID, so Put writes that
-	// KeyID into the file header. A FRESH index is required so
-	// the engine treats this as a separate session — the auto-
-	// promoted resolver from the previous Open would otherwise
-	// take precedence.
+	// publishes "tenant-X" as ResolveWriteKey result, so Put
+	// writes that KeyID into the file header. A FRESH index
+	// is required so the engine treats this as a separate
+	// session — the auto-promoted resolver from the previous
+	// Open would otherwise take precedence.
 	fresh := indexfx.Memory(t)
 	custom := &fixedKeyIDResolver{keyID: "tenant-X", dek: dek}
 	s, err := core.OpenStore(context.Background(), r.Driver(),
@@ -482,7 +482,7 @@ type alwaysFailingResolver struct{}
 func (alwaysFailingResolver) GetKeys(_ string) ([][]byte, error) {
 	return nil, errors.New("alwaysFailingResolver: should not be called")
 }
-func (alwaysFailingResolver) DefaultKeyID() string { return "" }
+func (alwaysFailingResolver) ResolveWriteKey(core.KeyContext) string { return "" }
 
 // TestWalk_ParanoidStoreWalksWithoutDecryption verifies the §3.5
 // invariant: in Paranoid mode, Namespace is encrypted inside the

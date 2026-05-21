@@ -56,11 +56,11 @@ const (
 //
 // KeyID is populated for crypto stages whose plugin resolves its
 // DEK through a core.KeyResolver. On Put the Encoder records the
-// DefaultKeyID() of the resolver in use; on Get the Decoder
-// looks up candidate keys for the recorded KeyID. The field is
-// empty for non-crypto stages and for crypto plugins that pin
-// the DEK at factory construction time (legacy single-key
-// wiring).
+// KeyID the engine resolved (ResolveWriteKey) and passed via
+// EncodeContext; on Get the Decoder looks up candidate keys for
+// the recorded KeyID. The field is empty for non-crypto stages
+// and for crypto plugins that pin the DEK at factory construction
+// time (legacy single-key wiring).
 type PipelineStage struct {
 	Algorithm string
 	Hash      string

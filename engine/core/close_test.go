@@ -21,9 +21,9 @@ type fakeKeyResolver struct {
 	closed atomic.Bool
 }
 
-func (r *fakeKeyResolver) GetKeys(string) ([][]byte, error) { return nil, nil }
-func (r *fakeKeyResolver) DefaultKeyID() string             { return "" }
-func (r *fakeKeyResolver) close()                           { r.closed.Store(true) }
+func (r *fakeKeyResolver) GetKeys(string) ([][]byte, error)  { return nil, nil }
+func (r *fakeKeyResolver) ResolveWriteKey(KeyContext) string { return "" }
+func (r *fakeKeyResolver) close()                            { r.closed.Store(true) }
 
 // newTestStore builds a minimal *store sufficient to exercise
 // Close. It does not stand up the Driver, Index, descriptor, or
