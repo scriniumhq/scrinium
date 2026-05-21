@@ -37,3 +37,13 @@ const (
 	// the pointer file lives at NamespaceSystemConfig + "/current".
 	NamespaceSystemConfig = "system.config"
 )
+
+// StagingPrefix is the driver path prefix for in-flight blob writes,
+// under system.state. A blob is written here until its content hash
+// is known, then renamed to its final hash-derived path. Living under
+// system.state keeps staging blobs out of the way of other engine
+// code: the bootstrap Orphan Scan treats dangling staging files as
+// orphans and prunes them. Both the write path (which creates these
+// files) and the Orphan Scan (which reclaims them) reference this
+// constant, so the convention is defined once here.
+const StagingPrefix = NamespaceSystemState + "/staging"

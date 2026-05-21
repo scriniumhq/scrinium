@@ -14,6 +14,7 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/store/internal/recovery"
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
 
@@ -87,6 +88,6 @@ func WriteDriverFile(s coreapi.Store, path string, data []byte) error {
 // recoverOrphans function. Used by recovery_faulty_test.go to
 // drive the function with fake StoreIndex / faulty Driver values
 // directly, bypassing the full Init/Open path.
-func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (OrphanReport, error) {
-	return recoverOrphans(ctx, drv, idx)
+func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (recovery.OrphanReport, error) {
+	return recovery.RecoverOrphans(ctx, drv, idx)
 }

@@ -1,4 +1,4 @@
-package store
+package recovery
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/coreapi"
+	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
@@ -61,14 +62,14 @@ type OrphanReport struct {
 // §10.2) lands with the chunker.Wrapper milestone; this function
 // is the single place to add it when the TOC manifest type
 // becomes reachable.
-func recoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (OrphanReport, error) {
+func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (OrphanReport, error) {
 	start := time.Now()
 	report := OrphanReport{}
 
 	// 1. Sweep system.state/staging/. Unconditional removal: any
 	// file here is from a crashed prior process. Per-file Remove
 	// errors do not stop the sweep.
-	if err := drv.ListObjectsWithModTime(ctx, stagingPrefix, time.Time{},
+	if err := drv.ListObjectsWithModTime(ctx, domain.StagingPrefix, time.Time{},
 		func(om driver.ObjectMeta) error {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -169,7 +170,7 @@ func recoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreInd
 // errors themselves — events should not transport mutable
 // structures or platform-specific error types). Used by lifecycle
 // after every successful recoverOrphans call.
-func publishOrphanReport(pub coreapi.Publisher, r OrphanReport) {
+func PublishOrphanReport(pub coreapi.Publisher, r OrphanReport) {
 	if pub == nil {
 		return
 	}

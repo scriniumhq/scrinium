@@ -19,6 +19,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/manifestcrypto"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/engine/store/internal/recovery"
 	"scrinium.dev/engine/store/internal/recoverykit"
 	"scrinium.dev/engine/store/internal/systemstore"
 )
@@ -196,7 +197,7 @@ func buildStore(
 // StateBootstrapping. The caller decides whether to retry, fall
 // back to Locked, or surface the failure.
 func unlockBootstrap(ctx context.Context, s *store, pub coreapi.Publisher) error {
-	report, err := recoverOrphans(ctx, s.drv, s.index)
+	report, err := recovery.RecoverOrphans(ctx, s.drv, s.index)
 	if err != nil {
 		return fmt.Errorf("orphan scan: %w", err)
 	}
@@ -208,7 +209,7 @@ func unlockBootstrap(ctx context.Context, s *store, pub coreapi.Publisher) error
 		report.Errors = append(report.Errors,
 			fmt.Errorf("unlockBootstrap: persist last_orphan_scan_at: %w", setErr))
 	}
-	publishOrphanReport(pub, report)
+	recovery.PublishOrphanReport(pub, report)
 
 	s.stateMu.Lock()
 	s.state = domain.StateUnlocked

@@ -19,17 +19,6 @@ import (
 	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
-// stagingPrefix is the directory where in-flight blob writes live
-// until their content hash is known. After the hash is computed
-// the file is renamed to its final hash-derived path.
-//
-// Living under system.state keeps staging blobs out of the way of
-// all other engine code: the Recovery Agent in M3 will treat
-// dangling staging files as orphans and prune them. We do not
-// need a HostStorage transit buffer for this: every staging blob
-// is rewritten or removed within a single Put call.
-const stagingPrefix = domain.NamespaceSystemState + "/staging"
-
 // Put records an artifact in the Store. Two blob-placement paths
 // are supported:
 //
@@ -474,7 +463,7 @@ func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 // helper. A future improvement (multi-host) is to mix in a
 // host_id (TODO M3.1).
 func (s *store) makeStagingPath() string {
-	return stagingPrefix + "/" + uuid.NewString()
+	return domain.StagingPrefix + "/" + uuid.NewString()
 }
 
 // countingReader wraps an io.Reader and tracks the number of bytes
