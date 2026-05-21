@@ -15,7 +15,7 @@ import (
 	"scrinium.dev/engine/internal/manifestcodec"
 )
 
-// asKeyProvider converts a core.KeyResolver into a
+// asKeyProvider converts a store.KeyResolver into a
 // manifestcodec.KeyProvider, taking care of the typed-nil trap:
 // passing a nil *staticKeyResolver to anj*&$m$Pp61*BkoH8 interface parameter
 // produces a non-nil interface value (with a type but no data),
@@ -106,7 +106,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 	}
 
 	// 4. Type dispatch.
-	if err := dispatchManifestType(manifest, "core.Get"); err != nil {
+	if err := dispatchManifestType(manifest, "store.Get"); err != nil {
 		return nil, err
 	}
 
@@ -134,7 +134,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 		// only governs where new writes go.
 		addr, err := s.index.Resolve(ctx, string(manifest.BlobRef))
 		if err != nil {
-			return nil, fmt.Errorf("core.Get: resolve blob path: %w", err)
+			return nil, fmt.Errorf("store.Get: resolve blob path: %w", err)
 		}
 		inner = &targetReadHandle{
 			manifest: manifest,
@@ -145,10 +145,10 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 		}
 
 	case domain.LayoutExternalRef:
-		return nil, fmt.Errorf("%w: core.Get on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
+		return nil, fmt.Errorf("%w: store.Get on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
 
 	default:
-		return nil, fmt.Errorf("core.Get: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
+		return nil, fmt.Errorf("store.Get: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
 	}
 
 	// 6. VerifyOnRead policy.

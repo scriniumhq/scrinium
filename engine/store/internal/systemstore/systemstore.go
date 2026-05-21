@@ -1,29 +1,4 @@
-package store
-
-// system_store_impl.go — concrete SystemStore wired to a Store's
-// driver, index, and hash registry. The implementation reuses the
-// low-level writeInlineSystemArtifact primitive (which already
-// builds an inline manifest, writes it, and indexes it) and adds
-// the per-name pointer machinery from ADR-57.
-//
-// Pointer files live in the driver next to the manifest tree, one
-// per name. For a name "scrub/cursor" mapped to system.state, the
-// pointer is at "system.state/scrub/cursor" — a plain driver file
-// holding the active ArtifactID. Manifest files live under
-// "manifests/<aa>/<bb>/<id>" (by ArtifactID), so pointer paths and
-// manifest paths never collide.
-//
-// Atomicity model (per-name Put):
-//
-//  1. Read the current pointer for name (may be absent).
-//  2. Write the new artifact through writeSystemArtifact.
-//  3. Atomically replace the pointer file (driver.Put is atomic).
-//  4. If a predecessor existed, delete its manifest file.
-//
-// Crash between (3) and (4) leaves the predecessor manifest as an
-// orphan with no pointer. The bootstrap Orphan Scan (docs/2 §10.2.3)
-// sweeps these. Crash between (2) and (3) leaves the new manifest
-// as an orphan; same recovery.
+package systemstore
 
 import (
 	"bytes"
@@ -43,33 +18,67 @@ import (
 	"scrinium.dev/engine/internal/manifestcodec"
 )
 
-// systemStore is the SystemStore implementation bound to a Store.
-type systemStore struct {
-	drv    driver.Driver
-	index  coreapi.StoreIndex
-	hashes domain.HashRegistry
-	cfg    domain.StoreConfig
-}
+// maxSystemPointerSize caps how many bytes are read from a pointer
+// file ("<algo>-<hex>\n") before treating it as corrupt.
+const maxSystemPointerSize = 256
 
 // systemSessionID is the fixed SessionID engine writers use for
-// system artifacts. Matches the pre-ADR-57 value used by
-// writeSystemConfig so existing on-disk data is compatible.
+// system artifacts. Matches the historic value used by the config
+// writer so existing on-disk data is compatible.
 const systemSessionID = domain.SessionID("init")
 
-// newSystemStore wires the facade to its dependencies. Called once
-// per Store during construction.
-func newSystemStore(drv driver.Driver, idx coreapi.StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig) *systemStore {
-	return &systemStore{
-		drv:    drv,
-		index:  idx,
-		hashes: hashes,
-		cfg:    cfg,
-	}
+// ArtifactWriter persists a system artifact in the given namespace
+// and returns its ArtifactID. skipIndex selects the unindexed write
+// path (for artifacts whose presence in StoreIndex would be
+// redundant or harmful — e.g. index snapshots). Injected by the
+// store layer, which owns the low-level inline-artifact primitives
+// (shared with the config writer).
+type ArtifactWriter func(
+	ctx context.Context,
+	namespace string,
+	sessionID domain.SessionID,
+	payload []byte,
+	hashAlgo string,
+	skipIndex bool,
+) (domain.ArtifactID, error)
+
+// InlineHandleFactory builds a coreapi.ReadHandle over an inline
+// manifest's payload. Injected by the store layer, which owns the
+// concrete inlineReadHandle type (shared with the Get path).
+type InlineHandleFactory func(domain.Manifest) coreapi.ReadHandle
+
+// SystemStore is the coreapi.SystemStore implementation bound to a
+// store's driver, index, and hash registry.
+type SystemStore struct {
+	drv        driver.Driver
+	index      coreapi.StoreIndex
+	hashes     domain.HashRegistry
+	cfg        domain.StoreConfig
+	writeArt   ArtifactWriter
+	makeHandle InlineHandleFactory
 }
 
-// System returns the SystemStore facade. Part of the AdminStore
-// interface.
-func (s *store) System() coreapi.SystemStore { return s.system }
+// New wires the facade to its dependencies. Called once per Store
+// during construction. writeArt and makeHandle inject the two
+// store-layer primitives the implementation needs without coupling
+// to *store internals.
+func New(
+	drv driver.Driver,
+	idx coreapi.StoreIndex,
+	hashes domain.HashRegistry,
+	cfg domain.StoreConfig,
+	writeArt ArtifactWriter,
+	makeHandle InlineHandleFactory,
+) *SystemStore {
+	return &SystemStore{
+		drv:        drv,
+		index:      idx,
+		hashes:     hashes,
+		cfg:        cfg,
+		writeArt:   writeArt,
+		makeHandle: makeHandle,
+	}
+}
 
 // --- name validation and prefix mapping ---
 
@@ -142,8 +151,8 @@ func pointerPath(name string) (string, error) {
 
 // --- Put ---
 
-// Put implements SystemStore.Put.
-func (ss *systemStore) Put(ctx context.Context, name string, payload io.Reader, opts ...coreapi.SystemPutOption) error {
+// Put implements coreapi.SystemStore.Put.
+func (ss *SystemStore) Put(ctx context.Context, name string, payload io.Reader, opts ...coreapi.SystemPutOption) error {
 	o := coreapi.SystemPutConfig{}
 	for _, opt := range opts {
 		opt.ApplySystemPut(&o)
@@ -173,11 +182,10 @@ func (ss *systemStore) Put(ctx context.Context, name string, payload io.Reader, 
 		return fmt.Errorf("system store: read payload for %q: %w", name, err)
 	}
 
-	// 3. Write the new artifact. The low-level helper writes the
-	//    manifest file and (unless o.SkipIndex) indexes it.
-	newID, err := writeSystemArtifact(
-		ctx, ss.drv, ss.index, ss.hashes,
-		ns, systemSessionID, body,
+	// 3. Write the new artifact through the injected writer. It
+	//    writes the manifest file and (unless o.SkipIndex) indexes it.
+	newID, err := ss.writeArt(
+		ctx, ns, systemSessionID, body,
 		string(ss.cfg.ContentHasher), o.SkipIndex,
 	)
 	if err != nil {
@@ -202,8 +210,8 @@ func (ss *systemStore) Put(ctx context.Context, name string, payload io.Reader, 
 
 // --- Get ---
 
-// Get implements SystemStore.Get.
-func (ss *systemStore) Get(ctx context.Context, name string) (coreapi.ReadHandle, error) {
+// Get implements coreapi.SystemStore.Get.
+func (ss *SystemStore) Get(ctx context.Context, name string) (coreapi.ReadHandle, error) {
 	ptrPath, err := pointerPath(name)
 	if err != nil {
 		return nil, err
@@ -217,8 +225,8 @@ func (ss *systemStore) Get(ctx context.Context, name string) (coreapi.ReadHandle
 
 // --- Delete ---
 
-// Delete implements SystemStore.Delete. Idempotent.
-func (ss *systemStore) Delete(ctx context.Context, name string) error {
+// Delete implements coreapi.SystemStore.Delete. Idempotent.
+func (ss *SystemStore) Delete(ctx context.Context, name string) error {
 	ptrPath, err := pointerPath(name)
 	if err != nil {
 		return err
@@ -244,10 +252,10 @@ func (ss *systemStore) Delete(ctx context.Context, name string) error {
 
 // --- Walk ---
 
-// Walk implements SystemStore.Walk. Iterates over every name with
-// the given prefix in alphabetical order, yielding the underlying
-// manifest. Empty prefix scans every name.
-func (ss *systemStore) Walk(ctx context.Context, prefix string, cb func(name string, m domain.Manifest) error) error {
+// Walk implements coreapi.SystemStore.Walk. Iterates over every name
+// with the given prefix in alphabetical order, yielding the
+// underlying manifest. Empty prefix scans every name.
+func (ss *SystemStore) Walk(ctx context.Context, prefix string, cb func(name string, m domain.Manifest) error) error {
 	// Determine which physical namespaces to scan. config/* lives
 	// in system.config; everything else in system.state. An empty
 	// prefix means "everything" — scan both.
@@ -298,7 +306,7 @@ func (ss *systemStore) Walk(ctx context.Context, prefix string, cb func(name str
 // For system.config the historic flat pointer "config/current"
 // (§10.1.4) is surfaced separately when the prefix admits it,
 // since it does not live under pointers/.
-func (ss *systemStore) gatherNames(ctx context.Context, namespace, prefix string) ([]string, error) {
+func (ss *SystemStore) gatherNames(ctx context.Context, namespace, prefix string) ([]string, error) {
 	prefixPath := namespace + "/pointers/"
 	if prefix != "" {
 		prefixPath = namespace + "/pointers/" + prefix
@@ -327,31 +335,10 @@ func (ss *systemStore) gatherNames(ctx context.Context, namespace, prefix string
 
 // --- internal helpers ---
 
-// writeSystemArtifact is the low-level write primitive used by
-// SystemStore.Put and (for bootstrap) by writeSystemConfig. It is
-// a thin wrapper over writeInlineSystemArtifact that adds the
-// "skip index" mode.
-func writeSystemArtifact(
-	ctx context.Context,
-	drv driver.Driver,
-	idx coreapi.StoreIndex,
-	hashes domain.HashRegistry,
-	namespace string,
-	sessionID domain.SessionID,
-	payload []byte,
-	hashAlgo string,
-	skipIndex bool,
-) (domain.ArtifactID, error) {
-	if !skipIndex {
-		return writeInlineSystemArtifact(ctx, drv, idx, hashes, namespace, sessionID, payload, hashAlgo)
-	}
-	return writeInlineSystemArtifactUnindexed(ctx, drv, hashes, namespace, sessionID, payload, hashAlgo)
-}
-
 // readPointer reads the pointer file at the given driver path and
 // parses its content as an ArtifactID. Returns errs.ErrArtifactNotFound
 // when the pointer file is absent.
-func (ss *systemStore) readPointer(ctx context.Context, ptrPath string) (domain.ArtifactID, error) {
+func (ss *SystemStore) readPointer(ctx context.Context, ptrPath string) (domain.ArtifactID, error) {
 	id, err := ss.readPointerAt(ctx, ptrPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -364,7 +351,7 @@ func (ss *systemStore) readPointer(ctx context.Context, ptrPath string) (domain.
 
 // readPointerAt is the unwrapped form: surfaces os.ErrNotExist
 // directly. Used by Walk where the not-found case is common.
-func (ss *systemStore) readPointerAt(ctx context.Context, ptrPath string) (domain.ArtifactID, error) {
+func (ss *SystemStore) readPointerAt(ctx context.Context, ptrPath string) (domain.ArtifactID, error) {
 	rc, err := ss.drv.Get(ctx, ptrPath)
 	if err != nil {
 		return "", err
@@ -386,15 +373,15 @@ func (ss *systemStore) readPointerAt(ctx context.Context, ptrPath string) (domai
 
 // writePointer writes the pointer file at ptrPath to contain
 // "id\n". Driver.Put is atomic per the driver contract.
-func (ss *systemStore) writePointer(ctx context.Context, ptrPath string, id domain.ArtifactID) error {
+func (ss *SystemStore) writePointer(ctx context.Context, ptrPath string, id domain.ArtifactID) error {
 	body := []byte(string(id) + "\n")
 	return ss.drv.Put(ctx, ptrPath, bytes.NewReader(body))
 }
 
 // readArtifact opens the manifest file for the given id, returning
 // a ReadHandle over the inline payload. SystemStore artifacts are
-// always inline (writeInlineSystemArtifact's contract).
-func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (coreapi.ReadHandle, error) {
+// always inline (the inline-artifact writer's contract).
+func (ss *SystemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (coreapi.ReadHandle, error) {
 	m, err := ss.loadManifest(ctx, id)
 	if err != nil {
 		return nil, err
@@ -403,15 +390,12 @@ func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (
 		return nil, fmt.Errorf("system store: expected inline layout for %s, got %q",
 			id, m.LayoutHeader.BlobStorage)
 	}
-	return &inlineReadHandle{
-		manifest: m,
-		reader:   bytes.NewReader(m.InlineBlob),
-	}, nil
+	return ss.makeHandle(m), nil
 }
 
 // loadManifest reads and verifies the manifest file for the given
 // ArtifactID.
-func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
+func (ss *SystemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
 	manifestPath, err := blobpath.ManifestPath(id)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("manifest path: %w", err)
@@ -448,7 +432,7 @@ func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (
 // predecessor was written with WithoutIndex). DeleteManifest with
 // an unknown ArtifactID returns ErrArtifactNotFound, which we
 // silently ignore.
-func (ss *systemStore) dropPredecessor(ctx context.Context, id domain.ArtifactID) {
+func (ss *SystemStore) dropPredecessor(ctx context.Context, id domain.ArtifactID) {
 	// Best-effort: read the manifest to know its BlobRef (needed
 	// for DeleteManifest's blobRefs argument). On read failure
 	// skip indexed cleanup and remove the file anyway.

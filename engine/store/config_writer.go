@@ -11,7 +11,7 @@ import (
 
 // maxSystemPointerSize caps how many bytes are read from a
 // system-namespace pointer file ("<algo>-<hex>\n"). It guards
-// readPointerAt in system_store_impl.go against a corrupted/huge
+// readPointerAt in systemstore.go against a corrupted/huge
 // pointer. Previously lived in sysconfig.go (removed in the config
 // refactor); kept in core because it is generic system-store
 // plumbing, not part of the StoreConfig format (storeconfig has its

@@ -246,7 +246,7 @@ func newVerifyingReadHandle(inner coreapi.ReadHandle, s *store) (coreapi.ReadHan
 	algo, want, hasher, err := s.parseContentHash(m.ContentHash)
 	if err != nil {
 		_ = inner.Close()
-		return nil, fmt.Errorf("core.Get: %w", err)
+		return nil, fmt.Errorf("store.Get: %w", err)
 	}
 	limit := int64(-1)
 	if m.OriginalSize > 0 {

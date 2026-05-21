@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/engine/store/internal/systemstore"
 )
 
 // store is the engine's internal implementation of Store. It is
@@ -69,7 +70,7 @@ type store struct {
 	// SystemStore facade. Initialised once at construction; nil
 	// only in unit tests that build a *store by hand without
 	// going through the full constructor.
-	system *systemStore
+	system *systemstore.SystemStore
 
 	// Crypto state. cryptoMu guards the trio (descriptor, dek,
 	// passphraseProvider) because Unlock / SetPassphrase /
@@ -138,9 +139,14 @@ func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobTy
 	// Until then the stub here keeps the current DataStore
 	// contract honest: callers who reach for PutBlob today get a
 	// clear "not implemented" rather than silent success.
-	return "", fmt.Errorf("%w: store.Store.PutBlob is deferred to M5 (chunker.Wrapper); the method itself moves to BlobStore at M5 start (backlog ADR-TBD)",
+	return "", fmt.Errorf("%w: store.PutBlob is deferred to M5 (chunker.Wrapper); the method itself moves to BlobStore at M5 start (backlog ADR-TBD)",
 		errs.ErrNotImplemented)
 }
 
 // Compile-time interface conformance.
+
+// System returns the SystemStore facade. Part of the AdminStore
+// interface.
+func (s *store) System() coreapi.SystemStore { return s.system }
+
 var _ coreapi.Store = (*store)(nil)

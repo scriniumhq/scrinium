@@ -8,6 +8,7 @@ package store
 // constructor reaches across into the other.
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"scrinium.dev/engine/internal/manifestcrypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/recoverykit"
+	"scrinium.dev/engine/store/internal/systemstore"
 )
 
 // buildRecoveryKit assembles the kit text for a freshly-encrypted
@@ -161,7 +163,22 @@ func buildStore(
 		dek:                dek,
 		passphraseProvider: o.passphrase,
 	}
-	s.system = newSystemStore(drv, idx, o.hashRegistry, cfg)
+	s.system = systemstore.New(drv, idx, o.hashRegistry, cfg,
+		// ArtifactWriter: the inline-artifact write primitive lives in
+		// store (shared with the config writer); systemstore calls it
+		// through this closure, branching on skipIndex.
+		func(ctx context.Context, ns string, sid domain.SessionID, payload []byte, hashAlgo string, skipIndex bool) (domain.ArtifactID, error) {
+			if skipIndex {
+				return writeInlineSystemArtifactUnindexed(ctx, drv, o.hashRegistry, ns, sid, payload, hashAlgo)
+			}
+			return writeInlineSystemArtifact(ctx, drv, idx, o.hashRegistry, ns, sid, payload, hashAlgo)
+		},
+		// InlineHandleFactory: inlineReadHandle is store-private (Get
+		// path); systemstore builds handles through this closure.
+		func(m domain.Manifest) coreapi.ReadHandle {
+			return &inlineReadHandle{manifest: m, reader: bytes.NewReader(m.InlineBlob)}
+		},
+	)
 	return s, nil
 }
 
