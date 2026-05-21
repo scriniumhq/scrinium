@@ -6,6 +6,7 @@ import (
 	"slices"
 	"time"
 
+	"scrinium.dev/engine/core/internal/storeconfig"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 )
@@ -39,15 +40,15 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	}
 
 	current := s.snapshotConfig()
-	requested := applyConfigDefaults(cfg)
+	requested := storeconfig.ApplyDefaults(cfg)
 
-	if err := validateImmutableConfig(requested); err != nil {
+	if err := storeconfig.ValidateImmutable(requested); err != nil {
 		return fmt.Errorf("core.UpdateConfig: %w", err)
 	}
 	// validateAgainstActiveConfig compares requested to current on
 	// every immutable field; mutable fields pass through. Same
 	// contract as OpenStore's WithConfig check.
-	if err := validateAgainstActiveConfig(requested, current); err != nil {
+	if err := storeconfig.ValidateAgainstActive(requested, current); err != nil {
 		return fmt.Errorf("core.UpdateConfig: %w", err)
 	}
 	// DeletionPolicyLock guard: once locked, NoDelete cannot be
@@ -62,7 +63,7 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 
 	s.cfgMu.Lock()
 	defer s.cfgMu.Unlock()
-	if _, err := writeSystemConfig(ctx, s.drv, s.index, s.hashes, requested); err != nil {
+	if _, err := storeconfig.Write(ctx, s.drv, newConfigArtifactWriter(s.drv, s.index, s.hashes), requested); err != nil {
 		return fmt.Errorf("core.UpdateConfig: %w", err)
 	}
 	s.activeConfig = requested
@@ -86,7 +87,7 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 		return nil, err
 	}
 
-	currentID, err := readSystemConfigPointer(ctx, s.drv, s.hashes)
+	currentID, err := storeconfig.ReadPointer(ctx, s.drv, s.hashes)
 	if err != nil {
 		return nil, fmt.Errorf("core.ConfigHistory: %w", err)
 	}
@@ -104,13 +105,13 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 	}
 	var entries []entry
 	listErr := s.index.ListByNamespace(ctx, domain.NamespaceSystemConfig, func(m domain.Manifest) error {
-		cfg, err := loadSystemConfigByID(ctx, s.drv, s.hashes, m.ArtifactID)
+		cfg, err := storeconfig.LoadByID(ctx, s.drv, s.hashes, m.ArtifactID)
 		if err != nil {
 			return fmt.Errorf("decode %s: %w", m.ArtifactID, err)
 		}
 		entries = append(entries, entry{
 			id:        m.ArtifactID,
-			cfg:       applyConfigDefaults(cfg),
+			cfg:       storeconfig.ApplyDefaults(cfg),
 			createdAt: m.CreatedAt,
 		})
 		return nil

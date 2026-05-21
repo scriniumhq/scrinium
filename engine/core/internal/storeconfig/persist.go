@@ -1,4 +1,4 @@
-package core
+package storeconfig
 
 import (
 	"bytes"
@@ -18,24 +18,43 @@ import (
 )
 
 const (
-	sysConfigNamespace   = domain.NamespaceSystemConfig
-	sysConfigPointer     = domain.NamespaceSystemConfig + "/current"
-	sysConfigSessionID   = "init"
-	maxConfigPointerSize = 256 // sanity cap for "<algo>-<hex>\n"
+	namespace      = domain.NamespaceSystemConfig
+	pointerPath    = domain.NamespaceSystemConfig + "/current"
+	sessionID      = "init"
+	maxPointerSize = 256 // sanity cap for "<algo>-<hex>\n"
 )
 
-// writeSystemConfig persists the StoreConfig as a system.config
-// inline artifact and atomically updates the system.config/current
-// pointer to its ArtifactID. Returns the new ArtifactID.
+// ArtifactWriter persists an inline system artifact and returns its
+// ArtifactID. It is the single write primitive the config persistence
+// needs from the engine core; core.*store satisfies it through its
+// writeInlineSystemArtifact primitive.
 //
-// Per §10.1.4 the pointer file is the single source of truth for
-// the active StoreConfig; the descriptor (store.json) carries only
+// Kept narrow on purpose: storeconfig owns the system.config FORMAT
+// (StoreConfig serialisation + pointer), while the core retains the
+// MECHANICS of writing an inline artifact (manifest build, hashing,
+// indexing) — that primitive is shared with system.state agents and
+// does not belong to the config layer.
+type ArtifactWriter interface {
+	WriteInlineArtifact(
+		ctx context.Context,
+		namespace string,
+		sessionID domain.SessionID,
+		payload []byte,
+		hashAlgo string,
+	) (domain.ArtifactID, error)
+}
+
+// Write persists the StoreConfig as a system.config inline artifact
+// and atomically updates the system.config/current pointer to its
+// ArtifactID. Returns the new ArtifactID.
+//
+// Per §10.1.4 the pointer file is the single source of truth for the
+// active StoreConfig; the descriptor (store.json) carries only
 // identity and crypto Paranoid.
-func writeSystemConfig(
+func Write(
 	ctx context.Context,
 	drv driver.Driver,
-	idx StoreIndex,
-	hashes domain.HashRegistry,
+	w ArtifactWriter,
 	cfg domain.StoreConfig,
 ) (domain.ArtifactID, error) {
 	payload, err := json.MarshalIndent(cfg, "", "  ")
@@ -44,44 +63,41 @@ func writeSystemConfig(
 	}
 	payload = append(payload, '\n')
 
-	id, err := writeInlineSystemArtifact(
-		ctx, drv, idx, hashes,
-		sysConfigNamespace, sysConfigSessionID, payload,
-		string(cfg.ContentHasher),
+	id, err := w.WriteInlineArtifact(
+		ctx, namespace, sessionID, payload, string(cfg.ContentHasher),
 	)
 	if err != nil {
 		return "", err
 	}
 
 	pointerBytes := []byte(string(id) + "\n")
-	if err := drv.Put(ctx, sysConfigPointer, bytes.NewReader(pointerBytes)); err != nil {
+	if err := drv.Put(ctx, pointerPath, bytes.NewReader(pointerBytes)); err != nil {
 		return "", fmt.Errorf("system config: put pointer: %w", err)
 	}
 	return id, nil
 }
 
-// readSystemConfig follows system.config/current to read the
-// active StoreConfig. Returns errs.ErrMissingConfigPointer,
-// errs.ErrCorruptedConfigPointer, or errs.ErrDanglingConfigPointer
-// per the failure modes documented in §10.1.4.
-func readSystemConfig(
+// Read follows system.config/current to read the active StoreConfig.
+// Returns errs.ErrMissingConfigPointer, errs.ErrCorruptedConfigPointer,
+// or errs.ErrDanglingConfigPointer per the failure modes documented in
+// §10.1.4.
+func Read(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
 ) (domain.StoreConfig, error) {
-	id, err := readSystemConfigPointer(ctx, drv, hashes)
+	id, err := ReadPointer(ctx, drv, hashes)
 	if err != nil {
 		return domain.StoreConfig{}, err
 	}
-	return loadSystemConfigByID(ctx, drv, hashes, id)
+	return LoadByID(ctx, drv, hashes, id)
 }
 
-// loadSystemConfigByID reads the system.config artifact by its
-// ArtifactID and returns the decoded StoreConfig. Bypasses the
-// system.config/current pointer — used by ConfigHistory, which
-// has the IDs from WalkSystem already, and reused by the active
-// reader on top of readSystemConfigPointer.
-func loadSystemConfigByID(
+// LoadByID reads the system.config artifact by its ArtifactID and
+// returns the decoded StoreConfig. Bypasses the system.config/current
+// pointer — used by ConfigHistory, which has the IDs from WalkSystem
+// already, and reused by Read on top of ReadPointer.
+func LoadByID(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
@@ -124,22 +140,22 @@ func loadSystemConfigByID(
 	return cfg, nil
 }
 
-// readSystemConfigPointer parses the pointer file's content into
-// an ArtifactID. Separated out so tests can probe each failure
-// mode (missing / corrupted / dangling) independently.
-func readSystemConfigPointer(
+// ReadPointer parses the pointer file's content into an ArtifactID.
+// Separated out so tests can probe each failure mode (missing /
+// corrupted / dangling) independently.
+func ReadPointer(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
 ) (domain.ArtifactID, error) {
-	rc, err := drv.Get(ctx, sysConfigPointer)
+	rc, err := drv.Get(ctx, pointerPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", errs.ErrMissingConfigPointer
 		}
 		return "", fmt.Errorf("system config: get pointer: %w", err)
 	}
-	raw, err := io.ReadAll(io.LimitReader(rc, maxConfigPointerSize))
+	raw, err := io.ReadAll(io.LimitReader(rc, maxPointerSize))
 	_ = rc.Close()
 	if err != nil {
 		return "", fmt.Errorf("system config: read pointer: %w", err)

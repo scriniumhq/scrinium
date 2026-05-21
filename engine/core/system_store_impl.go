@@ -369,7 +369,7 @@ func (ss *systemStore) readPointerAt(ctx context.Context, ptrPath string) (domai
 		return "", err
 	}
 	defer rc.Close()
-	raw, err := io.ReadAll(io.LimitReader(rc, maxConfigPointerSize))
+	raw, err := io.ReadAll(io.LimitReader(rc, maxSystemPointerSize))
 	if err != nil {
 		return "", fmt.Errorf("read pointer: %w", err)
 	}
