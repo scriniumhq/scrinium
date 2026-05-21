@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/localfs"
+	"scrinium.dev/engine/store"
 )
 
 // Reopener captures the (Driver, StoreIndex) pair so a test can
@@ -46,13 +46,13 @@ func (r *Reopener) Root() string {
 // WithHashRegistry are filled in automatically; pass any other
 // option (WithPassphrase, WithAutoUnlock, WithConfig, ...) through
 // extra. Calls t.Fatalf on failure.
-func (r *Reopener) Open(t testing.TB, extra ...core.StoreOption) coreapi.Store {
+func (r *Reopener) Open(t testing.TB, extra ...store.StoreOption) coreapi.Store {
 	t.Helper()
-	opts := append([]core.StoreOption{
-		core.WithStoreIndex(r.idx),
-		core.WithHashRegistry(Hashes()),
+	opts := append([]store.StoreOption{
+		store.WithStoreIndex(r.idx),
+		store.WithHashRegistry(Hashes()),
 	}, extra...)
-	s, err := core.OpenStore(context.Background(), r.drv, opts...)
+	s, err := store.OpenStore(context.Background(), r.drv, opts...)
 	if err != nil {
 		t.Fatalf("storefx.Reopener.Open: %v", err)
 	}
@@ -62,11 +62,11 @@ func (r *Reopener) Open(t testing.TB, extra ...core.StoreOption) coreapi.Store {
 // TryOpen is the non-fatal variant of Open: it returns the error
 // instead of t.Fatalf. Use when the test's assertion is on the
 // failure mode itself (wrong passphrase, ConfigMismatch, ...).
-func (r *Reopener) TryOpen(t testing.TB, extra ...core.StoreOption) (coreapi.Store, error) {
+func (r *Reopener) TryOpen(t testing.TB, extra ...store.StoreOption) (coreapi.Store, error) {
 	t.Helper()
-	opts := append([]core.StoreOption{
-		core.WithStoreIndex(r.idx),
-		core.WithHashRegistry(Hashes()),
+	opts := append([]store.StoreOption{
+		store.WithStoreIndex(r.idx),
+		store.WithHashRegistry(Hashes()),
 	}, extra...)
-	return core.OpenStore(context.Background(), r.drv, opts...)
+	return store.OpenStore(context.Background(), r.drv, opts...)
 }

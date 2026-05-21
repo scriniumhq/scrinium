@@ -33,10 +33,10 @@ import (
 	"sort"
 	"testing"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/store"
 )
 
 // Factory builds a fresh SystemStore for one subtest. Cleanup is
@@ -223,7 +223,7 @@ func testWithoutIndexSkips(t *testing.T, f Factory) {
 	ctx := context.Background()
 	body := []byte("snapshot-payload-1234")
 
-	if err := ss.Put(ctx, "index_snapshot/2026-04-01", bytes.NewReader(body), core.WithoutIndex()); err != nil {
+	if err := ss.Put(ctx, "index_snapshot/2026-04-01", bytes.NewReader(body), store.WithoutIndex()); err != nil {
 		t.Fatalf("Put with WithoutIndex: %v", err)
 	}
 

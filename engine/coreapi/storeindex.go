@@ -133,7 +133,7 @@ type StoreIndex interface {
 	// Close releases resources held by the index — database
 	// connections, file handles, internal goroutines. The host
 	// application owns the StoreIndex's lifetime (DI contract: see
-	// core.WithStoreIndex doc) and must call Close after the Store
+	// store.WithStoreIndex doc) and must call Close after the Store
 	// has been shut down.
 	//
 	// Idempotent: a second Close on an already-closed index returns

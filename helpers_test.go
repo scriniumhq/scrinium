@@ -6,10 +6,10 @@ import (
 	"hash"
 	"os"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index/sqlite"
+	"scrinium.dev/engine/store"
 )
 
 // openLocalDriver builds a localfs driver for tests. The
@@ -30,7 +30,7 @@ func openLocalIndex(ctx context.Context, path string) (*sqlite.Index, error) {
 // duplicated rather than exported because the registry is an
 // internal detail and tests shouldn't depend on it.
 func testHashRegistry() domain.HashRegistry {
-	return core.NewHashRegistry().
+	return store.NewHashRegistry().
 		Register("sha256", func() hash.Hash { return sha256.New() })
 }
 

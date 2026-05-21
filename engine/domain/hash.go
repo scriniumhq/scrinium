@@ -10,7 +10,7 @@ import "hash"
 // Lives in domain so that helpers (manifestcodec, future codecs,
 // maintenance agents) can depend on the contract without pulling
 // in core. The default implementation lives in core, constructed
-// via core.NewHashRegistry().
+// via store.NewHashRegistry().
 type HashRegistry interface {
 	// Parse splits an "<algo>-<hex>" identifier into the algorithm
 	// name and the raw hash bytes.

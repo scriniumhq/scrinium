@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/store"
 )
 
 // TestLoadPassphraseProvider_Empty: empty path is the
@@ -40,7 +40,7 @@ func TestLoadPassphraseProvider_Reads(t *testing.T) {
 		t.Fatal("expected non-nil provider")
 	}
 
-	got, err := pp(context.Background(), core.PassphraseHint{})
+	got, err := pp(context.Background(), store.PassphraseHint{})
 	if err != nil {
 		t.Fatalf("provider: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestLoadPassphraseProvider_TrimmingTable(t *testing.T) {
 			if err != nil {
 				t.Fatalf("load: %v", err)
 			}
-			got, err := pp(context.Background(), core.PassphraseHint{})
+			got, err := pp(context.Background(), store.PassphraseHint{})
 			if err != nil {
 				t.Fatalf("call: %v", err)
 			}
@@ -120,7 +120,7 @@ func TestLoadPassphraseProvider_EmptyAfterTrim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	_, err = pp(context.Background(), core.PassphraseHint{})
+	_, err = pp(context.Background(), store.PassphraseHint{})
 	if err == nil {
 		t.Errorf("expected error from provider on empty-after-trim file")
 	}
