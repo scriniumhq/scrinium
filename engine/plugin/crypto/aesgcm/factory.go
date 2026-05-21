@@ -21,11 +21,14 @@ const (
 )
 
 // factory is the pinned-DEK AES-GCM TransformerFactory. It holds
-// the AEAD primitive built from a single key passed to New, so
-// per-operation Encoders and Decoders do not pay the AES key
-// schedule cost on construction. Use NewWithResolver for the
+// the AEAD primitive built from a single key passed to New so that
+// per-operation Decoders do not pay the AES key schedule cost on
+// construction. It also retains the raw key: under EncryptedDedup
+// Convergent the segmented encoder needs the DEK as the HMAC key for
+// per-segment IV derivation (ADR-59). Use NewWithResolver for the
 // multi-key path (rotation, multi-tenant, crypto-shredding).
 type factory struct {
+	key  []byte
 	aead cipher.AEAD
 }
 
@@ -44,7 +47,10 @@ func New(key []byte) (coreapi.TransformerFactory, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &factory{aead: aead}, nil
+	// Copy the key so a caller mutating its slice cannot change our
+	// IV derivation out from under in-flight writes.
+	keyCopy := append([]byte(nil), key...)
+	return &factory{key: keyCopy, aead: aead}, nil
 }
 
 // buildAEAD wraps the standard-library AES-GCM construction with
@@ -70,22 +76,31 @@ func buildAEAD(key []byte) (cipher.AEAD, error) {
 }
 
 // NewEncoder creates a fresh per-operation Encoder. The pinned-DEK
-// path ignores ec: the key is fixed at factory construction and the
-// stage records an empty KeyID.
-func (f *factory) NewEncoder(_ coreapi.EncodeContext) coreapi.Encoder {
-	return &encoder{aead: f.aead}
+// path records an empty KeyID; it reads the segmentation mode and
+// size from the EncodeContext the engine threads from StoreConfig
+// (ADR-59).
+func (f *factory) NewEncoder(ec coreapi.EncodeContext) coreapi.Encoder {
+	return &encoder{
+		aead:    f.aead,
+		dek:     f.key,
+		mode:    ivModeFor(ec.EncryptedDedup),
+		segSize: ec.SegmentSize,
+		// KeyID stays empty: pinned-DEK never records one.
+	}
 }
 
-// NewDecoder creates a fresh per-operation Decoder bound to the
-// IV recorded in stage.IV at write time.
-func (f *factory) NewDecoder(stage domain.PipelineStage) coreapi.Decoder {
-	return &decoder{aead: f.aead, iv: stage.IV}
+// NewDecoder creates a fresh per-operation Decoder. The IV is no
+// longer taken from stage.IV — the segmented format stores one IV
+// per segment frame inside the blob, so the decoder reads it from
+// the stream (ADR-59).
+func (f *factory) NewDecoder(_ domain.PipelineStage) coreapi.Decoder {
+	return &decoder{aead: f.aead}
 }
 
-// AEAD implements store.AEADCapable. The presence of this method
+// AEAD implements coreapi.AEADCapable. The presence of this method
 // lets the engine treat blobs encrypted by this plugin as
-// AEAD-protected on the read path — the GCM tag covers the entire
-// ciphertext and is verified by Decoder.Transform on every read,
-// so an explicit ContentHash recomputation under VerifyOnRead=Auto
-// would be redundant.
+// AEAD-protected on the read path — each segment's GCM tag is
+// verified by Decoder.Transform on every read, so an explicit
+// ContentHash recomputation under VerifyOnRead=Auto would be
+// redundant.
 func (f *factory) AEAD() {}

@@ -299,7 +299,11 @@ func (s *store) streamThroughPipeline(
 ) {
 	stagingPath := s.makeStagingPath()
 
-	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, coreapi.EncodeContext{KeyID: writeKeyID})
+	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, coreapi.EncodeContext{
+		KeyID:          writeKeyID,
+		EncryptedDedup: cfg.EncryptedDedup, // ADR-58: IV mode for the crypto stage
+		SegmentSize:    cfg.SegmentSize,    // ADR-59: segmented AEAD frame size
+	})
 	if err != nil {
 		return "", "", 0, nil, domain.PhysicalAddress{}, fmt.Errorf("store.Put: %w", err)
 	}

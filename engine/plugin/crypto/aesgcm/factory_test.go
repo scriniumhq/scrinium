@@ -22,36 +22,40 @@ func mustKey(t *testing.T) []byte {
 	return k
 }
 
-func TestAESGCM_RoundTrip(t *testing.T) {
-	key := mustKey(t)
-	factory, err := aesgcm.New(key)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-
-	payload := []byte("Scrinium is a content-addressable store.")
-
-	enc := factory.NewEncoder(coreapi.EncodeContext{})
-	ct, err := io.ReadAll(enc.Transform(bytes.NewReader(payload)))
+func encode(t *testing.T, f coreapi.TransformerFactory, ec coreapi.EncodeContext, plain []byte) ([]byte, coreapi.TransformResult) {
+	t.Helper()
+	enc := f.NewEncoder(ec)
+	ct, err := io.ReadAll(enc.Transform(bytes.NewReader(plain)))
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
-	res := enc.Result()
-	if len(res.IV) != 12 {
-		t.Fatalf("Result.IV length = %d, want 12", len(res.IV))
+	return ct, enc.Result()
+}
+
+func TestAESGCM_RoundTrip(t *testing.T) {
+	factory, err := aesgcm.New(mustKey(t))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	payload := []byte("Scrinium is a content-addressable store.")
+
+	ct, res := encode(t, factory, coreapi.EncodeContext{}, payload)
+	// Segmented format: per-blob IV is gone — Result.IV must be nil.
+	if res.IV != nil {
+		t.Fatalf("Result.IV must be nil for segmented format, got %d bytes", len(res.IV))
+	}
+	if res.KeyID != "" {
+		t.Fatalf("pinned factory must not record KeyID, got %q", res.KeyID)
 	}
 	if res.OutputSize != int64(len(ct)) {
 		t.Fatalf("OutputSize=%d, want %d", res.OutputSize, len(ct))
 	}
-	// AEAD output is plaintext + 16-byte tag.
-	if len(ct) != len(payload)+16 {
-		t.Fatalf("ciphertext len = %d, want %d", len(ct), len(payload)+16)
+	// Header + frame overhead means the blob is larger than payload.
+	if len(ct) <= len(payload) {
+		t.Fatalf("framed blob (%d) must exceed payload (%d)", len(ct), len(payload))
 	}
 
-	dec := factory.NewDecoder(domain.PipelineStage{
-		Algorithm: "aes-gcm",
-		IV:        res.IV,
-	})
+	dec := factory.NewDecoder(domain.PipelineStage{Algorithm: "aes-gcm"})
 	pt, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -61,19 +65,30 @@ func TestAESGCM_RoundTrip(t *testing.T) {
 	}
 }
 
-func TestAESGCM_WrongKeyFailsAEAD(t *testing.T) {
-	factory1, _ := aesgcm.New(mustKey(t))
-	factory2, _ := aesgcm.New(mustKey(t))
+// The decoder takes the IV from each frame, never from stage.IV — a
+// bogus stage IV must not affect the result.
+func TestAESGCM_DecoderIgnoresStageIV(t *testing.T) {
+	factory, _ := aesgcm.New(mustKey(t))
+	ct, _ := encode(t, factory, coreapi.EncodeContext{}, []byte("ignore the stage IV"))
 
-	enc := factory1.NewEncoder(coreapi.EncodeContext{})
-	ct, _ := io.ReadAll(enc.Transform(bytes.NewReader([]byte("secret"))))
-	iv := enc.Result().IV
-
-	dec := factory2.NewDecoder(domain.PipelineStage{IV: iv})
-	_, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
-	if err == nil {
-		t.Fatalf("expected error decrypting with wrong key, got nil")
+	bogus := bytes.Repeat([]byte{0xAB}, 12)
+	dec := factory.NewDecoder(domain.PipelineStage{Algorithm: "aes-gcm", IV: bogus})
+	pt, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
 	}
+	if string(pt) != "ignore the stage IV" {
+		t.Fatalf("got %q", pt)
+	}
+}
+
+func TestAESGCM_WrongKeyFailsAEAD(t *testing.T) {
+	f1, _ := aesgcm.New(mustKey(t))
+	f2, _ := aesgcm.New(mustKey(t))
+
+	ct, _ := encode(t, f1, coreapi.EncodeContext{}, []byte("secret"))
+	dec := f2.NewDecoder(domain.PipelineStage{})
+	_, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("got %v, want errs.ErrDecryptionFailed", err)
 	}
@@ -81,34 +96,11 @@ func TestAESGCM_WrongKeyFailsAEAD(t *testing.T) {
 
 func TestAESGCM_TamperedCiphertextFailsAEAD(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
+	ct, _ := encode(t, factory, coreapi.EncodeContext{}, bytes.Repeat([]byte{'x'}, 1024))
 
-	enc := factory.NewEncoder(coreapi.EncodeContext{})
-	ct, _ := io.ReadAll(enc.Transform(bytes.NewReader(
-		bytes.Repeat([]byte{'x'}, 1024))))
-	iv := enc.Result().IV
-
-	// Flip a bit in the middle of the ciphertext (well before the
-	// tag).
-	ct[len(ct)/2] ^= 0x01
-
-	dec := factory.NewDecoder(domain.PipelineStage{IV: iv})
-	_, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
-	if !errors.Is(err, errs.ErrDecryptionFailed) {
-		t.Fatalf("got %v, want errs.ErrDecryptionFailed", err)
-	}
-}
-
-func TestAESGCM_WrongIVFailsAEAD(t *testing.T) {
-	factory, _ := aesgcm.New(mustKey(t))
-
-	enc := factory.NewEncoder(coreapi.EncodeContext{})
-	ct, _ := io.ReadAll(enc.Transform(bytes.NewReader([]byte("payload"))))
-	wrongIV := make([]byte, 12)
-	for i := range wrongIV {
-		wrongIV[i] = byte(i + 1)
-	}
-
-	dec := factory.NewDecoder(domain.PipelineStage{IV: wrongIV})
+	// Flip a byte near the end (inside the last segment's tag region).
+	ct[len(ct)-1] ^= 0x01
+	dec := factory.NewDecoder(domain.PipelineStage{})
 	_, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("got %v, want errs.ErrDecryptionFailed", err)
@@ -116,8 +108,7 @@ func TestAESGCM_WrongIVFailsAEAD(t *testing.T) {
 }
 
 func TestAESGCM_BadKeyLengthAtConstruction(t *testing.T) {
-	cases := []int{0, 16, 24, 31, 33, 64}
-	for _, n := range cases {
+	for _, n := range []int{0, 16, 24, 31, 33, 64} {
 		_, err := aesgcm.New(make([]byte, n))
 		if !errors.Is(err, aesgcm.ErrInvalidKeyLength) {
 			t.Fatalf("len=%d: got %v, want ErrInvalidKeyLength", n, err)
@@ -127,17 +118,60 @@ func TestAESGCM_BadKeyLengthAtConstruction(t *testing.T) {
 
 func TestAESGCM_FactoryReusableAcrossOperations(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
-
 	for i := 0; i < 5; i++ {
-		enc := factory.NewEncoder(coreapi.EncodeContext{})
-		ct, _ := io.ReadAll(enc.Transform(bytes.NewReader(
-			[]byte("payload " + string(rune('a'+i))))))
-		iv := enc.Result().IV
-
-		dec := factory.NewDecoder(domain.PipelineStage{IV: iv})
-		_, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
-		if err != nil {
+		ct, _ := encode(t, factory, coreapi.EncodeContext{},
+			[]byte("payload "+string(rune('a'+i))))
+		dec := factory.NewDecoder(domain.PipelineStage{})
+		if _, err := io.ReadAll(dec.Transform(bytes.NewReader(ct))); err != nil {
 			t.Fatalf("iter %d: %v", i, err)
 		}
+	}
+}
+
+// Convergent: same key + same plaintext → identical ciphertext bytes.
+// Disabled (default): same input → different bytes (random IVs).
+func TestAESGCM_ConvergentDeterministicVsDisabled(t *testing.T) {
+	factory, _ := aesgcm.New(mustKey(t))
+	payload := bytes.Repeat([]byte{'z'}, 4096)
+
+	convCtx := coreapi.EncodeContext{EncryptedDedup: domain.EncryptedDedupConvergent, SegmentSize: 1024}
+	a, _ := encode(t, factory, convCtx, payload)
+	b, _ := encode(t, factory, convCtx, payload)
+	if !bytes.Equal(a, b) {
+		t.Fatal("Convergent: identical input must produce identical bytes")
+	}
+	// And it still decrypts.
+	dec := factory.NewDecoder(domain.PipelineStage{})
+	pt, err := io.ReadAll(dec.Transform(bytes.NewReader(a)))
+	if err != nil || !bytes.Equal(pt, payload) {
+		t.Fatalf("convergent round-trip: err=%v eq=%v", err, bytes.Equal(pt, payload))
+	}
+
+	disCtx := coreapi.EncodeContext{EncryptedDedup: domain.EncryptedDedupDisabled, SegmentSize: 1024}
+	c, _ := encode(t, factory, disCtx, payload)
+	d, _ := encode(t, factory, disCtx, payload)
+	if bytes.Equal(c, d) {
+		t.Fatal("Disabled: identical input must NOT produce identical bytes")
+	}
+}
+
+// Multi-segment round-trip with a small SegmentSize forces several
+// frames; the streaming encoder must not buffer the whole blob.
+func TestAESGCM_MultiSegmentRoundTrip(t *testing.T) {
+	factory, _ := aesgcm.New(mustKey(t))
+	payload := make([]byte, 1024*10+57)
+	if _, err := rand.Read(payload); err != nil {
+		t.Fatal(err)
+	}
+	ec := coreapi.EncodeContext{SegmentSize: 1024}
+	ct, _ := encode(t, factory, ec, payload)
+
+	dec := factory.NewDecoder(domain.PipelineStage{})
+	pt, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !bytes.Equal(pt, payload) {
+		t.Fatal("multi-segment round-trip mismatch")
 	}
 }

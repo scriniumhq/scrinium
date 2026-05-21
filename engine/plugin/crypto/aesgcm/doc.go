@@ -3,27 +3,48 @@
 //
 // Wiring (typical host setup):
 //
-//	reg := store.NewTransformerRegistry().
+//	reg := plugins.NewTransformerRegistry().
 //	    Register("aes-gcm", aesgcm.New(dek))
 //	store, _, _ := store.InitStore(ctx, drv,
 //	    store.WithReadRegistry(reg), /* ... */)
 //
-// The factory holds the DEK; per-operation instances generate or
-// receive an IV without touching the key directly. The key is
-// expected to be 32 bytes (AES-256). Other lengths fail at
-// factory-construction time.
+// The factory holds the DEK; per-operation instances seal or open a
+// blob without the caller touching the key directly. The key must be
+// 32 bytes (AES-256). Other lengths fail at factory-construction time.
 //
-// Streaming model.
-// AES-GCM is a single-message AEAD: the tag covers the entire
-// ciphertext and is verified at the very end. The Decoder
-// therefore detects tampering only after the last byte has been
-// pulled. Callers that read partial bytes and act on them before
-// EOF are violating the AEAD contract; the engine consumes the
-// stream to EOF before surfacing it to clients on the read path.
+// # Streaming model (segmented AEAD)
 //
-// IV handling.
-// The Encoder generates a fresh 12-byte IV via crypto/rand on its
-// first Transform call and exposes it via Result().IV — the
-// Pipeline runner records it in manifest.Pipeline[i].IV. The
-// Decoder receives the IV via stage.IV at construction.
+// A blob is written as a header followed by a sequence of independent
+// AES-GCM segments of fixed plaintext size (ADR-59); the on-disk
+// framing lives in internal/segaead, this package is the adapter. The
+// encoder reads one segment (≈1 MiB by default) at a time, seals it
+// with its own IV and tag, and emits the frame — O(SegmentSize)
+// memory and a single pass, regardless of blob size. There is no
+// whole-blob buffering. The decoder reads frames one by one, taking
+// each IV from its frame and verifying that segment's GCM tag, so
+// corruption is localised to a single segment.
+//
+// Because integrity is checked per segment on every read, the factory
+// implements coreapi.AEADCapable: the engine can skip a redundant
+// ContentHash recomputation under VerifyOnRead=Auto.
+//
+// # IV handling
+//
+// There is no per-blob IV. The IV mode is taken from
+// EncodeContext.EncryptedDedup: Disabled draws a fresh random IV per
+// segment; Convergent derives it deterministically as
+// HMAC-SHA256(DEK, SHA-256(segment) ‖ KeyID ‖ index)[:12], making the
+// ciphertext (and therefore the BlobRef) reproducible for dedup. In
+// both modes the IV lives in the segment frame, so
+// manifest.Pipeline[i].IV stays empty and the Decoder ignores
+// stage.IV.
+//
+// # Pinned vs resolver
+//
+// New(key) pins a single DEK and records an empty KeyID. NewWithResolver
+// resolves the DEK per operation through a coreapi.KeyResolver — the
+// engine picks the write KeyID via ResolveWriteKey and threads it
+// through EncodeContext; on read the Decoder enumerates the resolver's
+// candidate keys per segment to support rotation and multi-tenant
+// stores.
 package aesgcm
