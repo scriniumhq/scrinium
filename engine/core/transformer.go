@@ -1,24 +1,15 @@
 package core
 
 import (
-	"context"
-	"hash"
 	"io"
-	"time"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/event"
 )
 
-// Publisher is the minimal contract for emitting events; it is
-// passed to Store via WithPublisher. It is satisfied by
-// event.EventBus and by any custom implementation (asynchronous,
-// persistent, filtering).
-type Publisher interface {
-	Publish(e event.Event)
-}
-
-// --- Pipeline transformers ---
+// transformer.go — Pipeline transformation contracts: the
+// Encoder/Decoder pair, their factory, the per-write EncodeContext,
+// the AEAD capability marker, and the algorithm registry. Split out
+// of the former plugins.go grab-bag.
 
 // Encoder is the per-write transformation plugin (used by Put).
 // Created via TransformerFactory.NewEncoder(); lives for one
@@ -110,91 +101,8 @@ type TransformerRegistry interface {
 	Register(id string, f TransformerFactory) TransformerRegistry
 }
 
-// --- Encryption-key resolution ---
-
-// KeyResolver is the plugin that resolves a DEK by its string
-// KeyID. It allows a Store to support several DEKs simultaneously:
-// multi-tenant stores, mixed recovered data, intermediate states
-// during key rotation, crypto-shredding.
-//
-// On write the engine calls ResolveWriteKey(KeyContext) to choose
-// the KeyID, passes it to the blob Encoder via EncodeContext, and
-// writes it into the manifest header. On read the KeyID is read
-// from the header, GetKeys returns a list of candidates, and the
-// engine transparently iterates over them until one decrypts
-// successfully or the list is exhausted.
-type KeyResolver interface {
-	GetKeys(keyID string) ([][]byte, error)
-
-	// ResolveWriteKey returns the KeyID to encrypt a new artifact
-	// under, given its write-time context. The default
-	// StaticKeyResolver ignores ctx and returns "" (one store,
-	// one DEK). A custom resolver may map ctx.Namespace to a KeyID
-	// to implement key-per-namespace. The read path never calls
-	// this — the KeyID always comes from the manifest header.
-	ResolveWriteKey(ctx KeyContext) string
-}
-
-// KeyContext carries the write-time context the engine hands to
-// ResolveWriteKey. Extended additively — new fields are added
-// without changing the method signature. See ADR-58.
-type KeyContext struct {
-	// Namespace is the artifact's namespace at write time.
-	Namespace string
-}
-
-// --- Maintenance agents ---
-
-// MaintenanceAgent is the contract of a one-shot administrative
-// operation. Declared here (rather than in agent/) so that Store
-// can require a MaintenanceAgent to be validated through Validate
-// without depending on higher layers.
-type MaintenanceAgent interface {
-	// Validate checks whether the operation is applicable to the
-	// current state of the Store: required maintenance mode,
-	// presence of required parameters, availability of
-	// dependencies.
-	Validate(ctx context.Context) error
-
-	// Run starts the operation. It acquires a maintenance/lease,
-	// performs the work, and releases the lease. It returns the
-	// result with accumulated statistics.
-	Run(ctx context.Context) (*AgentResult, error)
-}
-
-// AgentResult is the result of an agent's work (one-shot or one
-// background cycle). Used in EventAgentCompleted and
-// EventAgentCycle.
-type AgentResult struct {
-	AgentType   string
-	StoreID     string
-	StartedAt   time.Time
-	CompletedAt time.Time
-	Stats       map[string]int64
-	Partial     bool // true if the work was interrupted and completed only partially
-}
-
-// --- Registry constructors ---
-
 // NewTransformerRegistry creates an empty transformer registry.
 // The host application registers factories through Register.
 func NewTransformerRegistry() TransformerRegistry {
 	return &transformerRegistry{factories: make(map[string]TransformerFactory)}
-}
-
-// NewHashRegistry creates an empty hash-algorithm registry.
-// The host application registers factories through Register.
-func NewHashRegistry() domain.HashRegistry {
-	return &hashRegistry{hashers: make(map[string]func() hash.Hash)}
-}
-
-// NewStaticKeyResolver creates a KeyResolver that returns the same
-// DEK for any request. ResolveWriteKey ignores its context and
-// returns an empty KeyID. This is the default behaviour: one Store, one DEK.
-func NewStaticKeyResolver(dek []byte) KeyResolver {
-	// Defensive copy so external code cannot modify the key after
-	// passing it to the resolver.
-	cp := make([]byte, len(dek))
-	copy(cp, dek)
-	return &staticKeyResolver{dek: cp}
 }
