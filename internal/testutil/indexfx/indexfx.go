@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"scrinium.dev/engine/coreapi"
 	sqliteindex "scrinium.dev/engine/index/sqlite"
-	"scrinium.dev/engine/store"
 )
 
 // Memory returns an in-memory sqlite-backed StoreIndex.
-func Memory(t testing.TB) store.StoreIndex {
+func Memory(t testing.TB) coreapi.StoreIndex {
 	t.Helper()
 	idx, err := sqliteindex.NewStore(context.Background(), ":memory:")
 	if err != nil {
@@ -23,7 +23,7 @@ func Memory(t testing.TB) store.StoreIndex {
 
 // Disk returns a StoreIndex backed by a SQLite file at path.
 // Parent dir is created if missing.
-func Disk(t testing.TB, path string) store.StoreIndex {
+func Disk(t testing.TB, path string) coreapi.StoreIndex {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("indexfx.Disk: mkdir: %v", err)
@@ -36,7 +36,7 @@ func Disk(t testing.TB, path string) store.StoreIndex {
 	return idx
 }
 
-func registerClose(t testing.TB, idx store.StoreIndex) {
+func registerClose(t testing.TB, idx coreapi.StoreIndex) {
 	t.Helper()
 	t.Cleanup(func() { _ = idx.Close() })
 }

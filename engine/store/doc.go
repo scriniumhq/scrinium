@@ -6,7 +6,7 @@
 // cryptographic identifiers (ContentHash, BlobRef, ArtifactID).
 // The two metadata blocks per ADR-54 (Ext for engine extensions
 // like fsmeta, Usr for opaque host data) are passed through but
-// never interpreted by the core.
+// never interpreted by the store.
 //
 // The Store contract is split into three interfaces:
 //   - DataStore — operations on artifacts (Put, Get, Delete, Walk,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/store"
@@ -21,7 +22,7 @@ import (
 // against t.
 type Reopener struct {
 	drv driver.Driver
-	idx store.StoreIndex
+	idx coreapi.StoreIndex
 }
 
 // Driver returns the underlying driver. Tests use this for direct
@@ -29,7 +30,7 @@ type Reopener struct {
 func (r *Reopener) Driver() driver.Driver { return r.drv }
 
 // Index returns the captured StoreIndex.
-func (r *Reopener) Index() store.StoreIndex { return r.idx }
+func (r *Reopener) Index() coreapi.StoreIndex { return r.idx }
 
 // Root returns the localfs root if the underlying driver is a
 // localfs.Driver; empty string otherwise. Used by tests that need

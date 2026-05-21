@@ -53,7 +53,7 @@ func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 		artifactCount++
 		return nil
 	}); err != nil {
-		return domain.StorageInfo{}, fmt.Errorf("core.Capacity: count manifests: %w", err)
+		return domain.StorageInfo{}, fmt.Errorf("store.Capacity: count manifests: %w", err)
 	}
 	out.ArtifactCount = artifactCount
 
@@ -66,7 +66,7 @@ func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 	// not contribute here.
 	blobs, err := s.drv.CountObjects(ctx, "blobs")
 	if err != nil {
-		return domain.StorageInfo{}, fmt.Errorf("core.Capacity: count blobs: %w", err)
+		return domain.StorageInfo{}, fmt.Errorf("store.Capacity: count blobs: %w", err)
 	}
 	out.BlobCount = blobs
 

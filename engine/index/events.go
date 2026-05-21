@@ -8,7 +8,7 @@ import "time"
 // dropped — emission is a diagnostic surface, not a correctness
 // requirement.
 //
-// All four event-type prefixes ("core.", "agent.", "curator.",
+// All four event-type prefixes ("store.", "agent.", "curator.",
 // "index.") are reserved per docs/2. Internals/01 §1.7. The
 // "index." namespace covers any backend (sqlite, postgres,
 // in-memory) — payload shapes are backend-agnostic.

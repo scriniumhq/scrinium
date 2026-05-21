@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/manifestcrypto"
@@ -140,7 +141,7 @@ func buildStore(
 	ctx context.Context,
 	o storeOptions,
 	drv driver.Driver,
-	idx StoreIndex,
+	idx coreapi.StoreIndex,
 	cfg domain.StoreConfig,
 	desc *descriptor.Descriptor,
 	dek []byte,
@@ -177,7 +178,7 @@ func buildStore(
 // Errors from the Orphan Scan propagate; the *store is left in
 // StateBootstrapping. The caller decides whether to retry, fall
 // back to Locked, or surface the failure.
-func unlockBootstrap(ctx context.Context, s *store, pub Publisher) error {
+func unlockBootstrap(ctx context.Context, s *store, pub coreapi.Publisher) error {
 	report, err := recoverOrphans(ctx, s.drv, s.index)
 	if err != nil {
 		return fmt.Errorf("orphan scan: %w", err)

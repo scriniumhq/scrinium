@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
@@ -60,7 +61,7 @@ type OrphanReport struct {
 // §10.2) lands with the chunker.Wrapper milestone; this function
 // is the single place to add it when the TOC manifest type
 // becomes reachable.
-func recoverOrphans(ctx context.Context, drv driver.Driver, idx StoreIndex) (OrphanReport, error) {
+func recoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (OrphanReport, error) {
 	start := time.Now()
 	report := OrphanReport{}
 
@@ -168,13 +169,13 @@ func recoverOrphans(ctx context.Context, drv driver.Driver, idx StoreIndex) (Orp
 // errors themselves — events should not transport mutable
 // structures or platform-specific error types). Used by lifecycle
 // after every successful recoverOrphans call.
-func publishOrphanReport(pub Publisher, r OrphanReport) {
+func publishOrphanReport(pub coreapi.Publisher, r OrphanReport) {
 	if pub == nil {
 		return
 	}
 	pub.Publish(event.Event{
-		Type: EventOrphanScanCompleted,
-		Payload: OrphanScanCompletedPayload{
+		Type: event.EventOrphanScanCompleted,
+		Payload: event.OrphanScanCompletedPayload{
 			StagingRemoved:   r.StagingRemoved,
 			BlobsRemoved:     r.BlobsRemoved,
 			ManifestsRemoved: r.ManifestsRemoved,

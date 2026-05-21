@@ -1,7 +1,7 @@
 package index
 
 import (
-	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/coreapi"
 )
 
 // IndexOption is an option for the constructor of a StoreIndex
@@ -21,13 +21,13 @@ type IndexOption func(*IndexOptions)
 type IndexOptions struct {
 	// Publisher is the event bus to which the implementation
 	// emits index.* metric events. nil disables emission.
-	Publisher store.Publisher
+	Publisher coreapi.Publisher
 }
 
 // WithIndexPublisher provides a Publisher for emitting metric
 // events (write_latency, contention_error, size). When omitted,
 // events are silently dropped — the index's behaviour does not
 // change.
-func WithIndexPublisher(p store.Publisher) IndexOption {
+func WithIndexPublisher(p coreapi.Publisher) IndexOption {
 	return func(o *IndexOptions) { o.Publisher = p }
 }

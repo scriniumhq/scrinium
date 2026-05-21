@@ -59,13 +59,13 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	requested := storeconfig.ApplyDefaults(cfg)
 
 	if err := storeconfig.ValidateImmutable(requested); err != nil {
-		return fmt.Errorf("core.UpdateConfig: %w", err)
+		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	// ValidateAgainstActive compares requested to current on every
 	// immutable field; mutable fields pass through. Same contract as
 	// OpenStore's WithConfig check.
 	if err := storeconfig.ValidateAgainstActive(requested, current); err != nil {
-		return fmt.Errorf("core.UpdateConfig: %w", err)
+		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	// DeletionPolicyLock guard: once locked, NoDelete cannot be
 	// dropped through UpdateConfig. The lock flag itself is
@@ -80,7 +80,7 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	s.cfgMu.Lock()
 	defer s.cfgMu.Unlock()
 	if _, err := storeconfig.Write(ctx, s.drv, configWriter(s.drv, s.index, s.hashes), requested); err != nil {
-		return fmt.Errorf("core.UpdateConfig: %w", err)
+		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	s.activeConfig = requested
 	return nil
@@ -105,7 +105,7 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 
 	currentID, err := storeconfig.ReadPointer(ctx, s.drv, s.hashes)
 	if err != nil {
-		return nil, fmt.Errorf("core.ConfigHistory: %w", err)
+		return nil, fmt.Errorf("store.ConfigHistory: %w", err)
 	}
 
 	// ListByNamespace yields manifest rows from the index — namespace,
@@ -133,7 +133,7 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 		return nil
 	})
 	if listErr != nil {
-		return nil, fmt.Errorf("core.ConfigHistory: list by namespace: %w", listErr)
+		return nil, fmt.Errorf("store.ConfigHistory: list by namespace: %w", listErr)
 	}
 
 	slices.SortStableFunc(entries, func(a, b entry) int {

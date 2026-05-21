@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/url"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/uriresolve"
-	"scrinium.dev/engine/store"
 )
 
 // init registers the sqlite:// scheme with the index registry.
@@ -37,7 +37,7 @@ func init() {
 // (WAL + busy_timeout=5000ms). Exposing them through query
 // params requires extending the IndexOption surface; tracked
 // as a follow-up.
-func openSQLiteURI(ctx context.Context, u *url.URL, opts ...index.IndexOption) (store.StoreIndex, error) {
+func openSQLiteURI(ctx context.Context, u *url.URL, opts ...index.IndexOption) (coreapi.StoreIndex, error) {
 	// Special form: sqlite://:memory: → in-memory DB. The URL
 	// parser keeps ":memory:" in u.Host because the colons
 	// look like an authority-with-port; we recognise it

@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/internal/blobpath"
 	"scrinium.dev/engine/internal/manifestcodec"
 	"scrinium.dev/engine/internal/manifestcrypto"
@@ -66,22 +68,22 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	// §7.3) and we want errors at the call that needs the algo,
 	// not at startup.
 	if err := s.validatePipelineAlgos(cfg.Pipeline); err != nil {
-		return "", fmt.Errorf("core.Put: %w", err)
+		return "", fmt.Errorf("store.Put: %w", err)
 	}
 
 	// Reject configurations whose support is not yet wired.
 	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
-		return "", fmt.Errorf("core.Put: BlobType %q not supported (TODO M3)", opts.BlobType)
+		return "", fmt.Errorf("store.Put: BlobType %q not supported (TODO M3)", opts.BlobType)
 	}
 	if cfg.BlobStorage == domain.BlobStorageExternalRef {
-		return "", errors.New("core.Put: BlobStorage: ExternalRef not yet supported")
+		return "", errors.New("store.Put: BlobStorage: ExternalRef not yet supported")
 	}
 	if cfg.ManifestStorage != domain.ManifestStorageRemote && cfg.ManifestStorage != "" {
 		// Local and Replicated require HostStorage as the transit
 		// buffer (see 2. Internals/01 Topology and 4. API
 		// Reference/05 Configuration §5). Until HostStorage is
 		// wired (TODO M4.2), only Remote (the default) works.
-		return "", fmt.Errorf("core.Put: ManifestStorage %q requires HostStorage (TODO M4.2)",
+		return "", fmt.Errorf("store.Put: ManifestStorage %q requires HostStorage (TODO M4.2)",
 			cfg.ManifestStorage)
 	}
 
@@ -141,15 +143,15 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		// Same as M1.4 — kept verbatim modulo the helper hashes.
 		head, err := io.ReadAll(io.LimitReader(a.Payload, inlineLimit+1))
 		if err != nil {
-			return "", fmt.Errorf("core.Put: read payload head: %w", err)
+			return "", fmt.Errorf("store.Put: read payload head: %w", err)
 		}
 		if int64(len(head)) <= inlineLimit {
 			h, err := s.hashes.NewHasher(hashAlgo)
 			if err != nil {
-				return "", fmt.Errorf("core.Put: hasher: %w", err)
+				return "", fmt.Errorf("store.Put: hasher: %w", err)
 			}
 			if _, err := h.Write(head); err != nil {
-				return "", fmt.Errorf("core.Put: hash inline: %w", err)
+				return "", fmt.Errorf("store.Put: hash inline: %w", err)
 			}
 			contentHash = domain.ContentHash(s.hashes.Format(hashAlgo, h.Sum(nil)))
 			originalSize = int64(len(head))
@@ -227,7 +229,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		}
 		if s.keyResolver == nil {
 			s.cryptoMu.Unlock()
-			return "", fmt.Errorf("core.Put: ManifestCrypto=%q requires WithKeyResolver or default-resolver promotion",
+			return "", fmt.Errorf("store.Put: ManifestCrypto=%q requires WithKeyResolver or default-resolver promotion",
 				cfg.ManifestCrypto)
 		}
 		dekSnapshot = append([]byte{}, s.dek...)
@@ -247,7 +249,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		// harmless (ref_count stays 0, GC reaps it). Rolling back
 		// would require an inverse of Driver.Rename, which can
 		// race against a parallel Put deduping on the same content.
-		return "", fmt.Errorf("core.Put: compute artifact id: %w", err)
+		return "", fmt.Errorf("store.Put: compute artifact id: %w", err)
 	}
 	manifest = signedManifest
 
@@ -255,10 +257,10 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 
 	manifestPath, err := blobpath.ManifestPath(artifactID)
 	if err != nil {
-		return "", fmt.Errorf("core.Put: manifest path: %w", err)
+		return "", fmt.Errorf("store.Put: manifest path: %w", err)
 	}
 	if err := s.drv.Put(ctx, manifestPath, bytes.NewReader(manifestBytes)); err != nil {
-		return "", fmt.Errorf("core.Put: write manifest: %w", err)
+		return "", fmt.Errorf("store.Put: write manifest: %w", err)
 	}
 
 	// --- Phase 4: index ---
@@ -273,12 +275,12 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		// (M3) is the recovery path. We surface the error so the
 		// caller can retry the index step or reissue Put (which
 		// will dedup the blob and re-attempt the manifest).
-		return "", fmt.Errorf("core.Put: index manifest: %w", err)
+		return "", fmt.Errorf("store.Put: index manifest: %w", err)
 	}
 
 	// --- Phase 5: emit ---
 
-	s.publish(EventManifestSaved, ManifestSavedPayload{
+	s.publish(event.EventManifestSaved, event.ManifestSavedPayload{
 		Manifest:  manifest,
 		IsTransit: false,
 	})
@@ -308,9 +310,9 @@ func (s *store) streamThroughPipeline(
 ) {
 	stagingPath := s.makeStagingPath()
 
-	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, EncodeContext{KeyID: writeKeyID})
+	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, coreapi.EncodeContext{KeyID: writeKeyID})
 	if err != nil {
-		return "", "", 0, nil, domain.PhysicalAddress{}, fmt.Errorf("core.Put: %w", err)
+		return "", "", 0, nil, domain.PhysicalAddress{}, fmt.Errorf("store.Put: %w", err)
 	}
 
 	// originalSize must measure the ORIGINAL payload, not the
@@ -321,7 +323,7 @@ func (s *store) streamThroughPipeline(
 
 	if err := s.drv.Put(ctx, stagingPath, counter); err != nil {
 		return "", "", 0, nil, domain.PhysicalAddress{},
-			fmt.Errorf("core.Put: stage payload: %w", err)
+			fmt.Errorf("store.Put: stage payload: %w", err)
 	}
 
 	contentHash, blobRef, pipelineStages = pp.finalize(s.hashes.Format)
@@ -355,26 +357,26 @@ func (s *store) commitBlob(
 	existingRef, found, err := s.dedupProbe(ctx, contentHash, originalSize, blobRef, crypto)
 	if err != nil {
 		_ = s.drv.Remove(ctx, stagingPath)
-		return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: dedup probe: %w", err)
+		return "", domain.PhysicalAddress{}, fmt.Errorf("store.Put: dedup probe: %w", err)
 	}
 	if found {
 		if err := s.drv.Remove(ctx, stagingPath); err != nil {
-			return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: drop staging: %w", err)
+			return "", domain.PhysicalAddress{}, fmt.Errorf("store.Put: drop staging: %w", err)
 		}
 		addr, err := s.index.Resolve(ctx, existingRef)
 		if err != nil {
-			return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: resolve existing blob: %w", err)
+			return "", domain.PhysicalAddress{}, fmt.Errorf("store.Put: resolve existing blob: %w", err)
 		}
 		return domain.BlobRef(existingRef), addr, nil
 	}
 	finalPath, err := blobpath.Resolve(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
 	if err != nil {
 		_ = s.drv.Remove(ctx, stagingPath)
-		return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: resolve blob path: %w", err)
+		return "", domain.PhysicalAddress{}, fmt.Errorf("store.Put: resolve blob path: %w", err)
 	}
 	if err := s.drv.Rename(ctx, stagingPath, finalPath); err != nil {
 		_ = s.drv.Remove(ctx, stagingPath)
-		return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: commit blob: %w", err)
+		return "", domain.PhysicalAddress{}, fmt.Errorf("store.Put: commit blob: %w", err)
 	}
 	return blobRef, domain.PhysicalAddress{
 		Workspace: domain.WorkspaceLocation,
@@ -438,7 +440,7 @@ func (s *store) resolveWriteKeyID(namespace string) string {
 	if r == nil {
 		return ""
 	}
-	return r.ResolveWriteKey(KeyContext{Namespace: namespace})
+	return r.ResolveWriteKey(coreapi.KeyContext{Namespace: namespace})
 }
 
 // validatePutInputs covers the cheap, side-effect-free checks that
@@ -447,7 +449,7 @@ func (s *store) resolveWriteKeyID(namespace string) string {
 func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	if a.Payload == nil && opts.ExternalURI == "" {
 
-		return errors.New("core.Put: nil Payload and no ExternalURI")
+		return errors.New("store.Put: nil Payload and no ExternalURI")
 	}
 	if len(opts.Namespace) > domain.MaxNamespaceLen {
 		return errs.ErrNamespaceTooLong

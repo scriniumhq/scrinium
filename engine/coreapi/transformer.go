@@ -1,4 +1,4 @@
-package store
+package coreapi
 
 import (
 	"io"
@@ -99,10 +99,4 @@ type AEADCapable interface {
 type TransformerRegistry interface {
 	Get(id string) (TransformerFactory, error)
 	Register(id string, f TransformerFactory) TransformerRegistry
-}
-
-// NewTransformerRegistry creates an empty transformer registry.
-// The host application registers factories through Register.
-func NewTransformerRegistry() TransformerRegistry {
-	return &transformerRegistry{factories: make(map[string]TransformerFactory)}
 }

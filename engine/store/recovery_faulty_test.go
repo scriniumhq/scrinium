@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver/faulty"
 	"scrinium.dev/engine/errs"
@@ -25,7 +26,7 @@ import (
 // leave a possibly-orphan blob on disk than mistake healthy data
 // for orphan because of a transient SQLite hiccup).
 type faultyIndex struct {
-	store.StoreIndex
+	coreapi.StoreIndex
 	resolveErr        error // if non-nil, Resolve returns this
 	manifestExistsErr error // if non-nil, ManifestExists returns this
 }

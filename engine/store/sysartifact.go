@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/blobpath"
@@ -26,7 +27,7 @@ import (
 func writeInlineSystemArtifact(
 	ctx context.Context,
 	drv driver.Driver,
-	idx StoreIndex,
+	idx coreapi.StoreIndex,
 	hashes domain.HashRegistry,
 	namespace string,
 	sessionID domain.SessionID,

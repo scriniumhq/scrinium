@@ -10,6 +10,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 )
 
 // Verify performs a full integrity check of an artifact:
@@ -49,12 +50,12 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 		return err
 	}
 
-	if err := dispatchManifestType(manifest, "core.Verify"); err != nil {
+	if err := dispatchManifestType(manifest, "store.Verify"); err != nil {
 		return err
 	}
 
 	if err := s.verifyBlobHash(ctx, manifest); err != nil {
-		s.publish(EventScrubFailed, ScrubFailedPayload{
+		s.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: id,
 			Err:        err,
 		})
@@ -79,7 +80,7 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 	_, want, hasher, err := s.parseContentHash(m.ContentHash)
 	if err != nil {
-		return fmt.Errorf("core.Verify: %w", err)
+		return fmt.Errorf("store.Verify: %w", err)
 	}
 
 	// Step 1 — obtain a reader over the on-disk (ciphertext-
@@ -96,7 +97,7 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 	plaintext, err := s.buildGetReader(m.Pipeline, ciphertext)
 	if err != nil {
 		// buildGetReader closed `ciphertext` on its failure path.
-		return fmt.Errorf("core.Verify: build pipeline: %w", err)
+		return fmt.Errorf("store.Verify: build pipeline: %w", err)
 	}
 
 	// Step 3 — stream-hash. Pipeline errors (AEAD tag mismatch,
@@ -118,7 +119,7 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 		return errors.Join(errs.ErrCorruptedBlob, copyErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("core.Verify: close blob reader: %w", closeErr)
+		return fmt.Errorf("store.Verify: close blob reader: %w", closeErr)
 	}
 
 	if !bytes.Equal(hasher.Sum(nil), want) {
@@ -147,21 +148,21 @@ func (s *store) openBlobBytes(ctx context.Context, m domain.Manifest) (io.ReadCl
 		// the current PathTopology would compute.
 		addr, err := s.index.Resolve(ctx, string(m.BlobRef))
 		if err != nil {
-			return nil, fmt.Errorf("core.Verify: resolve blob path: %w", err)
+			return nil, fmt.Errorf("store.Verify: resolve blob path: %w", err)
 		}
 		rc, err := s.drv.Get(ctx, addr.Path)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				return nil, errs.ErrCorruptedBlob
 			}
-			return nil, fmt.Errorf("core.Verify: get blob: %w", err)
+			return nil, fmt.Errorf("store.Verify: get blob: %w", err)
 		}
 		return rc, nil
 
 	case domain.LayoutExternalRef:
-		return nil, fmt.Errorf("%w: core.Verify on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
+		return nil, fmt.Errorf("%w: store.Verify on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
 
 	default:
-		return nil, fmt.Errorf("core.Verify: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
+		return nil, fmt.Errorf("store.Verify: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
 	}
 }

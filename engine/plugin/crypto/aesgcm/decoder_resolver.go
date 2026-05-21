@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/store"
 )
 
 // resolverDecoder is the per-operation Decoder for the
@@ -21,7 +21,7 @@ import (
 // is indistinguishable at the AEAD layer; we always report the
 // public sentinel ErrDecryptionFailed if no candidate succeeds.
 type resolverDecoder struct {
-	resolver store.KeyResolver
+	resolver coreapi.KeyResolver
 	keyID    string
 	iv       []byte
 }
@@ -74,4 +74,4 @@ func (d *resolverDecoder) Transform(r io.Reader) io.Reader {
 }
 
 // Compile-time assertion: resolverDecoder is a store.Decoder.
-var _ store.Decoder = (*resolverDecoder)(nil)
+var _ coreapi.Decoder = (*resolverDecoder)(nil)

@@ -135,7 +135,7 @@ func InitPlain(t testing.TB, extra ...store.StoreOption) (store.Store, *Reopener
 // core/lifecycle.go's InitStore).
 //
 // extra options are appended to the engine's defaults; pass
-// core.WithKDFParams or store.WithConfig as needed.
+// store.WithKDFParams or store.WithConfig as needed.
 func InitEncrypted(t testing.TB, pass string, extra ...store.StoreOption) (store.Store, *Reopener) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)

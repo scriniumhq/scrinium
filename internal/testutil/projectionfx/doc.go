@@ -1,5 +1,5 @@
 // Package projectionfx supplies a FakeSource — an in-memory
-// implementation of core.Source — for unit tests that exercise
+// implementation of store.Source — for unit tests that exercise
 // the projection layer (View, FSOps) without standing up a real
 // store.
 //
@@ -11,7 +11,7 @@
 //   - Replay arbitrary manifest histories without driver/index
 //     setup.
 //
-// Useful for testing host code that consumes core.Source — the
+// Useful for testing host code that consumes store.Source — the
 // FakeSource satisfies the same interface a real Store does on
 // the projection-facing side.
 //

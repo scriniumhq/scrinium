@@ -98,7 +98,7 @@ func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 	//
 	//    Extension registration is a backend-specific feature
 	//    — sqlite supports it, postgres will, but the
-	//    abstract core.StoreIndex interface doesn't surface
+	//    abstract store.StoreIndex interface doesn't surface
 	//    it (lifting it requires defining what registries
 	//    mean across all future backends). We probe via
 	//    type-assertion: backends that support it implement
@@ -116,7 +116,7 @@ func Open(ctx context.Context, cfg Config) (_ *Scrinium, retErr error) {
 		}
 	}
 
-	// 5. core.OpenStore wires driver + index + hash registry
+	// 5. store.OpenStore wires driver + index + hash registry
 	//    into a Store. Hash registry is fixed at sha256 here
 	//    — every shipped binary uses the same; pluggable
 	//    when we have a use case.

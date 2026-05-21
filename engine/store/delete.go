@@ -9,6 +9,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/internal/blobpath"
 )
 
@@ -49,7 +50,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	}
 
 	// Type dispatch.
-	if err := dispatchManifestType(manifest, "core.Delete"); err != nil {
+	if err := dispatchManifestType(manifest, "store.Delete"); err != nil {
 		return err
 	}
 
@@ -78,13 +79,13 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 		// no blobs row — leave blobRefs empty
 	case domain.LayoutTarget:
 		if manifest.BlobRef == "" {
-			return fmt.Errorf("core.Delete: Target manifest %q has empty BlobRef", id)
+			return fmt.Errorf("store.Delete: Target manifest %q has empty BlobRef", id)
 		}
 		blobRefs = []string{string(manifest.BlobRef)}
 	case domain.LayoutExternalRef:
 		// no blobs row by design (§2.2)
 	default:
-		return fmt.Errorf("core.Delete: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
+		return fmt.Errorf("store.Delete: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
 	}
 
 	// Index transaction. Idempotent at this layer: a re-issued
@@ -94,12 +95,12 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	// file is gone). The "manifest file present, index row
 	// absent" window is RebuildIndexAgent territory.
 	if err := s.index.DeleteManifest(ctx, id, blobRefs); err != nil {
-		return fmt.Errorf("core.Delete: index: %w", err)
+		return fmt.Errorf("store.Delete: index: %w", err)
 	}
 
 	manifestPath, err := blobpath.ManifestPath(id)
 	if err != nil {
-		return fmt.Errorf("core.Delete: manifest path: %w", err)
+		return fmt.Errorf("store.Delete: manifest path: %w", err)
 	}
 	if err := s.drv.Remove(ctx, manifestPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		// Index has already removed the row. The manifest file
@@ -108,9 +109,9 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 		// reap it on next sweep. We still surface the Remove
 		// error so the caller knows the operation was not
 		// fully clean.
-		return fmt.Errorf("core.Delete: remove manifest file: %w", err)
+		return fmt.Errorf("store.Delete: remove manifest file: %w", err)
 	}
 
-	s.publish(EventArtifactDeleted, ArtifactDeletedPayload{ArtifactID: id})
+	s.publish(event.EventArtifactDeleted, event.ArtifactDeletedPayload{ArtifactID: id})
 	return nil
 }

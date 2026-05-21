@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
@@ -216,7 +217,7 @@ func makePayload(i int, size int) []byte {
 	return p
 }
 
-func readAllAndClose(t *testing.T, rh store.ReadHandle) []byte {
+func readAllAndClose(t *testing.T, rh coreapi.ReadHandle) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(rh); err != nil {

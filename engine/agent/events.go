@@ -12,7 +12,7 @@ import (
 // same constant set is reused for "gc", "scrub", "ingester", and
 // any custom agent the host has registered.
 //
-// All four event-type prefixes ("core.", "agent.", "curator.",
+// All four event-type prefixes ("store.", "agent.", "curator.",
 // "index.") are reserved per docs/2. Internals/01 §1.7. User
 // agents must emit their own events under their own namespace
 // (e.g. "acme.quota_monitor.threshold_exceeded").

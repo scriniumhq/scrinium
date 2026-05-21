@@ -65,7 +65,7 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 	case domain.StateLocked:
 		// Proceed below.
 	default:
-		return fmt.Errorf("core.Unlock: state %v rejects unlock", s.State())
+		return fmt.Errorf("store.Unlock: state %v rejects unlock", s.State())
 	}
 
 	// Plain DEK in Locked state would be a bug — Plain Stores
@@ -82,13 +82,13 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 		Reason:  "unlock",
 	})
 	if err != nil {
-		return fmt.Errorf("core.Unlock: %w", err)
+		return fmt.Errorf("store.Unlock: %w", err)
 	}
 
 	dek, err := unwrapDEK(s.desc.DEK, *s.desc.KDFParams, passphrase)
 	manifestcrypto.Wipe(passphrase)
 	if err != nil {
-		return fmt.Errorf("core.Unlock: %w", err)
+		return fmt.Errorf("store.Unlock: %w", err)
 	}
 
 	s.dek = dek
@@ -112,7 +112,7 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 		s.stateMu.Lock()
 		s.state = domain.StateLocked
 		s.stateMu.Unlock()
-		return fmt.Errorf("core.Unlock: %w", err)
+		return fmt.Errorf("store.Unlock: %w", err)
 	}
 	return nil
 }
@@ -139,7 +139,7 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 	// Unlocked. Refuse explicitly; checkWritable does not catch this
 	// because Degraded is "API available, but consensus pending".
 	if state := s.State(); state == domain.StateDegraded {
-		return fmt.Errorf("core.SetPassphrase: state %v rejects write; wait for Auto-Heal", state)
+		return fmt.Errorf("store.SetPassphrase: state %v rejects write; wait for Auto-Heal", state)
 	}
 	if s.desc == nil {
 		return fmt.Errorf("%w: descriptor not loaded", errs.ErrStoreCorrupted)
@@ -159,7 +159,7 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 		Reason:  "set_passphrase",
 	})
 	if err != nil {
-		return fmt.Errorf("core.SetPassphrase: %w", err)
+		return fmt.Errorf("store.SetPassphrase: %w", err)
 	}
 
 	// Cost: take from active config if the caller specified
@@ -174,7 +174,7 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 	wrapped, kdfParams, err := wrapDEK(s.dek, passphrase, cost)
 	manifestcrypto.Wipe(passphrase)
 	if err != nil {
-		return fmt.Errorf("core.SetPassphrase: %w", err)
+		return fmt.Errorf("store.SetPassphrase: %w", err)
 	}
 
 	next := *s.desc // shallow copy is fine; we'll replace pointer fields
@@ -184,7 +184,7 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 	next.KDFParams = &kdfParams
 
 	if err := s.commitDescriptor(ctx, &next); err != nil {
-		return fmt.Errorf("core.SetPassphrase: %w", err)
+		return fmt.Errorf("store.SetPassphrase: %w", err)
 	}
 	return nil
 }
@@ -217,7 +217,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	// Unlocked. Refuse explicitly; checkWritable does not catch this
 	// because Degraded is "API available, but consensus pending".
 	if state := s.State(); state == domain.StateDegraded {
-		return fmt.Errorf("core.RotateKEK: state %v rejects write; wait for Auto-Heal", state)
+		return fmt.Errorf("store.RotateKEK: state %v rejects write; wait for Auto-Heal", state)
 	}
 	if s.desc == nil {
 		return fmt.Errorf("%w: descriptor not loaded", errs.ErrStoreCorrupted)
@@ -241,12 +241,12 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		Reason:  "unlock",
 	})
 	if err != nil {
-		return fmt.Errorf("core.RotateKEK: current passphrase: %w", err)
+		return fmt.Errorf("store.RotateKEK: current passphrase: %w", err)
 	}
 	verified, err := unwrapDEK(s.desc.DEK, *s.desc.KDFParams, currentPass)
 	manifestcrypto.Wipe(currentPass)
 	if err != nil {
-		return fmt.Errorf("core.RotateKEK: %w", err)
+		return fmt.Errorf("store.RotateKEK: %w", err)
 	}
 	if !bytes.Equal(verified, s.dek) {
 		manifestcrypto.Wipe(verified)
@@ -275,7 +275,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	wrapped, kdfParams, err := wrapDEK(s.dek, newPass, cost)
 	manifestcrypto.Wipe(newPass)
 	if err != nil {
-		return fmt.Errorf("core.RotateKEK: %w", err)
+		return fmt.Errorf("store.RotateKEK: %w", err)
 	}
 
 	next := *s.desc
@@ -285,7 +285,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	// DEKEncrypted stays true; DEK bytes are only the wrapping change.
 
 	if err := s.commitDescriptor(ctx, &next); err != nil {
-		return fmt.Errorf("core.RotateKEK: %w", err)
+		return fmt.Errorf("store.RotateKEK: %w", err)
 	}
 
 	// Note: s.dek does NOT change. The DEK is re-wrapped under
@@ -314,7 +314,7 @@ func (s *store) exportRecoveryKitImpl(ctx context.Context) ([]byte, error) {
 	case domain.StateUnlocked, domain.StateDegraded:
 		// OK
 	default:
-		return nil, fmt.Errorf("core.ExportRecoveryKit: state %v rejects export",
+		return nil, fmt.Errorf("store.ExportRecoveryKit: state %v rejects export",
 			s.State())
 	}
 

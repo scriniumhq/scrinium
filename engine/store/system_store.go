@@ -25,6 +25,7 @@ import (
 	"context"
 	"io"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 )
 
@@ -40,7 +41,7 @@ type SystemStore interface {
 
 	// Get opens the artifact currently pointed at by name. Returns
 	// errs.ErrArtifactNotFound when no pointer exists.
-	Get(ctx context.Context, name string) (ReadHandle, error)
+	Get(ctx context.Context, name string) (coreapi.ReadHandle, error)
 
 	// Delete removes the pointer and the artifact it points at.
 	// Idempotent: deleting an absent name returns nil.

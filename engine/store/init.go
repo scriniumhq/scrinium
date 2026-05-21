@@ -61,19 +61,19 @@ import (
 //     manifests for free.
 func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, []byte, error) {
 	if drv == nil {
-		return nil, nil, errors.New("core.InitStore: nil driver")
+		return nil, nil, errors.New("store.InitStore: nil driver")
 	}
 
 	// wrap is the local error-prefix closure for this function. The
-	// 12+ fmt.Errorf("core.InitStore: ...: %w") sites threaded the
+	// 12+ fmt.Errorf("store.InitStore: ...: %w") sites threaded the
 	// same prefix manually; centralising it here means a single
 	// edit if the prefix ever changes (e.g. a domain-prefixed
 	// errs.Wrap helper lands).
 	wrap := func(stage string, err error) error {
 		if stage == "" {
-			return fmt.Errorf("core.InitStore: %w", err)
+			return fmt.Errorf("store.InitStore: %w", err)
 		}
-		return fmt.Errorf("core.InitStore: %s: %w", stage, err)
+		return fmt.Errorf("store.InitStore: %s: %w", stage, err)
 	}
 
 	// --- Resolve options ---
@@ -135,7 +135,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	idx := o.storeIndex
 	if idx == nil {
 		return nil, nil, fmt.Errorf(
-			"core.InitStore: WithStoreIndex is required (see DI Example)")
+			"store.InitStore: WithStoreIndex is required (see DI Example)")
 	}
 
 	// --- Refuse encrypted-manifest configs without a passphrase ---
@@ -146,7 +146,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	// operational pain. Caught here at InitStore so the user
 	// sees the conflict before any disk I/O.
 	if cfg.ManifestCrypto != domain.ManifestCryptoPlain && o.passphrase == nil {
-		return nil, nil, fmt.Errorf("core.InitStore: %w: ManifestCrypto=%q requires WithPassphrase",
+		return nil, nil, fmt.Errorf("store.InitStore: %w: ManifestCrypto=%q requires WithPassphrase",
 			errs.ErrPassphraseRequired, cfg.ManifestCrypto)
 	}
 
@@ -212,7 +212,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	// is open for users — Hash registry is therefore required.
 	if o.hashRegistry == nil {
 		return nil, nil, fmt.Errorf(
-			"core.InitStore: WithHashRegistry is required to persist system.config")
+			"store.InitStore: WithHashRegistry is required to persist system.config")
 	}
 	if _, err := storeconfig.Write(ctx, drv, configWriter(drv, idx, o.hashRegistry), cfg); err != nil {
 		return nil, nil, wrap("write system.config", err)

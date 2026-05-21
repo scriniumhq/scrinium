@@ -14,7 +14,7 @@ import (
 // engine-internal (invisible to clients) and surfaces as
 // "not found", everything else is unknown.
 //
-// op is the operation name (e.g. "core.Get") used to build the
+// op is the operation name (e.g. "store.Get") used to build the
 // error message — there is no caller-side wrapping needed.
 func dispatchManifestType(m domain.Manifest, op string) error {
 	switch m.Type {

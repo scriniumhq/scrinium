@@ -23,7 +23,7 @@ import (
 //
 //	algo, want, hasher, err := s.parseContentHash(m.ContentHash)
 //	if err != nil {
-//	    return fmt.Errorf("core.Verify: %w", err)
+//	    return fmt.Errorf("store.Verify: %w", err)
 //	}
 //
 // `algo` is returned alongside the hasher so callers that need it

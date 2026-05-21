@@ -35,6 +35,7 @@ import (
 	"sort"
 	"strings"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
@@ -45,7 +46,7 @@ import (
 // systemStore is the SystemStore implementation bound to a Store.
 type systemStore struct {
 	drv    driver.Driver
-	index  StoreIndex
+	index  coreapi.StoreIndex
 	hashes domain.HashRegistry
 	cfg    domain.StoreConfig
 }
@@ -57,7 +58,7 @@ const systemSessionID = domain.SessionID("init")
 
 // newSystemStore wires the facade to its dependencies. Called once
 // per Store during construction.
-func newSystemStore(drv driver.Driver, idx StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig) *systemStore {
+func newSystemStore(drv driver.Driver, idx coreapi.StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig) *systemStore {
 	return &systemStore{
 		drv:    drv,
 		index:  idx,
@@ -202,7 +203,7 @@ func (ss *systemStore) Put(ctx context.Context, name string, payload io.Reader, 
 // --- Get ---
 
 // Get implements SystemStore.Get.
-func (ss *systemStore) Get(ctx context.Context, name string) (ReadHandle, error) {
+func (ss *systemStore) Get(ctx context.Context, name string) (coreapi.ReadHandle, error) {
 	ptrPath, err := pointerPath(name)
 	if err != nil {
 		return nil, err
@@ -333,7 +334,7 @@ func (ss *systemStore) gatherNames(ctx context.Context, namespace, prefix string
 func writeSystemArtifact(
 	ctx context.Context,
 	drv driver.Driver,
-	idx StoreIndex,
+	idx coreapi.StoreIndex,
 	hashes domain.HashRegistry,
 	namespace string,
 	sessionID domain.SessionID,
@@ -393,7 +394,7 @@ func (ss *systemStore) writePointer(ctx context.Context, ptrPath string, id doma
 // readArtifact opens the manifest file for the given id, returning
 // a ReadHandle over the inline payload. SystemStore artifacts are
 // always inline (writeInlineSystemArtifact's contract).
-func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (ReadHandle, error) {
+func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (coreapi.ReadHandle, error) {
 	m, err := ss.loadManifest(ctx, id)
 	if err != nil {
 		return nil, err

@@ -53,7 +53,7 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 	// 1. Resolve the artifact set through the index.
 	ids, err := s.index.GetBySession(ctx, sessionID)
 	if err != nil {
-		return fmt.Errorf("core.RollbackSession: index lookup: %w", err)
+		return fmt.Errorf("store.RollbackSession: index lookup: %w", err)
 	}
 	if len(ids) == 0 {
 		// No-op: session does not exist, or was already rolled
@@ -71,7 +71,7 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 			// Index row exists but the manifest cannot be
 			// loaded — inconsistent state.
 			// (TODO M3.4: RebuildIndexAgent) is the recovery path.
-			return fmt.Errorf("core.RollbackSession: load %q: %w", id, err)
+			return fmt.Errorf("store.RollbackSession: load %q: %w", id, err)
 		}
 		if !m.RetentionUntil.IsZero() && m.RetentionUntil.After(now) {
 			return errs.ErrRetentionNotExpired
@@ -100,7 +100,7 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 			if errors.Is(err, errs.ErrArtifactNotFound) {
 				continue
 			}
-			return fmt.Errorf("core.RollbackSession: delete %q: %w", id, err)
+			return fmt.Errorf("store.RollbackSession: delete %q: %w", id, err)
 		}
 	}
 

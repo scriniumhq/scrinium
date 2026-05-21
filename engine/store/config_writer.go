@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/store/internal/storeconfig"
@@ -27,7 +28,7 @@ const maxSystemPointerSize = 256
 // Built from (drv, idx, hashes) rather than from *store because the
 // config write path runs both before a *store exists (InitStore) and
 // on a live *store (UpdateConfig).
-func configWriter(drv driver.Driver, idx StoreIndex, hashes domain.HashRegistry) storeconfig.ArtifactWriter {
+func configWriter(drv driver.Driver, idx coreapi.StoreIndex, hashes domain.HashRegistry) storeconfig.ArtifactWriter {
 	return func(
 		ctx context.Context,
 		namespace string,

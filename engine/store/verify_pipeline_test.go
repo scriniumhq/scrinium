@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
@@ -27,7 +28,7 @@ import (
 // root for on-disk inspection.
 func initPipelineStore(
 	t *testing.T,
-	reg store.TransformerRegistry,
+	reg coreapi.TransformerRegistry,
 	pipeline []string,
 	extra ...store.StoreOption,
 ) (store.Store, string) {

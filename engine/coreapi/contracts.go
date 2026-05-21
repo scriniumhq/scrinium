@@ -1,11 +1,9 @@
-package store
+package coreapi
 
 import (
 	"context"
-	"hash"
 	"time"
 
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/event"
 )
 
@@ -50,10 +48,4 @@ type AgentResult struct {
 	CompletedAt time.Time
 	Stats       map[string]int64
 	Partial     bool // true if the work was interrupted and completed only partially
-}
-
-// NewHashRegistry creates an empty hash-algorithm registry.
-// The host application registers factories through Register.
-func NewHashRegistry() domain.HashRegistry {
-	return &hashRegistry{hashers: make(map[string]func() hash.Hash)}
 }

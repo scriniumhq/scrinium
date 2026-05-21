@@ -6,6 +6,7 @@ import (
 	"io"
 	"sync"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
@@ -46,8 +47,8 @@ type store struct {
 	// Identity and dependencies.
 	storeID string
 	drv     driver.Driver
-	index   StoreIndex
-	pub     Publisher
+	index   coreapi.StoreIndex
+	pub     coreapi.Publisher
 
 	// Configuration. activeConfig is the StoreConfig in effect for
 	// new operations; it is replaced atomically by UpdateConfig.
@@ -62,8 +63,8 @@ type store struct {
 	// Plugin registries — populated at construction; never mutated
 	// after that.
 	hashes       domain.HashRegistry
-	transformers TransformerRegistry
-	keyResolver  KeyResolver
+	transformers coreapi.TransformerRegistry
+	keyResolver  coreapi.KeyResolver
 
 	// SystemStore facade. Initialised once at construction; nil
 	// only in unit tests that build a *store by hand without
@@ -137,7 +138,7 @@ func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobTy
 	// Until then the stub here keeps the current DataStore
 	// contract honest: callers who reach for PutBlob today get a
 	// clear "not implemented" rather than silent success.
-	return "", fmt.Errorf("%w: core.Store.PutBlob is deferred to M5 (chunker.Wrapper); the method itself moves to BlobStore at M5 start (backlog ADR-TBD)",
+	return "", fmt.Errorf("%w: store.Store.PutBlob is deferred to M5 (chunker.Wrapper); the method itself moves to BlobStore at M5 start (backlog ADR-TBD)",
 		errs.ErrNotImplemented)
 }
 

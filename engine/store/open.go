@@ -69,18 +69,18 @@ import (
 //   - StoreIndex schema cross-check against descriptor (M3.4).
 func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, error) {
 	if drv == nil {
-		return nil, errors.New("core.OpenStore: nil driver")
+		return nil, errors.New("store.OpenStore: nil driver")
 	}
 
 	// wrap is the local error-prefix closure for this function. The
-	// 13+ fmt.Errorf("core.OpenStore: ...: %w") sites threaded the
+	// 13+ fmt.Errorf("store.OpenStore: ...: %w") sites threaded the
 	// same prefix manually; centralising it here means a single
 	// edit if the prefix ever changes.
 	wrap := func(stage string, err error) error {
 		if stage == "" {
-			return fmt.Errorf("core.OpenStore: %w", err)
+			return fmt.Errorf("store.OpenStore: %w", err)
 		}
-		return fmt.Errorf("core.OpenStore: %s: %w", stage, err)
+		return fmt.Errorf("store.OpenStore: %s: %w", stage, err)
 	}
 
 	// --- Resolve options ---
@@ -98,11 +98,11 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	idx := o.storeIndex
 	if idx == nil {
 		return nil, fmt.Errorf(
-			"core.OpenStore: WithStoreIndex is required (see DI Example)")
+			"store.OpenStore: WithStoreIndex is required (see DI Example)")
 	}
 	if o.hashRegistry == nil {
 		return nil, fmt.Errorf(
-			"core.OpenStore: WithHashRegistry is required to read system.config")
+			"store.OpenStore: WithHashRegistry is required to read system.config")
 	}
 
 	// --- Read both descriptor replicas; reconcile ---
@@ -201,7 +201,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// AutoUnlock: invoke the provider, derive KEK, unwrap DEK.
 	if o.passphrase == nil {
-		return nil, fmt.Errorf("core.OpenStore: %w: WithAutoUnlock requires WithPassphrase",
+		return nil, fmt.Errorf("store.OpenStore: %w: WithAutoUnlock requires WithPassphrase",
 			errs.ErrPassphraseRequired)
 	}
 	passphrase, err := callProvider(ctx, o.passphrase, PassphraseHint{

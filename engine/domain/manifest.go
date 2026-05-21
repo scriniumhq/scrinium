@@ -84,7 +84,7 @@ type Manifest struct {
 	// at two places only:
 	//   - manifestcodec.ComputeArtifactID, after writing the body
 	//     and hashing the result;
-	//   - core.loadManifest, from the id used to fetch the file.
+	//   - store.loadManifest, from the id used to fetch the file.
 	// On the wire (manifestcodec) the field is invisible; in the
 	// index (sqlite) it is the primary key. See codec_test.go for
 	// the "ArtifactID does not appear in JSON" invariant.

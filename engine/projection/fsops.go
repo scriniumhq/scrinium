@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/pathx"
 )
 
@@ -82,7 +82,7 @@ type FSOps struct {
 type StoreClient interface {
 	Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error)
 	Delete(ctx context.Context, id domain.ArtifactID) error
-	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (store.ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (coreapi.ReadHandle, error)
 }
 
 // FileInfo is the POSIX-shaped descriptor that Stat/Listdir
@@ -470,7 +470,7 @@ func (o *FSOps) listInRoot(path string) NodeSeq {
 	return o.view.ListIn(o.view.RootView(), path)
 }
 
-func (o *FSOps) openInRoot(ctx context.Context, path string) (store.ReadHandle, error) {
+func (o *FSOps) openInRoot(ctx context.Context, path string) (coreapi.ReadHandle, error) {
 	return o.view.OpenIn(ctx, o.view.RootView(), path, domain.GetOptions{})
 }
 
@@ -1326,7 +1326,7 @@ func (q *quotaTracker) Release(n int64) {
 // underlying handle's random-access support is propagated: ReadAt
 // works iff the handle supports it.
 type readOnlyFile struct {
-	rh store.ReadHandle
+	rh coreapi.ReadHandle
 }
 
 func (f *readOnlyFile) ReadAt(p []byte, off int64) (int, error) {

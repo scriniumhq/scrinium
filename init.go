@@ -95,7 +95,7 @@ func Init(ctx context.Context, cfg Config) (_ *Scrinium, recoveryKit []byte, ret
 		}
 	}
 
-	// 5. core.InitStore. The presence of cfg.PassphraseFile
+	// 5. store.InitStore. The presence of cfg.PassphraseFile
 	//    selects the encrypted-Init path (a passphrase
 	//    provider is wired in, InitStore wraps the freshly
 	//    generated DEK with a KEK derived from the passphrase

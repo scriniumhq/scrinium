@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/store"
 )
 
 // DefaultBusyTimeout is the default value applied via
@@ -58,12 +58,12 @@ type Index struct {
 // Compile-time interface conformance. Catches signature drift
 // between store.StoreIndex and *Index immediately at build time
 // instead of at the first assignment site.
-var _ store.StoreIndex = (*Index)(nil)
+var _ coreapi.StoreIndex = (*Index)(nil)
 
 // options is the resolved configuration. Defaults applied by Open.
 type options struct {
 	busyTimeout time.Duration
-	publisher   store.Publisher
+	publisher   coreapi.Publisher
 	journalMode journalMode
 	syncMode    syncMode
 }
@@ -291,6 +291,6 @@ func (i *Index) publish(typ string, payload any) {
 		return
 	}
 	// event.Event is the concrete shape. We import it lazily via
-	// core.Publisher so the import lives at the use site only.
+	// store.Publisher so the import lives at the use site only.
 	pub.Publish(eventOf(typ, payload))
 }

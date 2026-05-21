@@ -6,6 +6,7 @@ import (
 	"hash"
 	"io"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 )
 
@@ -42,7 +43,7 @@ type putPipeline struct {
 
 type putPipelineStage struct {
 	algorithm string
-	encoder   Encoder
+	encoder   coreapi.Encoder
 	hasher    hash.Hash
 }
 
@@ -55,7 +56,7 @@ func (s *store) buildPutPipeline(
 	hashAlgo string,
 	input io.Reader,
 	algoIDs []string,
-	ec EncodeContext,
+	ec coreapi.EncodeContext,
 ) (io.Reader, *putPipeline, error) {
 	contentHasher, err := s.hashes.NewHasher(hashAlgo)
 	if err != nil {
@@ -221,4 +222,4 @@ func (s *store) validatePipelineAlgos(algoIDs []string) error {
 // reserved for a later milestone (see backlog "M2-extra: Pipeline
 // on inline blobs").
 var errPipelineWithInline = errors.New(
-	"core.Put: Pipeline transforms on Inline blobs are not supported in M2.1")
+	"store.Put: Pipeline transforms on Inline blobs are not supported in M2.1")

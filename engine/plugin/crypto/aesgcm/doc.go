@@ -3,10 +3,10 @@
 //
 // Wiring (typical host setup):
 //
-//	reg := core.NewTransformerRegistry().
+//	reg := store.NewTransformerRegistry().
 //	    Register("aes-gcm", aesgcm.New(dek))
-//	store, _, _ := core.InitStore(ctx, drv,
-//	    core.WithReadRegistry(reg), /* ... */)
+//	store, _, _ := store.InitStore(ctx, drv,
+//	    store.WithReadRegistry(reg), /* ... */)
 //
 // The factory holds the DEK; per-operation instances generate or
 // receive an IV without touching the key directly. The key is

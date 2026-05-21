@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/manifestcrypto"
@@ -18,10 +19,10 @@ import (
 // the protection is cheaper than chasing flaky races in tests.
 type transformerRegistry struct {
 	mu        sync.RWMutex
-	factories map[string]TransformerFactory
+	factories map[string]coreapi.TransformerFactory
 }
 
-func (r *transformerRegistry) Get(id string) (TransformerFactory, error) {
+func (r *transformerRegistry) Get(id string) (coreapi.TransformerFactory, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	f, ok := r.factories[id]
@@ -31,7 +32,7 @@ func (r *transformerRegistry) Get(id string) (TransformerFactory, error) {
 	return f, nil
 }
 
-func (r *transformerRegistry) Register(id string, f TransformerFactory) TransformerRegistry {
+func (r *transformerRegistry) Register(id string, f coreapi.TransformerFactory) coreapi.TransformerRegistry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.factories[id] = f
@@ -109,7 +110,7 @@ func (r *staticKeyResolver) GetKeys(keyID string) ([][]byte, error) {
 	return [][]byte{cp}, nil
 }
 
-func (r *staticKeyResolver) ResolveWriteKey(KeyContext) string {
+func (r *staticKeyResolver) ResolveWriteKey(coreapi.KeyContext) string {
 	return ""
 }
 

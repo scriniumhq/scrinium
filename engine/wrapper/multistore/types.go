@@ -1,6 +1,7 @@
 package multistore
 
 import (
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
@@ -144,5 +145,5 @@ type WrapperFactory interface {
 // requires HostStorage.
 type WrapperDeps struct {
 	HostStorage host.TransitStore
-	Publisher   store.Publisher
+	Publisher   coreapi.Publisher
 }

@@ -51,7 +51,7 @@ func (s *store) SetMaintenanceMode(ctx context.Context, mode domain.MaintenanceM
 	case domain.MaintenanceModeNone, domain.MaintenanceModeReadOnly, domain.MaintenanceModeOffline:
 		// OK
 	default:
-		return fmt.Errorf("core.SetMaintenanceMode: invalid mode %d", mode)
+		return fmt.Errorf("store.SetMaintenanceMode: invalid mode %d", mode)
 	}
 
 	s.stateMu.Lock()
