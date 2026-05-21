@@ -1,4 +1,4 @@
-package store
+package plugins
 
 import (
 	"encoding/hex"
@@ -50,13 +50,13 @@ type hashRegistry struct {
 func (r *hashRegistry) Parse(h string) (algo string, raw []byte, err error) {
 	dash := strings.IndexByte(h, '-')
 	if dash <= 0 || dash == len(h)-1 {
-		return "", nil, errors.New("core: invalid hash format, expected '<algo>-<hex>'")
+		return "", nil, errors.New("plugins: invalid hash format, expected '<algo>-<hex>'")
 	}
 	algo = h[:dash]
 	hexPart := h[dash+1:]
 	raw, err = hex.DecodeString(hexPart)
 	if err != nil {
-		return "", nil, errors.New("core: invalid hash hex part: " + err.Error())
+		return "", nil, errors.New("plugins: invalid hash hex part: " + err.Error())
 	}
 	return algo, raw, nil
 }
@@ -87,7 +87,7 @@ func (r *hashRegistry) Register(algo string, fn func() hash.Hash) domain.HashReg
 // context and returns an empty KeyID. This is the default
 // behaviour for typical scenarios.
 //
-// mu guards dek so close (called from Store.Close) and GetKeys
+// mu guards dek so Close (called from store.Close) and GetKeys
 // (called by manifestcodec on every encrypted decode) cannot race.
 type staticKeyResolver struct {
 	mu  sync.Mutex
@@ -114,9 +114,9 @@ func (r *staticKeyResolver) ResolveWriteKey(coreapi.KeyContext) string {
 	return ""
 }
 
-// close wipes the resolver's internal DEK copy. Called by
-// store.Close. Idempotent.
-func (r *staticKeyResolver) close() {
+// Close wipes the resolver's internal DEK copy. Called by
+// store.Close via an anonymous-interface assertion. Idempotent.
+func (r *staticKeyResolver) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.dek != nil {

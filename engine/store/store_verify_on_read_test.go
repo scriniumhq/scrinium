@@ -6,6 +6,7 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/plugins"
 )
 
 // fakePlainFactory is a TransformerFactory that does NOT
@@ -24,7 +25,7 @@ func (fakeAEADFactory) AEAD()                                                 {}
 
 func newTestRegistry(t *testing.T) coreapi.TransformerRegistry {
 	t.Helper()
-	return NewTransformerRegistry().
+	return plugins.NewTransformerRegistry().
 		Register("zstd", fakePlainFactory{}).
 		Register("aes-gcm", fakeAEADFactory{})
 }

@@ -9,6 +9,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
+	"scrinium.dev/engine/plugins"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/recoverykit"
@@ -465,7 +466,7 @@ func TestKeyResolverPromotion_RespectsCustomResolver(t *testing.T) {
 	}
 
 	customDEK := bytes.Repeat([]byte{0xAB}, 32)
-	custom := store.NewStaticKeyResolver(customDEK)
+	custom := plugins.NewStaticKeyResolver(customDEK)
 
 	s, err := store.OpenStore(context.Background(), drv,
 		store.WithPassphrase(storefx.StaticPP("pw")),

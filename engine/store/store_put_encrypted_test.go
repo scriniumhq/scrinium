@@ -15,6 +15,7 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/plugin/crypto/aesgcm"
+	"scrinium.dev/engine/plugins"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
@@ -291,7 +292,7 @@ func TestPut_EncryptedBlobsDoNotDedup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("aesgcm.New: %v", err)
 	}
-	reg := store.NewTransformerRegistry().Register("aes-gcm", aesFactory)
+	reg := plugins.NewTransformerRegistry().Register("aes-gcm", aesFactory)
 
 	cfg := domain.StoreConfig{Pipeline: []string{"aes-gcm"}}
 	drv := driverfx.LocalFS(t)

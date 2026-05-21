@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/plugins"
 )
 
 // --- Test scaffolding ---
@@ -175,7 +176,7 @@ func TestClose_OperationsReturnErrClosed(t *testing.T) {
 
 func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 	dek := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	resolver := NewStaticKeyResolver(dek).(*staticKeyResolver)
+	resolver := plugins.NewStaticKeyResolver(dek)
 
 	s := &store{
 		state:       domain.StateUnlocked,
@@ -187,18 +188,15 @@ func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	// After close, GetKeys returns (nil, nil) — the codec turns
-	// that into ErrKeyNotFound.
+	// After close the default resolver is closed: GetKeys returns
+	// (nil, nil) — the codec turns that into ErrKeyNotFound. (The
+	// internal DEK-wipe is unit-tested in the plugins package.)
 	keys, err := resolver.GetKeys("any")
 	if err != nil {
 		t.Errorf("GetKeys after close: unexpected err: %v", err)
 	}
 	if keys != nil {
 		t.Errorf("GetKeys after close: want nil keys, got %v", keys)
-	}
-	// The internal dek slice is wiped and nil-ed.
-	if resolver.dek != nil {
-		t.Errorf("resolver.dek after close: want nil, got %v", resolver.dek)
 	}
 }
 
@@ -237,7 +235,7 @@ func TestClose_NilKeyResolver_NoPanic(t *testing.T) {
 // to catch ordering bugs.
 func TestClose_RaceWithGetKeys(t *testing.T) {
 	dek := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	resolver := NewStaticKeyResolver(dek).(*staticKeyResolver)
+	resolver := plugins.NewStaticKeyResolver(dek)
 
 	s := &store{
 		state:       domain.StateUnlocked,

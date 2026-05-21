@@ -42,8 +42,8 @@ func (s *store) Close() error {
 	resolver := s.keyResolver
 	s.cryptoMu.Unlock()
 
-	if r, ok := resolver.(*staticKeyResolver); ok {
-		r.close()
+	if r, ok := resolver.(interface{ Close() }); ok {
+		r.Close()
 	}
 
 	return nil

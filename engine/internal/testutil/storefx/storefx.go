@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/plugins"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
@@ -21,7 +22,7 @@ import (
 // ContentHasher: HashBLAKE3 do not need to pull in a blake3 library.
 // Tests that care about a specific algorithm register their own.
 func Hashes() domain.HashRegistry {
-	return store.NewHashRegistry().
+	return plugins.NewHashRegistry().
 		Register("sha256", func() hash.Hash { return sha256.New() }).
 		Register("blake3", func() hash.Hash { return sha256.New() })
 }

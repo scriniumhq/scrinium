@@ -6,6 +6,7 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/plugins"
 	"scrinium.dev/engine/store"
 )
 
@@ -44,7 +45,7 @@ func TestStoreOptionsApply(t *testing.T) {
 		store.WithPublisher(nil),
 		store.WithHashRegistry(nil),
 		store.WithReadRegistry(nil),
-		store.WithKeyResolver(store.NewStaticKeyResolver([]byte("k"))),
+		store.WithKeyResolver(plugins.NewStaticKeyResolver([]byte("k"))),
 		store.WithPassphrase(nil),
 		store.WithAutoUnlock(),
 	}

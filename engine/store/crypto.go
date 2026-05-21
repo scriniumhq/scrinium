@@ -8,6 +8,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/plugins"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/kdf"
 	"scrinium.dev/engine/store/internal/keywrap"
@@ -163,5 +164,5 @@ func (s *store) promoteKeyResolverIfDefault() {
 	if len(s.dek) == 0 {
 		return
 	}
-	s.keyResolver = NewStaticKeyResolver(s.dek)
+	s.keyResolver = plugins.NewStaticKeyResolver(s.dek)
 }

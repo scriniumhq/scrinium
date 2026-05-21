@@ -15,6 +15,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index/sqlite"
+	"scrinium.dev/engine/plugins"
 	"scrinium.dev/engine/store"
 )
 
@@ -49,7 +50,7 @@ func initStorePlain(t *testing.T, dir string) {
 	}
 	defer idx.Close()
 
-	hashes := store.NewHashRegistry().
+	hashes := plugins.NewHashRegistry().
 		Register("sha256", func() hash.Hash { return sha256.New() })
 
 	if _, _, err := store.InitStore(ctx, drv,
