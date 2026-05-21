@@ -19,6 +19,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/manifestcrypto"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/recovery"
 	"scrinium.dev/engine/store/internal/recoverykit"
 	"scrinium.dev/engine/store/internal/systemstore"
@@ -81,7 +82,7 @@ func initEncryptedDEK(
 	if cfgKDFParams != nil {
 		cost = *cfgKDFParams
 	}
-	wrapped, params, werr := wrapDEK(dek, passphrase, cost)
+	wrapped, params, werr := keyring.WrapDEK(dek, passphrase, cost)
 	manifestcrypto.Wipe(passphrase)
 	if werr != nil {
 		return nil, descriptor.KDFParams{}, nil, fmt.Errorf("wrap DEK: %w", werr)

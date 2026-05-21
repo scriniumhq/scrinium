@@ -13,6 +13,7 @@ import (
 	"scrinium.dev/engine/internal/manifestcrypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/descriptorcache"
+	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
 
@@ -220,7 +221,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		return nil, fmt.Errorf("%w: descriptor reports DEKEncrypted=true without KDFParams",
 			errs.ErrStoreCorrupted)
 	}
-	dek, err := unwrapDEK(desc.DEK, *desc.KDFParams, passphrase)
+	dek, err := keyring.UnwrapDEK(desc.DEK, *desc.KDFParams, passphrase)
 	manifestcrypto.Wipe(passphrase)
 	if err != nil {
 		return nil, wrap("", err)
