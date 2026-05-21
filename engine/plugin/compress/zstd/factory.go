@@ -68,8 +68,9 @@ func New(opts Options) core.TransformerFactory {
 	return &factory{opts: opts.withDefaults()}
 }
 
-// NewEncoder creates a fresh per-operation Encoder.
-func (f *factory) NewEncoder() core.Encoder {
+// NewEncoder creates a fresh per-operation Encoder. zstd is keyless
+// and ignores ec.
+func (f *factory) NewEncoder(_ core.EncodeContext) core.Encoder {
 	return newEncoder(f.opts)
 }
 

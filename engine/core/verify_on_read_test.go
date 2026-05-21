@@ -11,13 +11,13 @@ import (
 // implement AEADCapable — stands in for a compressor like zstd.
 type fakePlainFactory struct{}
 
-func (fakePlainFactory) NewEncoder() Encoder                           { panic("unused") }
+func (fakePlainFactory) NewEncoder(ctx EncodeContext) Encoder          { panic("unused") }
 func (fakePlainFactory) NewDecoder(stage domain.PipelineStage) Decoder { panic("unused") }
 
 // fakeAEADFactory implements AEADCapable — stands in for aesgcm.
 type fakeAEADFactory struct{}
 
-func (fakeAEADFactory) NewEncoder() Encoder                           { panic("unused") }
+func (fakeAEADFactory) NewEncoder(ctx EncodeContext) Encoder          { panic("unused") }
 func (fakeAEADFactory) NewDecoder(stage domain.PipelineStage) Decoder { panic("unused") }
 func (fakeAEADFactory) AEAD()                                         {}
 

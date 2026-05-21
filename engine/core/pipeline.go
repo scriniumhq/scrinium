@@ -55,6 +55,7 @@ func (s *store) buildPutPipeline(
 	hashAlgo string,
 	input io.Reader,
 	algoIDs []string,
+	ec EncodeContext,
 ) (io.Reader, *putPipeline, error) {
 	contentHasher, err := s.hashes.NewHasher(hashAlgo)
 	if err != nil {
@@ -82,7 +83,7 @@ func (s *store) buildPutPipeline(
 		if err != nil {
 			return nil, nil, fmt.Errorf("pipeline: get factory %q: %w", algo, err)
 		}
-		enc := factory.NewEncoder()
+		enc := factory.NewEncoder(ec)
 		stageOut := enc.Transform(current)
 
 		// Each stage gets its own hasher: per-stage hashes are

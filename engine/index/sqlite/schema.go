@@ -3,7 +3,7 @@ package sqlite
 // CurrentSchemaVersion is the schema version this build of the
 // package writes and expects to read. Bumped whenever a migration
 // is added to migrations[].
-const CurrentSchemaVersion = 2
+const CurrentSchemaVersion = 3
 
 // migrations is the ordered list of forward-only schema migrations.
 // Each migration is applied inside its own transaction; if any step
@@ -23,6 +23,11 @@ var migrations = []migration{
 		Version:     2,
 		Description: "index extensions: ext_meta, ext_data",
 		Statements:  []string{schemaV2},
+	},
+	{
+		Version:     3,
+		Description: "ADR-58: blobs.crypto_identity in the dedup key",
+		Statements:  schemaV3,
 	},
 }
 
@@ -51,7 +56,11 @@ type migration struct {
 //
 // Indices:
 //   - blobs(content_hash, original_size) is the dedup key for
-//     ExistsByContent. Unique to enforce dedup invariants.
+//     ExistsByContent. Unique to enforce dedup invariants. NOTE:
+//     migration v3 replaces this index with a three-column one that
+//     adds crypto_identity (ADR-58). The v1 DDL below is left
+//     verbatim — migrations are append-only history, not the live
+//     shape.
 //   - blobs(last_verified_at) supports Scrub Agent batched fetches
 //     of stale entries.
 //   - blobs(ref_count) supports GC ListOrphanBlobs.
@@ -169,3 +178,27 @@ CREATE TABLE ext_data (
     PRIMARY KEY (extension, table_name, key)
 ) WITHOUT ROWID;
 `
+
+// schemaV3 adds the crypto-identity component of the blob dedup
+// lookup (ADR-58). The column is NOT NULL DEFAULT ” so the
+// migration is a pure add for existing rows: Plain blobs keep an
+// empty identity and their historical (content_hash, original_size)
+// lookup is unchanged.
+//
+// Crucially the index is NON-UNIQUE. Physical blob identity is
+// blob_ref (the PRIMARY KEY) — for an encrypted blob that is the
+// hash of the ciphertext, so under Disabled three writes of the
+// same plaintext are three distinct rows that share
+// (content_hash, original_size, crypto_identity): the identity does
+// NOT include the random IV, and must not, or Convergent dedup
+// would break. A UNIQUE constraint here would reject the 2nd write.
+// blobs_content is therefore a plain lookup index supporting the
+// ExistsByContent probe (which already uses LIMIT 1); duplicate-row
+// prevention is the blob_ref PK + ON CONFLICT(blob_ref) DO NOTHING.
+//
+// Append-only: never edit this once shipped.
+var schemaV3 = []string{
+	`ALTER TABLE blobs ADD COLUMN crypto_identity TEXT NOT NULL DEFAULT ''`,
+	`DROP INDEX blobs_content`,
+	`CREATE INDEX blobs_content ON blobs(content_hash, original_size, crypto_identity)`,
+}

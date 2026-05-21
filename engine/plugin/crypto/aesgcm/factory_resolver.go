@@ -14,13 +14,12 @@ import (
 // core.KeyResolver, which lets a single factory cover key
 // rotation, multi-tenant stores, and crypto-shredding.
 //
-// On Put the Encoder picks resolver.DefaultKeyID() and records it
-// in TransformResult.KeyID; the Pipeline runner copies the field
-// into manifest.Pipeline[i].KeyID. On Get the Decoder reads the
-// recorded KeyID from the stage and asks the resolver for
-// candidate keys, trying each until one decrypts (matches the
-// manifestcodec.DecodeFileEncrypted contract for manifest body
-// crypto).
+// The engine picks the write KeyID once via
+// KeyResolver.ResolveWriteKey and passes it through EncodeContext;
+// the Encoder records it in TransformResult.KeyID, and the Pipeline
+// runner copies the field into manifest.Pipeline[i].KeyID. On Get
+// the Decoder reads the recorded KeyID from the stage and asks the
+// resolver for candidate keys, trying each until one decrypts.
 type factoryResolver struct {
 	resolver core.KeyResolver
 }
@@ -33,28 +32,25 @@ var errKeyResolverMissing = errors.New("aesgcm: KeyResolver not provided")
 
 // errKeyResolverEmpty surfaces an empty result from GetKeys.
 // Treated as a decryption-side failure on read; treated as a
-// configuration error on write (Store opened without a usable
-// DEK).
+// configuration error on write (Store opened without a usable DEK).
 var errKeyResolverEmpty = errors.New("aesgcm: KeyResolver returned no keys")
 
 // NewWithResolver constructs an AES-256-GCM TransformerFactory
-// backed by a KeyResolver. Use this when the Store may operate
-// with multiple DEKs over its lifetime — encrypted-Store
-// bootstraps, RotateKEK aftermath, multi-tenant routing.
+// backed by a KeyResolver. Use this when the Store may operate with
+// multiple DEKs over its lifetime — encrypted-Store bootstraps,
+// RotateKEK aftermath, multi-tenant routing.
 //
-// The resolver may be nil at construction time; absence is
-// surfaced on the first Transform that needs a key. This mirrors
-// the manifestcodec contract: a Locked Store fails on use, not on
-// wiring.
+// The resolver may be nil at construction time; absence is surfaced
+// on the first Transform that needs a key.
 func NewWithResolver(resolver core.KeyResolver) core.TransformerFactory {
 	return &factoryResolver{resolver: resolver}
 }
 
-// NewEncoder returns an Encoder that resolves its DEK on first
-// Transform. KeyID is the resolver's DefaultKeyID() at the moment
-// of resolution.
-func (f *factoryResolver) NewEncoder() core.Encoder {
-	return &resolverEncoder{resolver: f.resolver}
+// NewEncoder returns an Encoder bound to the write KeyID the engine
+// resolved for this operation (ec.KeyID). The DEK lookup happens on
+// first Transform.
+func (f *factoryResolver) NewEncoder(ec core.EncodeContext) core.Encoder {
+	return &resolverEncoder{resolver: f.resolver, keyID: ec.KeyID}
 }
 
 // NewDecoder returns a Decoder bound to the recorded stage KeyID
@@ -67,16 +63,15 @@ func (f *factoryResolver) NewDecoder(stage domain.PipelineStage) core.Decoder {
 	}
 }
 
-// AEAD implements core.AEADCapable for the resolver-backed
-// factory. Same rationale as the pinned-DEK factory: the GCM tag
+// AEAD implements core.AEADCapable for the resolver-backed factory.
+// Same rationale as the pinned-DEK factory: the GCM tag
 // authenticates every read, so VerifyOnRead=Auto can skip the
 // explicit ContentHash recomputation.
 func (f *factoryResolver) AEAD() {}
 
-// resolveAEADs returns AEAD primitives for every candidate DEK
-// the resolver yields for keyID, in resolver order. The caller
-// (Decoder) tries each in turn; the Encoder always uses the
-// first.
+// resolveAEADs returns AEAD primitives for every candidate DEK the
+// resolver yields for keyID, in resolver order. The caller (Decoder)
+// tries each in turn; the Encoder always uses the first.
 func resolveAEADs(resolver core.KeyResolver, keyID string) ([]cipher.AEAD, error) {
 	if resolver == nil {
 		return nil, errKeyResolverMissing

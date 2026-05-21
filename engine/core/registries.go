@@ -82,8 +82,9 @@ func (r *hashRegistry) Register(algo string, fn func() hash.Hash) domain.HashReg
 }
 
 // staticKeyResolver implements KeyResolver with a single DEK. It
-// returns one key for any KeyID; DefaultKeyID is the empty string.
-// This is the default behaviour for typical scenarios.
+// returns one key for any KeyID; ResolveWriteKey ignores its
+// context and returns an empty KeyID. This is the default
+// behaviour for typical scenarios.
 //
 // mu guards dek so close (called from Store.Close) and GetKeys
 // (called by manifestcodec on every encrypted decode) cannot race.
@@ -108,7 +109,7 @@ func (r *staticKeyResolver) GetKeys(keyID string) ([][]byte, error) {
 	return [][]byte{cp}, nil
 }
 
-func (r *staticKeyResolver) DefaultKeyID() string {
+func (r *staticKeyResolver) ResolveWriteKey(KeyContext) string {
 	return ""
 }
 

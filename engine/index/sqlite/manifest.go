@@ -95,22 +95,27 @@ func upsertBlob(
 	blobRef string,
 	contentHash domain.ContentHash,
 	originalSize int64,
+	crypto domain.CryptoIdentity,
 	addr domain.PhysicalAddress,
 ) error {
 	// last_verified_at is NULL on insert — the blob has never been
 	// scrubbed yet. Scrub Agent (M3) updates it via MarkVerified.
+	// crypto_identity is the ADR-58 third component of the dedup
+	// key: empty for Plain blobs, "<algorithm>/<KeyID>" for
+	// encrypted ones.
 	const stmt = `
 		INSERT INTO blobs (
-			blob_ref, content_hash, original_size,
+			blob_ref, content_hash, original_size, crypto_identity,
 			physical_workspace, physical_path,
 			pack_ref, pack_offset, pack_size,
 			ref_count, last_verified_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
 		ON CONFLICT(blob_ref) DO NOTHING`
 	_, err := tx.ExecContext(ctx, stmt,
 		blobRef,
 		string(contentHash),
 		originalSize,
+		string(crypto),
 		int(addr.Workspace),
 		addr.Path,
 		addr.PackRef,
@@ -158,9 +163,10 @@ func registerBlob(
 	blobRef string,
 	contentHash domain.ContentHash,
 	originalSize int64,
+	crypto domain.CryptoIdentity,
 	addr domain.PhysicalAddress,
 ) error {
-	if err := upsertBlob(ctx, tx, blobRef, contentHash, originalSize, addr); err != nil {
+	if err := upsertBlob(ctx, tx, blobRef, contentHash, originalSize, crypto, addr); err != nil {
 		return err
 	}
 	return bumpRefCount(ctx, tx, blobRef)
@@ -264,7 +270,7 @@ func indexBlobManifest(
 	if m.BlobRef == "" {
 		return fmt.Errorf("sqlite: blob manifest %q has empty BlobRef", m.ArtifactID)
 	}
-	if err := registerBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, addr); err != nil {
+	if err := registerBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
 		return err
 	}
 	if err := insertManifestRow(ctx, tx, m); err != nil {
@@ -284,7 +290,7 @@ func indexTOCManifest(
 		return fmt.Errorf("sqlite: TOC manifest %q has empty BlobRef", m.ArtifactID)
 	}
 	// Step 1: register the TOC blob itself.
-	if err := registerBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, addr); err != nil {
+	if err := registerBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
 		return err
 	}
 
@@ -333,7 +339,7 @@ func indexPackManifest(
 	if m.BlobRef == "" {
 		return fmt.Errorf("sqlite: pack manifest %q has empty BlobRef", m.ArtifactID)
 	}
-	if err := upsertBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, addr); err != nil {
+	if err := upsertBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
 		return err
 	}
 

@@ -94,7 +94,7 @@ func TestHashRegistry_RoundTrip(t *testing.T) {
 
 type stubFactory struct{ id string }
 
-func (f *stubFactory) NewEncoder() Encoder                       { return nil }
+func (f *stubFactory) NewEncoder(ctx EncodeContext) Encoder      { return nil }
 func (f *stubFactory) NewDecoder(_ domain.PipelineStage) Decoder { return nil }
 
 func TestTransformerRegistry_RegisterAndGet(t *testing.T) {
@@ -138,10 +138,11 @@ func TestTransformerRegistry_ChainedRegistration(t *testing.T) {
 
 // --- KeyResolver tests ---
 
-func TestStaticKeyResolver_DefaultKeyID(t *testing.T) {
+func TestStaticKeyResolver_ResolveWriteKey(t *testing.T) {
 	r := NewStaticKeyResolver([]byte("dek"))
-	if got := r.DefaultKeyID(); got != "" {
-		t.Errorf("DefaultKeyID: got %q, want empty string", got)
+	// Non-empty namespace asserts the static resolver ignores ctx.
+	if got := r.ResolveWriteKey(KeyContext{Namespace: "ns"}); got != "" {
+		t.Errorf("ResolveWriteKey: got %q, want empty string", got)
 	}
 }
 

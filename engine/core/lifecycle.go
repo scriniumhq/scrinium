@@ -271,6 +271,13 @@ func validateAgainstActiveConfig(req, active domain.StoreConfig) error {
 			fmt.Sprintf("ManifestCrypto: requested %q, active %q",
 				req.ManifestCrypto, active.ManifestCrypto))
 	}
+	// ADR-58: EncryptedDedup is immutable — changing it would break
+	// reproducibility of historical encrypted blob addresses.
+	if req.EncryptedDedup != "" && req.EncryptedDedup != active.EncryptedDedup {
+		mismatches = append(mismatches,
+			fmt.Sprintf("EncryptedDedup: requested %q, active %q",
+				req.EncryptedDedup, active.EncryptedDedup))
+	}
 	if req.ContentHasher != "" && req.ContentHasher != active.ContentHasher {
 		mismatches = append(mismatches,
 			fmt.Sprintf("ContentHasher: requested %q, active %q",

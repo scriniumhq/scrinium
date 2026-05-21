@@ -70,8 +70,20 @@ type TransformResult struct {
 // for a single algorithm. State shared between instances (a common
 // zstd dictionary, a common encryption key) belongs to the factory.
 type TransformerFactory interface {
-	NewEncoder() Encoder
+	NewEncoder(ctx EncodeContext) Encoder
 	NewDecoder(stage domain.PipelineStage) Decoder
+}
+
+// EncodeContext carries the per-operation write context the engine
+// hands to NewEncoder. Crypto factories read KeyID — chosen once
+// by the engine via KeyResolver.ResolveWriteKey — to fetch the DEK
+// through GetKeys; non-crypto factories ignore it. Extended
+// additively. See ADR-58.
+type EncodeContext struct {
+	// KeyID is the resolved write-key id for this operation. Empty
+	// for the default single-key resolver and for non-crypto
+	// stages.
+	KeyID string
 }
 
 // AEADCapable is the anonymous capability interface a
@@ -105,14 +117,30 @@ type TransformerRegistry interface {
 // multi-tenant stores, mixed recovered data, intermediate states
 // during key rotation, crypto-shredding.
 //
-// On write the engine takes the KeyID from DefaultKeyID() and
+// On write the engine calls ResolveWriteKey(KeyContext) to choose
+// the KeyID, passes it to the blob Encoder via EncodeContext, and
 // writes it into the manifest header. On read the KeyID is read
 // from the header, GetKeys returns a list of candidates, and the
 // engine transparently iterates over them until one decrypts
 // successfully or the list is exhausted.
 type KeyResolver interface {
 	GetKeys(keyID string) ([][]byte, error)
-	DefaultKeyID() string
+
+	// ResolveWriteKey returns the KeyID to encrypt a new artifact
+	// under, given its write-time context. The default
+	// StaticKeyResolver ignores ctx and returns "" (one store,
+	// one DEK). A custom resolver may map ctx.Namespace to a KeyID
+	// to implement key-per-namespace. The read path never calls
+	// this — the KeyID always comes from the manifest header.
+	ResolveWriteKey(ctx KeyContext) string
+}
+
+// KeyContext carries the write-time context the engine hands to
+// ResolveWriteKey. Extended additively — new fields are added
+// without changing the method signature. See ADR-58.
+type KeyContext struct {
+	// Namespace is the artifact's namespace at write time.
+	Namespace string
 }
 
 // --- Maintenance agents ---
@@ -161,8 +189,8 @@ func NewHashRegistry() domain.HashRegistry {
 }
 
 // NewStaticKeyResolver creates a KeyResolver that returns the same
-// DEK for any request. DefaultKeyID returns an empty string. This
-// is the default behaviour: one Store, one DEK.
+// DEK for any request. ResolveWriteKey ignores its context and
+// returns an empty KeyID. This is the default behaviour: one Store, one DEK.
 func NewStaticKeyResolver(dek []byte) KeyResolver {
 	// Defensive copy so external code cannot modify the key after
 	// passing it to the resolver.

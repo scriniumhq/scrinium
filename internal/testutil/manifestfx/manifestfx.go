@@ -74,6 +74,15 @@ func BlobWithHash(id, blobRef string, contentHash domain.ContentHash, originalSi
 	}
 }
 
+// EncryptedBlobWithHash is BlobWithHash plus a single crypto
+// Pipeline stage, so the index derives a non-empty crypto-identity
+// ("<algo>/<keyID>") for the blob row. For ADR-58 dedup-key tests.
+func EncryptedBlobWithHash(id, blobRef string, contentHash domain.ContentHash, originalSize int64, algo, keyID string) domain.Manifest {
+	m := BlobWithHash(id, blobRef, contentHash, originalSize)
+	m.Pipeline = []domain.PipelineStage{{Algorithm: algo, KeyID: keyID}}
+	return m
+}
+
 // SyntheticHash builds a 64-hex-character sha256-prefixed string by
 // repeating fillChar. Convenient when staging multiple blobs that
 // must have distinct content hashes:

@@ -111,6 +111,13 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 
 	hashAlgo := string(cfg.ContentHasher)
 
+	// ADR-58 (R6): the engine owns write-key choice. Resolve the
+	// KeyID once and thread it into the blob Pipeline (EncodeContext)
+	// and the manifest-body crypto below, so a blob and its manifest
+	// encrypt under the same KeyID. The default StaticKeyResolver
+	// ignores the namespace and returns "".
+	writeKeyID := s.resolveWriteKeyID(opts.Namespace)
+
 	useInlineFallback := cfg.BlobStorage == domain.BlobStorageInlineFallback &&
 		cfg.InlineBlobLimit > 0
 	inlineLimit := cfg.InlineBlobLimit
@@ -158,7 +165,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 			// back in front of the remaining Payload.
 			combined := io.MultiReader(bytes.NewReader(head), a.Payload)
 			contentHash, blobRef, originalSize, pipelineStages, blobAddr, err =
-				s.streamThroughPipeline(ctx, cfg, hashAlgo, combined)
+				s.streamThroughPipeline(ctx, cfg, hashAlgo, writeKeyID, combined)
 			if err != nil {
 				return "", err
 			}
@@ -168,7 +175,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		// (which may be empty — runner handles that).
 		var err error
 		contentHash, blobRef, originalSize, pipelineStages, blobAddr, err =
-			s.streamThroughPipeline(ctx, cfg, hashAlgo, a.Payload)
+			s.streamThroughPipeline(ctx, cfg, hashAlgo, writeKeyID, a.Payload)
 		if err != nil {
 			return "", err
 		}
@@ -226,7 +233,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 				cfg.ManifestCrypto)
 		}
 		dekSnapshot = append([]byte{}, s.dek...)
-		keyID = s.keyResolver.DefaultKeyID()
+		keyID = writeKeyID
 		s.cryptoMu.Unlock()
 		defer manifestcrypto.Wipe(dekSnapshot)
 	}
@@ -291,6 +298,7 @@ func (s *store) streamThroughPipeline(
 	ctx context.Context,
 	cfg domain.StoreConfig,
 	hashAlgo string,
+	writeKeyID string,
 	input io.Reader,
 ) (
 	contentHash domain.ContentHash,
@@ -302,7 +310,7 @@ func (s *store) streamThroughPipeline(
 ) {
 	stagingPath := s.makeStagingPath()
 
-	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline)
+	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, EncodeContext{KeyID: writeKeyID})
 	if err != nil {
 		return "", "", 0, nil, domain.PhysicalAddress{}, fmt.Errorf("core.Put: %w", err)
 	}
@@ -326,7 +334,7 @@ func (s *store) streamThroughPipeline(
 	originalSize = pp.contentBytesRead()
 
 	commitRef, addr, err := s.commitBlob(ctx, cfg, stagingPath, contentHash,
-		originalSize, blobRef)
+		originalSize, blobRef, domain.CryptoIdentityOf(pipelineStages))
 	if err != nil {
 		return "", "", 0, nil, domain.PhysicalAddress{}, err
 	}
@@ -344,8 +352,9 @@ func (s *store) commitBlob(
 	contentHash domain.ContentHash,
 	originalSize int64,
 	blobRef domain.BlobRef,
+	crypto domain.CryptoIdentity,
 ) (domain.BlobRef, domain.PhysicalAddress, error) {
-	existingRef, found, err := s.index.ExistsByContent(ctx, contentHash, originalSize)
+	existingRef, found, err := s.dedupProbe(ctx, contentHash, originalSize, blobRef, crypto)
 	if err != nil {
 		_ = s.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("core.Put: dedup probe: %w", err)
@@ -373,6 +382,65 @@ func (s *store) commitBlob(
 		Workspace: domain.WorkspaceLocation,
 		Path:      finalPath,
 	}, nil
+}
+
+// dedupProbe is the single point that decides whether a freshly
+// staged blob duplicates one already in the index (ADR-58, the
+// "single dedup-resolver"). It branches on crypto-identity:
+//
+//   - Plain (empty identity): probe by (ContentHash, OriginalSize).
+//     Keyless transforms are reproducible, so an existing row is a
+//     genuine byte-duplicate — drop staging, share it. Preserves
+//     T-07 (dedup independent of compression).
+//
+//   - Encrypted (non-empty identity): a duplicate is only safe when
+//     the ciphertext is byte-reproducible. Under Disabled the IV is
+//     random, so the staged BlobRef is unique and we must NOT dedup
+//     — probing by (ContentHash, OriginalSize, identity) would find
+//     a survivor encrypted under a different IV and corrupt this
+//     write (the exact M2 data-loss bug). We therefore probe by the
+//     final-stream BlobRef: a hit means identical ciphertext, which
+//     under Disabled never happens and under Convergent (R8) is
+//     exactly the intended dedup.
+//
+// The crypto-identity is recorded in the blob row regardless (see
+// registerBlob/IndexManifest) — Convergent and cross-store dedup
+// (M4/S1) read it.
+func (s *store) dedupProbe(
+	ctx context.Context,
+	contentHash domain.ContentHash,
+	originalSize int64,
+	blobRef domain.BlobRef,
+	crypto domain.CryptoIdentity,
+) (string, bool, error) {
+	if crypto == "" {
+		return s.index.ExistsByContent(ctx, contentHash, originalSize, "")
+	}
+	// Encrypted: identity is reproducible only via BlobRef equality.
+	if _, err := s.index.Resolve(ctx, string(blobRef)); err != nil {
+		if errors.Is(err, errs.ErrArtifactNotFound) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return string(blobRef), true, nil
+}
+
+// resolveWriteKeyID asks the KeyResolver which KeyID a new artifact
+// in this namespace should be encrypted under (ADR-58). The
+// resolver reference is snapshotted under cryptoMu but ResolveWriteKey
+// is called without the lock held — it must be cheap and must not
+// block (a map lookup), so a long-running custom resolver cannot
+// stall a parallel Unlock/RotateKEK. Returns "" when no resolver is
+// configured (unencrypted store).
+func (s *store) resolveWriteKeyID(namespace string) string {
+	s.cryptoMu.Lock()
+	r := s.keyResolver
+	s.cryptoMu.Unlock()
+	if r == nil {
+		return ""
+	}
+	return r.ResolveWriteKey(KeyContext{Namespace: namespace})
 }
 
 // snapshotConfig returns a copy of the current active StoreConfig.

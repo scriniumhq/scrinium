@@ -37,6 +37,13 @@ func applyConfigDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 	if cfg.ManifestCrypto == "" {
 		cfg.ManifestCrypto = domain.ManifestCryptoPlain
 	}
+	// ADR-58: an encrypting store defaults to Disabled (no dedup of
+	// encrypted blobs, full AEAD semantics). A Plain store leaves
+	// the field empty — it is ignored there (crypto-identity is
+	// empty, the dedup key degrades to (ContentHash, OriginalSize)).
+	if cfg.EncryptedDedup == "" && isEncryptingConfig(cfg) {
+		cfg.EncryptedDedup = domain.EncryptedDedupDisabled
+	}
 	if cfg.ContentHasher == "" {
 		cfg.ContentHasher = domain.HashSHA256
 	}
@@ -112,6 +119,14 @@ func validateImmutableConfig(cfg domain.StoreConfig) error {
 	default:
 		return errs.ErrInvalidConfig
 	}
+	// ADR-58: EncryptedDedup is immutable and constrained to the
+	// known modes. "" is legitimate for a Plain store — the field
+	// is ignored there.
+	switch cfg.EncryptedDedup {
+	case "", domain.EncryptedDedupDisabled, domain.EncryptedDedupConvergent:
+	default:
+		return errs.ErrInvalidConfig
+	}
 
 	// PathTopology: Native is a read-only marker; allowed only
 	// with BlobStorage: ExternalRef.
@@ -143,4 +158,23 @@ func validateImmutableConfig(cfg domain.StoreConfig) error {
 	}
 
 	return nil
+}
+
+// isEncryptingConfig reports whether the config produces encrypted
+// blobs — either the manifest body is protected (Sealed/Paranoid)
+// or the blob Pipeline contains a crypto stage. EncryptedDedup only
+// has meaning for such stores. The Pipeline-stage check is name
+// based against the registered crypto algorithms (3. Reference/04
+// §4.3); it stays correct as long as crypto plugins register under
+// their canonical ids.
+func isEncryptingConfig(cfg domain.StoreConfig) bool {
+	if cfg.ManifestCrypto != "" && cfg.ManifestCrypto != domain.ManifestCryptoPlain {
+		return true
+	}
+	for _, algo := range cfg.Pipeline {
+		if domain.IsCryptoAlgorithm(algo) {
+			return true
+		}
+	}
+	return false
 }

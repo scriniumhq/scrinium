@@ -14,6 +14,8 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
+	"scrinium.dev/engine/plugin/crypto/aesgcm"
+	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
 )
 
@@ -262,28 +264,44 @@ func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
 
 // --- Paranoid blob dedup invariant ---
 
-// TestPutParanoid_BlobDedupAcrossManifests verifies the §3.3
-// invariant: in Paranoid mode N writes of the same payload
-// produce N distinct ArtifactIDs (manifest non-determinism)
-// but exactly ONE blob with ref_count = N.
+// TestPut_EncryptedBlobsDoNotDedup is the regression test for the
+// M2 data-loss bug ADR-58 closes. The store encrypts BLOBS via a
+// crypto Pipeline stage (aes-gcm) — that is what gives a blob a
+// non-empty crypto-identity; ManifestCrypto governs the manifest
+// body, a separate axis (Encryption Model §5.4).
 //
-// Direct ref_count introspection isn't on the public API; we
-// verify indirectly through the same pattern as
-// TestDelete_SharedBlobKeepsRefCount: count blob files on disk,
-// delete in order, observe that the blob survives until the
-// last referrer.
-func TestPutParanoid_BlobDedupAcrossManifests(t *testing.T) {
-	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
-	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
-	root := r.Root()
+// With EncryptedDedup defaulting to Disabled, N writes of the SAME
+// plaintext produce N distinct ArtifactIDs AND N distinct blobs on
+// disk (random IV -> distinct ciphertext -> distinct BlobRef).
+// Crucially every manifest stays independently readable — the old
+// behaviour collapsed them onto one blob whose IV matched only the
+// first writer, so the 2nd and 3rd Get failed with
+// ErrDecryptionFailed.
+//
+// The pinned-DEK aesgcm factory records an empty KeyID, so the
+// crypto-identity here is "aes-gcm/" — non-empty, which is all the
+// dedup probe needs to take the encrypted branch.
+func TestPut_EncryptedBlobsDoNotDedup(t *testing.T) {
+	dek := make([]byte, 32)
+	for i := range dek {
+		dek[i] = byte(i)
+	}
+	aesFactory, err := aesgcm.New(dek)
+	if err != nil {
+		t.Fatalf("aesgcm.New: %v", err)
+	}
+	reg := core.NewTransformerRegistry().Register("aes-gcm", aesFactory)
 
-	s := r.Open(t,
-		core.WithPassphrase(storefx.StaticPP("pw")),
-		core.WithAutoUnlock(),
+	cfg := domain.StoreConfig{Pipeline: []string{"aes-gcm"}}
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+	s := storefx.InitOn(t, drv,
+		core.WithStoreIndex(idx),
+		core.WithReadRegistry(reg),
 		core.WithConfig(cfg),
 	)
 
-	const samePayload = "Paranoid dedup payload"
+	const samePayload = "encrypted no-dedup payload"
 	ids := make([]domain.ArtifactID, 0, 3)
 	for i := 0; i < 3; i++ {
 		a, _ := payloadReader(samePayload)
@@ -294,60 +312,49 @@ func TestPutParanoid_BlobDedupAcrossManifests(t *testing.T) {
 		ids = append(ids, id)
 	}
 
-	// (a) Three distinct ArtifactIDs — manifest non-determinism.
+	// (a) Three distinct ArtifactIDs — ciphertext non-determinism.
 	for i := 0; i < len(ids); i++ {
 		for j := i + 1; j < len(ids); j++ {
 			if ids[i] == ids[j] {
-				t.Fatalf("Paranoid must produce distinct ArtifactIDs per Put, got identical at %d/%d: %s",
-					i, j, ids[i])
+				t.Fatalf("distinct ArtifactIDs expected, identical at %d/%d: %s", i, j, ids[i])
 			}
 		}
 	}
 
-	// (b) Exactly one blob file on disk — blob-level dedup.
-	disk := storefx.OnDiskAt(root)
-	if blobCount := disk.BlobCount(); blobCount != 1 {
-		t.Errorf("after 3 Puts of the same payload, blobs/ should have 1 file, got %d", blobCount)
+	// (b) Three blobs on disk — encrypted blobs do NOT dedup under
+	// Disabled. This is the assertion that read "1" before ADR-58.
+	disk := storefx.OnDiskAt(drv.Root())
+	if blobCount := disk.BlobCount(); blobCount != 3 {
+		t.Errorf("Disabled: 3 Puts of same plaintext should yield 3 blobs, got %d", blobCount)
 	}
 
-	// (c) Delete two of three; blob must survive.
+	// (c) Every manifest is independently readable — the property
+	// the bug violated. Each blob decrypts under its own IV.
+	for i, id := range ids {
+		rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+		if err != nil {
+			t.Fatalf("Get id[%d]: %v", i, err)
+		}
+		got, _ := io.ReadAll(rh)
+		_ = rh.Close()
+		if string(got) != samePayload {
+			t.Errorf("id[%d] payload: got %q, want %q", i, got, samePayload)
+		}
+	}
+
+	// (d) Deleting one leaves the others intact (independent blobs,
+	// no shared ref_count to confuse).
 	if err := s.Delete(context.Background(), ids[0]); err != nil {
 		t.Fatalf("Delete[0]: %v", err)
 	}
-	if err := s.Delete(context.Background(), ids[1]); err != nil {
-		t.Fatalf("Delete[1]: %v", err)
-	}
-	if blobCount := disk.BlobCount(); blobCount != 1 {
-		t.Errorf("blob should survive while one referrer remains, got %d files", blobCount)
-	}
-	// The third manifest is still readable — proves the blob
-	// is intact, not just present.
-	rh, err := s.Get(context.Background(), ids[2], domain.GetOptions{})
+	rh, err := s.Get(context.Background(), ids[1], domain.GetOptions{})
 	if err != nil {
-		t.Fatalf("Get last surviving id: %v", err)
+		t.Fatalf("Get id[1] after Delete[0]: %v", err)
 	}
 	got, _ := io.ReadAll(rh)
 	_ = rh.Close()
 	if string(got) != samePayload {
-		t.Errorf("payload after two deletes: got %q, want %q", got, samePayload)
-	}
-
-	// (d) Delete the last referrer. Per docs §5.3 (Asynchronous
-	// Engine), Delete is logical only — the blob stays on disk
-	// with ref_count == 0 until GC Agent (TODO M3.2) reaps it.
-	// What we CAN verify here: every manifest is gone, and the
-	// blob file is still present (waiting for GC).
-	if err := s.Delete(context.Background(), ids[2]); err != nil {
-		t.Fatalf("Delete[2]: %v", err)
-	}
-	for i, id := range ids {
-		if _, err := s.Get(context.Background(), id, domain.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
-			t.Errorf("Get(ids[%d]) after final Delete: expected ErrArtifactNotFound, got %v", i, err)
-		}
-	}
-	if blobCount := disk.BlobCount(); blobCount != 1 {
-		t.Errorf("blob should remain on disk after last Delete (GC reaps it later), got %d files",
-			blobCount)
+		t.Errorf("survivor payload: got %q, want %q", got, samePayload)
 	}
 }
 
@@ -355,8 +362,8 @@ func TestPutParanoid_BlobDedupAcrossManifests(t *testing.T) {
 
 // fixedKeyIDResolver is a test-only KeyResolver that hands the
 // same DEK out for every KeyID and returns a non-empty
-// DefaultKeyID so the manifest header carries KeyID bytes we can
-// tamper with.
+// KeyID from ResolveWriteKey so the manifest header carries KeyID
+// bytes we can tamper with.
 type fixedKeyIDResolver struct {
 	keyID string
 	dek   []byte
@@ -365,7 +372,7 @@ type fixedKeyIDResolver struct {
 func (r *fixedKeyIDResolver) GetKeys(_ string) ([][]byte, error) {
 	return [][]byte{append([]byte{}, r.dek...)}, nil
 }
-func (r *fixedKeyIDResolver) DefaultKeyID() string { return r.keyID }
+func (r *fixedKeyIDResolver) ResolveWriteKey(core.KeyContext) string { return r.keyID }
 
 // TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest verifies
 // the §3.4 invariant: ArtifactID = hash(file bytes including
@@ -382,7 +389,7 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	_, r := storefx.InitEncrypted(t, "pw", core.WithConfig(cfg))
 
 	// AutoUnlock so the engine has a DEK; then we override the
-	// auto-promoted resolver with one whose DefaultKeyID is
+	// auto-promoted resolver with one whose ResolveWriteKey is
 	// non-empty so the file header carries a KeyID we can
 	// tamper with. The DEK has to match what the engine
 	// unwrapped — we read it indirectly through the resolver
@@ -400,7 +407,7 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	dek := keys[0]
 
 	// Reopen with a custom resolver that uses the same DEK but
-	// publishes "tenant-X" as DefaultKeyID, so Put writes that
+	// publishes "tenant-X" via ResolveWriteKey, so Put writes that
 	// KeyID into the file header. A FRESH index is required so
 	// the engine treats this as a separate session — the auto-
 	// promoted resolver from the previous Open would otherwise
@@ -482,7 +489,7 @@ type alwaysFailingResolver struct{}
 func (alwaysFailingResolver) GetKeys(_ string) ([][]byte, error) {
 	return nil, errors.New("alwaysFailingResolver: should not be called")
 }
-func (alwaysFailingResolver) DefaultKeyID() string { return "" }
+func (alwaysFailingResolver) ResolveWriteKey(core.KeyContext) string { return "" }
 
 // TestWalk_ParanoidStoreWalksWithoutDecryption verifies the §3.5
 // invariant: in Paranoid mode, Namespace is encrypted inside the

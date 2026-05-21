@@ -18,7 +18,7 @@ import (
 func roundTrip(t *testing.T, factory core.TransformerFactory, payload []byte) core.TransformResult {
 	t.Helper()
 
-	enc := factory.NewEncoder()
+	enc := factory.NewEncoder(core.EncodeContext{})
 	encStream := enc.Transform(bytes.NewReader(payload))
 	encoded, err := io.ReadAll(encStream)
 	if err != nil {
@@ -94,7 +94,7 @@ func TestZstd_DecoderRejectsCorruptedFrame(t *testing.T) {
 		t.Fatalf("rand: %v", err)
 	}
 
-	enc := factory.NewEncoder()
+	enc := factory.NewEncoder(core.EncodeContext{})
 	encoded, err := io.ReadAll(enc.Transform(bytes.NewReader(payload)))
 	if err != nil {
 		t.Fatalf("encode: %v", err)
