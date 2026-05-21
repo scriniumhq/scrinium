@@ -27,7 +27,7 @@ func WriteSystemConfig(
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
 ) (domain.ArtifactID, error) {
-	return storeconfig.Write(ctx, drv, newConfigArtifactWriter(drv, idx, hashes), cfg)
+	return storeconfig.Write(ctx, drv, configWriter(drv, idx, hashes), cfg)
 }
 
 // ReadSystemConfig is the test alias for readSystemConfig.
