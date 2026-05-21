@@ -120,10 +120,6 @@ func (s *store) SetPassphrase(ctx context.Context) error {
 	return s.setPassphraseImpl(ctx)
 }
 
-func (s *store) Config() domain.StoreConfig {
-	return s.snapshotConfig()
-}
-
 // --- DataStore: stubs implemented in M1.4 ---
 
 func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error) {

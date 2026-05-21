@@ -11,14 +11,30 @@ import (
 	"scrinium.dev/engine/errs"
 )
 
-// admin_config.go — AdminStore methods that read or mutate
-// system.config: UpdateConfig and ConfigHistory. Companion to
-// crypto_admin.go (which holds the AdminStore methods that touch
-// the descriptor's crypto Paranoid).
-//
-// The `Config()` accessor stays on store_impl.go alongside the
-// other trivial getters (`State`, `Capabilities`); it is a one-line
-// snapshot that does not warrant its own file.
+// config_methods.go — every *store method that reads or mutates the
+// active StoreConfig, collected in one place: the in-memory readers
+// (Config, snapshotConfig) and the AdminStore operations
+// (UpdateConfig, ConfigHistory). The pure StoreConfig logic (defaults,
+// validation, persistence format) lives in the storeconfig
+// subpackage; this file is only the *store-bound surface that wraps
+// it. Companion to crypto_admin.go (the descriptor-crypto AdminStore
+// methods).
+
+// Config returns a snapshot of the active StoreConfig. A pure
+// in-memory reader, so it skips the enter* gate (like State /
+// Capabilities).
+func (s *store) Config() domain.StoreConfig {
+	return s.snapshotConfig()
+}
+
+// snapshotConfig returns the active config under cfgMu.RLock(). The
+// single in-memory read used by Config() and by every method that
+// needs the current config without re-reading disk.
+func (s *store) snapshotConfig() domain.StoreConfig {
+	s.cfgMu.RLock()
+	defer s.cfgMu.RUnlock()
+	return s.activeConfig
+}
 
 // UpdateConfig swaps the active StoreConfig. Only mutable fields
 // can change; immutable mismatches return errs.ErrConfigMismatch.
@@ -45,15 +61,15 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	if err := storeconfig.ValidateImmutable(requested); err != nil {
 		return fmt.Errorf("core.UpdateConfig: %w", err)
 	}
-	// validateAgainstActiveConfig compares requested to current on
-	// every immutable field; mutable fields pass through. Same
-	// contract as OpenStore's WithConfig check.
+	// ValidateAgainstActive compares requested to current on every
+	// immutable field; mutable fields pass through. Same contract as
+	// OpenStore's WithConfig check.
 	if err := storeconfig.ValidateAgainstActive(requested, current); err != nil {
 		return fmt.Errorf("core.UpdateConfig: %w", err)
 	}
 	// DeletionPolicyLock guard: once locked, NoDelete cannot be
 	// dropped through UpdateConfig. The lock flag itself is
-	// immutable (caught by validateAgainstActiveConfig above).
+	// immutable (caught by ValidateAgainstActive above).
 	if current.DeletionPolicyLock &&
 		current.DeletionPolicy == domain.DeletionPolicyNoDelete &&
 		requested.DeletionPolicy != domain.DeletionPolicyNoDelete {
