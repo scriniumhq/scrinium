@@ -8,7 +8,7 @@
 //     compatible columns) — migration tooling can copy data.
 //     PostgreSQL-specific niceties: JSONB for metadata,
 //     LISTEN/NOTIFY for change feed, partial indexes.
-//  2. Implement all methods of core.StoreIndex against PG.
+//  2. Implement all methods of store.StoreIndex against PG.
 //     Most translate one-to-one from the sqlite versions; a
 //     few will benefit from PG-specific syntax (UPSERT via
 //     ON CONFLICT, RETURNING clauses).

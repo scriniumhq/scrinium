@@ -221,7 +221,7 @@ type ExtensionInfo struct {
 //
 // Backends that support extensions implement this; the rest are
 // transparently skipped by callers that type-assert it. Lives
-// here (not on core.StoreIndex) so the core package needs no
+// here (not on store.StoreIndex) so the core package needs no
 // import of engine/index — the assertion happens at the wiring
 // layer instead.
 type ExtensionHost interface {

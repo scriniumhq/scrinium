@@ -36,7 +36,7 @@ const (
 //     "scrub", "snapshot", "ingester", "ejector", "sync").
 //   - User agents: <namespace>.<n> ("acme.quota_monitor").
 //
-// The event.Event.Type prefixes "core.", "agent.", "curator.", and
+// The event.Event.Type prefixes "store.", "agent.", "curator.", and
 // "index." are reserved. User agents must emit their own events
 // under their own namespace.
 type BackgroundAgent interface {

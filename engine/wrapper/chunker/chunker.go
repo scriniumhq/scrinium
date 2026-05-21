@@ -21,7 +21,7 @@ package chunker
 import (
 	"fmt"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/wrapper/multistore"
 )
@@ -47,7 +47,7 @@ type ChunkerConfig struct {
 // produces a different ArtifactID and breaks cross-store
 // deduplication.
 //
-// The returned Wrap is a plain core.DataStore without an extension:
+// The returned Wrap is a plain store.DataStore without an extension:
 // the chunker does not need an explicit Flush, every Put is
 // self-contained.
 //
@@ -60,6 +60,6 @@ type factory struct {
 	cfg ChunkerConfig
 }
 
-func (f *factory) Wrap(store core.DataStore, deps multistore.WrapperDeps) (core.DataStore, error) {
+func (f *factory) Wrap(store coreapi.DataStore, deps multistore.WrapperDeps) (coreapi.DataStore, error) {
 	return nil, fmt.Errorf("%w: chunker.Wrap", errs.ErrNotImplemented)
 }

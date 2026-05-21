@@ -55,7 +55,7 @@ const (
 // PipelineStage is a single transformation stage in the Pipeline.
 //
 // KeyID is populated for crypto stages whose plugin resolves its
-// DEK through a core.KeyResolver. On Put the Encoder records the
+// DEK through a store.KeyResolver. On Put the Encoder records the
 // KeyID the engine resolved (ResolveWriteKey) and passed via
 // EncodeContext; on Get the Decoder looks up candidate keys for
 // the recorded KeyID. The field is empty for non-crypto stages
@@ -84,7 +84,7 @@ type Manifest struct {
 	// at two places only:
 	//   - manifestcodec.ComputeArtifactID, after writing the body
 	//     and hashing the result;
-	//   - core.loadManifest, from the id used to fetch the file.
+	//   - store.loadManifest, from the id used to fetch the file.
 	// On the wire (manifestcodec) the field is invisible; in the
 	// index (sqlite) it is the primary key. See codec_test.go for
 	// the "ArtifactID does not appear in JSON" invariant.

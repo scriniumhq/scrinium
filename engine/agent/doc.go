@@ -7,7 +7,7 @@
 // Two lifecycle modalities:
 //   - BackgroundAgent — cyclic or continuous work. Implemented here.
 //   - MaintenanceAgent — one-shot operation. The contract lives in
-//     core (see core.MaintenanceAgent); the implementations live in
+//     core (see store.MaintenanceAgent); the implementations live in
 //     maintenance/.
 //
 // Two ownership modalities:

@@ -1,11 +1,11 @@
-// Package eventfx supplies a Recorder — a core.Publisher that
+// Package eventfx supplies a Recorder — a store.Publisher that
 // captures every published event in memory — for tests that
 // assert event behaviour.
 //
 // Typical pattern:
 //
 //	rec := eventfx.New()
-//	store, _ := core.OpenStore(ctx, drv, core.WithPublisher(rec), ...)
+//	store, _ := store.OpenStore(ctx, drv, store.WithPublisher(rec), ...)
 //	// ... exercise the store ...
 //	if got := rec.Count("manifest.put"); got != 1 {
 //	    t.Errorf("expected 1 manifest.put event, got %d", got)

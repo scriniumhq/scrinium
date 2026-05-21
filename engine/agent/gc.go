@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 )
@@ -64,14 +64,14 @@ type GCAgent interface {
 	RunOnce(ctx context.Context) (GCStats, error)
 }
 
-// NewGCAgent creates a GC Agent. Takes core.Store (not DataStore):
+// NewGCAgent creates a GC Agent. Takes store.Store (not DataStore):
 // GC needs both halves of the contract — AdminStore for reading
 // StoreConfig (GCLeasePolicy, TombstoneGracePeriod, DeletionPolicy)
 // and DataStore for WalkSystem (lease coordination).
 //
 // TODO(M3.2): two-phase GC with tombstone reaping.
 func NewGCAgent(
-	store core.Store,
+	store coreapi.Store,
 	bus event.EventBus,
 	cfg GCConfig,
 ) (GCAgent, error) {

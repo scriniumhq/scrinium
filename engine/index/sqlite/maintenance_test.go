@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 )
@@ -168,14 +168,14 @@ func TestSetMeta_BinarySafe(t *testing.T) {
 // --- Compile-time interface conformance ---
 
 func TestIndex_ImplementsStoreIndex(t *testing.T) {
-	// The compile-time check var _ core.StoreIndex = (*Index)(nil)
+	// The compile-time check var _ store.StoreIndex = (*Index)(nil)
 	// in sqlite.go is the real guarantee; this test just confirms
 	// it at runtime so a regression shows up in test output, not
 	// just a build error.
-	var _ core.StoreIndex = (*Index)(nil)
+	var _ coreapi.StoreIndex = (*Index)(nil)
 	idx := newMemoryIndex(t)
-	var asInterface core.StoreIndex = idx
+	var asInterface coreapi.StoreIndex = idx
 	if asInterface == nil {
-		t.Fatal("Index does not satisfy core.StoreIndex")
+		t.Fatal("Index does not satisfy store.StoreIndex")
 	}
 }

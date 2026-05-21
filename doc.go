@@ -24,7 +24,7 @@
 // partially-opened resources), and zeroizes secrets on shutdown.
 //
 // Hosts that want full control over wiring should compose
-// core.OpenStore and friends directly; this package is a
+// store.OpenStore and friends directly; this package is a
 // convenience.
 //
 // # Lifecycle

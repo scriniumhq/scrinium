@@ -4,14 +4,15 @@ import (
 	"context"
 	"testing"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/localfs"
+	"scrinium.dev/engine/store"
 )
 
 // Reopener captures the (Driver, StoreIndex) pair so a test can
 // reopen the same Location across the engine boundary. drv and idx
-// outlive any individual core.Store; the Reopener exists for
+// outlive any individual store.Store; the Reopener exists for
 // scenarios where the test sequence is "Init → close store →
 // reopen with different options" — common in encrypted-Store
 // flows where the second open uses AutoUnlock or a new passphrase.
@@ -21,7 +22,7 @@ import (
 // against t.
 type Reopener struct {
 	drv driver.Driver
-	idx core.StoreIndex
+	idx coreapi.StoreIndex
 }
 
 // Driver returns the underlying driver. Tests use this for direct
@@ -29,7 +30,7 @@ type Reopener struct {
 func (r *Reopener) Driver() driver.Driver { return r.drv }
 
 // Index returns the captured StoreIndex.
-func (r *Reopener) Index() core.StoreIndex { return r.idx }
+func (r *Reopener) Index() coreapi.StoreIndex { return r.idx }
 
 // Root returns the localfs root if the underlying driver is a
 // localfs.Driver; empty string otherwise. Used by tests that need
@@ -45,13 +46,13 @@ func (r *Reopener) Root() string {
 // WithHashRegistry are filled in automatically; pass any other
 // option (WithPassphrase, WithAutoUnlock, WithConfig, ...) through
 // extra. Calls t.Fatalf on failure.
-func (r *Reopener) Open(t testing.TB, extra ...core.StoreOption) core.Store {
+func (r *Reopener) Open(t testing.TB, extra ...store.StoreOption) coreapi.Store {
 	t.Helper()
-	opts := append([]core.StoreOption{
-		core.WithStoreIndex(r.idx),
-		core.WithHashRegistry(Hashes()),
+	opts := append([]store.StoreOption{
+		store.WithStoreIndex(r.idx),
+		store.WithHashRegistry(Hashes()),
 	}, extra...)
-	s, err := core.OpenStore(context.Background(), r.drv, opts...)
+	s, err := store.OpenStore(context.Background(), r.drv, opts...)
 	if err != nil {
 		t.Fatalf("storefx.Reopener.Open: %v", err)
 	}
@@ -61,11 +62,11 @@ func (r *Reopener) Open(t testing.TB, extra ...core.StoreOption) core.Store {
 // TryOpen is the non-fatal variant of Open: it returns the error
 // instead of t.Fatalf. Use when the test's assertion is on the
 // failure mode itself (wrong passphrase, ConfigMismatch, ...).
-func (r *Reopener) TryOpen(t testing.TB, extra ...core.StoreOption) (core.Store, error) {
+func (r *Reopener) TryOpen(t testing.TB, extra ...store.StoreOption) (coreapi.Store, error) {
 	t.Helper()
-	opts := append([]core.StoreOption{
-		core.WithStoreIndex(r.idx),
-		core.WithHashRegistry(Hashes()),
+	opts := append([]store.StoreOption{
+		store.WithStoreIndex(r.idx),
+		store.WithHashRegistry(Hashes()),
 	}, extra...)
-	return core.OpenStore(context.Background(), r.drv, opts...)
+	return store.OpenStore(context.Background(), r.drv, opts...)
 }

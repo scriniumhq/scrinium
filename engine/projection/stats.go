@@ -46,7 +46,7 @@ type DaemonInfo struct {
 	Namespace string
 
 	// Capacity is the optional storage snapshot from
-	// core.Store.Capacity. nil hides the [storage] section
+	// store.Store.Capacity. nil hides the [storage] section
 	// entirely. -1 inside fields means "Driver did not report".
 	Capacity *domain.StorageInfo
 
@@ -149,7 +149,7 @@ func writeViewSection(b *strings.Builder, view *View) {
 	b.WriteString("\n")
 }
 
-// writeStorageSection covers StorageInfo from core.Store.Capacity.
+// writeStorageSection covers StorageInfo from store.Store.Capacity.
 // -1 in any field is rendered "n/a" (Driver didn't report). The
 // difference between ArtifactCount and BlobCount surfaces
 // deduplication efficiency at a glance.

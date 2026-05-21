@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
@@ -70,7 +70,7 @@ type Ingester interface {
 // StateFile is set.
 func NewIngester(
 	source driver.Driver,
-	target core.DataStore,
+	target coreapi.DataStore,
 	bus event.EventBus,
 	cfg IngesterConfig,
 ) (Ingester, error) {

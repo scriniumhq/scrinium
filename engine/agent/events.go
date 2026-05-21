@@ -12,7 +12,7 @@ import (
 // same constant set is reused for "gc", "scrub", "ingester", and
 // any custom agent the host has registered.
 //
-// All four event-type prefixes ("core.", "agent.", "curator.",
+// All four event-type prefixes ("store.", "agent.", "curator.",
 // "index.") are reserved per docs/2. Internals/01 §1.7. User
 // agents must emit their own events under their own namespace
 // (e.g. "acme.quota_monitor.threshold_exceeded").
@@ -28,7 +28,7 @@ const (
 
 	// EventAgentCycle — one unit of work completed (a full GC
 	// pass, a single Scrub batch, one Ingester flush). Payload:
-	// core.AgentResult with the cycle's stats. The same payload
+	// store.AgentResult with the cycle's stats. The same payload
 	// shape is reused by EventAgentCompleted; the difference is
 	// semantic — Cycle means "one unit done, agent continues",
 	// Completed means "agent finished, Run returned".
@@ -51,8 +51,8 @@ const (
 	EventAgentCancelled = "agent.cancelled"
 
 	// EventAgentStaleLease — agent took over a lease whose owner
-	// stopped renewing. Payload: core.LeaseTakeoverPayload (same
-	// shape as core.EventStaleLeaseTakeover; see core/events.go).
+	// stopped renewing. Payload: store.LeaseTakeoverPayload (same
+	// shape as store.EventStaleLeaseTakeover; see core/events.go).
 	// The struct lives in core because the stale-lease concept is
 	// shared with the core-level Store lease takeover; declaring
 	// it once and reusing it keeps the two events decoder-

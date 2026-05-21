@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/store"
 )
 
 // loadPassphraseProvider returns a PassphraseProvider that
@@ -24,7 +24,7 @@ import (
 //
 // Returns nil for an empty path. Hosts that want to remain
 // Plain-DEK pass an empty PassphraseFile.
-func loadPassphraseProvider(path string) (core.PassphraseProvider, error) {
+func loadPassphraseProvider(path string) (store.PassphraseProvider, error) {
 	if path == "" {
 		return nil, nil
 	}
@@ -38,7 +38,7 @@ func loadPassphraseProvider(path string) (core.PassphraseProvider, error) {
 		return nil, fmt.Errorf("passphrase file %q: is a directory", path)
 	}
 
-	return func(ctx context.Context, _ core.PassphraseHint) ([]byte, error) {
+	return func(ctx context.Context, _ store.PassphraseHint) ([]byte, error) {
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("passphrase file: %w", err)

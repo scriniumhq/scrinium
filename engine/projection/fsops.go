@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection/fsmeta"
@@ -69,20 +69,20 @@ type FSOps struct {
 }
 
 // StoreClient is the write-side surface FSOps depends on. Defined
-// here rather than reusing core.Store so that:
+// here rather than reusing store.Store so that:
 //
 //   - the dependency is minimal — FSOps does not need namespace
 //     enumeration, lifecycle, crypto admin, or any of core's
 //     other surface;
 //   - tests can supply a fake without implementing every method
-//     of core.Store.
+//     of store.Store.
 //
-// core.Store satisfies this interface naturally (subset typing
+// store.Store satisfies this interface naturally (subset typing
 // in Go).
 type StoreClient interface {
 	Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error)
 	Delete(ctx context.Context, id domain.ArtifactID) error
-	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (core.ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (coreapi.ReadHandle, error)
 }
 
 // FileInfo is the POSIX-shaped descriptor that Stat/Listdir
@@ -470,7 +470,7 @@ func (o *FSOps) listInRoot(path string) NodeSeq {
 	return o.view.ListIn(o.view.RootView(), path)
 }
 
-func (o *FSOps) openInRoot(ctx context.Context, path string) (core.ReadHandle, error) {
+func (o *FSOps) openInRoot(ctx context.Context, path string) (coreapi.ReadHandle, error) {
 	return o.view.OpenIn(ctx, o.view.RootView(), path, domain.GetOptions{})
 }
 
@@ -1321,12 +1321,12 @@ func (q *quotaTracker) Release(n int64) {
 
 // --- readOnlyFile ---
 
-// readOnlyFile wraps a core.ReadHandle in the File interface,
+// readOnlyFile wraps a store.ReadHandle in the File interface,
 // returning ErrEditingDisabled for every write/sync method. The
 // underlying handle's random-access support is propagated: ReadAt
 // works iff the handle supports it.
 type readOnlyFile struct {
-	rh core.ReadHandle
+	rh coreapi.ReadHandle
 }
 
 func (f *readOnlyFile) ReadAt(p []byte, off int64) (int, error) {

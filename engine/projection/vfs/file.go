@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/internal/pathx"
 )
@@ -43,7 +43,7 @@ type File interface {
 // keep behaviour explicit per case rather than overloading a
 // single struct with mode flags.
 //
-//   - readHandleFile  : read-only over a core.ReadHandle (service
+//   - readHandleFile  : read-only over a store.ReadHandle (service
 //                       trees, by-X paths inside _scrinium).
 //   - bytesFile       : in-memory read-only (stats virtual file).
 //   - rwFile          : read/write over projection.File (root view).
@@ -52,10 +52,10 @@ type File interface {
 //                       when not needed).
 
 // readHandleFile is read-only. Tracks a manual offset to
-// satisfy io.Reader/io.Seeker since core.ReadHandle is
+// satisfy io.Reader/io.Seeker since store.ReadHandle is
 // offset-addressable via ReadAt only.
 type readHandleFile struct {
-	rh    core.ReadHandle
+	rh    coreapi.ReadHandle
 	name  string
 	path  string
 	size  int64

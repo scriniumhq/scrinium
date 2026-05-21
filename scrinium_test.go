@@ -12,10 +12,11 @@ import (
 	"testing"
 
 	"scrinium.dev"
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index/sqlite"
+	"scrinium.dev/engine/plugins"
+	"scrinium.dev/engine/store"
 )
 
 // initStorePlain initialises an empty Plain-DEK store at dir so
@@ -49,12 +50,12 @@ func initStorePlain(t *testing.T, dir string) {
 	}
 	defer idx.Close()
 
-	hashes := core.NewHashRegistry().
+	hashes := plugins.NewHashRegistry().
 		Register("sha256", func() hash.Hash { return sha256.New() })
 
-	if _, _, err := core.InitStore(ctx, drv,
-		core.WithStoreIndex(idx),
-		core.WithHashRegistry(hashes),
+	if _, _, err := store.InitStore(ctx, drv,
+		store.WithStoreIndex(idx),
+		store.WithHashRegistry(hashes),
 	); err != nil {
 		t.Fatalf("init: %v", err)
 	}

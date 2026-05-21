@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
@@ -64,7 +64,7 @@ type Ejector interface {
 // NewEjector creates an Ejector instance.
 // TODO(M6.3): host-driven artifact ejection.
 func NewEjector(
-	source core.DataStore,
+	source coreapi.DataStore,
 	bus event.EventBus,
 	cfg EjectorConfig,
 ) (Ejector, error) {

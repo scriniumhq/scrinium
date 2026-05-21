@@ -1,5 +1,5 @@
 // Package indextest is the shared conformance suite for
-// implementations of core.StoreIndex.
+// implementations of store.StoreIndex.
 //
 // Every implementation (engine/index/sqlite, future engine/index/postgres,
 // future in-memory backends) is expected to register a Factory
@@ -19,7 +19,7 @@
 //	func TestConformance_SQLite(t *testing.T) {
 //	    indextest.Run(t, indextest.Factory{
 //	        Name: "sqlite-memory",
-//	        New: func(t *testing.T) core.StoreIndex {
+//	        New: func(t *testing.T) store.StoreIndex {
 //	            idx, err := sqlite.NewStore(context.Background(), ":memory:")
 //	            if err != nil { t.Fatal(err) }
 //	            t.Cleanup(func() { _ = idx.Close() })

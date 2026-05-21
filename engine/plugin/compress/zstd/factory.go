@@ -4,8 +4,8 @@ import (
 	"io"
 
 	"github.com/klauspost/compress/zstd"
+	"scrinium.dev/engine/coreapi"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 )
 
@@ -64,20 +64,20 @@ type factory struct {
 
 // New constructs a zstd TransformerFactory with the given options.
 // Zero-valued fields are filled with the spec defaults.
-func New(opts Options) core.TransformerFactory {
+func New(opts Options) coreapi.TransformerFactory {
 	return &factory{opts: opts.withDefaults()}
 }
 
 // NewEncoder creates a fresh per-operation Encoder. zstd is keyless
 // and ignores ec.
-func (f *factory) NewEncoder(_ core.EncodeContext) core.Encoder {
+func (f *factory) NewEncoder(_ coreapi.EncodeContext) coreapi.Encoder {
 	return newEncoder(f.opts)
 }
 
 // NewDecoder creates a fresh per-operation Decoder. stage.IV is
 // unused by zstd; stage.Algorithm and stage.Hash are informational
 // only — the runner has already validated them.
-func (f *factory) NewDecoder(stage domain.PipelineStage) core.Decoder {
+func (f *factory) NewDecoder(stage domain.PipelineStage) coreapi.Decoder {
 	_ = stage // zstd is stateless across Put/Get
 	return &decoder{}
 }

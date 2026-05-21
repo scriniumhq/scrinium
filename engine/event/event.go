@@ -3,7 +3,7 @@ package event
 import "sync"
 
 // Event is a single message on the bus. Type identifies the event
-// (for example, "core.manifest_saved", "agent.started"); Payload
+// (for example, "store.manifest_saved", "agent.started"); Payload
 // carries the concrete payload whose type is determined by Type.
 type Event struct {
 	Type    string

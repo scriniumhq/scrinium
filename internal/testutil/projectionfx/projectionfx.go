@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection/fsmeta"
@@ -111,7 +111,7 @@ func (f *FakeSource) Get(
 	ctx context.Context,
 	id domain.ArtifactID,
 	opts domain.GetOptions,
-) (core.ReadHandle, error) {
+) (coreapi.ReadHandle, error) {
 	f.mu.RLock()
 	getErr := f.getErr
 	payload, hasPayload := f.payloads[id]
@@ -193,7 +193,7 @@ func (f *FakeSource) Put(
 
 // Delete drops the artifact (manifest + payload) from the store.
 // Idempotent: deleting an unknown id is a no-op (matches
-// core.Store semantics).
+// store.Store semantics).
 func (f *FakeSource) Delete(ctx context.Context, id domain.ArtifactID) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -240,7 +240,7 @@ func (f *FakeSource) Manifests() []domain.Manifest {
 
 // --- FakeReadHandle ---
 
-// FakeReadHandle is a core.ReadHandle backed by bytes. Designed
+// FakeReadHandle is a store.ReadHandle backed by bytes. Designed
 // for tests; supports random access by default but can be
 // configured stream-only via options.
 type FakeReadHandle struct {
@@ -333,7 +333,7 @@ func (h *FakeReadHandle) Close() error {
 }
 
 // Compile-time guard.
-var _ core.ReadHandle = (*FakeReadHandle)(nil)
+var _ coreapi.ReadHandle = (*FakeReadHandle)(nil)
 
 // --- Manifest builders ---
 

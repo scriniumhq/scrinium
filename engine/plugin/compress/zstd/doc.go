@@ -3,10 +3,10 @@
 //
 // Wiring (typical host setup):
 //
-//	reg := core.NewTransformerRegistry().
+//	reg := store.NewTransformerRegistry().
 //	    Register("zstd", zstd.New(zstd.Options{}))
-//	store, _, _ := core.InitStore(ctx, drv,
-//	    core.WithReadRegistry(reg), /* ... */)
+//	store, _, _ := store.InitStore(ctx, drv,
+//	    store.WithReadRegistry(reg), /* ... */)
 //
 // Stream contract.
 // The factory yields fresh per-operation Encoder and Decoder

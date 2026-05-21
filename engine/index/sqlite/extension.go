@@ -15,7 +15,7 @@ import (
 
 // Extensions returns the registry for installing index extensions
 // against this backend. Method on the concrete *Index type rather
-// than on core.StoreIndex — see ADR-49 for the rationale (avoids
+// than on store.StoreIndex — see ADR-49 for the rationale (avoids
 // a core ↔ index import cycle and respects backends that don't
 // support extensions).
 //
