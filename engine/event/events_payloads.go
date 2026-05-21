@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/event"
 )
 
 // event_payloads.go — event-type name constants and their payload
@@ -116,4 +117,14 @@ type LeaseTakeoverPayload struct {
 	PreviousHolder string
 	ExpiredAt      time.Time
 	TakenBy        string
+}
+
+// publish emits an event when a Publisher is configured. Cheap when
+// nil — the common case for tests and minimal-stack hosts. Lives in
+// events.go alongside the event payload types it dispatches.
+func (s *store) publish(typ string, payload any) {
+	if s.pub == nil {
+		return
+	}
+	s.pub.Publish(event.Event{Type: typ, Payload: payload})
 }
