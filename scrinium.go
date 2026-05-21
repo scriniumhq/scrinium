@@ -8,7 +8,6 @@ import (
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
-	"scrinium.dev/engine/store"
 )
 
 // Scrinium holds the long-lived resources every Scrinium-backed
@@ -33,7 +32,7 @@ type Scrinium struct {
 
 	// Store is the high-level CAS store. Surfaces use it for
 	// Put/Get and for capacity queries (stats endpoints).
-	Store store.Store
+	Store coreapi.Store
 
 	// Index is the metadata index. Surfaces rarely touch this
 	// directly; it's exposed for diagnostics like the

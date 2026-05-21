@@ -1,10 +1,9 @@
-package store
+package coreapi
 
 import (
 	"context"
 	"io"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 )
@@ -29,7 +28,7 @@ type DataStore interface {
 	// Get opens an artifact for reading. It returns a ReadHandle —
 	// a streaming primitive with lazy resolution of the physical
 	// address.
-	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (coreapi.ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (ReadHandle, error)
 
 	// Management and verification.
 

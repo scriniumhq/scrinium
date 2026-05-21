@@ -46,7 +46,7 @@ func (r *Reopener) Root() string {
 // WithHashRegistry are filled in automatically; pass any other
 // option (WithPassphrase, WithAutoUnlock, WithConfig, ...) through
 // extra. Calls t.Fatalf on failure.
-func (r *Reopener) Open(t testing.TB, extra ...store.StoreOption) store.Store {
+func (r *Reopener) Open(t testing.TB, extra ...store.StoreOption) coreapi.Store {
 	t.Helper()
 	opts := append([]store.StoreOption{
 		store.WithStoreIndex(r.idx),
@@ -62,7 +62,7 @@ func (r *Reopener) Open(t testing.TB, extra ...store.StoreOption) store.Store {
 // TryOpen is the non-fatal variant of Open: it returns the error
 // instead of t.Fatalf. Use when the test's assertion is on the
 // failure mode itself (wrong passphrase, ConfigMismatch, ...).
-func (r *Reopener) TryOpen(t testing.TB, extra ...store.StoreOption) (store.Store, error) {
+func (r *Reopener) TryOpen(t testing.TB, extra ...store.StoreOption) (coreapi.Store, error) {
 	t.Helper()
 	opts := append([]store.StoreOption{
 		store.WithStoreIndex(r.idx),

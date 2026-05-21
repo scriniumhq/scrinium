@@ -44,7 +44,7 @@ func ReadSystemConfig(
 // tests so they can assert that promoteKeyResolverIfDefault
 // did or did not run. Returns nil for non-*store implementers
 // (e.g. test mocks) so the helper degrades cleanly.
-func StoreKeyResolver(s Store) coreapi.KeyResolver {
+func StoreKeyResolver(s coreapi.Store) coreapi.KeyResolver {
 	concrete, ok := s.(*store)
 	if !ok {
 		return nil
@@ -58,7 +58,7 @@ func StoreKeyResolver(s Store) coreapi.KeyResolver {
 // Tests use this to inspect raw on-disk manifest bytes —
 // in particular to verify that Sealed leaves system fields
 // in plaintext while Paranoid hides them.
-func ReadDriverFile(s Store, path string) ([]byte, error) {
+func ReadDriverFile(s coreapi.Store, path string) ([]byte, error) {
 	concrete, ok := s.(*store)
 	if !ok {
 		return nil, fmt.Errorf("ReadDriverFile: not a *store")
@@ -75,7 +75,7 @@ func ReadDriverFile(s Store, path string) ([]byte, error) {
 // by tests that need to inject tampered manifest contents to
 // verify integrity-check paths. Bypasses Put — caller is
 // responsible for the resulting on-disk consistency.
-func WriteDriverFile(s Store, path string, data []byte) error {
+func WriteDriverFile(s coreapi.Store, path string, data []byte) error {
 	concrete, ok := s.(*store)
 	if !ok {
 		return fmt.Errorf("WriteDriverFile: not a *store")

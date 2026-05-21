@@ -12,7 +12,6 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/projection/fsmeta"
 	"scrinium.dev/engine/projection/vfs"
-	"scrinium.dev/engine/store"
 )
 
 // webBackingFS adapts vfs.VFS to web.BackingFS.
@@ -24,10 +23,10 @@ import (
 // directly because its only consumer is HTML rendering.
 type webBackingFS struct {
 	v     *vfs.VFS
-	store store.Store
+	store coreapi.Store
 }
 
-func newWebBackingFS(v *vfs.VFS, store store.Store) *webBackingFS {
+func newWebBackingFS(v *vfs.VFS, store coreapi.Store) *webBackingFS {
 	return &webBackingFS{v: v, store: store}
 }
 

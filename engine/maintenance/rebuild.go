@@ -7,7 +7,6 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
 )
 
@@ -122,7 +121,7 @@ type RebuildIndexAgent interface {
 //
 // TODO(M3.4): rebuild StoreIndex from manifests / Recovery Kit.
 func NewRebuildIndexAgent(
-	store store.Store,
+	store coreapi.Store,
 	bus event.EventBus,
 	cfg RebuildConfig,
 ) (RebuildIndexAgent, error) {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
-	"scrinium.dev/engine/store"
 )
 
 // GCConfig configures the GC Agent.
@@ -71,7 +71,7 @@ type GCAgent interface {
 //
 // TODO(M3.2): two-phase GC with tombstone reaping.
 func NewGCAgent(
-	store store.Store,
+	store coreapi.Store,
 	bus event.EventBus,
 	cfg GCConfig,
 ) (GCAgent, error) {
