@@ -12,7 +12,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
@@ -708,7 +708,7 @@ func (h *scriniumFileHandle) Release(ctx context.Context) syscall.Errno {
 // tree opens. Simpler than scriniumFileHandle — no Write/Flush.
 type readHandleFile struct {
 	mu sync.Mutex
-	rh core.ReadHandle
+	rh coreapi.ReadHandle
 }
 
 var (

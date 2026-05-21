@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/event"
@@ -29,7 +30,7 @@ import (
 // process.
 type recoveryFixture struct {
 	drv  driver.Driver
-	idx  core.StoreIndex
+	idx  coreapi.StoreIndex
 	root string
 	bus  event.EventBus
 	caps *capturedReports
@@ -116,7 +117,7 @@ func (f *recoveryFixture) resetReports() {
 // in the order it was published.
 type capturedReports struct {
 	mu       sync.Mutex
-	payloads []core.OrphanScanCompletedPayload
+	payloads []event.OrphanScanCompletedPayload
 }
 
 func newCapturedReports() *capturedReports {
@@ -124,10 +125,10 @@ func newCapturedReports() *capturedReports {
 }
 
 func (c *capturedReports) handle(e event.Event) {
-	if e.Type != core.EventOrphanScanCompleted {
+	if e.Type != event.EventOrphanScanCompleted {
 		return
 	}
-	p, ok := e.Payload.(core.OrphanScanCompletedPayload)
+	p, ok := e.Payload.(event.OrphanScanCompletedPayload)
 	if !ok {
 		return // bad payload type — caught explicitly by a dedicated test
 	}
@@ -136,7 +137,7 @@ func (c *capturedReports) handle(e event.Event) {
 	c.mu.Unlock()
 }
 
-func (c *capturedReports) last(t *testing.T) core.OrphanScanCompletedPayload {
+func (c *capturedReports) last(t *testing.T) event.OrphanScanCompletedPayload {
 	t.Helper()
 	c.mu.Lock()
 	defer c.mu.Unlock()

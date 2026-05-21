@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
 )
 
@@ -21,7 +21,7 @@ import (
 // is indistinguishable at the AEAD layer; we always report the
 // public sentinel ErrDecryptionFailed if no candidate succeeds.
 type resolverDecoder struct {
-	resolver core.KeyResolver
+	resolver coreapi.KeyResolver
 	keyID    string
 	iv       []byte
 }
@@ -74,4 +74,4 @@ func (d *resolverDecoder) Transform(r io.Reader) io.Reader {
 }
 
 // Compile-time assertion: resolverDecoder is a core.Decoder.
-var _ core.Decoder = (*resolverDecoder)(nil)
+var _ coreapi.Decoder = (*resolverDecoder)(nil)

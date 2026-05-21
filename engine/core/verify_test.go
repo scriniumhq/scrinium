@@ -22,16 +22,16 @@ import (
 // "Verify emits EventScrubFailed on hash mismatch" contract.
 type scrubCapture struct {
 	mu       sync.Mutex
-	payloads []core.ScrubFailedPayload
+	payloads []event.ScrubFailedPayload
 }
 
 func newScrubCapture() *scrubCapture { return &scrubCapture{} }
 
 func (c *scrubCapture) handle(e event.Event) {
-	if e.Type != core.EventScrubFailed {
+	if e.Type != event.EventScrubFailed {
 		return
 	}
-	p, ok := e.Payload.(core.ScrubFailedPayload)
+	p, ok := e.Payload.(event.ScrubFailedPayload)
 	if !ok {
 		return
 	}
@@ -46,7 +46,7 @@ func (c *scrubCapture) count() int {
 	return len(c.payloads)
 }
 
-func (c *scrubCapture) last(t *testing.T) core.ScrubFailedPayload {
+func (c *scrubCapture) last(t *testing.T) event.ScrubFailedPayload {
 	t.Helper()
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -34,6 +34,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 )
@@ -42,7 +43,7 @@ import (
 // responsible for tearing down everything the SystemStore touches
 // (driver dir, index).
 type Factory struct {
-	New func(t *testing.T) (ss core.SystemStore, idx core.StoreIndex, cleanup func())
+	New func(t *testing.T) (ss core.SystemStore, idx coreapi.StoreIndex, cleanup func())
 }
 
 // Run executes the full conformance suite against the factory.

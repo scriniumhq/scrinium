@@ -1,6 +1,7 @@
 package core
 
 import (
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 )
@@ -39,7 +40,7 @@ func shouldVerifyOnRead(
 	policy domain.VerifyOnReadPolicy,
 	stages []domain.PipelineStage,
 	caps driver.CapabilityMask,
-	transformers TransformerRegistry,
+	transformers coreapi.TransformerRegistry,
 ) bool {
 	switch policy {
 	case domain.VerifyOnReadForceEnabled:
@@ -59,7 +60,7 @@ func shouldVerifyOnRead(
 		if err != nil {
 			continue
 		}
-		if _, ok := f.(AEADCapable); ok {
+		if _, ok := f.(coreapi.AEADCapable); ok {
 			return false
 		}
 	}

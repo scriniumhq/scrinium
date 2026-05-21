@@ -10,8 +10,10 @@ import (
 	"os"
 	"sync"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 )
 
 // verifyingReadHandle wraps a ReadHandle and rehashes the
@@ -34,7 +36,7 @@ import (
 // The wrapper is created only when shouldVerifyOnRead returns
 // true; otherwise Get returns the inner handle unchanged.
 type verifyingReadHandle struct {
-	inner ReadHandle
+	inner coreapi.ReadHandle
 	store *store
 
 	algo   string
@@ -58,7 +60,7 @@ type verifyingReadHandle struct {
 // manifest has no ContentHash to verify against; that branch
 // keeps the wrapper layered cleanly over old or unusual
 // manifests without forcing a special case at every call site.
-func newVerifyingReadHandle(inner ReadHandle, s *store) (ReadHandle, error) {
+func newVerifyingReadHandle(inner coreapi.ReadHandle, s *store) (coreapi.ReadHandle, error) {
 	m := inner.Manifest()
 	if m.ContentHash == "" {
 		return inner, nil
@@ -152,7 +154,7 @@ func (h *verifyingReadHandle) markMismatch(err error) {
 	h.mu.Lock()
 	h.mismatch = true
 	h.mu.Unlock()
-	h.store.publish(EventScrubFailed, ScrubFailedPayload{
+	h.store.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 		ArtifactID: h.inner.Manifest().ArtifactID,
 		Err:        err,
 	})
@@ -190,4 +192,4 @@ func (h *verifyingReadHandle) Close() error {
 }
 
 // Compile-time interface conformance.
-var _ ReadHandle = (*verifyingReadHandle)(nil)
+var _ coreapi.ReadHandle = (*verifyingReadHandle)(nil)

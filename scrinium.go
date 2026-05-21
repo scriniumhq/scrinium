@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
@@ -37,7 +38,7 @@ type Scrinium struct {
 	// Index is the metadata index. Surfaces rarely touch this
 	// directly; it's exposed for diagnostics like the
 	// extension list rendered in stats.
-	Index core.StoreIndex
+	Index coreapi.StoreIndex
 
 	// View is the read-side projection of the store: trees by
 	// path, by date, etc. Both FUSE and WebDAV adapters route

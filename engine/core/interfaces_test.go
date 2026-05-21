@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/event"
 )
@@ -22,7 +23,7 @@ func TestEventBusSatisfiesPublisher(t *testing.T) {
 	bus := event.NewEventBus()
 
 	// Must compile and work at runtime.
-	var pub core.Publisher = bus
+	var pub coreapi.Publisher = bus
 	pub.Publish(event.Event{Type: "smoke.test", Payload: "hello"})
 
 	// The Store option must accept any Publisher implementation.

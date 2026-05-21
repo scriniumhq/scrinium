@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
@@ -372,7 +373,7 @@ type fixedKeyIDResolver struct {
 func (r *fixedKeyIDResolver) GetKeys(_ string) ([][]byte, error) {
 	return [][]byte{append([]byte{}, r.dek...)}, nil
 }
-func (r *fixedKeyIDResolver) ResolveWriteKey(core.KeyContext) string { return r.keyID }
+func (r *fixedKeyIDResolver) ResolveWriteKey(coreapi.KeyContext) string { return r.keyID }
 
 // TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest verifies
 // the §3.4 invariant: ArtifactID = hash(file bytes including
@@ -489,7 +490,7 @@ type alwaysFailingResolver struct{}
 func (alwaysFailingResolver) GetKeys(_ string) ([][]byte, error) {
 	return nil, errors.New("alwaysFailingResolver: should not be called")
 }
-func (alwaysFailingResolver) ResolveWriteKey(core.KeyContext) string { return "" }
+func (alwaysFailingResolver) ResolveWriteKey(coreapi.KeyContext) string { return "" }
 
 // TestWalk_ParanoidStoreWalksWithoutDecryption verifies the §3.5
 // invariant: in Paranoid mode, Namespace is encrypted inside the

@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/internal/pathx"
 )
@@ -55,7 +55,7 @@ type File interface {
 // satisfy io.Reader/io.Seeker since core.ReadHandle is
 // offset-addressable via ReadAt only.
 type readHandleFile struct {
-	rh    core.ReadHandle
+	rh    coreapi.ReadHandle
 	name  string
 	path  string
 	size  int64

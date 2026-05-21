@@ -9,6 +9,7 @@ import (
 	"os"
 	"sync"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
@@ -24,7 +25,7 @@ import (
 // Treating "nil resolver" as "no provider" mirrors the spec:
 // Plain manifests don't need a resolver, encrypted ones surface
 // ErrKeyNotFound.
-func asKeyProvider(r KeyResolver) manifestcodec.KeyProvider {
+func asKeyProvider(r coreapi.KeyResolver) manifestcodec.KeyProvider {
 	if r == nil {
 		return nil
 	}
@@ -93,7 +94,7 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 // ignored — it is a Curator-layer flag). TOC, Pack, ExternalRef,
 // Sealed/Paranoid crypto are deferred to later milestones
 // and return explicit errors when reached.
-func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (ReadHandle, error) {
+func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (coreapi.ReadHandle, error) {
 	if err := s.enterRead(ctx); err != nil {
 		return nil, err
 	}
@@ -112,7 +113,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 	}
 
 	// 5. Layout dispatch (BlobManifest only).
-	var inner ReadHandle
+	var inner coreapi.ReadHandle
 	switch manifest.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
 		// Bytes already in memory inside the manifest. No driver
@@ -336,5 +337,5 @@ func (h *targetReadHandle) Manifest() domain.Manifest {
 
 // Compile-time interface conformance.
 var (
-	_ ReadHandle = (*inlineReadHandle)(nil)
+	_ coreapi.ReadHandle = (*inlineReadHandle)(nil)
 )

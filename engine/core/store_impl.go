@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
@@ -46,8 +47,8 @@ type store struct {
 	// Identity and dependencies.
 	storeID string
 	drv     driver.Driver
-	index   StoreIndex
-	pub     Publisher
+	index   coreapi.StoreIndex
+	pub     coreapi.Publisher
 
 	// Configuration. activeConfig is the StoreConfig in effect for
 	// new operations; it is replaced atomically by UpdateConfig.
@@ -62,8 +63,8 @@ type store struct {
 	// Plugin registries — populated at construction; never mutated
 	// after that.
 	hashes       domain.HashRegistry
-	transformers TransformerRegistry
-	keyResolver  KeyResolver
+	transformers coreapi.TransformerRegistry
+	keyResolver  coreapi.KeyResolver
 
 	// SystemStore facade. Initialised once at construction; nil
 	// only in unit tests that build a *store by hand without
@@ -118,10 +119,6 @@ func (s *store) RotateKEK(ctx context.Context) error {
 
 func (s *store) SetPassphrase(ctx context.Context) error {
 	return s.setPassphraseImpl(ctx)
-}
-
-func (s *store) Config() domain.StoreConfig {
-	return s.snapshotConfig()
 }
 
 // --- DataStore: stubs implemented in M1.4 ---

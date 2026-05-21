@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 )
 
@@ -49,11 +50,11 @@ type storeOptions struct {
 	forceReinit   bool
 	purgeOnReinit bool
 	cfg           *domain.StoreConfig
-	storeIndex    StoreIndex
-	publisher     Publisher
+	storeIndex    coreapi.StoreIndex
+	publisher     coreapi.Publisher
 	hashRegistry  domain.HashRegistry
-	readRegistry  TransformerRegistry
-	keyResolver   KeyResolver
+	readRegistry  coreapi.TransformerRegistry
+	keyResolver   coreapi.KeyResolver
 	passphrase    PassphraseProvider
 	autoUnlock    bool
 }
@@ -81,13 +82,13 @@ func WithConfig(cfg domain.StoreConfig) StoreOption {
 }
 
 // WithStoreIndex provides the StoreIndex implementation. Required.
-func WithStoreIndex(idx StoreIndex) StoreOption {
+func WithStoreIndex(idx coreapi.StoreIndex) StoreOption {
 	return func(o *storeOptions) { o.storeIndex = idx }
 }
 
 // WithPublisher provides a Publisher implementation for emitting
 // events.
-func WithPublisher(p Publisher) StoreOption {
+func WithPublisher(p coreapi.Publisher) StoreOption {
 	return func(o *storeOptions) { o.publisher = p }
 }
 
@@ -100,14 +101,14 @@ func WithHashRegistry(r domain.HashRegistry) StoreOption {
 
 // WithReadRegistry provides the registry of transformation plugins.
 // Required when StoreConfig.Pipeline is non-empty.
-func WithReadRegistry(r TransformerRegistry) StoreOption {
+func WithReadRegistry(r coreapi.TransformerRegistry) StoreOption {
 	return func(o *storeOptions) { o.readRegistry = r }
 }
 
 // WithKeyResolver provides the key-resolver plugin. By default the
 // engine uses StaticKeyResolver populated with the DEK from
 // store.json.
-func WithKeyResolver(r KeyResolver) StoreOption {
+func WithKeyResolver(r coreapi.KeyResolver) StoreOption {
 	return func(o *storeOptions) { o.keyResolver = r }
 }
 

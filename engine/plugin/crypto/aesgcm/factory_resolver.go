@@ -4,7 +4,7 @@ import (
 	"crypto/cipher"
 	"errors"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 )
 
@@ -21,7 +21,7 @@ import (
 // the Decoder reads the recorded KeyID from the stage and asks the
 // resolver for candidate keys, trying each until one decrypts.
 type factoryResolver struct {
-	resolver core.KeyResolver
+	resolver coreapi.KeyResolver
 }
 
 // errKeyResolverMissing surfaces a nil resolver at the moment of
@@ -42,20 +42,20 @@ var errKeyResolverEmpty = errors.New("aesgcm: KeyResolver returned no keys")
 //
 // The resolver may be nil at construction time; absence is surfaced
 // on the first Transform that needs a key.
-func NewWithResolver(resolver core.KeyResolver) core.TransformerFactory {
+func NewWithResolver(resolver coreapi.KeyResolver) coreapi.TransformerFactory {
 	return &factoryResolver{resolver: resolver}
 }
 
 // NewEncoder returns an Encoder bound to the write KeyID the engine
 // resolved for this operation (ec.KeyID). The DEK lookup happens on
 // first Transform.
-func (f *factoryResolver) NewEncoder(ec core.EncodeContext) core.Encoder {
+func (f *factoryResolver) NewEncoder(ec coreapi.EncodeContext) coreapi.Encoder {
 	return &resolverEncoder{resolver: f.resolver, keyID: ec.KeyID}
 }
 
 // NewDecoder returns a Decoder bound to the recorded stage KeyID
 // and IV. The DEK lookup happens on Transform.
-func (f *factoryResolver) NewDecoder(stage domain.PipelineStage) core.Decoder {
+func (f *factoryResolver) NewDecoder(stage domain.PipelineStage) coreapi.Decoder {
 	return &resolverDecoder{
 		resolver: f.resolver,
 		keyID:    stage.KeyID,
@@ -72,7 +72,7 @@ func (f *factoryResolver) AEAD() {}
 // resolveAEADs returns AEAD primitives for every candidate DEK the
 // resolver yields for keyID, in resolver order. The caller (Decoder)
 // tries each in turn; the Encoder always uses the first.
-func resolveAEADs(resolver core.KeyResolver, keyID string) ([]cipher.AEAD, error) {
+func resolveAEADs(resolver coreapi.KeyResolver, keyID string) ([]cipher.AEAD, error) {
 	if resolver == nil {
 		return nil, errKeyResolverMissing
 	}

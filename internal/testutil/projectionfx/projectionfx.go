@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection/fsmeta"
@@ -111,7 +111,7 @@ func (f *FakeSource) Get(
 	ctx context.Context,
 	id domain.ArtifactID,
 	opts domain.GetOptions,
-) (core.ReadHandle, error) {
+) (coreapi.ReadHandle, error) {
 	f.mu.RLock()
 	getErr := f.getErr
 	payload, hasPayload := f.payloads[id]
@@ -333,7 +333,7 @@ func (h *FakeReadHandle) Close() error {
 }
 
 // Compile-time guard.
-var _ core.ReadHandle = (*FakeReadHandle)(nil)
+var _ coreapi.ReadHandle = (*FakeReadHandle)(nil)
 
 // --- Manifest builders ---
 

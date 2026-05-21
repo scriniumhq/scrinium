@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/wrapper/host"
@@ -105,7 +106,7 @@ type RebuildStats struct {
 // restore store.json (when lost) and the system.config/current
 // pointer (when dangling).
 type RebuildIndexAgent interface {
-	core.MaintenanceAgent
+	coreapi.MaintenanceAgent
 
 	// Stats returns a progress snapshot during execution (safe to
 	// call from another goroutine). After Run, returns the final

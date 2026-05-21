@@ -10,6 +10,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 )
 
 // Verify performs a full integrity check of an artifact:
@@ -54,7 +55,7 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 	}
 
 	if err := s.verifyBlobHash(ctx, manifest); err != nil {
-		s.publish(EventScrubFailed, ScrubFailedPayload{
+		s.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: id,
 			Err:        err,
 		})

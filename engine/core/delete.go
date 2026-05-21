@@ -9,6 +9,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/internal/blobpath"
 )
 
@@ -111,6 +112,6 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 		return fmt.Errorf("core.Delete: remove manifest file: %w", err)
 	}
 
-	s.publish(EventArtifactDeleted, ArtifactDeletedPayload{ArtifactID: id})
+	s.publish(event.EventArtifactDeleted, event.ArtifactDeletedPayload{ArtifactID: id})
 	return nil
 }

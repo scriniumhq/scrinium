@@ -5,7 +5,7 @@ import (
 	"errors"
 	"os"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
@@ -97,7 +97,7 @@ func serviceList(view *projection.View, tree projection.RootView, sub string) pr
 }
 
 // serviceOpen dispatches an Open on the right tree.
-func serviceOpen(ctx context.Context, view *projection.View, tree projection.RootView, sub string) (core.ReadHandle, error) {
+func serviceOpen(ctx context.Context, view *projection.View, tree projection.RootView, sub string) (coreapi.ReadHandle, error) {
 	switch tree {
 	case projection.RootByPath:
 		return view.OpenByPath(ctx, sub, domain.GetOptions{})

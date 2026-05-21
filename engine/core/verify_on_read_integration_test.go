@@ -22,14 +22,14 @@ import (
 // dragging VerifyOnRead tests along).
 type localScrubCapture struct {
 	mu       sync.Mutex
-	payloads []core.ScrubFailedPayload
+	payloads []event.ScrubFailedPayload
 }
 
 func (c *localScrubCapture) handle(e event.Event) {
-	if e.Type != core.EventScrubFailed {
+	if e.Type != event.EventScrubFailed {
 		return
 	}
-	p, ok := e.Payload.(core.ScrubFailedPayload)
+	p, ok := e.Payload.(event.ScrubFailedPayload)
 	if !ok {
 		return
 	}
@@ -44,7 +44,7 @@ func (c *localScrubCapture) count() int {
 	return len(c.payloads)
 }
 
-func (c *localScrubCapture) last(t *testing.T) core.ScrubFailedPayload {
+func (c *localScrubCapture) last(t *testing.T) event.ScrubFailedPayload {
 	t.Helper()
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -12,6 +12,7 @@ import (
 	"io"
 
 	"scrinium.dev/engine/core/internal/storeconfig"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 )
@@ -23,7 +24,7 @@ const SysConfigPointer = domain.NamespaceSystemConfig + "/current"
 func WriteSystemConfig(
 	ctx context.Context,
 	drv driver.Driver,
-	idx StoreIndex,
+	idx coreapi.StoreIndex,
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
 ) (domain.ArtifactID, error) {
@@ -43,7 +44,7 @@ func ReadSystemConfig(
 // tests so they can assert that promoteKeyResolverIfDefault
 // did or did not run. Returns nil for non-*store implementers
 // (e.g. test mocks) so the helper degrades cleanly.
-func StoreKeyResolver(s Store) KeyResolver {
+func StoreKeyResolver(s Store) coreapi.KeyResolver {
 	concrete, ok := s.(*store)
 	if !ok {
 		return nil
@@ -86,6 +87,6 @@ func WriteDriverFile(s Store, path string, data []byte) error {
 // recoverOrphans function. Used by recovery_faulty_test.go to
 // drive the function with fake StoreIndex / faulty Driver values
 // directly, bypassing the full Init/Open path.
-func RecoverOrphans(ctx context.Context, drv driver.Driver, idx StoreIndex) (OrphanReport, error) {
+func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (OrphanReport, error) {
 	return recoverOrphans(ctx, drv, idx)
 }
