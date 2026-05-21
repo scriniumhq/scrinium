@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
@@ -392,7 +393,7 @@ func TestPut_EmptyPayload(t *testing.T) {
 // helper: build a Store configured for InlineFallback. The limit
 // is small enough that tests can exercise both sides of it
 // cheaply.
-func newInlineStore(t *testing.T, limit int64) (core.Store, string) {
+func newInlineStore(t *testing.T, limit int64) (coreapi.Store, string) {
 	t.Helper()
 	cfg := domain.StoreConfig{
 		BlobStorage:     domain.BlobStorageInlineFallback,

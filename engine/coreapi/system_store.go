@@ -1,4 +1,4 @@
-package core
+package coreapi
 
 // system_store.go — ADR-57 SystemStore facade.
 //
@@ -19,13 +19,13 @@ package core
 //     (docs/2 §10.2).
 //
 // The name → physical namespace mapping (config/* → system.config,
-// everything else → system.state) lives in namespaceForName below.
+// everything else → system.state) lives in namespaceForName, in the
+// core implementation.
 
 import (
 	"context"
 	"io"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 )
 
@@ -41,7 +41,7 @@ type SystemStore interface {
 
 	// Get opens the artifact currently pointed at by name. Returns
 	// errs.ErrArtifactNotFound when no pointer exists.
-	Get(ctx context.Context, name string) (coreapi.ReadHandle, error)
+	Get(ctx context.Context, name string) (ReadHandle, error)
 
 	// Delete removes the pointer and the artifact it points at.
 	// Idempotent: deleting an absent name returns nil.
@@ -52,28 +52,20 @@ type SystemStore interface {
 	Walk(ctx context.Context, prefix string, cb func(name string, m domain.Manifest) error) error
 }
 
-// SystemPutOption is the option type for SystemStore.Put.
-type SystemPutOption func(*systemPutOptions)
-
-// systemPutOptions is the resolved options struct for a single Put
-// call. Unexported because the only way to populate it is through
-// SystemPutOption constructors.
-type systemPutOptions struct {
-	skipIndex bool
+// SystemPutConfig is the resolved set of options for a single
+// SystemStore.Put. Public because it crosses the package boundary:
+// the SystemStore contract lives here in coreapi, while option
+// constructors (WithoutIndex) live in the core implementation and
+// populate this struct through SystemPutOption.
+type SystemPutConfig struct {
+	// SkipIndex skips indexing the manifest in StoreIndex.
+	SkipIndex bool
 }
 
-// WithoutIndex skips indexing the manifest in StoreIndex. Used for
-// artifacts whose presence in the index would be either redundant
-// or actively harmful — most notably index snapshots themselves
-// (indexing a snapshot of the index inside the same index creates
-// an asymmetry where the snapshot row points at a manifest that
-// only exists after the snapshot was taken).
-//
-// Default (no option) indexes the artifact. This is the right
-// choice for cursors and config — small, frequently-read
-// artifacts where the index access path is cheaper than reading
-// the manifest file twice (once for the pointer's referent, once
-// for the artifact body).
-func WithoutIndex() SystemPutOption {
-	return func(o *systemPutOptions) { o.skipIndex = true }
+// SystemPutOption configures a single SystemStore.Put. An applier
+// over SystemPutConfig rather than a func(*private) so the contract
+// is self-contained in coreapi and option constructors can live in
+// any package that implements it.
+type SystemPutOption interface {
+	ApplySystemPut(*SystemPutConfig)
 }

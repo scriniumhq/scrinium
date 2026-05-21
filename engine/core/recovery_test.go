@@ -58,7 +58,7 @@ func newRecoveryFixture(t *testing.T) *recoveryFixture {
 // initStore runs core.InitStore against the fixture and returns
 // the resulting Store. EventOrphanScanCompleted has been published
 // by the time this returns (the bus is synchronous).
-func (f *recoveryFixture) initStore(t *testing.T) core.Store {
+func (f *recoveryFixture) initStore(t *testing.T) coreapi.Store {
 	t.Helper()
 	s, _, err := core.InitStore(context.Background(), f.drv,
 		core.WithStoreIndex(f.idx),
@@ -73,7 +73,7 @@ func (f *recoveryFixture) initStore(t *testing.T) core.Store {
 
 // openStore runs core.OpenStore on the same Driver+Index. Used for
 // "crash-then-reopen" scenarios.
-func (f *recoveryFixture) openStore(t *testing.T) core.Store {
+func (f *recoveryFixture) openStore(t *testing.T) coreapi.Store {
 	t.Helper()
 	s, err := core.OpenStore(context.Background(), f.drv,
 		core.WithStoreIndex(f.idx),

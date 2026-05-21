@@ -143,4 +143,4 @@ func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobTy
 }
 
 // Compile-time interface conformance.
-var _ Store = (*store)(nil)
+var _ coreapi.Store = (*store)(nil)

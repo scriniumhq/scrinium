@@ -31,7 +31,7 @@ func initPipelineStore(
 	reg coreapi.TransformerRegistry,
 	pipeline []string,
 	extra ...core.StoreOption,
-) (core.Store, string) {
+) (coreapi.Store, string) {
 	t.Helper()
 	cfg := domain.StoreConfig{Pipeline: pipeline}
 	drv := driverfx.LocalFS(t)
@@ -50,7 +50,7 @@ func initPipelineStore(
 // transformed blob per artifact; the helper resolves its path
 // through the manifest's BlobRef so the tests don't hardcode the
 // shard rule.
-func pipelineBlobPath(t *testing.T, s core.Store, root string, id domain.ArtifactID) string {
+func pipelineBlobPath(t *testing.T, s coreapi.Store, root string, id domain.ArtifactID) string {
 	t.Helper()
 	ref := readBlobRef(t, s, id)
 	return filepath.Join(root, blobPathForRef(t, string(ref)))

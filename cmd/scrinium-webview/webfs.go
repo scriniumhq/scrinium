@@ -8,7 +8,6 @@ import (
 	pathpkg "path"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/projection/fsmeta"
@@ -24,10 +23,10 @@ import (
 // directly because its only consumer is HTML rendering.
 type webBackingFS struct {
 	v     *vfs.VFS
-	store core.Store
+	store coreapi.Store
 }
 
-func newWebBackingFS(v *vfs.VFS, store core.Store) *webBackingFS {
+func newWebBackingFS(v *vfs.VFS, store coreapi.Store) *webBackingFS {
 	return &webBackingFS{v: v, store: store}
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/wrapper/host"
 	"scrinium.dev/engine/wrapper/multistore"
@@ -14,7 +14,7 @@ import (
 // access to registered Stores, transit management, and graceful
 // shutdown.
 type Curator interface {
-	core.DataStore
+	coreapi.DataStore
 
 	// MultistoreIndex returns the global index when one has been
 	// registered. It is usually nil with a single Target Store.
@@ -23,7 +23,7 @@ type Curator interface {
 	// Store returns a registered Target Store by ID with the full
 	// core.Store interface, including administrative methods.
 	// Returns ErrStoreNotRegistered for an unknown ID.
-	Store(id string) (core.Store, error)
+	Store(id string) (coreapi.Store, error)
 
 	// Close stops every background process in order: Flush bundler →
 	// Drain HostStorage → stop agents → wait for active Get calls.

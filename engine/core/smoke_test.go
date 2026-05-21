@@ -236,7 +236,7 @@ func readAllAndClose(t *testing.T, rh coreapi.ReadHandle) []byte {
 // backed index keeps page cache bounded (~8 MiB by default) and
 // pushes data into the file, so HeapAlloc actually measures Put-
 // side streaming behaviour.
-func newDiskStore(t *testing.T) (core.Store, string) {
+func newDiskStore(t *testing.T) (coreapi.Store, string) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	root := drv.Root()
@@ -252,7 +252,7 @@ func newDiskStore(t *testing.T) (core.Store, string) {
 // The smoke variant uses Paranoid; pass Sealed to exercise
 // the partial-encryption path. Both modes need WithPassphrase +
 // WithAutoUnlock so the smoke loop never has to prompt.
-func newEncryptedDiskStore(t *testing.T, crypto domain.ManifestCrypto) (core.Store, string) {
+func newEncryptedDiskStore(t *testing.T, crypto domain.ManifestCrypto) (coreapi.Store, string) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	root := drv.Root()

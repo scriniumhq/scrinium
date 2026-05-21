@@ -9,6 +9,7 @@ import (
 	"scrinium.dev/engine/core/internal/descriptor"
 	"scrinium.dev/engine/core/internal/descriptorcache"
 	"scrinium.dev/engine/core/internal/storeconfig"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
@@ -67,7 +68,7 @@ import (
 // What does NOT happen yet (planned milestones in parens):
 //   - location.lock acquisition / lease model (M3.1).
 //   - StoreIndex schema cross-check against descriptor (M3.4).
-func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, error) {
+func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (coreapi.Store, error) {
 	if drv == nil {
 		return nil, errors.New("core.OpenStore: nil driver")
 	}

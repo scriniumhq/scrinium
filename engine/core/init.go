@@ -10,6 +10,7 @@ import (
 	"scrinium.dev/engine/core/internal/descriptor"
 	"scrinium.dev/engine/core/internal/descriptorcache"
 	"scrinium.dev/engine/core/internal/storeconfig"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
@@ -59,7 +60,7 @@ import (
 //     encrypted manifests is the worst-of-both-worlds shape:
 //     anyone who reads store.json gets the keys to all the
 //     manifests for free.
-func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, []byte, error) {
+func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (coreapi.Store, []byte, error) {
 	if drv == nil {
 		return nil, nil, errors.New("core.InitStore: nil driver")
 	}

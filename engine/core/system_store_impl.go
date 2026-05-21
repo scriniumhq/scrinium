@@ -69,7 +69,7 @@ func newSystemStore(drv driver.Driver, idx coreapi.StoreIndex, hashes domain.Has
 
 // System returns the SystemStore facade. Part of the AdminStore
 // interface.
-func (s *store) System() SystemStore { return s.system }
+func (s *store) System() coreapi.SystemStore { return s.system }
 
 // --- name validation and prefix mapping ---
 
@@ -143,10 +143,10 @@ func pointerPath(name string) (string, error) {
 // --- Put ---
 
 // Put implements SystemStore.Put.
-func (ss *systemStore) Put(ctx context.Context, name string, payload io.Reader, opts ...SystemPutOption) error {
-	o := systemPutOptions{}
+func (ss *systemStore) Put(ctx context.Context, name string, payload io.Reader, opts ...coreapi.SystemPutOption) error {
+	o := coreapi.SystemPutConfig{}
 	for _, opt := range opts {
-		opt(&o)
+		opt.ApplySystemPut(&o)
 	}
 
 	ns, err := namespaceForName(name)
@@ -174,11 +174,11 @@ func (ss *systemStore) Put(ctx context.Context, name string, payload io.Reader, 
 	}
 
 	// 3. Write the new artifact. The low-level helper writes the
-	//    manifest file and (unless o.skipIndex) indexes it.
+	//    manifest file and (unless o.SkipIndex) indexes it.
 	newID, err := writeSystemArtifact(
 		ctx, ss.drv, ss.index, ss.hashes,
 		ns, systemSessionID, body,
-		string(ss.cfg.ContentHasher), o.skipIndex,
+		string(ss.cfg.ContentHasher), o.SkipIndex,
 	)
 	if err != nil {
 		return fmt.Errorf("system store: put %q: %w", name, err)

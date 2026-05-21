@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/internal/testutil/driverfx"
@@ -27,7 +28,7 @@ func Hashes() domain.HashRegistry {
 
 // Init: fresh Store on localfs + in-memory sqlite index + sha256.
 // Caller opts append to (and can override) defaults.
-func Init(t testing.TB, opts ...core.StoreOption) core.Store {
+func Init(t testing.TB, opts ...core.StoreOption) coreapi.Store {
 	t.Helper()
 	all := append([]core.StoreOption{core.WithStoreIndex(indexfx.Memory(t))}, opts...)
 	s, _ := initStore(t, driverfx.LocalFS(t), all...)
@@ -35,7 +36,7 @@ func Init(t testing.TB, opts ...core.StoreOption) core.Store {
 }
 
 // InitWithRoot is Init plus the driver root for on-disk inspection.
-func InitWithRoot(t testing.TB, opts ...core.StoreOption) (core.Store, string) {
+func InitWithRoot(t testing.TB, opts ...core.StoreOption) (coreapi.Store, string) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	all := append([]core.StoreOption{core.WithStoreIndex(indexfx.Memory(t))}, opts...)
@@ -45,7 +46,7 @@ func InitWithRoot(t testing.TB, opts ...core.StoreOption) (core.Store, string) {
 
 // InitOn wires Init around a caller-provided driver. Caller also
 // owns the index — pass core.WithStoreIndex explicitly.
-func InitOn(t testing.TB, drv driver.Driver, opts ...core.StoreOption) core.Store {
+func InitOn(t testing.TB, drv driver.Driver, opts ...core.StoreOption) coreapi.Store {
 	t.Helper()
 	s, _ := initStore(t, drv, opts...)
 	return s
@@ -86,7 +87,7 @@ func InitPlainOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) {
 // a fresh in-memory index and the standard test hash registry.
 // Returns the (Store, error) pair so the caller can assert on the
 // failure mode itself — fatal-on-failure callers should use OpenOn.
-func TryOpenOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) (core.Store, error) {
+func TryOpenOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) (coreapi.Store, error) {
 	t.Helper()
 	opts := append([]core.StoreOption{
 		core.WithStoreIndex(indexfx.Memory(t)),
@@ -97,7 +98,7 @@ func TryOpenOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) (core
 
 // OpenOn is the fatal variant of TryOpenOn: it calls t.Fatalf when
 // OpenStore returns an error and returns just the Store on success.
-func OpenOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) core.Store {
+func OpenOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) coreapi.Store {
 	t.Helper()
 	s, err := TryOpenOn(t, drv, extra...)
 	if err != nil {
@@ -106,7 +107,7 @@ func OpenOn(t testing.TB, drv driver.Driver, extra ...core.StoreOption) core.Sto
 	return s
 }
 
-func initStore(t testing.TB, drv driver.Driver, opts ...core.StoreOption) (core.Store, []byte) {
+func initStore(t testing.TB, drv driver.Driver, opts ...core.StoreOption) (coreapi.Store, []byte) {
 	t.Helper()
 	all := append([]core.StoreOption{core.WithHashRegistry(Hashes())}, opts...)
 	s, kit, err := core.InitStore(context.Background(), drv, all...)
@@ -120,7 +121,7 @@ func initStore(t testing.TB, drv driver.Driver, opts ...core.StoreOption) (core.
 // bound to the same (drv, idx) so the test can reopen the Location
 // later. Use whenever the test exercises a reopen-flow; for
 // single-Init tests, plain Init/InitWithRoot remain shorter.
-func InitPlain(t testing.TB, extra ...core.StoreOption) (core.Store, *Reopener) {
+func InitPlain(t testing.TB, extra ...core.StoreOption) (coreapi.Store, *Reopener) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
@@ -136,7 +137,7 @@ func InitPlain(t testing.TB, extra ...core.StoreOption) (core.Store, *Reopener) 
 //
 // extra options are appended to the engine's defaults; pass
 // core.WithKDFParams or core.WithConfig as needed.
-func InitEncrypted(t testing.TB, pass string, extra ...core.StoreOption) (core.Store, *Reopener) {
+func InitEncrypted(t testing.TB, pass string, extra ...core.StoreOption) (coreapi.Store, *Reopener) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
@@ -153,7 +154,7 @@ func InitEncrypted(t testing.TB, pass string, extra ...core.StoreOption) (core.S
 // PassphraseProvider configured on the second open uses the same
 // passphrase — tests that need a different provider can replace it
 // via Reopener.Open with WithPassphrase override.
-func InitEncryptedLocked(t testing.TB, pass string, extra ...core.StoreOption) (core.Store, *Reopener) {
+func InitEncryptedLocked(t testing.TB, pass string, extra ...core.StoreOption) (coreapi.Store, *Reopener) {
 	t.Helper()
 	_, r := InitEncrypted(t, pass, extra...)
 	s := r.Open(t,

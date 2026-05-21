@@ -43,7 +43,7 @@ import (
 // responsible for tearing down everything the SystemStore touches
 // (driver dir, index).
 type Factory struct {
-	New func(t *testing.T) (ss core.SystemStore, idx coreapi.StoreIndex, cleanup func())
+	New func(t *testing.T) (ss coreapi.SystemStore, idx coreapi.StoreIndex, cleanup func())
 }
 
 // Run executes the full conformance suite against the factory.

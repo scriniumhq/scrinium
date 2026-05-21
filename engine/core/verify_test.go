@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/core"
+	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
@@ -202,7 +203,7 @@ func TestVerify_CancelledContext(t *testing.T) {
 // readBlobRef reads the manifest from the Store and returns the
 // BlobRef. Implementation: open the artifact via Get and read the
 // manifest off the resulting handle.
-func readBlobRef(t *testing.T, s core.Store, id domain.ArtifactID) domain.BlobRef {
+func readBlobRef(t *testing.T, s coreapi.Store, id domain.ArtifactID) domain.BlobRef {
 	t.Helper()
 	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
 	if err != nil {

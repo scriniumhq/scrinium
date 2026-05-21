@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
@@ -122,7 +121,7 @@ type RebuildIndexAgent interface {
 //
 // TODO(M3.4): rebuild StoreIndex from manifests / Recovery Kit.
 func NewRebuildIndexAgent(
-	store core.Store,
+	store coreapi.Store,
 	bus event.EventBus,
 	cfg RebuildConfig,
 ) (RebuildIndexAgent, error) {

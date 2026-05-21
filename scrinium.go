@@ -3,7 +3,6 @@ package scrinium
 import (
 	"sync"
 
-	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/index"
@@ -33,7 +32,7 @@ type Scrinium struct {
 
 	// Store is the high-level CAS store. Surfaces use it for
 	// Put/Get and for capacity queries (stats endpoints).
-	Store core.Store
+	Store coreapi.Store
 
 	// Index is the metadata index. Surfaces rarely touch this
 	// directly; it's exposed for diagnostics like the
