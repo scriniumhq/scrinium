@@ -17,34 +17,24 @@ import (
 // own private maxPointerSize for the config pointer).
 const maxSystemPointerSize = 256
 
-// configArtifactWriter adapts the engine core's writeInlineSystemArtifact
-// primitive to the narrow storeconfig.ArtifactWriter interface. It lets
-// the storeconfig subpackage own the system.config FORMAT (StoreConfig
-// serialisation + pointer) while the core retains the MECHANICS of
-// writing an inline system artifact — the same primitive system.state
-// agents use.
+// configWriter returns a storeconfig.ArtifactWriter bound to the
+// engine core's writeInlineSystemArtifact primitive. storeconfig owns
+// the system.config FORMAT; core retains the MECHANICS of writing an
+// inline system artifact (the same primitive system.state agents
+// use). A closure rather than a named adapter type — the contract is
+// one function, so a struct + method would be boilerplate.
 //
-// Constructed from (drv, idx, hashes) rather than from *store, because
-// the config write path runs both before a *store exists (InitStore via
-// buildStore) and on a live *store (UpdateConfig). The three deps are
-// exactly what writeInlineSystemArtifact needs.
-type configArtifactWriter struct {
-	drv    driver.Driver
-	idx    StoreIndex
-	hashes domain.HashRegistry
-}
-
-func newConfigArtifactWriter(drv driver.Driver, idx StoreIndex, hashes domain.HashRegistry) storeconfig.ArtifactWriter {
-	return configArtifactWriter{drv: drv, idx: idx, hashes: hashes}
-}
-
-// WriteInlineArtifact satisfies storeconfig.ArtifactWriter.
-func (w configArtifactWriter) WriteInlineArtifact(
-	ctx context.Context,
-	namespace string,
-	sessionID domain.SessionID,
-	payload []byte,
-	hashAlgo string,
-) (domain.ArtifactID, error) {
-	return writeInlineSystemArtifact(ctx, w.drv, w.idx, w.hashes, namespace, sessionID, payload, hashAlgo)
+// Built from (drv, idx, hashes) rather than from *store because the
+// config write path runs both before a *store exists (InitStore) and
+// on a live *store (UpdateConfig).
+func configWriter(drv driver.Driver, idx StoreIndex, hashes domain.HashRegistry) storeconfig.ArtifactWriter {
+	return func(
+		ctx context.Context,
+		namespace string,
+		sessionID domain.SessionID,
+		payload []byte,
+		hashAlgo string,
+	) (domain.ArtifactID, error) {
+		return writeInlineSystemArtifact(ctx, drv, idx, hashes, namespace, sessionID, payload, hashAlgo)
+	}
 }

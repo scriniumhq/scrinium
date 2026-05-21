@@ -8,7 +8,6 @@ package core
 // constructor reaches across into the other.
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -119,37 +118,6 @@ func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.
 	default:
 		return fmt.Errorf("core: unknown ReconcileAction %d", int(action))
 	}
-}
-
-// refreshDescriptorCache compares the L2 cache against canonical
-// and rewrites it when out of sync.
-//
-// Three branches that all reduce to "save":
-//   - cache absent (loadDescriptorCache returned nil, nil)
-//   - cache load failed (corruption, partial state)
-//   - cache present but checksum diverges from canonical
-//
-// The "load failed" branch swallows the load error on purpose:
-// the cache is a fast-start aid, not authoritative, and a
-// damaged cache is fully recoverable from Location.
-func refreshDescriptorCache(ctx context.Context, idx metaStore, canonical *descriptor.Descriptor) error {
-	cache, _ := loadDescriptorCache(ctx, idx)
-
-	if cache != nil {
-		want, err := descriptor.Checksum(canonical)
-		if err != nil {
-			return fmt.Errorf("checksum canonical: %w", err)
-		}
-		if bytes.Equal(cache.Checksum, want) {
-			return nil // cache is already current
-		}
-	}
-
-	// Save (or re-save). saveDescriptorCache is idempotent.
-	if err := saveDescriptorCache(ctx, idx, canonical); err != nil {
-		return fmt.Errorf("save: %w", err)
-	}
-	return nil
 }
 
 // buildStore is the common tail shared by InitStore and OpenStore.

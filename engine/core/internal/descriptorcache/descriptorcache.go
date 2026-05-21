@@ -1,4 +1,4 @@
-package core
+package descriptorcache
 
 import (
 	"bytes"
@@ -12,38 +12,41 @@ import (
 	"scrinium.dev/engine/errs"
 )
 
-// store_meta keys for the descriptor L2 cache, per §10.1.5. The
-// cache is a fast-start aid: with it OpenStore can verify that
-// the on-disk descriptor matches what the previous session saw,
-// without re-parsing it. Without it OpenStore simply re-reads
-// L0/L1 — the cache is never authoritative.
+// store_meta keys for the descriptor L2 cache, per §10.1.5.
 const (
 	metaKeyDescriptorBlob     = "descriptor_blob"
 	metaKeyDescriptorSequence = "descriptor_sequence"
 	metaKeyDescriptorChecksum = "descriptor_checksum"
 )
 
-// DescriptorCache is the L2 cached projection of the on-disk
-// descriptor. The three fields are written together by
-// saveDescriptorCache; corruption (partial write, manual edit)
-// surfaces at load time as an error rather than a half-populated
-// struct.
-type DescriptorCache struct {
+// MetaStore is the narrow store_meta surface the cache needs. The
+// engine's StoreIndex satisfies it implicitly, as does any test
+// double — passing a full index would over-couple.
+type MetaStore interface {
+	GetMeta(ctx context.Context, key string) (string, error)
+	SetMeta(ctx context.Context, key, value string) error
+}
+
+// Cache is the L2 cached projection of the on-disk descriptor. The
+// three fields are written together by Save; corruption (partial
+// write, manual edit) surfaces at Load time as an error rather than
+// a half-populated struct.
+type Cache struct {
 	// Blob is the full JSON serialisation of the descriptor —
 	// byte-identical to what Persist would write to L0.
 	Blob []byte
 
-	// Sequence duplicates Blob's sequence field. Held separately
-	// so that "is the cache stale relative to Location" can be
-	// answered without parsing Blob.
+	// Sequence duplicates Blob's sequence field. Held separately so
+	// that "is the cache stale relative to Location" can be answered
+	// without parsing Blob.
 	Sequence uint64
 
-	// Checksum is SHA-256 over Blob. ChecksumLen bytes; hex-
-	// encoded in store_meta.
+	// Checksum is SHA-256 over Blob. descriptor.ChecksumLen bytes;
+	// hex-encoded in store_meta.
 	Checksum []byte
 }
 
-// loadDescriptorCache reads the three cache keys out of meta.
+// Load reads the three cache keys out of meta.
 //
 // Outcomes:
 //   - (cache, nil) — all three keys present and internally
@@ -51,13 +54,13 @@ type DescriptorCache struct {
 //   - (nil, nil)   — the cache does not exist. This is the
 //     fresh-host or first-OpenStore-after-corrupt-meta case;
 //     OpenStore treats it as "rebuild from Location".
-//   - (nil, err)   — the cache exists but is malformed. Either
-//     a partial write (some keys present, some not) or
-//     content-mismatch (checksum/sequence does not agree with
-//     blob). The caller MUST NOT use the returned data; the
-//     correct recovery is to re-derive the cache from the
-//     authoritative Location replicas.
-func loadDescriptorCache(ctx context.Context, meta metaStore) (*DescriptorCache, error) {
+//   - (nil, err)   — the cache exists but is malformed. Either a
+//     partial write (some keys present, some not) or content-
+//     mismatch (checksum/sequence does not agree with blob). The
+//     caller MUST NOT use the returned data; the correct recovery is
+//     to re-derive the cache from the authoritative Location
+//     replicas.
+func Load(ctx context.Context, meta MetaStore) (*Cache, error) {
 	blob, blobErr := meta.GetMeta(ctx, metaKeyDescriptorBlob)
 	seqStr, seqErr := meta.GetMeta(ctx, metaKeyDescriptorSequence)
 	csumHex, csumErr := meta.GetMeta(ctx, metaKeyDescriptorChecksum)
@@ -83,8 +86,8 @@ func loadDescriptorCache(ctx context.Context, meta metaStore) (*DescriptorCache,
 		return nil, fmt.Errorf("descriptor cache: %d/3 keys missing — partial state", missing)
 	}
 
-	// Surface any non-NotFound errors (I/O, classifier-level
-	// failures from the index).
+	// Surface any non-NotFound errors (I/O, classifier-level failures
+	// from the index).
 	for _, err := range []error{blobErr, seqErr, csumErr} {
 		if err != nil && !errors.Is(err, errs.ErrMetaKeyNotFound) {
 			return nil, fmt.Errorf("descriptor cache: read: %w", err)
@@ -107,29 +110,29 @@ func loadDescriptorCache(ctx context.Context, meta metaStore) (*DescriptorCache,
 			len(csum), descriptor.ChecksumLen)
 	}
 
-	cache := &DescriptorCache{
+	cache := &Cache{
 		Blob:     []byte(blob),
 		Sequence: seq,
 		Checksum: csum,
 	}
 
 	// Internal consistency: the sequence and checksum stored
-	// alongside the blob must match what the blob itself encodes.
-	// A mismatch means the cache was hand-edited or written by
-	// a buggy version; refuse to use it.
-	if err := validateCacheConsistency(cache); err != nil {
+	// alongside the blob must match what the blob itself encodes. A
+	// mismatch means the cache was hand-edited or written by a buggy
+	// version; refuse to use it.
+	if err := validateConsistency(cache); err != nil {
 		return nil, fmt.Errorf("descriptor cache: %w", err)
 	}
 
 	return cache, nil
 }
 
-// saveDescriptorCache writes the cache for d to meta. The three
-// keys are written sequentially; SetMeta is atomic per key, but
-// the trio is not atomic across a crash. A crash mid-trio leaves
-// a partial cache, which the next loadDescriptorCache rejects as
-// corruption — the caller then re-saves. The flow is idempotent.
-func saveDescriptorCache(ctx context.Context, meta metaStore, d *descriptor.Descriptor) error {
+// Save writes the cache for d to meta. The three keys are written
+// sequentially; SetMeta is atomic per key, but the trio is not
+// atomic across a crash. A crash mid-trio leaves a partial cache,
+// which the next Load rejects as corruption — the caller then
+// re-saves. The flow is idempotent.
+func Save(ctx context.Context, meta MetaStore, d *descriptor.Descriptor) error {
 	blob, err := descriptor.Marshal(d)
 	if err != nil {
 		return fmt.Errorf("descriptor cache: marshal: %w", err)
@@ -151,11 +154,41 @@ func saveDescriptorCache(ctx context.Context, meta metaStore, d *descriptor.Desc
 	return nil
 }
 
-// validateCacheConsistency verifies that the sequence and
-// checksum stored alongside the blob agree with what the blob
-// itself encodes. Used by loadDescriptorCache to reject
-// hand-edited or partially-written cache state.
-func validateCacheConsistency(c *DescriptorCache) error {
+// Refresh compares the L2 cache against canonical and rewrites it
+// when out of sync.
+//
+// Three branches that all reduce to "save":
+//   - cache absent (Load returned nil, nil)
+//   - cache load failed (corruption, partial state)
+//   - cache present but checksum diverges from canonical
+//
+// The "load failed" branch swallows the load error on purpose: the
+// cache is a fast-start aid, not authoritative, and a damaged cache
+// is fully recoverable from Location.
+func Refresh(ctx context.Context, meta MetaStore, canonical *descriptor.Descriptor) error {
+	cache, _ := Load(ctx, meta)
+
+	if cache != nil {
+		want, err := descriptor.Checksum(canonical)
+		if err != nil {
+			return fmt.Errorf("checksum canonical: %w", err)
+		}
+		if bytes.Equal(cache.Checksum, want) {
+			return nil // cache is already current
+		}
+	}
+
+	// Save (or re-save). Save is idempotent.
+	if err := Save(ctx, meta, canonical); err != nil {
+		return fmt.Errorf("save: %w", err)
+	}
+	return nil
+}
+
+// validateConsistency verifies that the sequence and checksum stored
+// alongside the blob agree with what the blob itself encodes. Used
+// by Load to reject hand-edited or partially-written cache state.
+func validateConsistency(c *Cache) error {
 	d, err := descriptor.Unmarshal(c.Blob)
 	if err != nil {
 		return fmt.Errorf("blob does not parse: %w", err)

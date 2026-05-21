@@ -25,24 +25,23 @@ const (
 )
 
 // ArtifactWriter persists an inline system artifact and returns its
-// ArtifactID. It is the single write primitive the config persistence
-// needs from the engine core; core.*store satisfies it through its
-// writeInlineSystemArtifact primitive.
+// ArtifactID. It is the single write primitive the config
+// persistence needs from the engine core; core passes a closure over
+// its writeInlineSystemArtifact primitive.
 //
-// Kept narrow on purpose: storeconfig owns the system.config FORMAT
-// (StoreConfig serialisation + pointer), while the core retains the
-// MECHANICS of writing an inline artifact (manifest build, hashing,
-// indexing) — that primitive is shared with system.state agents and
-// does not belong to the config layer.
-type ArtifactWriter interface {
-	WriteInlineArtifact(
-		ctx context.Context,
-		namespace string,
-		sessionID domain.SessionID,
-		payload []byte,
-		hashAlgo string,
-	) (domain.ArtifactID, error)
-}
+// A function type, not an interface: the contract is one method, and
+// a named adapter struct in core would be pure boilerplate. core owns
+// the MECHANICS of writing an inline artifact (manifest build,
+// hashing, indexing) — shared with system.state agents — while
+// storeconfig owns the system.config FORMAT (StoreConfig
+// serialisation + pointer).
+type ArtifactWriter func(
+	ctx context.Context,
+	namespace string,
+	sessionID domain.SessionID,
+	payload []byte,
+	hashAlgo string,
+) (domain.ArtifactID, error)
 
 // Write persists the StoreConfig as a system.config inline artifact
 // and atomically updates the system.config/current pointer to its
@@ -63,7 +62,7 @@ func Write(
 	}
 	payload = append(payload, '\n')
 
-	id, err := w.WriteInlineArtifact(
+	id, err := w(
 		ctx, namespace, sessionID, payload, string(cfg.ContentHasher),
 	)
 	if err != nil {

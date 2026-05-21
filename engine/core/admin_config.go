@@ -63,7 +63,7 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 
 	s.cfgMu.Lock()
 	defer s.cfgMu.Unlock()
-	if _, err := storeconfig.Write(ctx, s.drv, newConfigArtifactWriter(s.drv, s.index, s.hashes), requested); err != nil {
+	if _, err := storeconfig.Write(ctx, s.drv, configWriter(s.drv, s.index, s.hashes), requested); err != nil {
 		return fmt.Errorf("core.UpdateConfig: %w", err)
 	}
 	s.activeConfig = requested
