@@ -141,18 +141,3 @@ type StoreIndex interface {
 	// defined error; do not call Close while reads are in flight.
 	Close() error
 }
-
-// metaStore is the narrow slice of StoreIndex used by every helper
-// that touches the store_meta key/value table — descriptor cache
-// (descriptor_cache.go), and at later milestones the lease subsystem
-// (M3.1), the scrub cursor (M3.3), and the rebuild-state recorder
-// (M3.4).
-//
-// Centralising the abstraction here means every consumer accepts
-// the same minimal surface; passing a full *sqlite.Index would
-// over-couple. *Index satisfies metaStore implicitly, as does any
-// test double.
-type metaStore interface {
-	GetMeta(ctx context.Context, key string) (string, error)
-	SetMeta(ctx context.Context, key, value string) error
-}

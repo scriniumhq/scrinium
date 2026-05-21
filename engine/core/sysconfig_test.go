@@ -1,16 +1,13 @@
 package core_test
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"strings"
 	"testing"
 
 	"scrinium.dev/engine/core"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver/localfs"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/internal/testutil/indexfx"
 )
@@ -77,62 +74,5 @@ func TestWriteReadSystemConfig_RoundTrip(t *testing.T) {
 	n, _ := rc.Read(buf)
 	if got, want := strings.TrimSpace(string(buf[:n])), string(id); got != want {
 		t.Errorf("pointer content: got %q, want %q", got, want)
-	}
-}
-
-func TestReadSystemConfig_Missing(t *testing.T) {
-	drv, err := localfs.New(t.TempDir(), localfs.WithFsync(false))
-	if err != nil {
-		t.Fatalf("localfs.New: %v", err)
-	}
-	_, err = core.ReadSystemConfig(context.Background(), drv, storefx.Hashes())
-	if !errors.Is(err, errs.ErrMissingConfigPointer) {
-		t.Fatalf("expected ErrMissingConfigPointer, got %v", err)
-	}
-}
-
-func TestReadSystemConfig_CorruptedPointer(t *testing.T) {
-	cases := []struct {
-		name    string
-		content []byte
-	}{
-		{"empty", []byte("")},
-		{"whitespace only", []byte("   \n")},
-		{"garbage", []byte("not-an-artifact-id\n")},
-		{"missing dash", []byte("sha256deadbeef\n")},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			drv, err := localfs.New(t.TempDir(), localfs.WithFsync(false))
-			if err != nil {
-				t.Fatalf("localfs.New: %v", err)
-			}
-			if err := drv.Put(context.Background(), core.SysConfigPointer,
-				bytes.NewReader(c.content)); err != nil {
-				t.Fatalf("seed pointer: %v", err)
-			}
-			_, err = core.ReadSystemConfig(context.Background(), drv, storefx.Hashes())
-			if !errors.Is(err, errs.ErrCorruptedConfigPointer) {
-				t.Fatalf("expected ErrCorruptedConfigPointer, got %v", err)
-			}
-		})
-	}
-}
-
-func TestReadSystemConfig_DanglingPointer(t *testing.T) {
-	drv, err := localfs.New(t.TempDir(), localfs.WithFsync(false))
-	if err != nil {
-		t.Fatalf("localfs.New: %v", err)
-	}
-	// Syntactically valid ArtifactID, no manifest behind it.
-	pointer := []byte("sha256-" +
-		"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n")
-	if err := drv.Put(context.Background(), core.SysConfigPointer,
-		bytes.NewReader(pointer)); err != nil {
-		t.Fatalf("seed pointer: %v", err)
-	}
-	_, err = core.ReadSystemConfig(context.Background(), drv, storefx.Hashes())
-	if !errors.Is(err, errs.ErrDanglingConfigPointer) {
-		t.Fatalf("expected ErrDanglingConfigPointer, got %v", err)
 	}
 }

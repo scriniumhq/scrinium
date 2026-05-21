@@ -11,12 +11,13 @@ import (
 	"fmt"
 	"io"
 
+	"scrinium.dev/engine/core/internal/storeconfig"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 )
 
 // SysConfigPointer is the on-disk path of system.config/current.
-const SysConfigPointer = sysConfigPointer
+const SysConfigPointer = domain.NamespaceSystemConfig + "/current"
 
 // WriteSystemConfig is the test alias for writeSystemConfig.
 func WriteSystemConfig(
@@ -26,7 +27,7 @@ func WriteSystemConfig(
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
 ) (domain.ArtifactID, error) {
-	return writeSystemConfig(ctx, drv, idx, hashes, cfg)
+	return storeconfig.Write(ctx, drv, configWriter(drv, idx, hashes), cfg)
 }
 
 // ReadSystemConfig is the test alias for readSystemConfig.
@@ -35,7 +36,7 @@ func ReadSystemConfig(
 	drv driver.Driver,
 	hashes domain.HashRegistry,
 ) (domain.StoreConfig, error) {
-	return readSystemConfig(ctx, drv, hashes)
+	return storeconfig.Read(ctx, drv, hashes)
 }
 
 // StoreKeyResolver exposes the internal keyResolver field for

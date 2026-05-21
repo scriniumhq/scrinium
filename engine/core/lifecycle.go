@@ -8,18 +8,15 @@ package core
 // constructor reaches across into the other.
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"scrinium.dev/engine/core/internal/descriptor"
 	"scrinium.dev/engine/core/internal/recoverykit"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
@@ -123,37 +120,6 @@ func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.
 	}
 }
 
-// refreshDescriptorCache compares the L2 cache against canonical
-// and rewrites it when out of sync.
-//
-// Three branches that all reduce to "save":
-//   - cache absent (loadDescriptorCache returned nil, nil)
-//   - cache load failed (corruption, partial state)
-//   - cache present but checksum diverges from canonical
-//
-// The "load failed" branch swallows the load error on purpose:
-// the cache is a fast-start aid, not authoritative, and a
-// damaged cache is fully recoverable from Location.
-func refreshDescriptorCache(ctx context.Context, idx metaStore, canonical *descriptor.Descriptor) error {
-	cache, _ := loadDescriptorCache(ctx, idx)
-
-	if cache != nil {
-		want, err := descriptor.Checksum(canonical)
-		if err != nil {
-			return fmt.Errorf("checksum canonical: %w", err)
-		}
-		if bytes.Equal(cache.Checksum, want) {
-			return nil // cache is already current
-		}
-	}
-
-	// Save (or re-save). saveDescriptorCache is idempotent.
-	if err := saveDescriptorCache(ctx, idx, canonical); err != nil {
-		return fmt.Errorf("save: %w", err)
-	}
-	return nil
-}
-
 // buildStore is the common tail shared by InitStore and OpenStore.
 // It constructs the *store value, runs the bootstrap Orphan Scan,
 // publishes the report, and transitions the Store into
@@ -230,70 +196,4 @@ func unlockBootstrap(ctx context.Context, s *store, pub Publisher) error {
 	s.state = domain.StateUnlocked
 	s.stateMu.Unlock()
 	return nil
-}
-
-// validateAgainstActiveConfig checks that the caller-supplied
-// StoreConfig agrees with the active system.config on every
-// immutable parameter. Mutable parameters are not compared — they
-// are reassignable through UpdateConfig (M2+).
-//
-// Only fields the caller actually populated (non-zero values in the
-// requested config) are compared; a caller who passes WithConfig{}
-// or partial WithConfig with only mutable fields passes through.
-// A caller who passes an immutable that does not match the active
-// config gets errs.ErrConfigMismatch.
-//
-// Rationale for "non-zero comparison": go zero values are
-// indistinguishable from "field omitted". The caller can always
-// pass an explicit value to opt into the check; a default value
-// passes silently. This matches the contract documented in
-// 4. API Reference/01 Lifecycle §1.2.
-func validateAgainstActiveConfig(req, active domain.StoreConfig) error {
-	var mismatches []string
-
-	if req.PathTopology != "" && req.PathTopology != active.PathTopology {
-		mismatches = append(mismatches,
-			fmt.Sprintf("PathTopology: requested %q, active %q",
-				req.PathTopology, active.PathTopology))
-	}
-	if req.ManifestStorage != "" && req.ManifestStorage != active.ManifestStorage {
-		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestStorage: requested %q, active %q",
-				req.ManifestStorage, active.ManifestStorage))
-	}
-	if req.ManifestEncoding != "" && req.ManifestEncoding != active.ManifestEncoding {
-		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestEncoding: requested %q, active %q",
-				req.ManifestEncoding, active.ManifestEncoding))
-	}
-	if req.ManifestCrypto != "" && req.ManifestCrypto != active.ManifestCrypto {
-		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestCrypto: requested %q, active %q",
-				req.ManifestCrypto, active.ManifestCrypto))
-	}
-	// ADR-58: EncryptedDedup is immutable — changing it would break
-	// reproducibility of historical encrypted blob addresses.
-	if req.EncryptedDedup != "" && req.EncryptedDedup != active.EncryptedDedup {
-		mismatches = append(mismatches,
-			fmt.Sprintf("EncryptedDedup: requested %q, active %q",
-				req.EncryptedDedup, active.EncryptedDedup))
-	}
-	if req.ContentHasher != "" && req.ContentHasher != active.ContentHasher {
-		mismatches = append(mismatches,
-			fmt.Sprintf("ContentHasher: requested %q, active %q",
-				req.ContentHasher, active.ContentHasher))
-	}
-	// DeletionPolicyLock: bool, "not set" indistinguishable from
-	// "false". Compare only when the caller explicitly asked to
-	// lock — false is the relaxed default and passing it should not
-	// fail against a locked active config.
-	if req.DeletionPolicyLock && !active.DeletionPolicyLock {
-		mismatches = append(mismatches,
-			"DeletionPolicyLock: requested true, active false")
-	}
-
-	if len(mismatches) == 0 {
-		return nil
-	}
-	return fmt.Errorf("%w: %s", errs.ErrConfigMismatch, strings.Join(mismatches, "; "))
 }

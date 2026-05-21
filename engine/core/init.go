@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/core/internal/descriptorcache"
+	"scrinium.dev/engine/core/internal/storeconfig"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
@@ -87,8 +89,8 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	if o.cfg != nil {
 		cfg = *o.cfg
 	}
-	cfg = applyConfigDefaults(cfg)
-	if err := validateImmutableConfig(cfg); err != nil {
+	cfg = storeconfig.ApplyDefaults(cfg)
+	if err := storeconfig.ValidateImmutable(cfg); err != nil {
 		return nil, nil, wrap("invalid config", err)
 	}
 
@@ -198,7 +200,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		manifestcrypto.Wipe(dek)
 		return nil, nil, wrap("write descriptor", err)
 	}
-	if err := saveDescriptorCache(ctx, idx, desc); err != nil {
+	if err := descriptorcache.Save(ctx, idx, desc); err != nil {
 		manifestcrypto.Wipe(dek)
 		return nil, nil, wrap("save L2 cache", err)
 	}
@@ -212,7 +214,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		return nil, nil, fmt.Errorf(
 			"core.InitStore: WithHashRegistry is required to persist system.config")
 	}
-	if _, err := writeSystemConfig(ctx, drv, idx, o.hashRegistry, cfg); err != nil {
+	if _, err := storeconfig.Write(ctx, drv, configWriter(drv, idx, o.hashRegistry), cfg); err != nil {
 		return nil, nil, wrap("write system.config", err)
 	}
 

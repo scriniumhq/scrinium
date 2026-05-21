@@ -7,6 +7,8 @@ import (
 	"os"
 
 	"scrinium.dev/engine/core/internal/descriptor"
+	"scrinium.dev/engine/core/internal/descriptorcache"
+	"scrinium.dev/engine/core/internal/storeconfig"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
@@ -140,18 +142,18 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	// aid only. Save when absent, when corrupted (load returned
 	// an error), or when checksum diverges. Read errors are
 	// non-fatal — we always have the canonical to fall back to.
-	if err := refreshDescriptorCache(ctx, idx, desc); err != nil {
+	if err := descriptorcache.Refresh(ctx, idx, desc); err != nil {
 		return nil, wrap("refresh L2 cache", err)
 	}
 
 	// --- Load the active StoreConfig from system.config/current ---
 
-	active, err := readSystemConfig(ctx, drv, o.hashRegistry)
+	active, err := storeconfig.Read(ctx, drv, o.hashRegistry)
 	if err != nil {
 		return nil, wrap("read system.config", err)
 	}
-	active = applyConfigDefaults(active)
-	if err := validateImmutableConfig(active); err != nil {
+	active = storeconfig.ApplyDefaults(active)
+	if err := storeconfig.ValidateImmutable(active); err != nil {
 		return nil, fmt.Errorf("%w: system.config produced invalid config: %v",
 			errs.ErrStoreCorrupted, err)
 	}
@@ -159,7 +161,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	// --- Validate WithConfig against the active config ---
 
 	if o.cfg != nil {
-		if err := validateAgainstActiveConfig(*o.cfg, active); err != nil {
+		if err := storeconfig.ValidateAgainstActive(*o.cfg, active); err != nil {
 			return nil, err
 		}
 	}
