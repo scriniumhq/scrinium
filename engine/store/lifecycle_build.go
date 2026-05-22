@@ -21,6 +21,7 @@ import (
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/orphanscan"
+	"scrinium.dev/engine/store/internal/reconcile"
 	"scrinium.dev/engine/store/internal/recoverykit"
 	"scrinium.dev/engine/store/internal/systemstore"
 )
@@ -108,17 +109,17 @@ func initEncryptedDEK(
 // HealNone is a no-op; the four healing actions reduce to two
 // distinct disk operations (write L0 only, write L1 only) since
 // the canonical content already lives on the surviving side.
-func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.Descriptor, action descriptor.ReconcileAction) error {
+func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.Descriptor, action reconcile.Action) error {
 	switch action {
-	case descriptor.HealNone:
+	case reconcile.HealNone:
 		return nil
-	case descriptor.HealL0FromL1, descriptor.HealBothFromL1:
+	case reconcile.HealL0FromL1, reconcile.HealBothFromL1:
 		// HealL0FromL1: L0 was missing/corrupted, rewrite it.
 		// HealBothFromL1: sequence-divergence, L1 won, rewrite L0.
 		// Same disk operation; distinct names preserve diagnostic
 		// detail in logs.
 		return descriptor.WriteReplica(ctx, drv, canonical, descriptor.L0)
-	case descriptor.HealL1FromL0, descriptor.HealBothFromL0:
+	case reconcile.HealL1FromL0, reconcile.HealBothFromL0:
 		return descriptor.WriteReplica(ctx, drv, canonical, descriptor.L1)
 	default:
 		return fmt.Errorf("core: unknown ReconcileAction %d", int(action))

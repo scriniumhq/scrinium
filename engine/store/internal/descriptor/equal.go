@@ -2,14 +2,9 @@ package descriptor
 
 import "bytes"
 
-// Equal reports whether a and b are field-by-field equivalent.
-// nil-equal nil; non-nil-not-equal-to-nil; otherwise every field
-// (including KDFParams sub-fields and the salt slice) must match.
-//
-// Note: Equal compares the in-memory representation, not the
-// serialised form. Two descriptors that round-trip identically
-// through Marshal/Unmarshal are Equal; the reverse holds because
-// JSON encoding here is canonical (sorted-key, deterministic).
+// Equal reports whether a and b are field-by-field equivalent,
+// including KDFParams sub-fields and the salt slice. Two nils are
+// equal; a nil and a non-nil are not.
 func Equal(a, b *Descriptor) bool {
 	if a == nil && b == nil {
 		return true

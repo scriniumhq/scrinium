@@ -11,21 +11,20 @@ import (
 	"scrinium.dev/engine/driver"
 )
 
-// CurrentSchemaVersion is the schema version this build writes.
-// A binary reading a descriptor with schema_version > CurrentSchemaVersion
-// must refuse to open the Store.
+// CurrentSchemaVersion is the schema version this build writes. A
+// descriptor with a higher schema_version must be refused.
 const CurrentSchemaVersion = 1
 
-// Path is the descriptor file location relative to the driver root.
+// Path is the L0 descriptor location relative to the driver root.
 const Path = "store.json"
 
-// Descriptor is the on-disk shape of store.json per §10.1.3.
-//
-// Holds Store identity and the cryptographic Paranoid. Projection
-// parameters (PathTopology, ManifestStorage, ManifestEncoding,
-// ManifestCrypto, ContentHasher, DeletionPolicyLock) live in the
-// system.config artifact pointed to by system.config/current
-// (§10.1.4) — not here.
+// BackupPath is the L1 shadow-copy descriptor location relative to
+// the driver root, written synchronously with L0 on every mutation.
+const BackupPath = ".store.backup.json"
+
+// Descriptor is the on-disk shape of store.json: Store identity and
+// the crypto material. Projection parameters live in system.config,
+// not here.
 type Descriptor struct {
 	StoreID       string     `json:"store_id"`
 	SchemaVersion int        `json:"schema_version"`
@@ -38,7 +37,7 @@ type Descriptor struct {
 // KDFParams describes the Argon2id parameters used to derive a KEK
 // from a passphrase. Present only when DEKEncrypted=true.
 type KDFParams struct {
-	Algorithm string `json:"algorithm"` // "argon2id"
+	Algorithm string `json:"algorithm"`
 	Time      uint32 `json:"time"`
 	Memory    uint32 `json:"memory"`
 	Threads   uint8  `json:"threads"`
@@ -72,7 +71,8 @@ func (d *Descriptor) Validate() error {
 	return nil
 }
 
-// Marshal serialises d to pretty-printed JSON with a trailing newline.
+// Marshal serialises d to pretty-printed JSON with a trailing
+// newline. Deterministic: equal descriptors marshal byte-identically.
 func Marshal(d *Descriptor) ([]byte, error) {
 	if err := d.Validate(); err != nil {
 		return nil, err
@@ -101,8 +101,8 @@ func Unmarshal(data []byte) (*Descriptor, error) {
 	return &d, nil
 }
 
-// Read pulls the descriptor through a Driver. Returns os.ErrNotExist
-// (via the driver) when no descriptor is present.
+// Read pulls the L0 descriptor through a Driver. Returns
+// os.ErrNotExist (via the driver) when none is present.
 func Read(ctx context.Context, drv driver.Driver) (*Descriptor, error) {
 	rc, err := drv.Get(ctx, Path)
 	if err != nil {
@@ -116,20 +116,12 @@ func Read(ctx context.Context, drv driver.Driver) (*Descriptor, error) {
 	return Unmarshal(data)
 }
 
-// Persist writes d to both replicas (L0 and L1), serialised once
-// and Put twice. This is the canonical way to put a descriptor
-// on disk: any production path that mutates the descriptor —
-// InitStore, Unlock, SetPassphrase, RotateKEK — goes through
-// Persist.
+// Persist writes d to both replicas (L0 and L1), serialised once and
+// Put twice. This is the canonical descriptor write; every mutation
+// path (InitStore, Unlock, SetPassphrase, RotateKEK) goes through it.
 //
-// Each individual Put is atomic; the pair is not. A crash
-// between the two leaves L1 stale and L0 fresh, which Reconcile
-// heals on the next OpenStore. The on-disk invariant after a
-// successful Persist is "L0 ⇄ L1, byte-identical".
-//
-// For repair-style writes that target one replica only — used
-// by Reconcile self-heal and by tests fabricating divergence —
-// see WriteReplica.
+// Each Put is atomic; the pair is not. A crash between the two leaves
+// L1 stale, which reconcile heals on the next OpenStore.
 func Persist(ctx context.Context, drv driver.Driver, d *Descriptor) error {
 	data, err := Marshal(d)
 	if err != nil {
@@ -144,13 +136,9 @@ func Persist(ctx context.Context, drv driver.Driver, d *Descriptor) error {
 	return nil
 }
 
-// WriteReplica writes d to one specific replica. Reserved for
-// repair flows: Reconcile self-heal needs to overwrite the
-// damaged side without touching the good one, and tests need to
-// fabricate L0/L1 divergence. Production code that simply wants
-// the descriptor on disk uses Persist.
-//
-// Driver.Put is atomic (temp + rename).
+// WriteReplica writes d to one specific replica. Used by reconcile
+// self-heal (to overwrite the damaged side without touching the good
+// one) and by tests fabricating divergence. Driver.Put is atomic.
 func WriteReplica(ctx context.Context, drv driver.Driver, d *Descriptor, r Replica) error {
 	data, err := Marshal(d)
 	if err != nil {
@@ -161,4 +149,39 @@ func WriteReplica(ctx context.Context, drv driver.Driver, d *Descriptor, r Repli
 		return fmt.Errorf("descriptor.WriteReplica: %w", err)
 	}
 	return drv.Put(ctx, path, bytes.NewReader(data))
+}
+
+// Replica identifies one of the two on-disk descriptor copies.
+type Replica int
+
+const (
+	// L0 is the primary descriptor (store.json).
+	L0 Replica = iota
+	// L1 is the shadow descriptor (.store.backup.json).
+	L1
+)
+
+// String returns the canonical short name ("L0" or "L1").
+func (r Replica) String() string {
+	switch r {
+	case L0:
+		return "L0"
+	case L1:
+		return "L1"
+	default:
+		return fmt.Sprintf("Replica(%d)", int(r))
+	}
+}
+
+// Path returns the replica's path relative to the driver root, or an
+// error for an out-of-range value (so a typo'd cast is loud).
+func (r Replica) Path() (string, error) {
+	switch r {
+	case L0:
+		return Path, nil
+	case L1:
+		return BackupPath, nil
+	default:
+		return "", fmt.Errorf("descriptor: unknown Replica %d", int(r))
+	}
 }

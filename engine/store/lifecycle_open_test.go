@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/engine/store/internal/reconcile"
 	"scrinium.dev/internal/testutil/driverfx"
 )
 
@@ -41,7 +42,7 @@ func TestOpenStore_HealsAbsentL0FromL1(t *testing.T) {
 	}
 
 	// L0 must be back on disk after heal.
-	if _, status, err := descriptor.ReadReplica(context.Background(), drv, descriptor.Path); err != nil || status != descriptor.ReplicaValid {
+	if _, status, err := reconcile.ReadReplica(context.Background(), drv, descriptor.Path); err != nil || status != reconcile.Valid {
 		t.Errorf("L0 should be healed: status=%v, err=%v", status, err)
 	}
 }
@@ -57,7 +58,7 @@ func TestOpenStore_HealsAbsentL1FromL0(t *testing.T) {
 
 	_ = storefx.OpenOn(t, drv)
 
-	if _, status, err := descriptor.ReadReplica(context.Background(), drv, descriptor.BackupPath); err != nil || status != descriptor.ReplicaValid {
+	if _, status, err := reconcile.ReadReplica(context.Background(), drv, descriptor.BackupPath); err != nil || status != reconcile.Valid {
 		t.Errorf("L1 should be healed: status=%v, err=%v", status, err)
 	}
 }
@@ -102,7 +103,7 @@ func TestOpenStore_SplitBrainRejected(t *testing.T) {
 	storefx.InitPlainOn(t, drv)
 	// Read L0, fabricate a divergent L1 with the same Sequence
 	// but a different StoreID.
-	d0, _, err := descriptor.ReadReplica(context.Background(), drv, descriptor.Path)
+	d0, _, err := reconcile.ReadReplica(context.Background(), drv, descriptor.Path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,6 +13,7 @@ import (
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
+	"scrinium.dev/engine/store/internal/reconcile"
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
 
@@ -108,12 +109,12 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 
 	// --- Read both descriptor replicas; reconcile ---
 
-	l0, l1, l0s, l1s, err := descriptor.ReadBoth(ctx, drv)
+	l0, l1, l0s, l1s, err := reconcile.ReadBoth(ctx, drv)
 	if err != nil {
 		// Non-recoverable I/O error from the Driver — propagate.
 		return nil, wrap("read descriptor", err)
 	}
-	rec, err := descriptor.Reconcile(l0, l0s, l1, l1s)
+	rec, err := reconcile.Reconcile(l0, l0s, l1, l1s)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		return nil, errs.ErrStoreNotFound

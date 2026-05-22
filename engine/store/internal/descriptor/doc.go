@@ -1,33 +1,18 @@
-// Package descriptor reads and writes the Store descriptor file
-// (store.json). Per §10.1.3 the descriptor carries Store identity
-// and the cryptographic Paranoid: StoreID, schema_version, sequence,
-// DEK, dek_encrypted, kdf_params.
+// Package descriptor reads, writes, and (de)serialises the Store
+// descriptor file: Store identity (StoreID, schema_version, sequence)
+// and the crypto material (DEK, dek_encrypted, kdf_params). Projection
+// parameters live in system.config, not here.
 //
-// Projection parameters (PathTopology, ManifestStorage, etc.) live
-// in the system.config artifact pointed to by system.config/current
-// (§10.1.4) — not here. The descriptor is silent about them.
+// The descriptor is stored as two byte-identical replicas, L0
+// (store.json) and L1 (.store.backup.json), written together by
+// Persist. The L2 cache (Cache, in cache.go) is a fast-start
+// projection in store_meta, never authoritative.
 //
-// Format: JSON, pretty-printed, with a trailing newline. The file
-// format is engine-private and may evolve through migrations behind
-// schema_version.
+// Replica reading and the heal/split-brain decision algorithm live in
+// the reconcile subpackage. This package owns the descriptor's shape,
+// (de)serialisation, checksum, equality, and the two-replica write;
+// reconcile owns the recovery decision over them.
 //
-// DAG: descriptor depends on driver.Driver, errs (sentinel
-// errors), and stdlib. No imports from core, domain, or any
-// consumer package.
-//
-// cache owns the L2 cached projection of the
-// on-disk descriptor (§10.1.5). The cache is a fast-start aid: with
-// it OpenStore can verify that the on-disk descriptor matches what
-// the previous session saw without re-parsing it. It is never
-// authoritative — a missing or corrupt cache is always recoverable
-// by re-reading the L0/L1 descriptor replicas.
-//
-// Split out of engine/core so the cache's persistence and
-// consistency logic lives in one home rather than half in
-// descriptor_cache.go and half in lifecycle.go (Refresh used to sit
-// in lifecycle.go, unrelated to the bootstrap/DEK concerns there).
-//
-// The package depends only on a narrow MetaStore (Get/SetMeta over
-// store_meta) and on core/internal/descriptor; it never touches
-// *store. core's StoreIndex satisfies MetaStore implicitly.
+// Depends only on driver.Driver, errs, and a narrow MetaStore. No
+// imports from coreapi, domain, or any consumer package.
 package descriptor

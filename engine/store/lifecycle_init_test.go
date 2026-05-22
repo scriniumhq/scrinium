@@ -15,6 +15,7 @@ import (
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/engine/store/internal/reconcile"
 	"scrinium.dev/engine/store/internal/recoverykit"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
@@ -904,11 +905,11 @@ func TestInitStore_WritesL1Replica(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	storefx.InitEncryptedOn(t, drv, "pw")
 
-	d, status, err := descriptor.ReadReplica(context.Background(), drv, descriptor.BackupPath)
+	d, status, err := reconcile.ReadReplica(context.Background(), drv, descriptor.BackupPath)
 	if err != nil {
 		t.Fatalf("ReadReplica L1: %v", err)
 	}
-	if status != descriptor.ReplicaValid {
+	if status != reconcile.Valid {
 		t.Errorf("L1 status: got %v, want ReplicaValid", status)
 	}
 	if !d.DEKEncrypted {
