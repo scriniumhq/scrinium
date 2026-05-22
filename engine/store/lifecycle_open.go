@@ -21,7 +21,7 @@ import (
 //
 // Behaviour:
 //  1. Read both descriptor replicas (L0 store.json, L1
-//     .store.backup.json) per §10.1.5 and reconcile them. If
+//     .store.backup.json) and reconcile them. If
 //     both are absent → errs.ErrStoreNotFound. If both are
 //     unrecoverable (corrupted, or one corrupted + one absent)
 //     → errs.ErrStoreCorrupted. If both are valid but content
@@ -52,23 +52,14 @@ import (
 //     configured PassphraseProvider with Reason="unlock",
 //     unwrap DEK, run Orphan Scan, transition to
 //     StateUnlocked.
-//     - DEKEncrypted=true without WithAutoUnlock: skip
-//     Orphan Scan (the index walk needs the DEK in M2.3+
-//     for Paranoid manifests; until then it would still
-//     succeed for Plain manifests, but we treat the state
-//     uniformly), transition to StateLocked. The next
+//     - DEKEncrypted=true without WithAutoUnlock: skip the
+//     Orphan Scan and transition to StateLocked. The next
 //     Store.Unlock call completes bootstrap.
 //
-// Sealed and Paranoid manifest crypto are still rejected
-// pending M2.3. The split between "encrypted DEK" (this pack)
-// and "encrypted manifests" (next milestone) is deliberate:
-// they are independent axes of the configuration and a Store
-// with a passphrase-protected DEK plus Plain manifests is a
+// The split between an encrypted DEK and encrypted manifests is
+// deliberate: they are independent axes of the configuration, and a
+// Store with a passphrase-protected DEK plus Plain manifests is a
 // useful intermediate.
-//
-// What does NOT happen yet (planned milestones in parens):
-//   - location.lock acquisition / lease model (M3.1).
-//   - StoreIndex schema cross-check against descriptor (M3.4).
 func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, error) {
 	if drv == nil {
 		return nil, errors.New("store.OpenStore: nil driver")

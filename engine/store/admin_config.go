@@ -11,15 +11,6 @@ import (
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
 
-// config_methods.go — every *store method that reads or mutates the
-// active StoreConfig, collected in one place: the in-memory readers
-// (Config, snapshotConfig) and the AdminStore operations
-// (UpdateConfig, ConfigHistory). The pure StoreConfig logic (defaults,
-// validation, persistence format) lives in the storeconfig
-// subpackage; this file is only the *store-bound surface that wraps
-// it. Companion to crypto_admin.go (the descriptor-crypto AdminStore
-// methods).
-
 // Config returns a snapshot of the active StoreConfig. A pure
 // in-memory reader, so it skips the enter* gate (like State /
 // Capabilities).
@@ -86,18 +77,15 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	return nil
 }
 
-// ConfigHistory returns every system.config snapshot, the active
-// one first, the rest sorted by CreatedAt descending. Snapshots
-// where the layout is not Inline are skipped — the format requires
-// inline storage for the config payload, anything else is
-// corruption (caller will hit it through other code paths).
+// ConfigHistory returns every system.config snapshot: the active one
+// first, the rest sorted by CreatedAt descending.
 //
-// The "active first" rule is per docs/4 §4.4: a rollback through
-// UpdateConfig produces a fresh snapshot whose CreatedAt is newer
-// than what is being rolled back to, and the disk pointer follows
-// the rollback. Sorting purely by time would put the "discarded"
-// version first; promoting the pointer's target keeps the result
-// honest about which config is in effect.
+// The "active first" rule matters because a rollback through
+// UpdateConfig produces a fresh snapshot whose CreatedAt is newer than
+// the version it rolls back to, while the disk pointer follows the
+// rollback. Sorting purely by time would put the discarded version
+// first; promoting the pointer's target keeps the result honest about
+// which config is in effect.
 func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
 	if err := s.enterRead(ctx); err != nil {
 		return nil, err
@@ -149,10 +137,9 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 		}
 	}
 	if currentIdx < 0 {
-		// Pointer points at an artifact WalkSystem did not yield.
-		// On a healthy Store this cannot happen — bootstrap reads
-		// the same pointer and would have refused. Treat as
-		// dangling and surface the standard error.
+		// Pointer points at an artifact the index did not yield. On a
+		// healthy Store this cannot happen — bootstrap reads the same
+		// pointer and would have refused. Surface the standard error.
 		return nil, errs.ErrDanglingConfigPointer
 	}
 

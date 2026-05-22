@@ -12,13 +12,6 @@ import (
 	"scrinium.dev/engine/store/internal/keyring"
 )
 
-// admin_crypto_impl.go — the AdminStore crypto surface in one file:
-// the public delegators (Unlock, ExportRecoveryKit, RotateKEK,
-// SetPassphrase), their multi-step implementations, commitDescriptor,
-// and the callProvider glue. The public methods are thin so the
-// AdminStore contract reads top-to-bottom; the bodies below hold the
-// descriptor + DEK + sequence-bump + Persist + cache mutations.
-
 // Unlock transitions an encrypted Store from Locked to Unlocked.
 // Idempotent in Unlocked.
 func (s *store) Unlock(ctx context.Context) error {
@@ -44,29 +37,16 @@ func (s *store) SetPassphrase(ctx context.Context) error {
 	return s.setPassphraseImpl(ctx)
 }
 
-// AdminStore crypto methods. The implementations live here
-// rather than in store_impl.go to keep crypto state mutations
-// (descriptor + dek + sequence bump + Persist + cache) in one
-// readable file.
+// Shared discipline for the crypto methods below:
+//   - crypto.mu guards s.crypto.desc / .dek / .provider for the whole
+//     of each operation; none is on a hot path, so serialising is fine.
+//   - stateMu is taken only briefly, for the state transition.
+//   - Every passphrase from callProvider is wiped immediately after the
+//     KEK is derived; KEKs are wiped inside the keyring helpers.
 //
-// Concurrency:
-//   - crypto.mu guards reads and writes of s.crypto.desc, s.crypto.dek,
-//     s.crypto.provider for the duration of every operation
-//     here. None of these methods is on a hot path; serialising
-//     them is fine.
-//   - stateMu is taken briefly when transitioning state.
-//
-// Multi-process caveat: between OpenStore and these calls,
-// another process holding the same Location can have rewritten
-// the descriptor. M2.2 has no lease (lands M3.1); concurrent
-// writers are out of scope. This implementation does NOT
-// re-read the descriptor from disk before mutation; one-process
-// usage is the only supported configuration.
-//
-// Passphrase hygiene: every passphrase byte slice obtained from
-// callProvider is wiped via aead.Wipe immediately after the KEK
-// has been derived. KEKs themselves are wiped inside wrapDEK and
-// unwrapDEK helpers; this file does not handle them directly.
+// Concurrent writers from another process sharing the Location are out
+// of scope: these methods do not re-read the descriptor before mutating
+// it, so single-process usage is the only supported configuration.
 
 // unlockEncrypted is the body of Store.Unlock for an encrypted
 // Store currently in StateLocked. It invokes the configured
@@ -180,9 +160,8 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 		return errs.ErrPassphraseAlreadySet
 	}
 	if len(s.crypto.dek) == 0 {
-		// Plain Store must have a plaintext DEK after InitStore
-		// per §3.1. If it doesn't, the open-path invariant is
-		// broken.
+		// A Plain Store must have a plaintext DEK after InitStore; if it
+		// doesn't, the open-path invariant is broken.
 		return fmt.Errorf("%w: Plain Store has no plaintext DEK", errs.ErrStoreCorrupted)
 	}
 

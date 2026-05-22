@@ -36,7 +36,7 @@ import (
 //     and passes it as a dependency. This keeps core free of any
 //     import dependency on index/* packages (DAG: core ← index).
 //  5. Generate a 32-byte DEK from crypto/rand. The DEK is
-//     generated unconditionally per §3.1; encryption can be
+//     generated unconditionally; encryption can be
 //     turned on later through SetPassphrase without re-keying.
 //  6. If WithPassphrase is configured, derive a KEK through
 //     Argon2id and wrap the DEK with AES-256-GCM. The wrapped
@@ -57,7 +57,7 @@ import (
 //
 // Recovery Kit:
 //   - nil for Plain-DEK Stores (no encryption to recover).
-//   - non-nil text bytes per §10.3 for encrypted Stores.
+//   - non-nil text bytes for encrypted Stores.
 //
 // Refusal cases:
 //   - ManifestCrypto != Plain without WithPassphrase →
@@ -132,7 +132,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	// --- Generate identity and DEK ---
 	//
 	// DEK is generated for every Store regardless of crypto
-	// configuration (§3.1). When WithPassphrase is set the DEK is
+	// configuration. When WithPassphrase is set the DEK is
 	// wrapped with the resulting KEK; otherwise it lives in the
 	// descriptor in plaintext. In both branches dek is the in-memory
 	// unwrapped value, kept alive on *store after construction. Its
@@ -199,7 +199,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 // with errs.ErrStoreAlreadyExists unless force is set; an unreadable one
 // refuses with errs.ErrStoreCorrupted unless force is set. Under force,
 // the well-known descriptor file is removed — blobs/ are left in place
-// for GC (purge wiring lands in M3).
+// for GC.
 func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit bool, wrap func(string, error) error) error {
 	existing, probeErr := descriptor.Read(ctx, drv)
 	switch {
@@ -231,7 +231,7 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 
 // persistInitState writes the descriptor (both replicas), refreshes the
 // L2 cache, and persists the active StoreConfig as system.config. A hash
-// registry is required for the config write (per §10.1.4 system.config
+// registry is required for the config write (system.config
 // must be readable before the Store opens for users). The descriptor and
 // cache are written first so a config-write failure still leaves a
 // readable Store identity behind.
