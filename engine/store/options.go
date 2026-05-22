@@ -43,12 +43,8 @@ type PassphraseProvider func(ctx context.Context, hint PassphraseHint) ([]byte, 
 // irrelevant.
 type StoreOption func(*storeOptions)
 
-// storeOptions is the internal aggregate of options. Not exported.
-// Its concrete content is filled in starting in M1+; for M0 it is a
-// placeholder for the constructor signatures.
+// storeOptions is the resolved aggregate of all StoreOptions.
 type storeOptions struct {
-	// Fields are populated in M1+ as the corresponding With*
-	// functions are wired up.
 	forceReinit   bool
 	purgeOnReinit bool
 	cfg           *domain.StoreConfig

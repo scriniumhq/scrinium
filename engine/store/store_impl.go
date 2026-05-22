@@ -6,7 +6,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/event"
-	index2 "scrinium.dev/engine/index"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
 )
 
@@ -34,7 +34,7 @@ type store struct {
 	// Identity and dependencies.
 	storeID string
 	drv     driver.Driver
-	index   index2.StoreIndex
+	index   index.StoreIndex
 	pub     event.Publisher
 
 	// activeConfig is the StoreConfig in effect for new operations,
@@ -61,9 +61,8 @@ type store struct {
 	crypto cryptoState
 }
 
-// System returns the SystemStore facade. Part of AdminStore; reached
-// only through AdminStore, so DataStore consumers cannot see system
-// state (ADR-57).
+// System returns the SystemStore facade. Reached only through
+// AdminStore, so DataStore consumers cannot see system state.
 func (s *store) System() SystemStore { return s.system }
 
 var _ Store = (*store)(nil)

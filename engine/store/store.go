@@ -62,9 +62,8 @@ type DataStore interface {
 	// Iteration and introspection.
 
 	// Walk iterates over user manifests. namespace = "*" — every user
-	// namespace; an empty string — only the default one.
-	// system.* is unreachable through Walk; system artifacts live
-	// behind AdminStore.System() per ADR-57.
+	// namespace; an empty string — only the default one. system.*
+	// artifacts are unreachable here; they live behind System().
 	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
 
 	// Capacity returns aggregated storage metrics.
@@ -120,12 +119,7 @@ type AdminStore interface {
 
 	// UpdateConfig updates the mutable parameters of StoreConfig.
 	// Immutable parameters cannot be changed — errs.ErrConfigMismatch.
-	//
-	// Not yet wired: returns errs.ErrNotImplemented in M2. The
-	// implementation lands with the configuration-history work in
-	// M3.x — by then a new system.config artifact is written, the
-	// pointer in system.config/current is bumped atomically, and
-	// the active config in memory swaps without restart.
+	// Not yet wired: returns errs.ErrNotImplemented.
 	UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error
 
 	// Config returns a snapshot of the active StoreConfig — the
@@ -160,17 +154,15 @@ type AdminStore interface {
 	// graceful-shutdown path.
 	Close() error
 
-	// System returns the facade for engine-internal service
-	// artifacts (configuration, agent cursors, index snapshots,
-	// etc.). Reached only through AdminStore, so DataStore
-	// consumers cannot see system state. See ADR-57 and
-	// docs/3 Reference/01 Core/01 Types.md.
+	// System returns the facade for engine-internal service artifacts
+	// (configuration, agent cursors, index snapshots, …). Reached only
+	// through AdminStore, so DataStore consumers cannot see system state.
 	System() SystemStore
 }
 
-// SystemStore — facade for engine-internal service artifacts. See
-// the file header and ADR-57 for the model; documented contract in
-// docs/3. Reference/01 Core/01 Types.md.
+// SystemStore is the facade for engine-internal service artifacts:
+// versioned configuration, agent cursors, index snapshots, and the
+// like, each addressed by a slash-separated name.
 type SystemStore interface {
 	// Put writes a system artifact under the given name. If the
 	// name already has an artifact, the predecessor is dropped
@@ -192,19 +184,15 @@ type SystemStore interface {
 }
 
 // SystemPutConfig is the resolved set of options for a single
-// SystemStore.Put. Public because it crosses the package boundary:
-// the SystemStore contract lives here in coreapi, while option
-// constructors (WithoutIndex) live in the core implementation and
-// populate this struct through SystemPutOption.
+// SystemStore.Put, populated by SystemPutOption appliers.
 type SystemPutConfig struct {
 	// SkipIndex skips indexing the manifest in StoreIndex.
 	SkipIndex bool
 }
 
-// SystemPutOption configures a single SystemStore.Put. An applier
-// over SystemPutConfig rather than a func(*private) so the contract
-// is self-contained in coreapi and option constructors can live in
-// any package that implements it.
+// SystemPutOption configures a single SystemStore.Put. An applier over
+// the exported SystemPutConfig (rather than a func over a private type)
+// so option constructors can live in any package.
 type SystemPutOption interface {
 	ApplySystemPut(*SystemPutConfig)
 }
