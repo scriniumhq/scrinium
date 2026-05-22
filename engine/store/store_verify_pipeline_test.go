@@ -14,9 +14,9 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/internal/testutil/storefx"
-	scriniumzstd "scrinium.dev/engine/plugin/compress/zstd"
-	"scrinium.dev/engine/plugin/crypto/aesgcm"
-	"scrinium.dev/engine/plugins"
+	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/engine/pipeline/stage/aesgcm"
+	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
@@ -29,7 +29,7 @@ import (
 // root for on-disk inspection.
 func initPipelineStore(
 	t *testing.T,
-	reg coreapi.TransformerRegistry,
+	reg pipeline.TransformerRegistry,
 	pipeline []string,
 	extra ...store.StoreOption,
 ) (coreapi.Store, string) {
@@ -60,7 +60,7 @@ func pipelineBlobPath(t *testing.T, s coreapi.Store, root string, id domain.Arti
 // --- Happy path: pipeline-bearing Verify succeeds ---
 
 func TestVerify_Pipeline_Zstd_Succeeds(t *testing.T) {
-	reg := plugins.NewTransformerRegistry().
+	reg := pipeline.NewTransformerRegistry().
 		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
 	s, _ := initPipelineStore(t, reg, []string{"zstd"})
 
@@ -88,7 +88,7 @@ func TestVerify_Pipeline_AESGCM_Succeeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("aesgcm.New: %v", err)
 	}
-	reg := plugins.NewTransformerRegistry().Register("aes-gcm", aesFactory)
+	reg := pipeline.NewTransformerRegistry().Register("aes-gcm", aesFactory)
 	s, _ := initPipelineStore(t, reg, []string{"aes-gcm"})
 
 	original := []byte("encrypted blob to verify")
@@ -109,7 +109,7 @@ func TestVerify_Pipeline_ZstdThenAESGCM_Succeeds(t *testing.T) {
 		dek[i] = byte(i)
 	}
 	aesFactory, _ := aesgcm.New(dek)
-	reg := plugins.NewTransformerRegistry().
+	reg := pipeline.NewTransformerRegistry().
 		Register("zstd", scriniumzstd.New(scriniumzstd.Options{})).
 		Register("aes-gcm", aesFactory)
 	s, _ := initPipelineStore(t, reg, []string{"zstd", "aes-gcm"})
@@ -143,7 +143,7 @@ func TestVerify_Pipeline_AESGCM_TamperedCiphertext_ReturnsCorruptedBlob(t *testi
 		dek[i] = byte(i)
 	}
 	aesFactory, _ := aesgcm.New(dek)
-	reg := plugins.NewTransformerRegistry().Register("aes-gcm", aesFactory)
+	reg := pipeline.NewTransformerRegistry().Register("aes-gcm", aesFactory)
 	s, root := initPipelineStore(t, reg, []string{"aes-gcm"},
 		store.WithPublisher(bus))
 
@@ -194,7 +194,7 @@ func TestVerify_Pipeline_Zstd_TamperedCiphertext_ReturnsCorruptedBlob(t *testing
 	scrub := newScrubCapture()
 	bus.Subscribe(scrub.handle)
 
-	reg := plugins.NewTransformerRegistry().
+	reg := pipeline.NewTransformerRegistry().
 		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
 	s, root := initPipelineStore(t, reg, []string{"zstd"},
 		store.WithPublisher(bus))
@@ -235,7 +235,7 @@ func TestVerify_Pipeline_Zstd_TamperedCiphertext_ReturnsCorruptedBlob(t *testing
 // ErrCorruptedBlob the same way the non-pipeline path does.
 
 func TestVerify_Pipeline_MissingBlob_ReturnsCorruptedBlob(t *testing.T) {
-	reg := plugins.NewTransformerRegistry().
+	reg := pipeline.NewTransformerRegistry().
 		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
 	s, root := initPipelineStore(t, reg, []string{"zstd"})
 
@@ -266,7 +266,7 @@ func TestVerify_Pipeline_MissingBlob_ReturnsCorruptedBlob(t *testing.T) {
 // (different pipeline state, different ordering).
 
 func TestVerify_Pipeline_ConsistentWithGet(t *testing.T) {
-	reg := plugins.NewTransformerRegistry().
+	reg := pipeline.NewTransformerRegistry().
 		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
 	s, _ := initPipelineStore(t, reg, []string{"zstd"})
 

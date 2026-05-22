@@ -6,7 +6,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 )
 
@@ -57,7 +57,7 @@ func WrapDEK(dek, passphrase []byte, cost domain.KDFParams) ([]byte, descriptor.
 	}
 
 	kek := deriveKEK(passphrase, salt, cost.Time, cost.Memory, cost.Threads)
-	defer manifestcrypto.Wipe(kek)
+	defer aead.Wipe(kek)
 
 	wrapped, err := wrapKEK(dek, kek)
 	if err != nil {
@@ -102,7 +102,7 @@ func UnwrapDEK(wrappedDEK []byte, params descriptor.KDFParams, passphrase []byte
 	}
 
 	kek := deriveKEK(passphrase, params.Salt, params.Time, params.Memory, params.Threads)
-	defer manifestcrypto.Wipe(kek)
+	defer aead.Wipe(kek)
 
 	dek, err := unwrapKEK(wrappedDEK, kek)
 	if err != nil {

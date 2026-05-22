@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/internal/blobpath"
 	"scrinium.dev/engine/internal/manifestcodec"
-	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/pipeline"
 )
 
 // Put records an artifact in the Store. Two blob-placement paths
@@ -56,7 +56,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	// extended at runtime (historical-compat use-case from docs
 	// §7.3) and we want errors at the call that needs the algo,
 	// not at startup.
-	if err := s.validatePipelineAlgos(cfg.Pipeline); err != nil {
+	if err := s.pipelineRunner().ValidateAlgos(cfg.Pipeline); err != nil {
 		return "", fmt.Errorf("store.Put: %w", err)
 	}
 
@@ -224,7 +224,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		dekSnapshot = append([]byte{}, s.dek...)
 		keyID = writeKeyID
 		s.cryptoMu.Unlock()
-		defer manifestcrypto.Wipe(dekSnapshot)
+		defer aead.Wipe(dekSnapshot)
 	}
 
 	artifactID, manifestBytes, signedManifest, err := manifestcodec.ComputeArtifactID(
@@ -299,7 +299,7 @@ func (s *store) streamThroughPipeline(
 ) {
 	stagingPath := s.makeStagingPath()
 
-	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, coreapi.EncodeContext{
+	streamReader, pp, err := s.pipelineRunner().BuildPut(hashAlgo, input, cfg.Pipeline, pipeline.EncodeContext{
 		KeyID:          writeKeyID,
 		EncryptedDedup: cfg.EncryptedDedup, // ADR-58: IV mode for the crypto stage
 		SegmentSize:    cfg.SegmentSize,    // ADR-59: segmented AEAD frame size
@@ -319,12 +319,12 @@ func (s *store) streamThroughPipeline(
 			fmt.Errorf("store.Put: stage payload: %w", err)
 	}
 
-	contentHash, blobRef, pipelineStages = pp.finalize(s.hashes.Format)
+	contentHash, blobRef, pipelineStages = pp.Finalize()
 
 	// counter.n now equals the byte count of the FINAL stream
 	// (post-Pipeline). originalSize must come from the
 	// pre-Pipeline tee — see comment below.
-	originalSize = pp.contentBytesRead()
+	originalSize = pp.ContentBytesRead()
 
 	commitRef, addr, err := s.commitBlob(ctx, cfg, stagingPath, contentHash,
 		originalSize, blobRef, domain.CryptoIdentityOf(pipelineStages))
@@ -433,7 +433,7 @@ func (s *store) resolveWriteKeyID(namespace string) string {
 	if r == nil {
 		return ""
 	}
-	return r.ResolveWriteKey(coreapi.KeyContext{Namespace: namespace})
+	return r.ResolveWriteKey(pipeline.KeyContext{Namespace: namespace})
 }
 
 // validatePutInputs covers the cheap, side-effect-free checks that

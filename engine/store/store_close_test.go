@@ -8,10 +8,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/plugins"
+	"scrinium.dev/engine/pipeline"
 )
 
 // --- Test scaffolding ---
@@ -23,9 +22,9 @@ type fakeKeyResolver struct {
 	closed atomic.Bool
 }
 
-func (r *fakeKeyResolver) GetKeys(string) ([][]byte, error)          { return nil, nil }
-func (r *fakeKeyResolver) ResolveWriteKey(coreapi.KeyContext) string { return "" }
-func (r *fakeKeyResolver) close()                                    { r.closed.Store(true) }
+func (r *fakeKeyResolver) GetKeys(string) ([][]byte, error)           { return nil, nil }
+func (r *fakeKeyResolver) ResolveWriteKey(pipeline.KeyContext) string { return "" }
+func (r *fakeKeyResolver) close()                                     { r.closed.Store(true) }
 
 // newTestStore builds a minimal *store sufficient to exercise
 // Close. It does not stand up the Driver, Index, descriptor, or
@@ -176,7 +175,7 @@ func TestClose_OperationsReturnErrClosed(t *testing.T) {
 
 func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 	dek := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	resolver := plugins.NewStaticKeyResolver(dek)
+	resolver := pipeline.NewStaticKeyResolver(dek)
 
 	s := &store{
 		state:       domain.StateUnlocked,
@@ -235,7 +234,7 @@ func TestClose_NilKeyResolver_NoPanic(t *testing.T) {
 // to catch ordering bugs.
 func TestClose_RaceWithGetKeys(t *testing.T) {
 	dek := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	resolver := plugins.NewStaticKeyResolver(dek)
+	resolver := pipeline.NewStaticKeyResolver(dek)
 
 	s := &store{
 		state:       domain.StateUnlocked,

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/plugins"
+	"scrinium.dev/engine/pipeline"
 )
 
 // crypto.go — store-side crypto glue that cannot live in the
@@ -22,7 +22,7 @@ import (
 // can branch with errors.Is.
 //
 // The returned slice is owned by the caller and MUST be wiped with
-// manifestcrypto.Wipe once the KEK has been derived. callProvider
+// aead.Wipe once the KEK has been derived. callProvider
 // does not retain a reference.
 func callProvider(ctx context.Context, p PassphraseProvider, hint PassphraseHint) ([]byte, error) {
 	if p == nil {
@@ -55,5 +55,5 @@ func (s *store) promoteKeyResolverIfDefault() {
 	if len(s.dek) == 0 {
 		return
 	}
-	s.keyResolver = plugins.NewStaticKeyResolver(s.dek)
+	s.keyResolver = pipeline.NewStaticKeyResolver(s.dek)
 }

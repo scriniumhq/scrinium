@@ -14,8 +14,8 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
-	"scrinium.dev/engine/plugin/crypto/aesgcm"
-	"scrinium.dev/engine/plugins"
+	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/engine/pipeline/stage/aesgcm"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
@@ -292,7 +292,7 @@ func TestPut_EncryptedBlobsDoNotDedup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("aesgcm.New: %v", err)
 	}
-	reg := plugins.NewTransformerRegistry().Register("aes-gcm", aesFactory)
+	reg := pipeline.NewTransformerRegistry().Register("aes-gcm", aesFactory)
 
 	cfg := domain.StoreConfig{Pipeline: []string{"aes-gcm"}}
 	drv := driverfx.LocalFS(t)
@@ -374,7 +374,7 @@ type fixedKeyIDResolver struct {
 func (r *fixedKeyIDResolver) GetKeys(_ string) ([][]byte, error) {
 	return [][]byte{append([]byte{}, r.dek...)}, nil
 }
-func (r *fixedKeyIDResolver) ResolveWriteKey(coreapi.KeyContext) string { return r.keyID }
+func (r *fixedKeyIDResolver) ResolveWriteKey(pipeline.KeyContext) string { return r.keyID }
 
 // TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest verifies
 // the §3.4 invariant: ArtifactID = hash(file bytes including
@@ -491,7 +491,7 @@ type alwaysFailingResolver struct{}
 func (alwaysFailingResolver) GetKeys(_ string) ([][]byte, error) {
 	return nil, errors.New("alwaysFailingResolver: should not be called")
 }
-func (alwaysFailingResolver) ResolveWriteKey(coreapi.KeyContext) string { return "" }
+func (alwaysFailingResolver) ResolveWriteKey(pipeline.KeyContext) string { return "" }
 
 // TestWalk_ParanoidStoreWalksWithoutDecryption verifies the §3.5
 // invariant: in Paranoid mode, Namespace is encrypted inside the

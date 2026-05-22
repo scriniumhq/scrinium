@@ -21,7 +21,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/internal/aead"
 )
 
 // AAD tags for the three Sealed sub-blocks. Concatenated with
@@ -129,7 +129,7 @@ func DecodeFileEncrypted(data []byte, keys KeyProvider) (domain.Manifest, error)
 	// for the GC to eventually collect.
 	defer func() {
 		for _, k := range candidates {
-			manifestcrypto.Wipe(k)
+			aead.Wipe(k)
 		}
 	}()
 
@@ -244,7 +244,7 @@ func decodeSealed(body []byte, candidates [][]byte, header []byte) (domain.Manif
 // sealBlock encrypts plaintext with the given DEK and a
 // per-block AAD derived from the file header and a block tag.
 func sealBlock(plaintext, dek, header, tag []byte) ([]byte, error) {
-	return manifestcrypto.Seal(plaintext, dek, blockAAD(header, tag))
+	return sealBody(plaintext, dek, blockAAD(header, tag))
 }
 
 // openSealedField decodes a JSON-string-wrapped base64
@@ -294,7 +294,7 @@ func encodeParanoid(m domain.Manifest, dek, aad []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ciphertext, err := manifestcrypto.Seal(plain, dek, aad)
+	ciphertext, err := sealBody(plain, dek, aad)
 	if err != nil {
 		return nil, fmt.Errorf("manifestcodec: seal Paranoid: %w", err)
 	}
@@ -314,7 +314,7 @@ func decodeParanoid(body []byte, candidates [][]byte, aad []byte) (domain.Manife
 // degenerate empty-slice case — surfaces ErrDecryptionFailed.
 func tryDecrypt(ciphertext []byte, candidates [][]byte, aad []byte) ([]byte, error) {
 	for _, dek := range candidates {
-		plaintext, err := manifestcrypto.Open(ciphertext, dek, aad)
+		plaintext, err := openBody(ciphertext, dek, aad)
 		if err == nil {
 			return plaintext, nil
 		}

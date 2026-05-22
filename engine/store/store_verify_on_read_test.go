@@ -3,29 +3,28 @@ package store
 import (
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/plugins"
+	"scrinium.dev/engine/pipeline"
 )
 
 // fakePlainFactory is a TransformerFactory that does NOT
 // implement AEADCapable — stands in for a compressor like zstd.
 type fakePlainFactory struct{}
 
-func (fakePlainFactory) NewEncoder(ctx coreapi.EncodeContext) coreapi.Encoder  { panic("unused") }
-func (fakePlainFactory) NewDecoder(stage domain.PipelineStage) coreapi.Decoder { panic("unused") }
+func (fakePlainFactory) NewEncoder(ctx pipeline.EncodeContext) pipeline.Encoder { panic("unused") }
+func (fakePlainFactory) NewDecoder(stage domain.PipelineStage) pipeline.Decoder { panic("unused") }
 
 // fakeAEADFactory implements AEADCapable — stands in for aesgcm.
 type fakeAEADFactory struct{}
 
-func (fakeAEADFactory) NewEncoder(ctx coreapi.EncodeContext) coreapi.Encoder  { panic("unused") }
-func (fakeAEADFactory) NewDecoder(stage domain.PipelineStage) coreapi.Decoder { panic("unused") }
-func (fakeAEADFactory) AEAD()                                                 {}
+func (fakeAEADFactory) NewEncoder(ctx pipeline.EncodeContext) pipeline.Encoder { panic("unused") }
+func (fakeAEADFactory) NewDecoder(stage domain.PipelineStage) pipeline.Decoder { panic("unused") }
+func (fakeAEADFactory) AEAD()                                                  {}
 
-func newTestRegistry(t *testing.T) coreapi.TransformerRegistry {
+func newTestRegistry(t *testing.T) pipeline.TransformerRegistry {
 	t.Helper()
-	return plugins.NewTransformerRegistry().
+	return pipeline.NewTransformerRegistry().
 		Register("zstd", fakePlainFactory{}).
 		Register("aes-gcm", fakeAEADFactory{})
 }
