@@ -508,16 +508,21 @@ func TestKeyResolverPromotion_OnInitStore(t *testing.T) {
 	}
 }
 
-// TestRotateKEK_NewPassphraseProviderError covers the failure path
-// where the provider succeeds for the current-passphrase prompts
-// (AutoUnlock + the current-pass verify) but errors on the new
-// passphrase. RotateKEK must surface that error and leave the Store
-// exactly as it was — descriptor unchanged, owner not locked out.
+// TestRotateKEK_NewPassphraseProviderError covers the failure path where
+// the provider succeeds for the current-passphrase prompts (AutoUnlock +
+// the current-pass verify) but errors on the new passphrase. RotateKEK
+// must surface that provider error, not mask it.
 //
 // Regression guard: the new-pass callProvider error used to be
-// overwritten by WrapDEK's err, so the rotation silently wrapped the
-// DEK under an empty passphrase, bumped Sequence, and locked the owner
-// out. See store.RotateKEK "new passphrase" check.
+// overwritten by WrapDEK's err. callProvider returns nil on error, so
+// WrapDEK then saw an empty passphrase and returned ErrPassphraseRequired
+// — swallowing the provider's real failure and pointing the operator at
+// the wrong cause. (No lockout: WrapDEK's empty-passphrase guard fires
+// before commitDescriptor, so the descriptor is never rewritten.) The
+// fix adds the missing error check; see store.RotateKEK "new passphrase".
+//
+// Unfixed  → ErrPassphraseRequired (masked).
+// Fixed    → ErrPassphraseProvider (real cause surfaces).
 func TestRotateKEK_NewPassphraseProviderError(t *testing.T) {
 	ctx := context.Background()
 	drv := driverfx.LocalFS(t)
@@ -531,9 +536,9 @@ func TestRotateKEK_NewPassphraseProviderError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Provider answers every "unlock" prompt (AutoUnlock, then the
-	// current-pass verify inside RotateKEK) with the real passphrase,
-	// but fails the "kek_rotation" prompt for the new one.
+	// Answers every "unlock" prompt (AutoUnlock, then the current-pass
+	// verify inside RotateKEK) with the real passphrase, but fails the
+	// "kek_rotation" prompt for the new one.
 	provider := func(_ context.Context, h store.PassphraseHint) ([]byte, error) {
 		if h.Reason == "kek_rotation" {
 			return nil, errors.New("provider unavailable")
@@ -556,17 +561,23 @@ func TestRotateKEK_NewPassphraseProviderError(t *testing.T) {
 		t.Fatalf("read descriptor before rotation: %v", err)
 	}
 
-	// 1. The provider error must surface, classified as a provider
-	//    failure (callProvider wraps any provider error with
-	//    ErrPassphraseProvider).
 	rotErr := s.RotateKEK(ctx)
+
+	// 1. The provider's real failure must surface (callProvider wraps
+	//    any provider error with ErrPassphraseProvider).
 	if !errors.Is(rotErr, errs.ErrPassphraseProvider) {
-		t.Fatalf("RotateKEK: want ErrPassphraseProvider, got %v", rotErr)
+		t.Errorf("RotateKEK: want ErrPassphraseProvider, got %v", rotErr)
+	}
+	// 2. It must NOT be masked as ErrPassphraseRequired — that is the
+	//    exact regression: an unchecked provider error degrades into
+	//    WrapDEK's empty-passphrase refusal.
+	if errors.Is(rotErr, errs.ErrPassphraseRequired) {
+		t.Errorf("RotateKEK: provider error masked as ErrPassphraseRequired: %v", rotErr)
 	}
 
-	// 2. The descriptor must not have been rewritten — a failed
-	//    rotation leaves on-disk crypto state untouched so a retry
-	//    starts from the same point.
+	// 3. No descriptor rewrite — a failed rotation leaves on-disk crypto
+	//    state untouched (holds with or without the fix; documents the
+	//    no-lockout invariant).
 	descAfter, err := descriptor.Read(ctx, drv)
 	if err != nil {
 		t.Fatalf("read descriptor after rotation: %v", err)
@@ -576,9 +587,7 @@ func TestRotateKEK_NewPassphraseProviderError(t *testing.T) {
 			descBefore.Sequence, descAfter.Sequence)
 	}
 
-	// 3. The owner must still be able to open with the original
-	//    passphrase. This is the real-world consequence of the bug:
-	//    a botched rotation must never lock the user out.
+	// 4. The owner can still open with the original passphrase.
 	if _, err := store.OpenStore(ctx, drv,
 		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithAutoUnlock(),

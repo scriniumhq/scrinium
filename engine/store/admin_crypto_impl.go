@@ -12,6 +12,38 @@ import (
 	"scrinium.dev/engine/store/internal/keyring"
 )
 
+// admin_crypto_impl.go — the AdminStore crypto surface in one file:
+// the public delegators (Unlock, ExportRecoveryKit, RotateKEK,
+// SetPassphrase), their multi-step implementations, commitDescriptor,
+// and the callProvider glue. The public methods are thin so the
+// AdminStore contract reads top-to-bottom; the bodies below hold the
+// descriptor + DEK + sequence-bump + Persist + cache mutations.
+
+// Unlock transitions an encrypted Store from Locked to Unlocked.
+// Idempotent in Unlocked.
+func (s *store) Unlock(ctx context.Context) error {
+	return s.unlockEncrypted(ctx)
+}
+
+// ExportRecoveryKit returns the current Recovery Kit. Available in
+// Unlocked and Degraded.
+func (s *store) ExportRecoveryKit(ctx context.Context) ([]byte, error) {
+	return s.exportRecoveryKitImpl(ctx)
+}
+
+// RotateKEK re-wraps the DEK under a new KEK. On-disk data is not
+// rewritten; the prior Recovery Kit is invalidated.
+func (s *store) RotateKEK(ctx context.Context) error {
+	return s.rotateKEKImpl(ctx)
+}
+
+// SetPassphrase enables encryption on a Store initialised with a
+// plaintext DEK. Refuses with errs.ErrPassphraseAlreadySet when the
+// DEK is already wrapped — use RotateKEK then.
+func (s *store) SetPassphrase(ctx context.Context) error {
+	return s.setPassphraseImpl(ctx)
+}
+
 // AdminStore crypto methods. The implementations live here
 // rather than in store_impl.go to keep crypto state mutations
 // (descriptor + dek + sequence bump + Persist + cache) in one
@@ -268,11 +300,13 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	})
 
 	if err != nil {
-		// Without this guard the provider error is silently
-		// overwritten by WrapDEK's err below, and the rotation
-		// proceeds to wrap the DEK under an empty/garbage
-		// passphrase and persist it — locking the owner out.
-		// Mirror the first-half "current passphrase" check.
+		// callProvider returns nil on error, so without this guard the
+		// WrapDEK below sees an empty passphrase and returns
+		// ErrPassphraseRequired, masking the provider's real failure
+		// and pointing the operator at the wrong cause. No descriptor
+		// is written (WrapDEK fails before commitDescriptor), so this
+		// is an error-contract/diagnostics bug, not a lockout. Mirror
+		// the first-half "current passphrase" check.
 		return fmt.Errorf("store.RotateKEK: new passphrase: %w", err)
 	}
 
@@ -358,4 +392,27 @@ func (s *store) commitDescriptor(ctx context.Context, next *descriptor.Descripto
 	}
 	s.crypto.desc = next
 	return nil
+}
+
+// callProvider invokes the configured PassphraseProvider with the
+// given hint, classifying its error returns. A nil provider
+// surfaces ErrPassphraseRequired; a provider that returns an error
+// gets that error wrapped with ErrPassphraseProvider so callers
+// can branch with errors.Is.
+//
+// The returned slice is owned by the caller and MUST be wiped with
+// aead.Wipe once the KEK has been derived. callProvider
+// does not retain a reference.
+func callProvider(ctx context.Context, p PassphraseProvider, hint PassphraseHint) ([]byte, error) {
+	if p == nil {
+		return nil, errs.ErrPassphraseRequired
+	}
+	pass, err := p(ctx, hint)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", errs.ErrPassphraseProvider, err)
+	}
+	if len(pass) == 0 {
+		return nil, errs.ErrPassphraseRequired
+	}
+	return pass, nil
 }

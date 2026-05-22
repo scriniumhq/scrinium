@@ -6,6 +6,7 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/systemstore"
 )
@@ -67,3 +68,12 @@ type store struct {
 func (s *store) System() coreapi.SystemStore { return s.system }
 
 var _ coreapi.Store = (*store)(nil)
+
+// publish emits an event when a Publisher is configured. Cheap when
+// nil — the common case for tests and minimal-stack hosts.
+func (s *store) publish(typ string, payload any) {
+	if s.pub == nil {
+		return
+	}
+	s.pub.Publish(event.Event{Type: typ, Payload: payload})
+}
