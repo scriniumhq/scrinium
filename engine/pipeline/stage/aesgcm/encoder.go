@@ -5,8 +5,8 @@ import (
 	"errors"
 	"io"
 
-	"scrinium.dev/engine/internal/segaead"
 	"scrinium.dev/engine/pipeline"
+	segaead2 "scrinium.dev/engine/pipeline/internal/segaead"
 )
 
 // encoder is the per-operation pinned-DEK Encoder. It delegates the
@@ -17,11 +17,11 @@ import (
 type encoder struct {
 	gcm     cipher.AEAD
 	dek     []byte // HMAC key for convergent IV derivation
-	mode    segaead.IVMode
+	mode    segaead2.IVMode
 	segSize int
 	keyID   string // empty for pinned-DEK
 
-	sealed  *segaead.SealReader
+	sealed  *segaead2.SealReader
 	started bool
 }
 
@@ -31,7 +31,7 @@ func (e *encoder) Transform(r io.Reader) io.Reader {
 	}
 	e.started = true
 
-	sr, err := segaead.Seal(r, segaead.SealParams{
+	sr, err := segaead2.Seal(r, segaead2.SealParams{
 		AEAD:        e.gcm,
 		Mode:        e.mode,
 		DEK:         e.dek,

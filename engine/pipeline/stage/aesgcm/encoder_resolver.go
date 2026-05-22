@@ -4,8 +4,8 @@ import (
 	"errors"
 	"io"
 
-	"scrinium.dev/engine/internal/segaead"
 	"scrinium.dev/engine/pipeline"
+	segaead2 "scrinium.dev/engine/pipeline/internal/segaead"
 )
 
 // resolverEncoder is the per-operation Encoder for the
@@ -19,10 +19,10 @@ import (
 type resolverEncoder struct {
 	resolver pipeline.KeyResolver
 	keyID    string // chosen by the engine, fixed at construction
-	mode     segaead.IVMode
+	mode     segaead2.IVMode
 	segSize  int
 
-	sealed  *segaead.SealReader
+	sealed  *segaead2.SealReader
 	started bool
 }
 
@@ -46,7 +46,7 @@ func (e *resolverEncoder) Transform(r io.Reader) io.Reader {
 		return errReader{err: err}
 	}
 
-	sr, err := segaead.Seal(r, segaead.SealParams{
+	sr, err := segaead2.Seal(r, segaead2.SealParams{
 		AEAD:        aead,
 		Mode:        e.mode,
 		DEK:         dek,

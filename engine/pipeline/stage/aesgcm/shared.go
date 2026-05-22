@@ -6,7 +6,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/segaead"
+	"scrinium.dev/engine/pipeline/internal/segaead"
 )
 
 // shared.go — small helpers common to the pinned-DEK and

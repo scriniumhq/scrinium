@@ -3,8 +3,8 @@ package aesgcm
 import (
 	"io"
 
-	"scrinium.dev/engine/internal/segaead"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/engine/pipeline/internal/segaead"
 )
 
 // resolverDecoder is the per-operation Decoder for the

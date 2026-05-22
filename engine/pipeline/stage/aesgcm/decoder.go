@@ -4,8 +4,8 @@ import (
 	"crypto/cipher"
 	"io"
 
-	"scrinium.dev/engine/internal/segaead"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/engine/pipeline/internal/segaead"
 )
 
 // decoder is the per-operation pinned-DEK Decoder. It reads the blob

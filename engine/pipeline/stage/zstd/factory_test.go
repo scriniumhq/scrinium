@@ -10,7 +10,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/pipeline"
-	scriniumzstd "scrinium.dev/engine/plugin/compress/zstd"
+	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"
 )
 
 // roundTrip is the property under test: Decoder(Encoder(x)) == x

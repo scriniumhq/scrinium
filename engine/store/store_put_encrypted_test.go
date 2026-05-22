@@ -15,7 +15,7 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/plugin/crypto/aesgcm"
+	"scrinium.dev/engine/pipeline/stage/aesgcm"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
