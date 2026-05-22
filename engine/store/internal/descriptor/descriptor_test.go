@@ -10,26 +10,27 @@ import (
 	"scrinium.dev/internal/testutil/driverfx"
 )
 
-func validDescriptor() *Descriptor {
+// validDescriptor returns a descriptor with one of every field
+// set, matching what Persist would produce post-InitStore.
+func validDescriptor(t *testing.T) *Descriptor {
+	t.Helper()
 	return &Descriptor{
 		StoreID:       "11111111-2222-3333-4444-555555555555",
 		SchemaVersion: CurrentSchemaVersion,
-		Sequence:      1,
-		DEK:           nil,
-		DEKEncrypted:  false,
+		Sequence:      7,
 	}
 }
 
 // --- Validate ---
 
 func TestValidate_OK(t *testing.T) {
-	if err := validDescriptor().Validate(); err != nil {
+	if err := validDescriptor(t).Validate(); err != nil {
 		t.Fatalf("expected valid, got %v", err)
 	}
 }
 
 func TestValidate_RejectsEmptyStoreID(t *testing.T) {
-	d := validDescriptor()
+	d := validDescriptor(t)
 	d.StoreID = ""
 	if err := d.Validate(); err == nil {
 		t.Fatal("expected error on empty StoreID")
@@ -37,7 +38,7 @@ func TestValidate_RejectsEmptyStoreID(t *testing.T) {
 }
 
 func TestValidate_RejectsZeroSchemaVersion(t *testing.T) {
-	d := validDescriptor()
+	d := validDescriptor(t)
 	d.SchemaVersion = 0
 	if err := d.Validate(); err == nil {
 		t.Fatal("expected error on zero SchemaVersion")
@@ -45,7 +46,7 @@ func TestValidate_RejectsZeroSchemaVersion(t *testing.T) {
 }
 
 func TestValidate_RejectsFutureSchemaVersion(t *testing.T) {
-	d := validDescriptor()
+	d := validDescriptor(t)
 	d.SchemaVersion = CurrentSchemaVersion + 1
 	err := d.Validate()
 	if err == nil {
@@ -57,7 +58,7 @@ func TestValidate_RejectsFutureSchemaVersion(t *testing.T) {
 }
 
 func TestValidate_RejectsZeroSequence(t *testing.T) {
-	d := validDescriptor()
+	d := validDescriptor(t)
 	d.Sequence = 0
 	if err := d.Validate(); err == nil {
 		t.Fatal("expected error on zero Sequence")
@@ -65,7 +66,7 @@ func TestValidate_RejectsZeroSequence(t *testing.T) {
 }
 
 func TestValidate_DEKEncryptedWithoutDEK(t *testing.T) {
-	d := validDescriptor()
+	d := validDescriptor(t)
 	d.DEKEncrypted = true
 	d.DEK = nil
 	d.KDFParams = &KDFParams{Algorithm: "argon2id", Time: 1, Memory: 19456, Threads: 1, Salt: []byte{1}}
@@ -75,7 +76,7 @@ func TestValidate_DEKEncryptedWithoutDEK(t *testing.T) {
 }
 
 func TestValidate_DEKEncryptedWithoutKDFParams(t *testing.T) {
-	d := validDescriptor()
+	d := validDescriptor(t)
 	d.DEKEncrypted = true
 	d.DEK = []byte{1, 2, 3}
 	d.KDFParams = nil
@@ -85,7 +86,7 @@ func TestValidate_DEKEncryptedWithoutKDFParams(t *testing.T) {
 }
 
 func TestValidate_PlainStoreOK(t *testing.T) {
-	d := validDescriptor()
+	d := validDescriptor(t)
 	d.DEKEncrypted = false
 	d.DEK = nil
 	d.KDFParams = nil
@@ -97,7 +98,7 @@ func TestValidate_PlainStoreOK(t *testing.T) {
 // --- Marshal / Unmarshal ---
 
 func TestMarshalUnmarshal_RoundTrip(t *testing.T) {
-	src := validDescriptor()
+	src := validDescriptor(t)
 	data, err := Marshal(src)
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
@@ -152,7 +153,7 @@ func TestUnmarshal_RejectsLegacyProjectionFields(t *testing.T) {
 }
 
 func TestUnmarshal_RejectsTrailingContent(t *testing.T) {
-	d, _ := Marshal(validDescriptor())
+	d, _ := Marshal(validDescriptor(t))
 	bad := append(d, []byte(`{"another":"document"}`)...)
 	_, err := Unmarshal(bad)
 	if err == nil {
@@ -173,7 +174,7 @@ func TestUnmarshal_RejectsMalformedJSON(t *testing.T) {
 
 func TestPersist_Read_RoundTrip(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	src := validDescriptor()
+	src := validDescriptor(t)
 
 	if err := Persist(context.Background(), drv, src); err != nil {
 		t.Fatalf("Persist: %v", err)
@@ -196,7 +197,7 @@ func TestPersist_Read_RoundTrip(t *testing.T) {
 // WriteReplica fails fast even if Persist still works.
 func TestWriteReplica_RoundTripL0(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	src := validDescriptor()
+	src := validDescriptor(t)
 
 	if err := WriteReplica(context.Background(), drv, src, L0); err != nil {
 		t.Fatalf("WriteReplica(L0): %v", err)
@@ -215,7 +216,7 @@ func TestWriteReplica_RoundTripL0(t *testing.T) {
 // Read targets L0 only.
 func TestWriteReplica_RoundTripL1(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	src := validDescriptor()
+	src := validDescriptor(t)
 
 	if err := WriteReplica(context.Background(), drv, src, L1); err != nil {
 		t.Fatalf("WriteReplica(L1): %v", err)
@@ -234,7 +235,7 @@ func TestWriteReplica_RoundTripL1(t *testing.T) {
 
 func TestWriteReplica_RejectsInvalidReplica(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	src := validDescriptor()
+	src := validDescriptor(t)
 	if err := WriteReplica(context.Background(), drv, src, Replica(99)); err == nil {
 		t.Fatal("expected error on invalid Replica value")
 	}

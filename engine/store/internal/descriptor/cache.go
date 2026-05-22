@@ -1,4 +1,4 @@
-package descriptorcache
+package descriptor
 
 import (
 	"bytes"
@@ -9,7 +9,6 @@ import (
 	"strconv"
 
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/store/internal/descriptor"
 )
 
 // store_meta keys for the descriptor L2 cache, per §10.1.5.
@@ -105,9 +104,9 @@ func Load(ctx context.Context, meta MetaStore) (*Cache, error) {
 	if err != nil {
 		return nil, fmt.Errorf("descriptor cache: parse checksum: %w", err)
 	}
-	if len(csum) != descriptor.ChecksumLen {
+	if len(csum) != ChecksumLen {
 		return nil, fmt.Errorf("descriptor cache: checksum length %d, want %d",
-			len(csum), descriptor.ChecksumLen)
+			len(csum), ChecksumLen)
 	}
 
 	cache := &Cache{
@@ -132,12 +131,12 @@ func Load(ctx context.Context, meta MetaStore) (*Cache, error) {
 // atomic across a crash. A crash mid-trio leaves a partial cache,
 // which the next Load rejects as corruption — the caller then
 // re-saves. The flow is idempotent.
-func Save(ctx context.Context, meta MetaStore, d *descriptor.Descriptor) error {
-	blob, err := descriptor.Marshal(d)
+func Save(ctx context.Context, meta MetaStore, d *Descriptor) error {
+	blob, err := Marshal(d)
 	if err != nil {
 		return fmt.Errorf("descriptor cache: marshal: %w", err)
 	}
-	csum, err := descriptor.Checksum(d)
+	csum, err := Checksum(d)
 	if err != nil {
 		return fmt.Errorf("descriptor cache: checksum: %w", err)
 	}
@@ -165,11 +164,11 @@ func Save(ctx context.Context, meta MetaStore, d *descriptor.Descriptor) error {
 // The "load failed" branch swallows the load error on purpose: the
 // cache is a fast-start aid, not authoritative, and a damaged cache
 // is fully recoverable from Location.
-func Refresh(ctx context.Context, meta MetaStore, canonical *descriptor.Descriptor) error {
+func Refresh(ctx context.Context, meta MetaStore, canonical *Descriptor) error {
 	cache, _ := Load(ctx, meta)
 
 	if cache != nil {
-		want, err := descriptor.Checksum(canonical)
+		want, err := Checksum(canonical)
 		if err != nil {
 			return fmt.Errorf("checksum canonical: %w", err)
 		}
@@ -189,7 +188,7 @@ func Refresh(ctx context.Context, meta MetaStore, canonical *descriptor.Descript
 // alongside the blob agree with what the blob itself encodes. Used
 // by Load to reject hand-edited or partially-written cache state.
 func validateConsistency(c *Cache) error {
-	d, err := descriptor.Unmarshal(c.Blob)
+	d, err := Unmarshal(c.Blob)
 	if err != nil {
 		return fmt.Errorf("blob does not parse: %w", err)
 	}
@@ -197,7 +196,7 @@ func validateConsistency(c *Cache) error {
 		return fmt.Errorf("sequence mismatch: blob says %d, cache says %d",
 			d.Sequence, c.Sequence)
 	}
-	expected, err := descriptor.Checksum(d)
+	expected, err := Checksum(d)
 	if err != nil {
 		return fmt.Errorf("recompute checksum: %w", err)
 	}

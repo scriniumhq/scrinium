@@ -12,7 +12,6 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
-	"scrinium.dev/engine/store/internal/descriptorcache"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
@@ -144,7 +143,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 	// aid only. Save when absent, when corrupted (load returned
 	// an error), or when checksum diverges. Read errors are
 	// non-fatal — we always have the canonical to fall back to.
-	if err := descriptorcache.Refresh(ctx, idx, desc); err != nil {
+	if err := descriptor.Refresh(ctx, idx, desc); err != nil {
 		return nil, wrap("refresh L2 cache", err)
 	}
 

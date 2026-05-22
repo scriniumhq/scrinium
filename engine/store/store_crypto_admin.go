@@ -9,7 +9,6 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
-	"scrinium.dev/engine/store/internal/descriptorcache"
 	"scrinium.dev/engine/store/internal/keyring"
 )
 
@@ -341,7 +340,7 @@ func (s *store) commitDescriptor(ctx context.Context, next *descriptor.Descripto
 	if err := descriptor.Persist(ctx, s.drv, next); err != nil {
 		return fmt.Errorf("persist descriptor: %w", err)
 	}
-	if err := descriptorcache.Save(ctx, s.index, next); err != nil {
+	if err := descriptor.Save(ctx, s.index, next); err != nil {
 		// Persisted on disk but cache write failed. The next
 		// OpenStore will rebuild the cache from Location, so
 		// this is recoverable; surface the error so the caller

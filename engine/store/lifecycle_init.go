@@ -13,7 +13,6 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
-	"scrinium.dev/engine/store/internal/descriptorcache"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
@@ -202,7 +201,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		aead.Wipe(dek)
 		return nil, nil, wrap("write descriptor", err)
 	}
-	if err := descriptorcache.Save(ctx, idx, desc); err != nil {
+	if err := descriptor.Save(ctx, idx, desc); err != nil {
 		aead.Wipe(dek)
 		return nil, nil, wrap("save L2 cache", err)
 	}
