@@ -14,6 +14,7 @@ import (
 	"scrinium.dev/engine/internal/manifestcrypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/descriptorcache"
+	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
 
@@ -166,7 +167,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 	// alive on *store after construction so subsequent writes
 	// have it without re-fetching from descriptor.
 
-	dek, err := generateDEK()
+	dek, err := keyring.GenerateDEK()
 	if err != nil {
 		return nil, nil, wrap("", err)
 	}

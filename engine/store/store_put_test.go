@@ -695,8 +695,10 @@ func TestPut_Pipeline_AESGCMRoundTrip(t *testing.T) {
 	if len(manifest.Pipeline) != 1 || manifest.Pipeline[0].Algorithm != "aes-gcm" {
 		t.Fatalf("manifest Pipeline = %+v", manifest.Pipeline)
 	}
-	if len(manifest.Pipeline[0].IV) != 12 {
-		t.Fatalf("IV length = %d, want 12", len(manifest.Pipeline[0].IV))
+	// ADR-59: the segmented AEAD blob stores one IV per segment inside
+	// the blob body, so the per-blob manifest stage IV is empty.
+	if len(manifest.Pipeline[0].IV) != 0 {
+		t.Fatalf("IV length = %d, want 0 (segmented format keeps IVs in frames)", len(manifest.Pipeline[0].IV))
 	}
 }
 

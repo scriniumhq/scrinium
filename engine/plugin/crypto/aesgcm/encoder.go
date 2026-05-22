@@ -1,75 +1,64 @@
 package aesgcm
 
 import (
-	"bytes"
 	"crypto/cipher"
-	"crypto/rand"
 	"errors"
 	"io"
-	"sync/atomic"
 
 	"scrinium.dev/engine/coreapi"
+	"scrinium.dev/engine/internal/segaead"
 )
 
-// encoder is the per-operation Encoder. AES-GCM cannot stream the
-// authentication tag — it is appended after the entire plaintext
-// has been processed — so we buffer the input, seal it once, and
-// expose the resulting ciphertext+tag through an io.Reader. This
-// is consistent with the docs §3.2 description of "single-pass
-// AEAD".
+// encoder is the per-operation pinned-DEK Encoder. It delegates the
+// on-disk framing to segaead: the blob is a header plus a sequence of
+// fixed-size AEAD segments, each with its own IV and tag, produced in
+// a single streaming pass with O(SegmentSize) memory (ADR-59). There
+// is no whole-blob io.ReadAll any more.
 type encoder struct {
-	aead cipher.AEAD
+	aead    cipher.AEAD
+	dek     []byte // HMAC key for convergent IV derivation
+	mode    segaead.IVMode
+	segSize int
+	keyID   string // empty for pinned-DEK
 
-	iv         []byte
-	outputSize atomic.Int64
-	started    bool
+	sealed  *segaead.SealReader
+	started bool
 }
 
 func (e *encoder) Transform(r io.Reader) io.Reader {
 	if e.started {
-		pr, pw := io.Pipe()
-		_ = pw.CloseWithError(errors.New("aesgcm encoder reused"))
-		return pr
+		return errReader{err: errors.New("aesgcm encoder reused")}
 	}
 	e.started = true
 
-	pr, pw := io.Pipe()
-	go func() {
-		defer pw.Close()
-
-		plaintext, err := io.ReadAll(r)
-		if err != nil {
-			_ = pw.CloseWithError(err)
-			return
-		}
-
-		iv := make([]byte, ivBytes)
-		if _, err := rand.Read(iv); err != nil {
-			_ = pw.CloseWithError(err)
-			return
-		}
-		e.iv = iv
-
-		// Seal returns ciphertext || tag. We do not bind any
-		// additional data — the manifest binds context implicitly
-		// (its bytes are hashed into the ArtifactID).
-		sealed := e.aead.Seal(nil, iv, plaintext, nil)
-		e.outputSize.Store(int64(len(sealed)))
-
-		if _, err := io.Copy(pw, bytes.NewReader(sealed)); err != nil {
-			_ = pw.CloseWithError(err)
-			return
-		}
-	}()
-
-	return pr
+	sr, err := segaead.Seal(r, segaead.SealParams{
+		AEAD:        e.aead,
+		Mode:        e.mode,
+		DEK:         e.dek,
+		KeyID:       e.keyID,
+		SegmentSize: e.segSize,
+	})
+	if err != nil {
+		return errReader{err: err}
+	}
+	e.sealed = sr
+	return sr
 }
 
-// Result returns OutputSize and the IV chosen at Transform time.
-// Called by the runner after EOF.
+// Result returns the byte count produced by the framed encoder. IV
+// is nil: the segmented format keeps a per-segment IV in each frame,
+// so manifest.Pipeline[i].IV stays empty for this stage (ADR-59).
+// KeyID is empty for the pinned-DEK factory.
 func (e *encoder) Result() coreapi.TransformResult {
+	var out int64
+	if e.sealed != nil {
+		out = e.sealed.BytesWritten()
+	}
 	return coreapi.TransformResult{
-		OutputSize: e.outputSize.Load(),
-		IV:         e.iv,
+		OutputSize: out,
+		IV:         nil,
+		KeyID:      e.keyID,
 	}
 }
+
+var _ coreapi.Encoder = (*encoder)(nil)

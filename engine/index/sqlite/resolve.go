@@ -68,10 +68,13 @@ func (i *Index) ExistsByContent(ctx context.Context, hash domain.ContentHash, or
 }
 
 // ExistsByHash is the chunk-deduplication primitive used by
-// chunker.Wrapper. Unlike ExistsByContent it does not check size,
-// because chunks are anonymous and the chunker has no manifest
-// metadata to compare against — but it DOES distinguish a normal
-// blob from a tombstoned one.
+// chunker.Wrapper. It keys on the full dedup triple (content_hash,
+// original_size, crypto_identity) — ADR-58. A chunk is anonymous in
+// name but not in length (the chunker knows the plaintext size) nor
+// in crypto-identity (an encrypted chunk under Disabled has a random
+// IV and must not collapse onto another). For a Plain chunk crypto is
+// empty and the key degrades to (content_hash, original_size). It
+// also distinguishes a normal blob from a tombstoned one.
 //
 // At the index level we don't currently track tombstones — the
 // driver does (see localfs.MarkTombstone). The StoreIndex contract
@@ -85,10 +88,13 @@ func (i *Index) ExistsByContent(ctx context.Context, hash domain.ContentHash, or
 // uses the index for liveness (ref_count > 0) and the driver for
 // physical state. Until M3.2 (GC) ties them together, BlobIsTombstone
 // returns are not produced.
-func (i *Index) ExistsByHash(ctx context.Context, hash domain.ContentHash) (domain.BlobExistStatus, error) {
-	const stmt = `SELECT 1 FROM blobs WHERE content_hash = ? LIMIT 1`
+func (i *Index) ExistsByHash(ctx context.Context, hash domain.ContentHash, originalSize int64, crypto domain.CryptoIdentity) (domain.BlobExistStatus, error) {
+	const stmt = `
+		SELECT 1 FROM blobs
+		WHERE content_hash = ? AND original_size = ? AND crypto_identity = ?
+		LIMIT 1`
 	var one int
-	err := i.db.QueryRowContext(ctx, stmt, string(hash)).Scan(&one)
+	err := i.db.QueryRowContext(ctx, stmt, string(hash), originalSize, string(crypto)).Scan(&one)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return domain.BlobNotFound, nil

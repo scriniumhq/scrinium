@@ -67,10 +67,12 @@ const (
 	// AEAD semantics, no equality leak. Default for an encrypting
 	// store.
 	EncryptedDedupDisabled EncryptedDedup = "Disabled"
-	// EncryptedDedupConvergent — IV = KDF(ContentHash, KeyID). One
-	// plaintext under one key yields one ciphertext, one BlobRef:
-	// encrypted blobs deduplicate, at the cost of leaking content
-	// equality to a storage observer. Wired in R8 (ADR-58).
+	// EncryptedDedupConvergent — IV = KDF(ContentHash, KeyID),
+	// realised per-segment as HMAC-SHA256(DEK, segHash ‖ KeyID ‖
+	// index) (ADR-59). One plaintext under one key yields one
+	// ciphertext, one BlobRef: encrypted blobs deduplicate, at the
+	// cost of leaking content equality to a storage observer. Wired
+	// in R8 (ADR-58/59).
 	EncryptedDedupConvergent EncryptedDedup = "Convergent"
 )
 
@@ -132,6 +134,15 @@ type StoreConfig struct {
 	Pipeline      []string
 	ContentHasher ContentHashAlgorithm
 	VerifyOnRead  VerifyOnReadPolicy
+
+	// SegmentSize is the plaintext segment size of the segmented
+	// AEAD blob format (ADR-59), in bytes. Immutable: ciphertext
+	// reproducibility under EncryptedDedup=Convergent (and therefore
+	// dedup of encrypted blobs and chunks) requires a stable value.
+	// Zero is ignored for a Plain store and defaulted to
+	// DefaultSegmentSize (≈1 MiB) for an encrypting store. Bounds:
+	// MinSegmentSize..MaxSegmentSize.
+	SegmentSize int
 
 	DeletionPolicy       DeletionPolicy
 	DeletionPolicyLock   bool

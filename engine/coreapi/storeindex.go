@@ -61,9 +61,17 @@ type StoreIndex interface {
 	// caller may drop its staging blob and reference the survivor.
 	ExistsByContent(ctx context.Context, hash domain.ContentHash, originalSize int64, crypto domain.CryptoIdentity) (blobRef string, exists bool, err error)
 
-	// ExistsByHash is the check by ContentHash with tombstone
-	// distinction. Used by chunker.Wrapper for chunk deduplication.
-	ExistsByHash(ctx context.Context, hash domain.ContentHash) (domain.BlobExistStatus, error)
+	// ExistsByHash is the chunk-deduplication probe with tombstone
+	// distinction, used by chunker.Wrapper. Like ExistsByContent it
+	// keys on the full dedup triple (ContentHash, OriginalSize,
+	// CryptoIdentity) — a chunk is anonymous in name but not in size
+	// (its length is known) or in crypto-identity, so under
+	// EncryptedDedup=Disabled two encrypted chunks of the same
+	// plaintext must not collapse (ADR-58). CryptoIdentity is empty
+	// for a Plain chunk, degrading the key to (ContentHash,
+	// OriginalSize). The return value distinguishes a live blob from a
+	// tombstoned one (BlobExists / BlobIsTombstone / BlobNotFound).
+	ExistsByHash(ctx context.Context, hash domain.ContentHash, originalSize int64, crypto domain.CryptoIdentity) (domain.BlobExistStatus, error)
 
 	// GetRefCount returns the current reference count of a blob.
 	GetRefCount(ctx context.Context, blobRef string) (int, error)

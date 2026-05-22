@@ -8,18 +8,19 @@ import (
 	"scrinium.dev/engine/domain"
 )
 
-// factoryResolver is the resolver-backed AES-GCM
-// TransformerFactory. Unlike the pinned-DEK factory it holds no
-// AEAD primitive: the DEK is resolved per operation through a
-// store.KeyResolver, which lets a single factory cover key
-// rotation, multi-tenant stores, and crypto-shredding.
+// factoryResolver is the resolver-backed AES-GCM TransformerFactory.
+// Unlike the pinned-DEK factory it holds no AEAD primitive: the DEK
+// is resolved per operation through a coreapi.KeyResolver, which lets
+// a single factory cover key rotation, multi-tenant stores, and
+// crypto-shredding.
 //
 // The engine picks the write KeyID once via
-// KeyResolver.ResolveWriteKey and passes it through EncodeContext;
-// the Encoder records it in TransformResult.KeyID, and the Pipeline
-// runner copies the field into manifest.Pipeline[i].KeyID. On Get
-// the Decoder reads the recorded KeyID from the stage and asks the
-// resolver for candidate keys, trying each until one decrypts.
+// KeyResolver.ResolveWriteKey and passes it (plus the EncryptedDedup
+// mode and SegmentSize) through EncodeContext; the Encoder records
+// the KeyID in TransformResult.KeyID, and the Pipeline runner copies
+// it into manifest.Pipeline[i].KeyID. On Get the Decoder reads the
+// recorded KeyID from the stage and asks the resolver for candidate
+// keys, trying each until one segment-AEAD-opens.
 type factoryResolver struct {
 	resolver coreapi.KeyResolver
 }
@@ -47,32 +48,39 @@ func NewWithResolver(resolver coreapi.KeyResolver) coreapi.TransformerFactory {
 }
 
 // NewEncoder returns an Encoder bound to the write KeyID the engine
-// resolved for this operation (ec.KeyID). The DEK lookup happens on
+// resolved for this operation (ec.KeyID), the IV mode derived from
+// ec.EncryptedDedup, and ec.SegmentSize. The DEK lookup happens on
 // first Transform.
 func (f *factoryResolver) NewEncoder(ec coreapi.EncodeContext) coreapi.Encoder {
-	return &resolverEncoder{resolver: f.resolver, keyID: ec.KeyID}
+	return &resolverEncoder{
+		resolver: f.resolver,
+		keyID:    ec.KeyID,
+		mode:     ivModeFor(ec.EncryptedDedup),
+		segSize:  ec.SegmentSize,
+	}
 }
 
-// NewDecoder returns a Decoder bound to the recorded stage KeyID
-// and IV. The DEK lookup happens on Transform.
+// NewDecoder returns a Decoder bound to the recorded stage KeyID.
+// The DEK lookup (and candidate enumeration for rotation) happens on
+// Transform; the IV comes from each segment frame, not the stage.
 func (f *factoryResolver) NewDecoder(stage domain.PipelineStage) coreapi.Decoder {
 	return &resolverDecoder{
 		resolver: f.resolver,
 		keyID:    stage.KeyID,
-		iv:       stage.IV,
 	}
 }
 
-// AEAD implements store.AEADCapable for the resolver-backed factory.
-// Same rationale as the pinned-DEK factory: the GCM tag
-// authenticates every read, so VerifyOnRead=Auto can skip the
+// AEAD implements coreapi.AEADCapable for the resolver-backed
+// factory. Same rationale as the pinned-DEK factory: each segment's
+// GCM tag authenticates the read, so VerifyOnRead=Auto can skip the
 // explicit ContentHash recomputation.
 func (f *factoryResolver) AEAD() {}
 
-// resolveAEADs returns AEAD primitives for every candidate DEK the
-// resolver yields for keyID, in resolver order. The caller (Decoder)
-// tries each in turn; the Encoder always uses the first.
-func resolveAEADs(resolver coreapi.KeyResolver, keyID string) ([]cipher.AEAD, error) {
+// resolveKeys returns the raw candidate DEKs the resolver yields for
+// keyID, in resolver order. The write side uses keys[0] (both to
+// build the AEAD and as the convergent-IV HMAC key); the read side
+// builds an AEAD from each candidate.
+func resolveKeys(resolver coreapi.KeyResolver, keyID string) ([][]byte, error) {
 	if resolver == nil {
 		return nil, errKeyResolverMissing
 	}
@@ -82,6 +90,17 @@ func resolveAEADs(resolver coreapi.KeyResolver, keyID string) ([]cipher.AEAD, er
 	}
 	if len(keys) == 0 {
 		return nil, errKeyResolverEmpty
+	}
+	return keys, nil
+}
+
+// resolveAEADs builds AEAD primitives for every candidate DEK, in
+// resolver order. Used by the read path; the write path only needs
+// keys[0] and builds its single AEAD directly.
+func resolveAEADs(resolver coreapi.KeyResolver, keyID string) ([]cipher.AEAD, error) {
+	keys, err := resolveKeys(resolver, keyID)
+	if err != nil {
+		return nil, err
 	}
 	out := make([]cipher.AEAD, 0, len(keys))
 	for _, k := range keys {

@@ -28,8 +28,8 @@ type Encoder interface {
 }
 
 // Decoder is the per-read transformation plugin (used by Get).
-// Created via TransformerFactory.NewDecoder(stage); receives IV and
-// other stage parameters via PipelineStage.
+// Created via TransformerFactory.NewDecoder(stage); receives the
+// stage parameters via PipelineStage.
 type Decoder interface {
 	Transform(r io.Reader) io.Reader
 }
@@ -40,8 +40,12 @@ type TransformResult struct {
 	// OutputSize — number of bytes that left the stage's output.
 	OutputSize int64
 
-	// IV — initialisation vector for crypto plugins. Written to
-	// manifest.Pipeline[i].IV. nil for non-crypto plugins.
+	// IV — initialisation vector for crypto plugins, written to
+	// manifest.Pipeline[i].IV. nil for non-crypto plugins AND for
+	// segmented-AEAD crypto plugins (ADR-59): a segmented blob keeps
+	// one IV per segment inside the blob, so there is no single
+	// per-blob IV to record. The Decoder reads the IV from each
+	// segment frame, not from the stage.
 	IV []byte
 
 	// KeyID — the identifier of the DEK used to encrypt this
@@ -66,15 +70,29 @@ type TransformerFactory interface {
 }
 
 // EncodeContext carries the per-operation write context the engine
-// hands to NewEncoder. Crypto factories read KeyID — chosen once
-// by the engine via KeyResolver.ResolveWriteKey — to fetch the DEK
-// through GetKeys; non-crypto factories ignore it. Extended
-// additively. See ADR-58.
+// hands to NewEncoder. Crypto factories read KeyID — chosen once by
+// the engine via KeyResolver.ResolveWriteKey — to fetch the DEK
+// through GetKeys, and read EncryptedDedup/SegmentSize to frame the
+// blob (ADR-58/59). Non-crypto factories ignore every field.
+// Extended additively. See ADR-58.
 type EncodeContext struct {
 	// KeyID is the resolved write-key id for this operation. Empty
 	// for the default single-key resolver and for non-crypto
 	// stages.
 	KeyID string
+
+	// EncryptedDedup is the store's deduplication policy for
+	// encrypted blobs, mirrored from StoreConfig (ADR-58). A crypto
+	// encoder maps it to the segment IV mode: Disabled (or empty) →
+	// random per-segment IVs; Convergent → deterministic per-segment
+	// IVs (ADR-59). Ignored by non-crypto stages.
+	EncryptedDedup domain.EncryptedDedup
+
+	// SegmentSize is the plaintext segment size for the segmented
+	// AEAD blob format, mirrored from StoreConfig.SegmentSize
+	// (immutable, ADR-59). Zero means "use the plugin default"
+	// (≈1 MiB). Ignored by non-crypto stages.
+	SegmentSize int
 }
 
 // AEADCapable is the anonymous capability interface a
@@ -93,7 +111,7 @@ type AEADCapable interface {
 	AEAD()
 }
 
-// TransformerRegistry is the registry of transformation factoriesj
+// TransformerRegistry is the registry of transformation factories
 // keyed by algorithm identifier (for example, "zstd", "aes-gcm").
 // The identifier appears in the manifest in pipeline[].algorithm.
 type TransformerRegistry interface {

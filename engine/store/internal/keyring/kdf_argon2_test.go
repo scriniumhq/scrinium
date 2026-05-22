@@ -1,58 +1,56 @@
-package kdf_test
+package keyring
 
 import (
 	"bytes"
 	"encoding/hex"
 	"testing"
-
-	"scrinium.dev/engine/store/internal/kdf"
 )
 
 func deriveDefault(t *testing.T, passphrase string) []byte {
 	t.Helper()
-	salt, err := kdf.NewSalt()
+	salt, err := newSalt()
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := kdf.Default()
-	return kdf.Derive([]byte(passphrase), salt, p.Time, p.Memory, p.Threads)
+	p := DefaultKDFParams()
+	return deriveKEK([]byte(passphrase), salt, p.Time, p.Memory, p.Threads)
 }
 
 func TestDerive_OutputLength(t *testing.T) {
 	kek := deriveDefault(t, "correct horse battery staple")
-	if len(kek) != kdf.KEKLen {
-		t.Fatalf("KEK length: got %d, want %d", len(kek), kdf.KEKLen)
+	if len(kek) != kekLen {
+		t.Fatalf("KEK length: got %d, want %d", len(kek), kekLen)
 	}
 }
 
 func TestDerive_DeterministicForSameInputs(t *testing.T) {
-	salt, _ := kdf.NewSalt()
-	p := kdf.Default()
+	salt, _ := newSalt()
+	p := DefaultKDFParams()
 	pass := []byte("correct horse battery staple")
-	kek1 := kdf.Derive(pass, salt, p.Time, p.Memory, p.Threads)
-	kek2 := kdf.Derive(pass, salt, p.Time, p.Memory, p.Threads)
+	kek1 := deriveKEK(pass, salt, p.Time, p.Memory, p.Threads)
+	kek2 := deriveKEK(pass, salt, p.Time, p.Memory, p.Threads)
 	if !bytes.Equal(kek1, kek2) {
 		t.Fatal("Derive is not deterministic for identical inputs")
 	}
 }
 
 func TestDerive_DifferentSaltsProduceDifferentKeys(t *testing.T) {
-	p := kdf.Default()
-	salt1, _ := kdf.NewSalt()
-	salt2, _ := kdf.NewSalt()
+	p := DefaultKDFParams()
+	salt1, _ := newSalt()
+	salt2, _ := newSalt()
 	pass := []byte("correct horse battery staple")
-	k1 := kdf.Derive(pass, salt1, p.Time, p.Memory, p.Threads)
-	k2 := kdf.Derive(pass, salt2, p.Time, p.Memory, p.Threads)
+	k1 := deriveKEK(pass, salt1, p.Time, p.Memory, p.Threads)
+	k2 := deriveKEK(pass, salt2, p.Time, p.Memory, p.Threads)
 	if bytes.Equal(k1, k2) {
 		t.Fatal("different salts produced identical KEK")
 	}
 }
 
 func TestDerive_DifferentPassphrasesProduceDifferentKeys(t *testing.T) {
-	p := kdf.Default()
-	salt, _ := kdf.NewSalt()
-	a := kdf.Derive([]byte("passphrase A"), salt, p.Time, p.Memory, p.Threads)
-	b := kdf.Derive([]byte("passphrase B"), salt, p.Time, p.Memory, p.Threads)
+	p := DefaultKDFParams()
+	salt, _ := newSalt()
+	a := deriveKEK([]byte("passphrase A"), salt, p.Time, p.Memory, p.Threads)
+	b := deriveKEK([]byte("passphrase B"), salt, p.Time, p.Memory, p.Threads)
 	if bytes.Equal(a, b) {
 		t.Fatal("different passphrases produced identical KEK")
 	}
@@ -67,7 +65,7 @@ func TestDerive_KnownVector(t *testing.T) {
 		0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
 		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
 	}
-	got := kdf.Derive(
+	got := deriveKEK(
 		[]byte("scrinium-test-vector"),
 		fixedSalt,
 		1,     // Time

@@ -94,7 +94,14 @@ type PackedEntry struct {
 	BlobOffset     int64
 	BlobSize       int64
 
-	ContentHash    ContentHash
+	ContentHash ContentHash
+	// CryptoIdentity carries the packed blob's crypto-identity
+	// (ADR-58) so the dedup key survives packing. The bundler
+	// transfers it from the source blob — it packs the finished
+	// ciphertext bytes as-is and never re-encrypts, so the identity
+	// is unchanged. Empty for a Plain packed blob. Persisted in
+	// packed_blobs.crypto_identity; pack-layer dedup (M4/S4) reads it.
+	CryptoIdentity CryptoIdentity
 	Namespace      string
 	SessionID      SessionID
 	PipelineParams []byte

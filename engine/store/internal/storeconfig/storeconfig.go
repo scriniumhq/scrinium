@@ -44,6 +44,13 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 	if cfg.EncryptedDedup == "" && isEncryptingConfig(cfg) {
 		cfg.EncryptedDedup = domain.EncryptedDedupDisabled
 	}
+	// ADR-59: the segmented AEAD blob format needs a segment size for
+	// any encrypting store. Mirror EncryptedDedup — default it only
+	// when the store actually encrypts; a Plain store leaves it zero
+	// (no crypto stage ever reads it). Immutable once chosen.
+	if cfg.SegmentSize == 0 && isEncryptingConfig(cfg) {
+		cfg.SegmentSize = domain.DefaultSegmentSize
+	}
 	if cfg.ContentHasher == "" {
 		cfg.ContentHasher = domain.HashSHA256
 	}
@@ -126,6 +133,15 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 		return errs.ErrInvalidConfig
 	}
 
+	// ADR-59: SegmentSize is immutable. Zero is legitimate (Plain
+	// store, or a not-yet-defaulted config); a non-zero value must
+	// fall within the format's bounds.
+	if cfg.SegmentSize != 0 &&
+		(cfg.SegmentSize < domain.MinSegmentSize || cfg.SegmentSize > domain.MaxSegmentSize) {
+		return fmt.Errorf("%w: SegmentSize=%d out of range [%d, %d]",
+			errs.ErrInvalidConfig, cfg.SegmentSize, domain.MinSegmentSize, domain.MaxSegmentSize)
+	}
+
 	// PathTopology: Native is a read-only marker; allowed only with
 	// BlobStorage: ExternalRef.
 	if cfg.PathTopology == domain.PathTopologyNative &&
@@ -203,6 +219,14 @@ func ValidateAgainstActive(req, active domain.StoreConfig) error {
 			fmt.Sprintf("EncryptedDedup: requested %q, active %q",
 				req.EncryptedDedup, active.EncryptedDedup))
 	}
+	// ADR-59: SegmentSize is immutable — changing it would break
+	// ciphertext reproducibility under Convergent (and therefore dedup
+	// of encrypted blobs/chunks).
+	if req.SegmentSize != 0 && req.SegmentSize != active.SegmentSize {
+		mismatches = append(mismatches,
+			fmt.Sprintf("SegmentSize: requested %d, active %d",
+				req.SegmentSize, active.SegmentSize))
+	}
 	if req.ContentHasher != "" && req.ContentHasher != active.ContentHasher {
 		mismatches = append(mismatches,
 			fmt.Sprintf("ContentHasher: requested %q, active %q",
@@ -225,11 +249,11 @@ func ValidateAgainstActive(req, active domain.StoreConfig) error {
 
 // isEncryptingConfig reports whether the config produces encrypted
 // blobs — either the manifest body is protected (Sealed/Paranoid) or
-// the blob Pipeline contains a crypto stage. EncryptedDedup only has
-// meaning for such stores. The Pipeline-stage check is name-based
-// against the registered crypto algorithms (3. Reference/04 §4.3); it
-// stays correct as long as crypto plugins register under their
-// canonical ids.
+// the blob Pipeline contains a crypto stage. EncryptedDedup and
+// SegmentSize only have meaning for such stores. The Pipeline-stage
+// check is name-based against the registered crypto algorithms
+// (3. Reference/04 §4.3); it stays correct as long as crypto plugins
+// register under their canonical ids.
 func isEncryptingConfig(cfg domain.StoreConfig) bool {
 	if cfg.ManifestCrypto != "" && cfg.ManifestCrypto != domain.ManifestCryptoPlain {
 		return true

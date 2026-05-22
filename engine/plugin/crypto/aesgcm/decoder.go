@@ -1,54 +1,29 @@
 package aesgcm
 
 import (
-	"bytes"
 	"crypto/cipher"
-	"errors"
-	"fmt"
 	"io"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/coreapi"
+	"scrinium.dev/engine/internal/segaead"
 )
 
-// decoder is the per-operation Decoder. It consumes the entire
-// ciphertext, calls Open (which verifies the GCM tag), and exposes
-// the plaintext as an io.Reader. A tag mismatch surfaces as
-// errs.ErrDecryptionFailed at the very first Read of the wrapped
-// reader.
+// decoder is the per-operation pinned-DEK Decoder. It reads the blob
+// header and then each segment frame in turn, taking the IV from the
+// frame (never from the manifest stage) and verifying each segment's
+// GCM tag as it goes — per-segment integrity, with corruption
+// localised to a single segment (ADR-59 / §03). A tag mismatch
+// surfaces as errs.ErrDecryptionFailed.
 type decoder struct {
 	aead cipher.AEAD
-	iv   []byte
 }
 
 func (d *decoder) Transform(r io.Reader) io.Reader {
-	pr, pw := io.Pipe()
-	go func() {
-		defer pw.Close()
-
-		if len(d.iv) != ivBytes {
-			_ = pw.CloseWithError(fmt.Errorf(
-				"aesgcm: expected %d-byte IV from manifest stage, got %d",
-				ivBytes, len(d.iv)))
-			return
-		}
-
-		ct, err := io.ReadAll(r)
-		if err != nil {
-			_ = pw.CloseWithError(err)
-			return
-		}
-		pt, err := d.aead.Open(nil, d.iv, ct, nil)
-		if err != nil {
-			// The GCM tag did not validate — either the wrong DEK
-			// or a corrupted/tampered ciphertext. Surface as the
-			// public sentinel.
-			_ = pw.CloseWithError(errors.Join(errs.ErrDecryptionFailed, err))
-			return
-		}
-		if _, err := io.Copy(pw, bytes.NewReader(pt)); err != nil {
-			_ = pw.CloseWithError(err)
-			return
-		}
-	}()
-	return pr
+	or, err := segaead.Open(r, []cipher.AEAD{d.aead})
+	if err != nil {
+		return errReader{err: err}
+	}
+	return decryptErrReader{r: or}
 }
+
+var _ coreapi.Decoder = (*decoder)(nil)

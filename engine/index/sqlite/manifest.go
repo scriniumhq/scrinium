@@ -348,10 +348,13 @@ func indexPackManifest(
 			artifact_id, pack_blob_ref, blob_ref,
 			manifest_offset, manifest_size,
 			blob_offset, blob_size,
-			content_hash, namespace, session_id, pipeline_params
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			content_hash, crypto_identity, namespace, session_id, pipeline_params
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(artifact_id) DO NOTHING`
 	for _, e := range entries {
+		// crypto_identity (ADR-58) is transferred from the source blob
+		// at pack time; the bundler does not re-encrypt, so it carries
+		// the identity verbatim. Empty for a Plain packed blob.
 		if _, err := tx.ExecContext(ctx, stmt,
 			string(e.ArtifactID),
 			string(m.BlobRef),
@@ -359,6 +362,7 @@ func indexPackManifest(
 			e.ManifestOffset, e.ManifestSize,
 			e.BlobOffset, e.BlobSize,
 			string(e.ContentHash),
+			string(e.CryptoIdentity),
 			e.Namespace, e.SessionID,
 			e.PipelineParams,
 		); err != nil {

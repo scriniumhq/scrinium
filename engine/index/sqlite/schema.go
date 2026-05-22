@@ -3,7 +3,7 @@ package sqlite
 // CurrentSchemaVersion is the schema version this build of the
 // package writes and expects to read. Bumped whenever a migration
 // is added to migrations[].
-const CurrentSchemaVersion = 3
+const CurrentSchemaVersion = 4
 
 // migrations is the ordered list of forward-only schema migrations.
 // Each migration is applied inside its own transaction; if any step
@@ -28,6 +28,11 @@ var migrations = []migration{
 		Version:     3,
 		Description: "ADR-58: blobs.crypto_identity in the dedup key",
 		Statements:  schemaV3,
+	},
+	{
+		Version:     4,
+		Description: "ADR-58: packed_blobs.crypto_identity (pack-layer dedup key)",
+		Statements:  schemaV4,
 	},
 }
 
@@ -201,4 +206,22 @@ var schemaV3 = []string{
 	`ALTER TABLE blobs ADD COLUMN crypto_identity TEXT NOT NULL DEFAULT ''`,
 	`DROP INDEX blobs_content`,
 	`CREATE INDEX blobs_content ON blobs(content_hash, original_size, crypto_identity)`,
+}
+
+// schemaV4 adds the crypto-identity component to packed_blobs, the
+// pack-layer mirror of the blobs.crypto_identity column from v3
+// (ADR-58). Packing transfers a blob's identity verbatim — the
+// bundler stores the finished ciphertext bytes without re-encrypting
+// — so the dedup key (content_hash, original_size, crypto_identity)
+// is reproducible inside a pack just as it is for a standalone blob.
+// NOT NULL DEFAULT ” makes the migration a pure add: existing rows
+// (Plain packed blobs) keep an empty identity.
+//
+// Pack-layer dedup that consumes this column ships with the bundler
+// in M4/S4; the column and the PackedEntry.CryptoIdentity field are
+// frozen here so that layer builds on the final shape.
+//
+// Append-only: never edit this once shipped.
+var schemaV4 = []string{
+	`ALTER TABLE packed_blobs ADD COLUMN crypto_identity TEXT NOT NULL DEFAULT ''`,
 }

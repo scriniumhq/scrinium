@@ -48,3 +48,38 @@ func IsCryptoAlgorithm(algo string) bool {
 		return false
 	}
 }
+
+// BlobDedupKey is the full deduplication key of a blob, shared by
+// every dedup layer (ADR-58): regular blobs (ExistsByContent),
+// chunks (ExistsByHash), packs (packed_blobs), and cross-store
+// (MultistoreIndex.ExistsAny). Two blobs collapse to one physical
+// object only when all three components match.
+//
+//   - ContentHash    — the plaintext content hash (the global key).
+//   - OriginalSize   — guards against hash-prefix collisions across
+//     files of different lengths.
+//   - CryptoIdentity — empty for Plain blobs; "<algorithm>/<KeyID>"
+//     for encrypted ones, so a different key (or Plain vs encrypted)
+//     never deduplicates.
+//
+// All three fields are comparable, so BlobDedupKey is usable directly
+// as a Go map key (MultistoreIndex.ExistsAny returns a presence map
+// keyed by it).
+type BlobDedupKey struct {
+	ContentHash    ContentHash
+	OriginalSize   int64
+	CryptoIdentity CryptoIdentity
+}
+
+// BlobDedupKeyOf assembles the dedup key for a blob from its
+// plaintext ContentHash, OriginalSize and Pipeline stages. The
+// crypto-identity is derived the same way CryptoIdentityOf does, so
+// every layer that has a blob's stages can produce an identical key
+// without duplicating the derivation logic.
+func BlobDedupKeyOf(hash ContentHash, originalSize int64, stages []PipelineStage) BlobDedupKey {
+	return BlobDedupKey{
+		ContentHash:    hash,
+		OriginalSize:   originalSize,
+		CryptoIdentity: CryptoIdentityOf(stages),
+	}
+}

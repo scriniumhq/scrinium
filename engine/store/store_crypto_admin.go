@@ -10,6 +10,7 @@ import (
 	"scrinium.dev/engine/internal/manifestcrypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/descriptorcache"
+	"scrinium.dev/engine/store/internal/keyring"
 )
 
 // AdminStore crypto methods. The implementations live here
@@ -85,7 +86,7 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 		return fmt.Errorf("store.Unlock: %w", err)
 	}
 
-	dek, err := unwrapDEK(s.desc.DEK, *s.desc.KDFParams, passphrase)
+	dek, err := keyring.UnwrapDEK(s.desc.DEK, *s.desc.KDFParams, passphrase)
 	manifestcrypto.Wipe(passphrase)
 	if err != nil {
 		return fmt.Errorf("store.Unlock: %w", err)
@@ -171,7 +172,7 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 		cost = *cfg.KDFParams
 	}
 
-	wrapped, kdfParams, err := wrapDEK(s.dek, passphrase, cost)
+	wrapped, kdfParams, err := keyring.WrapDEK(s.dek, passphrase, cost)
 	manifestcrypto.Wipe(passphrase)
 	if err != nil {
 		return fmt.Errorf("store.SetPassphrase: %w", err)
@@ -243,7 +244,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("store.RotateKEK: current passphrase: %w", err)
 	}
-	verified, err := unwrapDEK(s.desc.DEK, *s.desc.KDFParams, currentPass)
+	verified, err := keyring.UnwrapDEK(s.desc.DEK, *s.desc.KDFParams, currentPass)
 	manifestcrypto.Wipe(currentPass)
 	if err != nil {
 		return fmt.Errorf("store.RotateKEK: %w", err)
@@ -272,7 +273,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		Memory:  s.desc.KDFParams.Memory,
 		Threads: s.desc.KDFParams.Threads,
 	}
-	wrapped, kdfParams, err := wrapDEK(s.dek, newPass, cost)
+	wrapped, kdfParams, err := keyring.WrapDEK(s.dek, newPass, cost)
 	manifestcrypto.Wipe(newPass)
 	if err != nil {
 		return fmt.Errorf("store.RotateKEK: %w", err)
