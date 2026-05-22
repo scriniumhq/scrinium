@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/klauspost/compress/zstd"
-	"scrinium.dev/engine/coreapi"
+	"scrinium.dev/engine/pipeline"
 )
 
 // encoder is the per-operation Encoder for zstd.
@@ -77,8 +77,8 @@ func (e *encoder) Transform(r io.Reader) io.Reader {
 // Result returns the recorded metrics. Called by the runner after
 // EOF on the wrapped reader. Entropy is always 0 (Bypass
 // heuristics deferred — see type comment).
-func (e *encoder) Result() coreapi.TransformResult {
-	return coreapi.TransformResult{
+func (e *encoder) Result() pipeline.TransformResult {
+	return pipeline.TransformResult{
 		OutputSize: e.outputSize.Load(),
 	}
 }

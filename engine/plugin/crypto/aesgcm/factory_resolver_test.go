@@ -6,9 +6,9 @@ import (
 	"io"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/plugin/crypto/aesgcm"
 )
 
@@ -24,7 +24,7 @@ func (r *fixedKeyResolver) GetKeys(keyID string) ([][]byte, error) {
 	}
 	return [][]byte{r.key}, nil
 }
-func (r *fixedKeyResolver) ResolveWriteKey(coreapi.KeyContext) string { return r.keyID }
+func (r *fixedKeyResolver) ResolveWriteKey(pipeline.KeyContext) string { return r.keyID }
 
 // rotatingKeyResolver returns multiple DEK candidates under one KeyID
 // — what the engine sees during a RotateKEK window.
@@ -43,14 +43,14 @@ func (r *rotatingKeyResolver) GetKeys(keyID string) ([][]byte, error) {
 	out = append(out, r.previousKeys...)
 	return out, nil
 }
-func (r *rotatingKeyResolver) ResolveWriteKey(coreapi.KeyContext) string { return r.keyID }
+func (r *rotatingKeyResolver) ResolveWriteKey(pipeline.KeyContext) string { return r.keyID }
 
 func TestAESGCM_Resolver_RoundTrip(t *testing.T) {
 	resolver := &fixedKeyResolver{keyID: "tenant-a", key: mustKey(t)}
 	factory := aesgcm.NewWithResolver(resolver)
 
 	payload := []byte("ciphertext flows through resolver")
-	ct, res := encode(t, factory, coreapi.EncodeContext{KeyID: "tenant-a"}, payload)
+	ct, res := encode(t, factory, pipeline.EncodeContext{KeyID: "tenant-a"}, payload)
 	if res.KeyID != "tenant-a" {
 		t.Errorf("Result.KeyID: got %q, want %q", res.KeyID, "tenant-a")
 	}
@@ -79,7 +79,7 @@ func TestAESGCM_Resolver_RotationDecryptsOldBlob(t *testing.T) {
 
 	writeFactory := aesgcm.NewWithResolver(&fixedKeyResolver{keyID: "active", key: oldKey})
 	payload := []byte("rotation-survivor blob")
-	ct, res := encode(t, writeFactory, coreapi.EncodeContext{KeyID: "active"}, payload)
+	ct, res := encode(t, writeFactory, pipeline.EncodeContext{KeyID: "active"}, payload)
 
 	readResolver := &rotatingKeyResolver{
 		keyID:        "active",
@@ -102,7 +102,7 @@ func TestAESGCM_Resolver_RotationDecryptsOldBlob(t *testing.T) {
 // AEAD tag mismatch).
 func TestAESGCM_Resolver_UnknownKeyIDFailsBeforeOpen(t *testing.T) {
 	factory := aesgcm.NewWithResolver(&fixedKeyResolver{keyID: "real", key: mustKey(t)})
-	ct, _ := encode(t, factory, coreapi.EncodeContext{KeyID: "real"}, []byte("body"))
+	ct, _ := encode(t, factory, pipeline.EncodeContext{KeyID: "real"}, []byte("body"))
 
 	dec := factory.NewDecoder(domain.PipelineStage{KeyID: "phantom"})
 	_, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
@@ -116,7 +116,7 @@ func TestAESGCM_Resolver_UnknownKeyIDFailsBeforeOpen(t *testing.T) {
 
 func TestAESGCM_Resolver_TamperedCiphertextFailsAEAD(t *testing.T) {
 	factory := aesgcm.NewWithResolver(&fixedKeyResolver{keyID: "k", key: mustKey(t)})
-	ct, res := encode(t, factory, coreapi.EncodeContext{KeyID: "k"}, bytes.Repeat([]byte{'x'}, 512))
+	ct, res := encode(t, factory, pipeline.EncodeContext{KeyID: "k"}, bytes.Repeat([]byte{'x'}, 512))
 
 	ct[len(ct)-1] ^= 0x01
 	dec := factory.NewDecoder(domain.PipelineStage{KeyID: res.KeyID})
@@ -128,7 +128,7 @@ func TestAESGCM_Resolver_TamperedCiphertextFailsAEAD(t *testing.T) {
 
 func TestAESGCM_Resolver_NilResolverFailsOnTransform(t *testing.T) {
 	factory := aesgcm.NewWithResolver(nil)
-	enc := factory.NewEncoder(coreapi.EncodeContext{})
+	enc := factory.NewEncoder(pipeline.EncodeContext{})
 	_, err := io.ReadAll(enc.Transform(bytes.NewReader([]byte("anything"))))
 	if err == nil {
 		t.Fatal("expected error for nil resolver, got nil")
@@ -137,8 +137,8 @@ func TestAESGCM_Resolver_NilResolverFailsOnTransform(t *testing.T) {
 
 func TestAESGCM_Resolver_IsAEADCapable(t *testing.T) {
 	factory := aesgcm.NewWithResolver(&fixedKeyResolver{keyID: "x", key: mustKey(t)})
-	if _, ok := factory.(coreapi.AEADCapable); !ok {
-		t.Fatal("resolver-backed factory must implement coreapi.AEADCapable")
+	if _, ok := factory.(pipeline.AEADCapable); !ok {
+		t.Fatal("resolver-backed factory must implement plugin.AEADCapable")
 	}
 }
 
@@ -153,7 +153,7 @@ func TestAESGCM_Resolver_ConvergentKeyIDSplitsCiphertext(t *testing.T) {
 	payload := bytes.Repeat([]byte{'q'}, 4096)
 
 	conv := func(keyID string) []byte {
-		ct, _ := encode(t, factory, coreapi.EncodeContext{
+		ct, _ := encode(t, factory, pipeline.EncodeContext{
 			KeyID: keyID, EncryptedDedup: domain.EncryptedDedupConvergent, SegmentSize: 1024,
 		}, payload)
 		return ct
@@ -178,14 +178,14 @@ func (r *twoKeyResolver) GetKeys(keyID string) ([][]byte, error) {
 	}
 	return nil, nil
 }
-func (r *twoKeyResolver) ResolveWriteKey(coreapi.KeyContext) string { return r.a }
+func (r *twoKeyResolver) ResolveWriteKey(pipeline.KeyContext) string { return r.a }
 
 func TestAESGCM_PinnedDEK_StillWorks(t *testing.T) {
 	factory, err := aesgcm.New(mustKey(t))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	ct, res := encode(t, factory, coreapi.EncodeContext{}, []byte("pinned"))
+	ct, res := encode(t, factory, pipeline.EncodeContext{}, []byte("pinned"))
 	if res.KeyID != "" {
 		t.Errorf("pinned factory must NOT record KeyID, got %q", res.KeyID)
 	}

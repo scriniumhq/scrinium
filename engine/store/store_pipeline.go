@@ -6,8 +6,8 @@ import (
 	"hash"
 	"io"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/pipeline"
 )
 
 // pipelineRunner builds and drives a chain of Encoder / Decoder
@@ -43,7 +43,7 @@ type putPipeline struct {
 
 type putPipelineStage struct {
 	algorithm string
-	encoder   coreapi.Encoder
+	encoder   pipeline.Encoder
 	hasher    hash.Hash
 }
 
@@ -56,7 +56,7 @@ func (s *store) buildPutPipeline(
 	hashAlgo string,
 	input io.Reader,
 	algoIDs []string,
-	ec coreapi.EncodeContext,
+	ec pipeline.EncodeContext,
 ) (io.Reader, *putPipeline, error) {
 	contentHasher, err := s.hashes.NewHasher(hashAlgo)
 	if err != nil {

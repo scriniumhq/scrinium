@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/plugins"
+	"scrinium.dev/engine/pipeline"
 )
 
 // crypto.go — store-side crypto glue that cannot live in the
@@ -55,5 +55,5 @@ func (s *store) promoteKeyResolverIfDefault() {
 	if len(s.dek) == 0 {
 		return
 	}
-	s.keyResolver = plugins.NewStaticKeyResolver(s.dek)
+	s.keyResolver = pipeline.NewStaticKeyResolver(s.dek)
 }

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/engine/pipeline"
 )
 
 // ErrInvalidKeyLength is returned by New when key is not 32 bytes.
@@ -29,7 +29,7 @@ type factory struct {
 // Pinned-DEK factories do NOT write a KeyID into pipeline stages and
 // do NOT consult the KeyResolver on read. New code should prefer
 // NewWithResolver.
-func New(key []byte) (coreapi.TransformerFactory, error) {
+func New(key []byte) (pipeline.TransformerFactory, error) {
 	if len(key) != aead.DEKLen {
 		return nil, fmt.Errorf("%w (got %d)", ErrInvalidKeyLength, len(key))
 	}
@@ -52,7 +52,7 @@ func buildAEAD(key []byte) (cipher.AEAD, error) {
 // NewEncoder creates a fresh per-operation Encoder. The pinned-DEK
 // path records an empty KeyID; it reads the segmentation mode and
 // size from EncodeContext (ADR-59).
-func (f *factory) NewEncoder(ec coreapi.EncodeContext) coreapi.Encoder {
+func (f *factory) NewEncoder(ec pipeline.EncodeContext) pipeline.Encoder {
 	return &encoder{
 		gcm:     f.gcm,
 		dek:     f.key,
@@ -63,9 +63,9 @@ func (f *factory) NewEncoder(ec coreapi.EncodeContext) coreapi.Encoder {
 
 // NewDecoder creates a fresh per-operation Decoder. The IV comes from
 // each segment frame, not stage.IV (ADR-59).
-func (f *factory) NewDecoder(_ domain.PipelineStage) coreapi.Decoder {
+func (f *factory) NewDecoder(_ domain.PipelineStage) pipeline.Decoder {
 	return &decoder{gcm: f.gcm}
 }
 
-// AEAD implements coreapi.AEADCapable.
+// AEAD implements pipeline.AEADCapable.
 func (f *factory) AEAD() {}

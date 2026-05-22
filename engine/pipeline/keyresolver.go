@@ -1,4 +1,4 @@
-package coreapi
+package pipeline
 
 // keyresolver.go — encryption-key resolution contract: KeyResolver,
 // its write-time KeyContext, and the default static resolver

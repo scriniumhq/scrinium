@@ -14,6 +14,7 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/recovery"
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
@@ -45,7 +46,7 @@ func ReadSystemConfig(
 // tests so they can assert that promoteKeyResolverIfDefault
 // did or did not run. Returns nil for non-*store implementers
 // (e.g. test mocks) so the helper degrades cleanly.
-func StoreKeyResolver(s coreapi.Store) coreapi.KeyResolver {
+func StoreKeyResolver(s coreapi.Store) pipeline.KeyResolver {
 	concrete, ok := s.(*store)
 	if !ok {
 		return nil

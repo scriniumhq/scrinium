@@ -7,9 +7,9 @@ import (
 	"io"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/plugin/crypto/aesgcm"
 )
 
@@ -22,7 +22,7 @@ func mustKey(t *testing.T) []byte {
 	return k
 }
 
-func encode(t *testing.T, f coreapi.TransformerFactory, ec coreapi.EncodeContext, plain []byte) ([]byte, coreapi.TransformResult) {
+func encode(t *testing.T, f pipeline.TransformerFactory, ec pipeline.EncodeContext, plain []byte) ([]byte, pipeline.TransformResult) {
 	t.Helper()
 	enc := f.NewEncoder(ec)
 	ct, err := io.ReadAll(enc.Transform(bytes.NewReader(plain)))
@@ -39,7 +39,7 @@ func TestAESGCM_RoundTrip(t *testing.T) {
 	}
 	payload := []byte("Scrinium is a content-addressable store.")
 
-	ct, res := encode(t, factory, coreapi.EncodeContext{}, payload)
+	ct, res := encode(t, factory, pipeline.EncodeContext{}, payload)
 	// Segmented format: per-blob IV is gone — Result.IV must be nil.
 	if res.IV != nil {
 		t.Fatalf("Result.IV must be nil for segmented format, got %d bytes", len(res.IV))
@@ -69,7 +69,7 @@ func TestAESGCM_RoundTrip(t *testing.T) {
 // bogus stage IV must not affect the result.
 func TestAESGCM_DecoderIgnoresStageIV(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
-	ct, _ := encode(t, factory, coreapi.EncodeContext{}, []byte("ignore the stage IV"))
+	ct, _ := encode(t, factory, pipeline.EncodeContext{}, []byte("ignore the stage IV"))
 
 	bogus := bytes.Repeat([]byte{0xAB}, 12)
 	dec := factory.NewDecoder(domain.PipelineStage{Algorithm: "aes-gcm", IV: bogus})
@@ -86,7 +86,7 @@ func TestAESGCM_WrongKeyFailsAEAD(t *testing.T) {
 	f1, _ := aesgcm.New(mustKey(t))
 	f2, _ := aesgcm.New(mustKey(t))
 
-	ct, _ := encode(t, f1, coreapi.EncodeContext{}, []byte("secret"))
+	ct, _ := encode(t, f1, pipeline.EncodeContext{}, []byte("secret"))
 	dec := f2.NewDecoder(domain.PipelineStage{})
 	_, err := io.ReadAll(dec.Transform(bytes.NewReader(ct)))
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
@@ -96,7 +96,7 @@ func TestAESGCM_WrongKeyFailsAEAD(t *testing.T) {
 
 func TestAESGCM_TamperedCiphertextFailsAEAD(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
-	ct, _ := encode(t, factory, coreapi.EncodeContext{}, bytes.Repeat([]byte{'x'}, 1024))
+	ct, _ := encode(t, factory, pipeline.EncodeContext{}, bytes.Repeat([]byte{'x'}, 1024))
 
 	// Flip a byte near the end (inside the last segment's tag region).
 	ct[len(ct)-1] ^= 0x01
@@ -119,7 +119,7 @@ func TestAESGCM_BadKeyLengthAtConstruction(t *testing.T) {
 func TestAESGCM_FactoryReusableAcrossOperations(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
 	for i := 0; i < 5; i++ {
-		ct, _ := encode(t, factory, coreapi.EncodeContext{},
+		ct, _ := encode(t, factory, pipeline.EncodeContext{},
 			[]byte("payload "+string(rune('a'+i))))
 		dec := factory.NewDecoder(domain.PipelineStage{})
 		if _, err := io.ReadAll(dec.Transform(bytes.NewReader(ct))); err != nil {
@@ -134,7 +134,7 @@ func TestAESGCM_ConvergentDeterministicVsDisabled(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
 	payload := bytes.Repeat([]byte{'z'}, 4096)
 
-	convCtx := coreapi.EncodeContext{EncryptedDedup: domain.EncryptedDedupConvergent, SegmentSize: 1024}
+	convCtx := pipeline.EncodeContext{EncryptedDedup: domain.EncryptedDedupConvergent, SegmentSize: 1024}
 	a, _ := encode(t, factory, convCtx, payload)
 	b, _ := encode(t, factory, convCtx, payload)
 	if !bytes.Equal(a, b) {
@@ -147,7 +147,7 @@ func TestAESGCM_ConvergentDeterministicVsDisabled(t *testing.T) {
 		t.Fatalf("convergent round-trip: err=%v eq=%v", err, bytes.Equal(pt, payload))
 	}
 
-	disCtx := coreapi.EncodeContext{EncryptedDedup: domain.EncryptedDedupDisabled, SegmentSize: 1024}
+	disCtx := pipeline.EncodeContext{EncryptedDedup: domain.EncryptedDedupDisabled, SegmentSize: 1024}
 	c, _ := encode(t, factory, disCtx, payload)
 	d, _ := encode(t, factory, disCtx, payload)
 	if bytes.Equal(c, d) {
@@ -163,7 +163,7 @@ func TestAESGCM_MultiSegmentRoundTrip(t *testing.T) {
 	if _, err := rand.Read(payload); err != nil {
 		t.Fatal(err)
 	}
-	ec := coreapi.EncodeContext{SegmentSize: 1024}
+	ec := pipeline.EncodeContext{SegmentSize: 1024}
 	ct, _ := encode(t, factory, ec, payload)
 
 	dec := factory.NewDecoder(domain.PipelineStage{})

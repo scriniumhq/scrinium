@@ -4,8 +4,8 @@ import (
 	"errors"
 	"io"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/internal/segaead"
+	"scrinium.dev/engine/pipeline"
 )
 
 // resolverEncoder is the per-operation Encoder for the
@@ -17,7 +17,7 @@ import (
 // per-segment IV derivation, so the survivor blob is byte-reproducible
 // (ADR-58/59).
 type resolverEncoder struct {
-	resolver coreapi.KeyResolver
+	resolver pipeline.KeyResolver
 	keyID    string // chosen by the engine, fixed at construction
 	mode     segaead.IVMode
 	segSize  int
@@ -64,16 +64,16 @@ func (e *resolverEncoder) Transform(r io.Reader) io.Reader {
 // was constructed with (copied by the runner into the manifest stage
 // so the Decoder can resolve the same key on read). IV is nil — the
 // segmented format keeps per-segment IVs inside the blob (ADR-59).
-func (e *resolverEncoder) Result() coreapi.TransformResult {
+func (e *resolverEncoder) Result() pipeline.TransformResult {
 	var out int64
 	if e.sealed != nil {
 		out = e.sealed.BytesWritten()
 	}
-	return coreapi.TransformResult{
+	return pipeline.TransformResult{
 		OutputSize: out,
 		IV:         nil,
 		KeyID:      e.keyID,
 	}
 }
 
-var _ coreapi.Encoder = (*resolverEncoder)(nil)
+var _ pipeline.Encoder = (*resolverEncoder)(nil)

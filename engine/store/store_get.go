@@ -13,6 +13,7 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/blobpath"
 	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/engine/pipeline"
 )
 
 // asKeyProvider converts a store.KeyResolver into a
@@ -23,7 +24,7 @@ import (
 // Treating "nil resolver" as "no provider" mirrors the spec:
 // Plain manifests don't need a resolver, encrypted ones surface
 // ErrKeyNotFound.
-func asKeyProvider(r coreapi.KeyResolver) manifestcodec.KeyProvider {
+func asKeyProvider(r pipeline.KeyResolver) manifestcodec.KeyProvider {
 	if r == nil {
 		return nil
 	}

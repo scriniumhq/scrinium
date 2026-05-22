@@ -5,6 +5,7 @@ import (
 
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/pipeline"
 )
 
 // PassphraseHint is the call context for a PassphraseProvider.
@@ -53,8 +54,8 @@ type storeOptions struct {
 	storeIndex    coreapi.StoreIndex
 	publisher     coreapi.Publisher
 	hashRegistry  domain.HashRegistry
-	readRegistry  coreapi.TransformerRegistry
-	keyResolver   coreapi.KeyResolver
+	readRegistry  pipeline.TransformerRegistry
+	keyResolver   pipeline.KeyResolver
 	passphrase    PassphraseProvider
 	autoUnlock    bool
 }
@@ -101,14 +102,14 @@ func WithHashRegistry(r domain.HashRegistry) StoreOption {
 
 // WithReadRegistry provides the registry of transformation plugins.
 // Required when StoreConfig.Pipeline is non-empty.
-func WithReadRegistry(r coreapi.TransformerRegistry) StoreOption {
+func WithReadRegistry(r pipeline.TransformerRegistry) StoreOption {
 	return func(o *storeOptions) { o.readRegistry = r }
 }
 
 // WithKeyResolver provides the key-resolver plugin. By default the
 // engine uses StaticKeyResolver populated with the DEK from
 // store.json.
-func WithKeyResolver(r coreapi.KeyResolver) StoreOption {
+func WithKeyResolver(r pipeline.KeyResolver) StoreOption {
 	return func(o *storeOptions) { o.keyResolver = r }
 }
 

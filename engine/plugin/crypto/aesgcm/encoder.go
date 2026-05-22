@@ -5,8 +5,8 @@ import (
 	"errors"
 	"io"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/internal/segaead"
+	"scrinium.dev/engine/pipeline"
 )
 
 // encoder is the per-operation pinned-DEK Encoder. It delegates the
@@ -49,16 +49,16 @@ func (e *encoder) Transform(r io.Reader) io.Reader {
 // is nil: the segmented format keeps a per-segment IV in each frame,
 // so manifest.Pipeline[i].IV stays empty for this stage (ADR-59).
 // KeyID is empty for the pinned-DEK factory.
-func (e *encoder) Result() coreapi.TransformResult {
+func (e *encoder) Result() pipeline.TransformResult {
 	var out int64
 	if e.sealed != nil {
 		out = e.sealed.BytesWritten()
 	}
-	return coreapi.TransformResult{
+	return pipeline.TransformResult{
 		OutputSize: out,
 		IV:         nil,
 		KeyID:      e.keyID,
 	}
 }
 
-var _ coreapi.Encoder = (*encoder)(nil)
+var _ pipeline.Encoder = (*encoder)(nil)

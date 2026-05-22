@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/internal/blobpath"
 	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/engine/pipeline"
 )
 
 // Put records an artifact in the Store. Two blob-placement paths
@@ -299,7 +299,7 @@ func (s *store) streamThroughPipeline(
 ) {
 	stagingPath := s.makeStagingPath()
 
-	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, coreapi.EncodeContext{
+	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, pipeline.EncodeContext{
 		KeyID:          writeKeyID,
 		EncryptedDedup: cfg.EncryptedDedup, // ADR-58: IV mode for the crypto stage
 		SegmentSize:    cfg.SegmentSize,    // ADR-59: segmented AEAD frame size
@@ -433,7 +433,7 @@ func (s *store) resolveWriteKeyID(namespace string) string {
 	if r == nil {
 		return ""
 	}
-	return r.ResolveWriteKey(coreapi.KeyContext{Namespace: namespace})
+	return r.ResolveWriteKey(pipeline.KeyContext{Namespace: namespace})
 }
 
 // validatePutInputs covers the cheap, side-effect-free checks that

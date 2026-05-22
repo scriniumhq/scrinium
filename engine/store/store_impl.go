@@ -10,6 +10,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/systemstore"
 )
@@ -64,8 +65,8 @@ type store struct {
 	// Plugin registries — populated at construction; never mutated
 	// after that.
 	hashes       domain.HashRegistry
-	transformers coreapi.TransformerRegistry
-	keyResolver  coreapi.KeyResolver
+	transformers pipeline.TransformerRegistry
+	keyResolver  pipeline.KeyResolver
 
 	// SystemStore facade. Initialised once at construction; nil
 	// only in unit tests that build a *store by hand without

@@ -4,8 +4,8 @@ import (
 	"crypto/cipher"
 	"io"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/internal/segaead"
+	"scrinium.dev/engine/pipeline"
 )
 
 // decoder is the per-operation pinned-DEK Decoder. It reads the blob
@@ -26,4 +26,4 @@ func (d *decoder) Transform(r io.Reader) io.Reader {
 	return decryptErrReader{r: or}
 }
 
-var _ coreapi.Decoder = (*decoder)(nil)
+var _ pipeline.Decoder = (*decoder)(nil)

@@ -13,9 +13,9 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
+	"scrinium.dev/engine/pipeline"
 	scriniumzstd "scrinium.dev/engine/plugin/compress/zstd"
 	"scrinium.dev/engine/plugin/crypto/aesgcm"
-	"scrinium.dev/engine/plugins"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
@@ -593,7 +593,7 @@ func TestPut_Inline_DisabledByZeroLimit(t *testing.T) {
 func TestPut_Pipeline_ZstdRoundTrip(t *testing.T) {
 	// Build a Store whose active config compresses via zstd. The
 	// content we write must come back identical via Get.
-	reg := plugins.NewTransformerRegistry().
+	reg := pipeline.NewTransformerRegistry().
 		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
 
 	cfg := domain.StoreConfig{
@@ -655,7 +655,7 @@ func TestPut_Pipeline_AESGCMRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("aesgcm.New: %v", err)
 	}
-	reg := plugins.NewTransformerRegistry().Register("aes-gcm", aesFactory)
+	reg := pipeline.NewTransformerRegistry().Register("aes-gcm", aesFactory)
 
 	cfg := domain.StoreConfig{
 		Pipeline: []string{"aes-gcm"},
@@ -708,7 +708,7 @@ func TestPut_Pipeline_ZstdThenAESGCM(t *testing.T) {
 		dek[i] = byte(i + 1)
 	}
 	aesFactory, _ := aesgcm.New(dek)
-	reg := plugins.NewTransformerRegistry().
+	reg := pipeline.NewTransformerRegistry().
 		Register("zstd", scriniumzstd.New(scriniumzstd.Options{})).
 		Register("aes-gcm", aesFactory)
 
@@ -753,7 +753,7 @@ func TestPut_Pipeline_ZstdThenAESGCM(t *testing.T) {
 
 func TestPut_Pipeline_MissingAlgorithm(t *testing.T) {
 	// Empty registry — "zstd" is not registered.
-	reg := plugins.NewTransformerRegistry()
+	reg := pipeline.NewTransformerRegistry()
 
 	cfg := domain.StoreConfig{
 		Pipeline: []string{"zstd"},
@@ -776,7 +776,7 @@ func TestPut_Pipeline_MissingAlgorithm(t *testing.T) {
 }
 
 func TestPut_Pipeline_RefusedOnInline(t *testing.T) {
-	reg := plugins.NewTransformerRegistry().
+	reg := pipeline.NewTransformerRegistry().
 		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
 
 	cfg := domain.StoreConfig{

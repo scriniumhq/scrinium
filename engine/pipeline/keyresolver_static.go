@@ -1,37 +1,20 @@
-package plugins
+package pipeline
 
 import (
 	"sync"
 
-	"scrinium.dev/engine/coreapi"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
 )
 
-// transformerRegistry implements TransformerRegistry with an RWMutex
-// so concurrent registration and reads stay safe. In production
-// registration usually happens once (when wiring the stack), but
-// the protection is cheaper than chasing flaky races in tests.
-type transformerRegistry struct {
-	mu        sync.RWMutex
-	factories map[string]coreapi.TransformerFactory
-}
-
-func (r *transformerRegistry) Get(id string) (coreapi.TransformerFactory, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	f, ok := r.factories[id]
-	if !ok {
-		return nil, errs.ErrUnsupportedAlgorithm
-	}
-	return f, nil
-}
-
-func (r *transformerRegistry) Register(id string, f coreapi.TransformerFactory) coreapi.TransformerRegistry {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.factories[id] = f
-	return r
+// NewStaticKeyResolver creates a KeyResolver that returns the same
+// DEK for any request. ResolveWriteKey ignores its context and
+// returns an empty KeyID. This is the default behaviour: one Store, one DEK.
+func NewStaticKeyResolver(dek []byte) KeyResolver {
+	// Defensive copy so external code cannot modify the key after
+	// passing it to the resolver.
+	cp := make([]byte, len(dek))
+	copy(cp, dek)
+	return &staticKeyResolver{dek: cp}
 }
 
 // staticKeyResolver implements KeyResolver with a single DEK. It
@@ -62,7 +45,7 @@ func (r *staticKeyResolver) GetKeys(keyID string) ([][]byte, error) {
 	return [][]byte{cp}, nil
 }
 
-func (r *staticKeyResolver) ResolveWriteKey(coreapi.KeyContext) string {
+func (r *staticKeyResolver) ResolveWriteKey(KeyContext) string {
 	return ""
 }
 

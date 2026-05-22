@@ -1,9 +1,9 @@
 package store
 
 import (
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/pipeline"
 )
 
 // shouldVerifyOnRead resolves the per-Get verification decision
@@ -40,7 +40,7 @@ func shouldVerifyOnRead(
 	policy domain.VerifyOnReadPolicy,
 	stages []domain.PipelineStage,
 	caps driver.CapabilityMask,
-	transformers coreapi.TransformerRegistry,
+	transformers pipeline.TransformerRegistry,
 ) bool {
 	switch policy {
 	case domain.VerifyOnReadForceEnabled:
@@ -60,7 +60,7 @@ func shouldVerifyOnRead(
 		if err != nil {
 			continue
 		}
-		if _, ok := f.(coreapi.AEADCapable); ok {
+		if _, ok := f.(pipeline.AEADCapable); ok {
 			return false
 		}
 	}

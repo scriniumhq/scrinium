@@ -10,8 +10,8 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/internal/testutil/storefx"
+	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/plugin/crypto/aesgcm"
-	"scrinium.dev/engine/plugins"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
@@ -125,7 +125,7 @@ func TestDedup_Matrix(t *testing.T) {
 				cfg.EncryptedDedup = tc.dedup
 				cfg.SegmentSize = tc.segmentSize
 				opts = append(opts,
-					store.WithReadRegistry(plugins.NewTransformerRegistry().Register("aes-gcm", f)))
+					store.WithReadRegistry(pipeline.NewTransformerRegistry().Register("aes-gcm", f)))
 			}
 			opts = append(opts, store.WithConfig(cfg))
 			s := storefx.InitOn(t, drv, opts...)

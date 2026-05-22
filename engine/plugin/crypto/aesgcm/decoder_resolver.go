@@ -3,8 +3,8 @@ package aesgcm
 import (
 	"io"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/internal/segaead"
+	"scrinium.dev/engine/pipeline"
 )
 
 // resolverDecoder is the per-operation Decoder for the
@@ -19,7 +19,7 @@ import (
 // genuine decryption failure. A segment that no candidate can open
 // surfaces errs.ErrDecryptionFailed (via decryptErrReader).
 type resolverDecoder struct {
-	resolver coreapi.KeyResolver
+	resolver pipeline.KeyResolver
 	keyID    string
 }
 
@@ -35,4 +35,4 @@ func (d *resolverDecoder) Transform(r io.Reader) io.Reader {
 	return decryptErrReader{r: or}
 }
 
-var _ coreapi.Decoder = (*resolverDecoder)(nil)
+var _ pipeline.Decoder = (*resolverDecoder)(nil)

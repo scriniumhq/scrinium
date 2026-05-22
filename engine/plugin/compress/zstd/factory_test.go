@@ -8,17 +8,17 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/pipeline"
 	scriniumzstd "scrinium.dev/engine/plugin/compress/zstd"
 )
 
 // roundTrip is the property under test: Decoder(Encoder(x)) == x
 // for every supported input shape.
-func roundTrip(t *testing.T, factory coreapi.TransformerFactory, payload []byte) coreapi.TransformResult {
+func roundTrip(t *testing.T, factory pipeline.TransformerFactory, payload []byte) pipeline.TransformResult {
 	t.Helper()
 
-	enc := factory.NewEncoder(coreapi.EncodeContext{})
+	enc := factory.NewEncoder(pipeline.EncodeContext{})
 	encStream := enc.Transform(bytes.NewReader(payload))
 	encoded, err := io.ReadAll(encStream)
 	if err != nil {
@@ -94,7 +94,7 @@ func TestZstd_DecoderRejectsCorruptedFrame(t *testing.T) {
 		t.Fatalf("rand: %v", err)
 	}
 
-	enc := factory.NewEncoder(coreapi.EncodeContext{})
+	enc := factory.NewEncoder(pipeline.EncodeContext{})
 	encoded, err := io.ReadAll(enc.Transform(bytes.NewReader(payload)))
 	if err != nil {
 		t.Fatalf("encode: %v", err)

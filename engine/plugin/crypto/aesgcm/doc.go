@@ -25,7 +25,7 @@
 // corruption is localised to a single segment.
 //
 // Because integrity is checked per segment on every read, the factory
-// implements coreapi.AEADCapable: the engine can skip a redundant
+// implements pipeline.AEADCapable: the engine can skip a redundant
 // ContentHash recomputation under VerifyOnRead=Auto.
 //
 // # IV handling

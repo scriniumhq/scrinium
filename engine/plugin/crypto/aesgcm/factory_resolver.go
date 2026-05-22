@@ -4,8 +4,8 @@ import (
 	"crypto/cipher"
 	"errors"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/pipeline"
 )
 
 // factoryResolver is the resolver-backed AES-GCM TransformerFactory.
@@ -22,7 +22,7 @@ import (
 // recorded KeyID from the stage and asks the resolver for candidate
 // keys, trying each until one segment-AEAD-opens.
 type factoryResolver struct {
-	resolver coreapi.KeyResolver
+	resolver pipeline.KeyResolver
 }
 
 // errKeyResolverMissing surfaces a nil resolver at the moment of
@@ -43,7 +43,7 @@ var errKeyResolverEmpty = errors.New("aesgcm: KeyResolver returned no keys")
 //
 // The resolver may be nil at construction time; absence is surfaced
 // on the first Transform that needs a key.
-func NewWithResolver(resolver coreapi.KeyResolver) coreapi.TransformerFactory {
+func NewWithResolver(resolver pipeline.KeyResolver) pipeline.TransformerFactory {
 	return &factoryResolver{resolver: resolver}
 }
 
@@ -51,7 +51,7 @@ func NewWithResolver(resolver coreapi.KeyResolver) coreapi.TransformerFactory {
 // resolved for this operation (ec.KeyID), the IV mode derived from
 // ec.EncryptedDedup, and ec.SegmentSize. The DEK lookup happens on
 // first Transform.
-func (f *factoryResolver) NewEncoder(ec coreapi.EncodeContext) coreapi.Encoder {
+func (f *factoryResolver) NewEncoder(ec pipeline.EncodeContext) pipeline.Encoder {
 	return &resolverEncoder{
 		resolver: f.resolver,
 		keyID:    ec.KeyID,
@@ -63,14 +63,14 @@ func (f *factoryResolver) NewEncoder(ec coreapi.EncodeContext) coreapi.Encoder {
 // NewDecoder returns a Decoder bound to the recorded stage KeyID.
 // The DEK lookup (and candidate enumeration for rotation) happens on
 // Transform; the IV comes from each segment frame, not the stage.
-func (f *factoryResolver) NewDecoder(stage domain.PipelineStage) coreapi.Decoder {
+func (f *factoryResolver) NewDecoder(stage domain.PipelineStage) pipeline.Decoder {
 	return &resolverDecoder{
 		resolver: f.resolver,
 		keyID:    stage.KeyID,
 	}
 }
 
-// AEAD implements coreapi.AEADCapable for the resolver-backed
+// AEAD implements pipeline.AEADCapable for the resolver-backed
 // factory. Same rationale as the pinned-DEK factory: each segment's
 // GCM tag authenticates the read, so VerifyOnRead=Auto can skip the
 // explicit ContentHash recomputation.
@@ -80,7 +80,7 @@ func (f *factoryResolver) AEAD() {}
 // keyID, in resolver order. The write side uses keys[0] (both to
 // build the AEAD and as the convergent-IV HMAC key); the read side
 // builds an AEAD from each candidate.
-func resolveKeys(resolver coreapi.KeyResolver, keyID string) ([][]byte, error) {
+func resolveKeys(resolver pipeline.KeyResolver, keyID string) ([][]byte, error) {
 	if resolver == nil {
 		return nil, errKeyResolverMissing
 	}
@@ -97,7 +97,7 @@ func resolveKeys(resolver coreapi.KeyResolver, keyID string) ([][]byte, error) {
 // resolveAEADs builds AEAD primitives for every candidate DEK, in
 // resolver order. Used by the read path; the write path only needs
 // keys[0] and builds its single AEAD directly.
-func resolveAEADs(resolver coreapi.KeyResolver, keyID string) ([]cipher.AEAD, error) {
+func resolveAEADs(resolver pipeline.KeyResolver, keyID string) ([]cipher.AEAD, error) {
 	keys, err := resolveKeys(resolver, keyID)
 	if err != nil {
 		return nil, err
