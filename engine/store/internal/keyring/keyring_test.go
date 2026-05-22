@@ -3,6 +3,7 @@ package keyring
 import (
 	"bytes"
 	"errors"
+	"scrinium.dev/engine/internal/aead"
 	"testing"
 
 	"scrinium.dev/engine/domain"
@@ -14,8 +15,8 @@ func TestGenerateDEK_LengthAndUniqueness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(a) != DEKLen {
-		t.Fatalf("len: got %d, want %d", len(a), DEKLen)
+	if len(a) != aead.DEKLen {
+		t.Fatalf("len: got %d, want %d", len(a), aead.DEKLen)
 	}
 	b, _ := GenerateDEK()
 	if bytes.Equal(a, b) {
