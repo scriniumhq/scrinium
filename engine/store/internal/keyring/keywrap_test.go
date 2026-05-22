@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"errors"
+	"scrinium.dev/engine/internal/aead"
 	"testing"
 
 	"scrinium.dev/engine/errs"
@@ -14,7 +15,7 @@ import (
 // independently testable.
 func freshKEK(t *testing.T) []byte {
 	t.Helper()
-	k := make([]byte, kekLen)
+	k := make([]byte, aead.DEKLen)
 	if _, err := rand.Read(k); err != nil {
 		t.Fatalf("rand: %v", err)
 	}
@@ -46,7 +47,7 @@ func TestWrap_LayoutSize(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Wrap: %v", err)
 	}
-	want := wrapNonceLen + len(dek) + wrapTagLen
+	want := aead.NonceLen + len(dek) + aead.TagLen
 	if len(wrapped) != want {
 		t.Errorf("wrapped length: got %d, want %d", len(wrapped), want)
 	}
@@ -60,7 +61,7 @@ func TestWrap_NoncesAreUnique(t *testing.T) {
 	// Same key, same DEK, but ciphertexts must diverge — proves
 	// nonce randomness. If the first NonceLen bytes are equal,
 	// our RNG or implementation is broken.
-	if bytes.Equal(w1[:wrapNonceLen], w2[:wrapNonceLen]) {
+	if bytes.Equal(w1[:aead.NonceLen], w2[:aead.NonceLen]) {
 		t.Fatal("two Wrap calls produced identical nonces")
 	}
 	if bytes.Equal(w1, w2) {
@@ -87,7 +88,7 @@ func TestUnwrap_TamperedCiphertext(t *testing.T) {
 
 	wrapped, _ := wrapKEK(dek, kek)
 	// Flip one bit in the ciphertext (skip the nonce).
-	wrapped[wrapNonceLen+5] ^= 0x01
+	wrapped[aead.NonceLen+5] ^= 0x01
 
 	_, err := unwrapKEK(wrapped, kek)
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
@@ -126,7 +127,7 @@ func TestUnwrap_TamperedTag(t *testing.T) {
 func TestUnwrap_TooShort(t *testing.T) {
 	kek := freshKEK(t)
 
-	for _, n := range []int{0, 1, wrapNonceLen, wrapNonceLen + wrapTagLen - 1} {
+	for _, n := range []int{0, 1, aead.NonceLen, aead.NonceLen + aead.TagLen - 1} {
 		_, err := unwrapKEK(make([]byte, n), kek)
 		if !errors.Is(err, errs.ErrDecryptionFailed) {
 			t.Errorf("len=%d: expected ErrDecryptionFailed, got %v", n, err)

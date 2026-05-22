@@ -1,4 +1,4 @@
-package descriptorcache
+package descriptor
 
 import (
 	"bytes"
@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/store/internal/descriptor"
 )
 
 // fakeMeta is a minimal in-memory metaStore for unit testing the
@@ -39,20 +38,9 @@ func (m *fakeMeta) SetMeta(_ context.Context, key, value string) error {
 	return nil
 }
 
-// validDescriptor returns a descriptor with one of every field
-// set, matching what Persist would produce post-InitStore.
-func validDescriptor(t *testing.T) *descriptor.Descriptor {
-	t.Helper()
-	return &descriptor.Descriptor{
-		StoreID:       "11111111-2222-3333-4444-555555555555",
-		SchemaVersion: descriptor.CurrentSchemaVersion,
-		Sequence:      7,
-	}
-}
-
 // --- save → load round-trip ---
 
-func TestDescriptorCache_RoundTrip(t *testing.T) {
+func TestCache_RoundTrip(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	src := validDescriptor(t)
@@ -71,16 +59,16 @@ func TestDescriptorCache_RoundTrip(t *testing.T) {
 	if got.Sequence != src.Sequence {
 		t.Errorf("Sequence: got %d, want %d", got.Sequence, src.Sequence)
 	}
-	if len(got.Checksum) != descriptor.ChecksumLen {
-		t.Errorf("Checksum length: got %d, want %d", len(got.Checksum), descriptor.ChecksumLen)
+	if len(got.Checksum) != ChecksumLen {
+		t.Errorf("Checksum length: got %d, want %d", len(got.Checksum), ChecksumLen)
 	}
 
-	expectedBlob, _ := descriptor.Marshal(src)
+	expectedBlob, _ := Marshal(src)
 	if !bytes.Equal(got.Blob, expectedBlob) {
 		t.Error("Blob round-trip mismatch")
 	}
 
-	expectedSum, _ := descriptor.Checksum(src)
+	expectedSum, _ := Checksum(src)
 	if !bytes.Equal(got.Checksum, expectedSum) {
 		t.Error("Checksum round-trip mismatch")
 	}
@@ -88,7 +76,7 @@ func TestDescriptorCache_RoundTrip(t *testing.T) {
 
 // --- empty cache is a normal "rebuild from Location" signal ---
 
-func TestDescriptorCache_AbsentReturnsNilNoError(t *testing.T) {
+func TestCache_AbsentReturnsNilNoError(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	got, err := Load(ctx, meta)
@@ -102,7 +90,7 @@ func TestDescriptorCache_AbsentReturnsNilNoError(t *testing.T) {
 
 // --- partial cache is corruption ---
 
-func TestDescriptorCache_PartialIsCorruption(t *testing.T) {
+func TestCache_PartialIsCorruption(t *testing.T) {
 	cases := []struct {
 		name string
 		set  func(m *fakeMeta)
@@ -146,7 +134,7 @@ func TestDescriptorCache_PartialIsCorruption(t *testing.T) {
 
 // --- internal-consistency violations ---
 
-func TestDescriptorCache_RejectsSequenceMismatch(t *testing.T) {
+func TestCache_RejectsSequenceMismatch(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	src := validDescriptor(t) // Sequence = 7
@@ -166,7 +154,7 @@ func TestDescriptorCache_RejectsSequenceMismatch(t *testing.T) {
 	}
 }
 
-func TestDescriptorCache_RejectsChecksumMismatch(t *testing.T) {
+func TestCache_RejectsChecksumMismatch(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	src := validDescriptor(t)
@@ -174,7 +162,7 @@ func TestDescriptorCache_RejectsChecksumMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Hand-edit: corrupt the checksum.
-	bogus := make([]byte, descriptor.ChecksumLen)
+	bogus := make([]byte, ChecksumLen)
 	meta.data[metaKeyDescriptorChecksum] = hex.EncodeToString(bogus)
 
 	_, err := Load(ctx, meta)
@@ -188,19 +176,19 @@ func TestDescriptorCache_RejectsChecksumMismatch(t *testing.T) {
 
 // --- malformed encodings ---
 
-func TestDescriptorCache_RejectsUnparseableSequence(t *testing.T) {
+func TestCache_RejectsUnparseableSequence(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	meta.data[metaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
 	meta.data[metaKeyDescriptorSequence] = "not-a-number"
-	meta.data[metaKeyDescriptorChecksum] = strings.Repeat("00", descriptor.ChecksumLen)
+	meta.data[metaKeyDescriptorChecksum] = strings.Repeat("00", ChecksumLen)
 	_, err := Load(ctx, meta)
 	if err == nil {
 		t.Fatal("expected parse error")
 	}
 }
 
-func TestDescriptorCache_RejectsUnparseableChecksum(t *testing.T) {
+func TestCache_RejectsUnparseableChecksum(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	meta.data[metaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
@@ -212,7 +200,7 @@ func TestDescriptorCache_RejectsUnparseableChecksum(t *testing.T) {
 	}
 }
 
-func TestDescriptorCache_RejectsBadChecksumLength(t *testing.T) {
+func TestCache_RejectsBadChecksumLength(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	meta.data[metaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
@@ -226,7 +214,7 @@ func TestDescriptorCache_RejectsBadChecksumLength(t *testing.T) {
 
 // --- save writes exactly three keys ---
 
-func TestDescriptorCache_SaveWritesThreeKeys(t *testing.T) {
+func TestCache_SaveWritesThreeKeys(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	src := validDescriptor(t)
@@ -249,7 +237,7 @@ func TestDescriptorCache_SaveWritesThreeKeys(t *testing.T) {
 
 // --- save → save overwrites ---
 
-func TestDescriptorCache_SaveOverwrites(t *testing.T) {
+func TestCache_SaveOverwrites(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	a := validDescriptor(t)
@@ -280,7 +268,7 @@ type errMeta struct{ err error }
 func (m *errMeta) GetMeta(context.Context, string) (string, error) { return "", m.err }
 func (m *errMeta) SetMeta(context.Context, string, string) error   { return m.err }
 
-func TestDescriptorCache_LoadPropagatesIOError(t *testing.T) {
+func TestCache_LoadPropagatesIOError(t *testing.T) {
 	ctx := t.Context()
 	sentinel := errors.New("disk on fire")
 	_, err := Load(ctx, &errMeta{err: sentinel})
@@ -292,7 +280,7 @@ func TestDescriptorCache_LoadPropagatesIOError(t *testing.T) {
 	}
 }
 
-func TestDescriptorCache_SavePropagatesIOError(t *testing.T) {
+func TestCache_SavePropagatesIOError(t *testing.T) {
 	ctx := t.Context()
 	sentinel := errors.New("disk on fire")
 	src := validDescriptor(t)

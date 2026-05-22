@@ -10,35 +10,24 @@ import (
 	"scrinium.dev/engine/store/internal/descriptor"
 )
 
-// DEKLen is the size of a Scrinium data-encryption key in bytes.
-// Fixed at 32 — the AES-256-GCM key size that the wrap layer
-// consumes.
-const DEKLen = 32
-
-// GenerateDEK returns a fresh DEK from crypto/rand. A failure here
-// means the OS RNG is broken and is surfaced unchanged; retrying
-// it makes no sense.
+// GenerateDEK returns a fresh DEK from crypto/rand. A failure means a
+// broken OS RNG and is surfaced unchanged.
 func GenerateDEK() ([]byte, error) {
-	dek := make([]byte, DEKLen)
+	dek := make([]byte, aead.DEKLen)
 	if _, err := rand.Read(dek); err != nil {
 		return nil, fmt.Errorf("keyring: generate DEK: %w", err)
 	}
 	return dek, nil
 }
 
-// WrapDEK turns a passphrase into a wrapped DEK ready for
-// descriptor persistence. Generates a fresh salt, derives the KEK
-// through Argon2id, and wraps dek with AES-256-GCM. The caller is
-// responsible for zeroing the passphrase buffer after this call
-// returns — WrapDEK does NOT mutate it.
-//
-// Returns the on-disk shape of the KDF parameters (algorithm,
-// salt, cost) so the caller can fold them straight into a
-// descriptor. The cost parameters come from cost; if cost is the
-// zero value, DefaultKDFParams() is used.
+// WrapDEK derives a KEK from passphrase (Argon2id over a fresh salt)
+// and wraps dek with AES-256-GCM, returning the wrapped bytes and the
+// on-disk KDF parameters for the descriptor. A zero cost falls back
+// to DefaultKDFParams. The caller owns and wipes passphrase; WrapDEK
+// does not mutate it.
 func WrapDEK(dek, passphrase []byte, cost domain.KDFParams) ([]byte, descriptor.KDFParams, error) {
-	if len(dek) != DEKLen {
-		return nil, descriptor.KDFParams{}, fmt.Errorf("keyring: WrapDEK: dek length %d, want %d", len(dek), DEKLen)
+	if len(dek) != aead.DEKLen {
+		return nil, descriptor.KDFParams{}, fmt.Errorf("keyring: WrapDEK: dek length %d, want %d", len(dek), aead.DEKLen)
 	}
 	if len(passphrase) == 0 {
 		return nil, descriptor.KDFParams{}, errs.ErrPassphraseRequired
@@ -73,17 +62,13 @@ func WrapDEK(dek, passphrase []byte, cost domain.KDFParams) ([]byte, descriptor.
 	}, nil
 }
 
-// UnwrapDEK reverses WrapDEK against an on-disk KDFParams instance.
-// Used by OpenStore auto-unlock, Store.Unlock, and RotateKEK (to
-// extract the current DEK before re-wrapping).
+// UnwrapDEK reverses WrapDEK against on-disk KDFParams. Used by
+// OpenStore auto-unlock, Store.Unlock, and RotateKEK. The caller owns
+// and wipes passphrase.
 //
-// passphrase ownership: as in WrapDEK, the caller wipes its own
-// buffer; UnwrapDEK does not.
-//
-// Errors:
-//   - errs.ErrInvalidKDFParams — params fail ValidateKDFParams
-//   - errs.ErrDecryptionFailed — wrong passphrase or tampered
-//     wrappedDEK (folded together by the wrap layer on purpose)
+// Errors: errs.ErrInvalidKDFParams (params fail validation);
+// errs.ErrDecryptionFailed (wrong passphrase or tampered wrappedDEK —
+// folded together on purpose).
 func UnwrapDEK(wrappedDEK []byte, params descriptor.KDFParams, passphrase []byte) ([]byte, error) {
 	if len(passphrase) == 0 {
 		return nil, errs.ErrPassphraseRequired
@@ -93,12 +78,10 @@ func UnwrapDEK(wrappedDEK []byte, params descriptor.KDFParams, passphrase []byte
 		return nil, err
 	}
 	if params.Algorithm != kdfAlgorithm {
-		return nil, fmt.Errorf("%w: algorithm %q (only %q supported)",
-			errs.ErrInvalidKDFParams, params.Algorithm, kdfAlgorithm)
+		return nil, fmt.Errorf("%w: algorithm %q (only %q supported)", errs.ErrInvalidKDFParams, params.Algorithm, kdfAlgorithm)
 	}
 	if len(params.Salt) != saltLen {
-		return nil, fmt.Errorf("%w: salt length %d, want %d",
-			errs.ErrInvalidKDFParams, len(params.Salt), saltLen)
+		return nil, fmt.Errorf("%w: salt length %d, want %d", errs.ErrInvalidKDFParams, len(params.Salt), saltLen)
 	}
 
 	kek := deriveKEK(passphrase, params.Salt, params.Time, params.Memory, params.Threads)
@@ -106,15 +89,12 @@ func UnwrapDEK(wrappedDEK []byte, params descriptor.KDFParams, passphrase []byte
 
 	dek, err := unwrapKEK(wrappedDEK, kek)
 	if err != nil {
-		return nil, err // already wrapped with ErrDecryptionFailed
+		return nil, err
 	}
-	if len(dek) != DEKLen {
-		// Defensive: a kit/descriptor that decrypts cleanly to the
-		// wrong length means somebody encrypted nonsense with a
-		// valid KEK. Treat as decryption failure to keep the error
-		// surface small.
-		return nil, fmt.Errorf("%w: unwrapped DEK length %d, want %d",
-			errs.ErrDecryptionFailed, len(dek), DEKLen)
+	if len(dek) != aead.DEKLen {
+		// Clean decrypt to the wrong length means valid-KEK over
+		// nonsense; treat as decryption failure to keep the surface small.
+		return nil, fmt.Errorf("%w: unwrapped DEK length %d, want %d", errs.ErrDecryptionFailed, len(dek), aead.DEKLen)
 	}
 	return dek, nil
 }

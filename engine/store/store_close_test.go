@@ -32,7 +32,9 @@ func (r *fakeKeyResolver) close()                                     { r.closed
 func newTestStore() *store {
 	return &store{
 		state: domain.StateUnlocked,
-		dek:   []byte{1, 2, 3, 4, 5, 6, 7, 8},
+		crypto: cryptoState{
+			dek: []byte{1, 2, 3, 4, 5, 6, 7, 8},
+		},
 	}
 }
 
@@ -56,15 +58,15 @@ func TestClose_Idempotent(t *testing.T) {
 
 func TestClose_WipesDEK(t *testing.T) {
 	s := newTestStore()
-	original := append([]byte(nil), s.dek...) // capture for length check
-	dekRef := s.dek                           // grab the slice header — observe its bytes after Close
+	original := append([]byte(nil), s.crypto.dek...) // capture for length check
+	dekRef := s.crypto.dek                           // grab the slice header — observe its bytes after Close
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	if s.dek != nil {
-		t.Errorf("s.dek: want nil after Close, got %v", s.dek)
+	if s.crypto.dek != nil {
+		t.Errorf("s.crypto.dek: want nil after Close, got %v", s.crypto.dek)
 	}
 	if !allZero(dekRef) {
 		t.Errorf("dek bytes should be zeroed, got %v (was %v)", dekRef, original)
@@ -76,7 +78,9 @@ func TestClose_WipesDEK(t *testing.T) {
 func TestClose_NilDEK_NoPanic(t *testing.T) {
 	s := &store{
 		state: domain.StateLocked,
-		dek:   nil,
+		crypto: cryptoState{
+			dek: nil,
+		},
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on nil dek: %v", err)
@@ -86,7 +90,9 @@ func TestClose_NilDEK_NoPanic(t *testing.T) {
 func TestClose_EmptyDEK_NoPanic(t *testing.T) {
 	s := &store{
 		state: domain.StateUnlocked,
-		dek:   []byte{},
+		crypto: cryptoState{
+			dek: []byte{},
+		},
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on empty dek: %v", err)
@@ -96,7 +102,9 @@ func TestClose_EmptyDEK_NoPanic(t *testing.T) {
 func TestClose_NoCapabilityToken_NoPanic(t *testing.T) {
 	s := &store{
 		state: domain.StateUnlocked,
-		dek:   []byte{1, 2, 3},
+		crypto: cryptoState{
+			dek: []byte{1, 2, 3},
+		},
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on nil token: %v", err)
@@ -178,9 +186,11 @@ func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 	resolver := pipeline.NewStaticKeyResolver(dek)
 
 	s := &store{
-		state:       domain.StateUnlocked,
-		dek:         append([]byte(nil), dek...),
-		keyResolver: resolver,
+		state: domain.StateUnlocked,
+		crypto: cryptoState{
+			dek:         append([]byte(nil), dek...),
+			keyResolver: resolver,
+		},
 	}
 
 	if err := s.Close(); err != nil {
@@ -202,9 +212,11 @@ func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 func TestClose_CustomKeyResolver_NotTouched(t *testing.T) {
 	resolver := &fakeKeyResolver{}
 	s := &store{
-		state:       domain.StateUnlocked,
-		dek:         []byte{1, 2, 3},
-		keyResolver: resolver,
+		state: domain.StateUnlocked,
+		crypto: cryptoState{
+			dek:         []byte{1, 2, 3},
+			keyResolver: resolver,
+		},
 	}
 
 	if err := s.Close(); err != nil {
@@ -218,9 +230,11 @@ func TestClose_CustomKeyResolver_NotTouched(t *testing.T) {
 
 func TestClose_NilKeyResolver_NoPanic(t *testing.T) {
 	s := &store{
-		state:       domain.StateUnlocked,
-		dek:         []byte{1, 2, 3},
-		keyResolver: nil,
+		state: domain.StateUnlocked,
+		crypto: cryptoState{
+			dek:         []byte{1, 2, 3},
+			keyResolver: nil,
+		},
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -237,9 +251,11 @@ func TestClose_RaceWithGetKeys(t *testing.T) {
 	resolver := pipeline.NewStaticKeyResolver(dek)
 
 	s := &store{
-		state:       domain.StateUnlocked,
-		dek:         append([]byte(nil), dek...),
-		keyResolver: resolver,
+		state: domain.StateUnlocked,
+		crypto: cryptoState{
+			dek:         append([]byte(nil), dek...),
+			keyResolver: resolver,
+		},
 	}
 
 	const N = 100
@@ -291,8 +307,8 @@ func TestClose_RaceWithItself(t *testing.T) {
 	if !s.closed {
 		t.Errorf("s.closed: want true after concurrent Closes")
 	}
-	if s.dek != nil {
-		t.Errorf("s.dek: want nil after concurrent Closes, got %v", s.dek)
+	if s.crypto.dek != nil {
+		t.Errorf("s.crypto.dek: want nil after concurrent Closes, got %v", s.crypto.dek)
 	}
 }
 

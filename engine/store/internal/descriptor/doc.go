@@ -1,17 +1,18 @@
-// Package descriptor reads and writes the Store descriptor file
-// (store.json). Per §10.1.3 the descriptor carries Store identity
-// and the cryptographic Paranoid: StoreID, schema_version, sequence,
-// DEK, dek_encrypted, kdf_params.
+// Package descriptor reads, writes, and (de)serialises the Store
+// descriptor file: Store identity (StoreID, schema_version, sequence)
+// and the crypto material (DEK, dek_encrypted, kdf_params). Projection
+// parameters live in system.config, not here.
 //
-// Projection parameters (PathTopology, ManifestStorage, etc.) live
-// in the system.config artifact pointed to by system.config/current
-// (§10.1.4) — not here. The descriptor is silent about them.
+// The descriptor is stored as two byte-identical replicas, L0
+// (store.json) and L1 (.store.backup.json), written together by
+// Persist. The L2 cache (Cache, in cache.go) is a fast-start
+// projection in store_meta, never authoritative.
 //
-// Format: JSON, pretty-printed, with a trailing newline. The file
-// format is engine-private and may evolve through migrations behind
-// schema_version.
+// Replica reading and the heal/split-brain decision algorithm live in
+// the reconcile subpackage. This package owns the descriptor's shape,
+// (de)serialisation, checksum, equality, and the two-replica write;
+// reconcile owns the recovery decision over them.
 //
-// DAG: descriptor depends on driver.Driver, errs (sentinel
-// errors), and stdlib. No imports from core, domain, or any
-// consumer package.
+// Depends only on driver.Driver, errs, and a narrow MetaStore. No
+// imports from coreapi, domain, or any consumer package.
 package descriptor

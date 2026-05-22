@@ -1,17 +1,14 @@
 // Package keyring is the engine's key-management layer: KEK
-// derivation (Argon2id), DEK generation, and the wrap/unwrap of a
-// DEK under a passphrase-derived KEK. It consolidates what used to
-// be three separate pieces — the kdf and keywrap subpackages and
-// the DEK orchestration in store/crypto.go — into one place, since
-// they are only ever used together and only by the store layer.
+// derivation (Argon2id), DEK generation, and the wrap/unwrap of a DEK
+// under a passphrase-derived KEK. The three are only ever used
+// together and only by the store layer, so they live in one package.
 //
-// Layering: keyring sits below store and above the byte-level AEAD
-// primitive (internal/manifestcrypto, used for wiping here). It
-// does NOT touch *store state; the store's crypto-admin methods
-// (Unlock/RotateKEK/SetPassphrase/ExportRecoveryKit) orchestrate
-// these functions over store state.
+// keyring sits below the store and above the AEAD primitive
+// (internal/aead, which supplies the AES-GCM construction and Wipe).
+// It does not touch *store state; the store's crypto-admin methods
+// (Unlock/RotateKEK/SetPassphrase/ExportRecoveryKit) orchestrate these
+// functions over that state.
 //
-// On-disk KDF parameters cross the boundary as descriptor.KDFParams
-// (the persisted shape); the client-facing cost shape is
-// domain.KDFParams.
+// On-disk KDF parameters cross the boundary as descriptor.KDFParams;
+// the client-facing cost shape is domain.KDFParams.
 package keyring

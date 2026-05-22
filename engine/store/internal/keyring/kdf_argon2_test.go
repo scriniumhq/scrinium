@@ -3,6 +3,7 @@ package keyring
 import (
 	"bytes"
 	"encoding/hex"
+	"scrinium.dev/engine/internal/aead"
 	"testing"
 )
 
@@ -18,8 +19,8 @@ func deriveDefault(t *testing.T, passphrase string) []byte {
 
 func TestDerive_OutputLength(t *testing.T) {
 	kek := deriveDefault(t, "correct horse battery staple")
-	if len(kek) != kekLen {
-		t.Fatalf("KEK length: got %d, want %d", len(kek), kekLen)
+	if len(kek) != aead.DEKLen {
+		t.Fatalf("KEK length: got %d, want %d", len(kek), aead.DEKLen)
 	}
 }
 

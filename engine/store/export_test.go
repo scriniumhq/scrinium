@@ -15,7 +15,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/store/internal/recovery"
+	"scrinium.dev/engine/store/internal/orphanscan"
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
 
@@ -51,9 +51,9 @@ func StoreKeyResolver(s coreapi.Store) pipeline.KeyResolver {
 	if !ok {
 		return nil
 	}
-	concrete.cryptoMu.Lock()
-	defer concrete.cryptoMu.Unlock()
-	return concrete.keyResolver
+	concrete.crypto.mu.Lock()
+	defer concrete.crypto.mu.Unlock()
+	return concrete.crypto.keyResolver
 }
 
 // ReadDriverFile reads a file from the Store's underlying Driver.
@@ -89,6 +89,6 @@ func WriteDriverFile(s coreapi.Store, path string, data []byte) error {
 // recoverOrphans function. Used by recovery_faulty_test.go to
 // drive the function with fake StoreIndex / faulty Driver values
 // directly, bypassing the full Init/Open path.
-func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (recovery.OrphanReport, error) {
-	return recovery.RecoverOrphans(ctx, drv, idx)
+func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (orphanscan.OrphanReport, error) {
+	return orphanscan.RecoverOrphans(ctx, drv, idx)
 }

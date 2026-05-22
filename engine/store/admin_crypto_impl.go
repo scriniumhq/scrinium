@@ -9,7 +9,6 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
-	"scrinium.dev/engine/store/internal/descriptorcache"
 	"scrinium.dev/engine/store/internal/keyring"
 )
 
@@ -19,8 +18,8 @@ import (
 // readable file.
 //
 // Concurrency:
-//   - cryptoMu guards reads and writes of s.desc, s.dek,
-//     s.passphraseProvider for the duration of every operation
+//   - crypto.mu guards reads and writes of s.crypto.desc, s.crypto.dek,
+//     s.crypto.provider for the duration of every operation
 //     here. None of these methods is on a hot path; serialising
 //     them is fine.
 //   - stateMu is taken briefly when transitioning state.
@@ -55,8 +54,8 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 	if err := s.enterAdmin(ctx); err != nil {
 		return err
 	}
-	s.cryptoMu.Lock()
-	defer s.cryptoMu.Unlock()
+	s.crypto.mu.Lock()
+	defer s.crypto.mu.Unlock()
 
 	// Idempotent fast path. Holds cryptoMu so a concurrent
 	// SetPassphrase/RotateKEK cannot race with the State read.
@@ -72,12 +71,12 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 	// Plain DEK in Locked state would be a bug — Plain Stores
 	// open to Unlocked unconditionally. Defensive surface; if
 	// we hit it, the open-path invariant is broken.
-	if s.desc == nil || !s.desc.DEKEncrypted || s.desc.KDFParams == nil {
+	if s.crypto.desc == nil || !s.crypto.desc.DEKEncrypted || s.crypto.desc.KDFParams == nil {
 		return fmt.Errorf("%w: descriptor in Locked state lacks crypto fields",
 			errs.ErrStoreCorrupted)
 	}
 
-	provider := s.passphraseProvider
+	provider := s.crypto.provider
 	passphrase, err := callProvider(ctx, provider, PassphraseHint{
 		StoreID: s.storeID,
 		Reason:  "unlock",
@@ -86,14 +85,14 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 		return fmt.Errorf("store.Unlock: %w", err)
 	}
 
-	dek, err := keyring.UnwrapDEK(s.desc.DEK, *s.desc.KDFParams, passphrase)
+	dek, err := keyring.UnwrapDEK(s.crypto.desc.DEK, *s.crypto.desc.KDFParams, passphrase)
 	aead.Wipe(passphrase)
 	if err != nil {
 		return fmt.Errorf("store.Unlock: %w", err)
 	}
 
-	s.dek = dek
-	s.promoteKeyResolverIfDefault()
+	s.crypto.dek = dek
+	s.crypto.promoteResolverIfDefault()
 
 	// Bootstrap-into-Unlocked: same path as the AutoUnlock leg
 	// of OpenStore. State first goes to Bootstrapping inside
@@ -108,8 +107,8 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 		// Wipe the DEK we just unwrapped — the Store is not
 		// safely operational, holding the key in memory adds
 		// risk without benefit.
-		aead.Wipe(s.dek)
-		s.dek = nil
+		aead.Wipe(s.crypto.dek)
+		s.crypto.dek = nil
 		s.stateMu.Lock()
 		s.state = domain.StateLocked
 		s.stateMu.Unlock()
@@ -132,8 +131,8 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 	if err := s.enterWrite(ctx); err != nil {
 		return err
 	}
-	s.cryptoMu.Lock()
-	defer s.cryptoMu.Unlock()
+	s.crypto.mu.Lock()
+	defer s.crypto.mu.Unlock()
 	// SetPassphrase rewrites the descriptor (Sequence+1) into both
 	// replicas. In Degraded the replicas are already out of sync —
 	// piling another write on top is unsafe until Auto-Heal reaches
@@ -142,20 +141,20 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 	if state := s.State(); state == domain.StateDegraded {
 		return fmt.Errorf("store.SetPassphrase: state %v rejects write; wait for Auto-Heal", state)
 	}
-	if s.desc == nil {
+	if s.crypto.desc == nil {
 		return fmt.Errorf("%w: descriptor not loaded", errs.ErrStoreCorrupted)
 	}
-	if s.desc.DEKEncrypted {
+	if s.crypto.desc.DEKEncrypted {
 		return errs.ErrPassphraseAlreadySet
 	}
-	if len(s.dek) == 0 {
+	if len(s.crypto.dek) == 0 {
 		// Plain Store must have a plaintext DEK after InitStore
 		// per §3.1. If it doesn't, the open-path invariant is
 		// broken.
 		return fmt.Errorf("%w: Plain Store has no plaintext DEK", errs.ErrStoreCorrupted)
 	}
 
-	passphrase, err := callProvider(ctx, s.passphraseProvider, PassphraseHint{
+	passphrase, err := callProvider(ctx, s.crypto.provider, PassphraseHint{
 		StoreID: s.storeID,
 		Reason:  "set_passphrase",
 	})
@@ -172,14 +171,14 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 		cost = *cfg.KDFParams
 	}
 
-	wrapped, kdfParams, err := keyring.WrapDEK(s.dek, passphrase, cost)
+	wrapped, kdfParams, err := keyring.WrapDEK(s.crypto.dek, passphrase, cost)
 	aead.Wipe(passphrase)
 	if err != nil {
 		return fmt.Errorf("store.SetPassphrase: %w", err)
 	}
 
-	next := *s.desc // shallow copy is fine; we'll replace pointer fields
-	next.Sequence = s.desc.Sequence + 1
+	next := *s.crypto.desc // shallow copy is fine; we'll replace pointer fields
+	next.Sequence = s.crypto.desc.Sequence + 1
 	next.DEK = wrapped
 	next.DEKEncrypted = true
 	next.KDFParams = &kdfParams
@@ -210,8 +209,8 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	if err := s.enterWrite(ctx); err != nil {
 		return err
 	}
-	s.cryptoMu.Lock()
-	defer s.cryptoMu.Unlock()
+	s.crypto.mu.Lock()
+	defer s.crypto.mu.Unlock()
 	// RotateKEK rewrites the descriptor (Sequence+1) into both
 	// replicas. In Degraded the replicas are already out of sync —
 	// piling another write on top is unsafe until Auto-Heal reaches
@@ -220,36 +219,36 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	if state := s.State(); state == domain.StateDegraded {
 		return fmt.Errorf("store.RotateKEK: state %v rejects write; wait for Auto-Heal", state)
 	}
-	if s.desc == nil {
+	if s.crypto.desc == nil {
 		return fmt.Errorf("%w: descriptor not loaded", errs.ErrStoreCorrupted)
 	}
-	if !s.desc.DEKEncrypted {
+	if !s.crypto.desc.DEKEncrypted {
 		return fmt.Errorf("%w: Store has plaintext DEK; use SetPassphrase",
 			errs.ErrPassphraseRequired)
 	}
-	if s.desc.KDFParams == nil {
+	if s.crypto.desc.KDFParams == nil {
 		return fmt.Errorf("%w: encrypted descriptor lacks KDFParams",
 			errs.ErrStoreCorrupted)
 	}
 
 	// First half: prove possession of the current passphrase
-	// by unwrapping the DEK and matching it against s.dek. The
+	// by unwrapping the DEK and matching it against s.crypto.dek. The
 	// "unlock" reason mirrors Store.Unlock — host implementations
 	// that retrieve passphrases from a keychain key off Reason and
 	// expect the same lookup as a regular unlock.
-	currentPass, err := callProvider(ctx, s.passphraseProvider, PassphraseHint{
+	currentPass, err := callProvider(ctx, s.crypto.provider, PassphraseHint{
 		StoreID: s.storeID,
 		Reason:  "unlock",
 	})
 	if err != nil {
 		return fmt.Errorf("store.RotateKEK: current passphrase: %w", err)
 	}
-	verified, err := keyring.UnwrapDEK(s.desc.DEK, *s.desc.KDFParams, currentPass)
+	verified, err := keyring.UnwrapDEK(s.crypto.desc.DEK, *s.crypto.desc.KDFParams, currentPass)
 	aead.Wipe(currentPass)
 	if err != nil {
 		return fmt.Errorf("store.RotateKEK: %w", err)
 	}
-	if !bytes.Equal(verified, s.dek) {
+	if !bytes.Equal(verified, s.crypto.dek) {
 		aead.Wipe(verified)
 		// Should never happen: if the passphrase unwrapped, it
 		// must have produced the same DEK that's already in
@@ -263,24 +262,24 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 	// Second half: obtain new passphrase, wrap with the same
 	// cost parameters as before (rotation does not retune
 	// cost; that would be a separate operation).
-	newPass, err := callProvider(ctx, s.passphraseProvider, PassphraseHint{
+	newPass, err := callProvider(ctx, s.crypto.provider, PassphraseHint{
 		StoreID: s.storeID,
 		Reason:  "kek_rotation",
 	})
 
 	cost := domain.KDFParams{
-		Time:    s.desc.KDFParams.Time,
-		Memory:  s.desc.KDFParams.Memory,
-		Threads: s.desc.KDFParams.Threads,
+		Time:    s.crypto.desc.KDFParams.Time,
+		Memory:  s.crypto.desc.KDFParams.Memory,
+		Threads: s.crypto.desc.KDFParams.Threads,
 	}
-	wrapped, kdfParams, err := keyring.WrapDEK(s.dek, newPass, cost)
+	wrapped, kdfParams, err := keyring.WrapDEK(s.crypto.dek, newPass, cost)
 	aead.Wipe(newPass)
 	if err != nil {
 		return fmt.Errorf("store.RotateKEK: %w", err)
 	}
 
-	next := *s.desc
-	next.Sequence = s.desc.Sequence + 1
+	next := *s.crypto.desc
+	next.Sequence = s.crypto.desc.Sequence + 1
 	next.DEK = wrapped
 	next.KDFParams = &kdfParams
 	// DEKEncrypted stays true; DEK bytes are only the wrapping change.
@@ -289,7 +288,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		return fmt.Errorf("store.RotateKEK: %w", err)
 	}
 
-	// Note: s.dek does NOT change. The DEK is re-wrapped under
+	// Note: s.crypto.dek does NOT change. The DEK is re-wrapped under
 	// a new KEK; the data-encryption key itself is the same,
 	// which is precisely the point — RotateKEK costs O(1),
 	// not O(data).
@@ -308,8 +307,8 @@ func (s *store) exportRecoveryKitImpl(ctx context.Context) ([]byte, error) {
 	if err := s.enterRead(ctx); err != nil {
 		return nil, err
 	}
-	s.cryptoMu.Lock()
-	defer s.cryptoMu.Unlock()
+	s.crypto.mu.Lock()
+	defer s.crypto.mu.Unlock()
 
 	switch s.State() {
 	case domain.StateUnlocked, domain.StateDegraded:
@@ -319,35 +318,35 @@ func (s *store) exportRecoveryKitImpl(ctx context.Context) ([]byte, error) {
 			s.State())
 	}
 
-	if s.desc == nil {
+	if s.crypto.desc == nil {
 		return nil, fmt.Errorf("%w: descriptor not loaded", errs.ErrStoreCorrupted)
 	}
-	if !s.desc.DEKEncrypted {
+	if !s.crypto.desc.DEKEncrypted {
 		return nil, fmt.Errorf("%w: Plain Store has no Recovery Kit",
 			errs.ErrPassphraseRequired)
 	}
 
-	return buildRecoveryKit(s.desc, s.desc.DEK)
+	return buildRecoveryKit(s.crypto.desc, s.crypto.desc.DEK)
 }
 
 // commitDescriptor is the shared tail of SetPassphrase and
 // RotateKEK: persist the next descriptor (both replicas), refresh
-// the L2 cache, and atomically swap s.desc.
+// the L2 cache, and atomically swap s.crypto.desc.
 //
-// Caller must hold s.cryptoMu. On any error the caller's in-
-// memory state (s.desc, s.dek) is left unchanged so a retry
+// Caller must hold s.crypto.mu. On any error the caller's in-
+// memory state (s.crypto.desc, s.crypto.dek) is left unchanged so a retry
 // re-derives from the same starting point.
 func (s *store) commitDescriptor(ctx context.Context, next *descriptor.Descriptor) error {
 	if err := descriptor.Persist(ctx, s.drv, next); err != nil {
 		return fmt.Errorf("persist descriptor: %w", err)
 	}
-	if err := descriptorcache.Save(ctx, s.index, next); err != nil {
+	if err := descriptor.Save(ctx, s.index, next); err != nil {
 		// Persisted on disk but cache write failed. The next
 		// OpenStore will rebuild the cache from Location, so
 		// this is recoverable; surface the error so the caller
 		// knows the operation was not fully successful.
 		return fmt.Errorf("save L2 cache: %w", err)
 	}
-	s.desc = next
+	s.crypto.desc = next
 	return nil
 }

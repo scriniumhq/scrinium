@@ -12,8 +12,8 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
-	"scrinium.dev/engine/store/internal/descriptorcache"
 	"scrinium.dev/engine/store/internal/keyring"
+	"scrinium.dev/engine/store/internal/reconcile"
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
 
@@ -109,12 +109,12 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 
 	// --- Read both descriptor replicas; reconcile ---
 
-	l0, l1, l0s, l1s, err := descriptor.ReadBoth(ctx, drv)
+	l0, l1, l0s, l1s, err := reconcile.ReadBoth(ctx, drv)
 	if err != nil {
 		// Non-recoverable I/O error from the Driver — propagate.
 		return nil, wrap("read descriptor", err)
 	}
-	rec, err := descriptor.Reconcile(l0, l0s, l1, l1s)
+	rec, err := reconcile.Reconcile(l0, l0s, l1, l1s)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		return nil, errs.ErrStoreNotFound
@@ -144,7 +144,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 	// aid only. Save when absent, when corrupted (load returned
 	// an error), or when checksum diverges. Read errors are
 	// non-fatal — we always have the canonical to fall back to.
-	if err := descriptorcache.Refresh(ctx, idx, desc); err != nil {
+	if err := descriptor.Refresh(ctx, idx, desc); err != nil {
 		return nil, wrap("refresh L2 cache", err)
 	}
 
@@ -177,7 +177,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		if err != nil {
 			return nil, wrap("", err)
 		}
-		s.promoteKeyResolverIfDefault()
+		s.crypto.promoteResolverIfDefault()
 		if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 			return nil, wrap("", err)
 		}
@@ -232,7 +232,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		aead.Wipe(dek)
 		return nil, wrap("", err)
 	}
-	s.promoteKeyResolverIfDefault()
+	s.crypto.promoteResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		return nil, wrap("", err)
 	}
