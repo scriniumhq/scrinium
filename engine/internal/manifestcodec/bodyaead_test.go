@@ -1,4 +1,4 @@
-package manifestcrypto_test
+package manifestcodec
 
 import (
 	"bytes"
@@ -8,7 +8,6 @@ import (
 
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
-	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
 // freshDEK returns a 32-byte DEK from crypto/rand. Each test
@@ -30,11 +29,11 @@ func TestSealOpen_RoundTrip(t *testing.T) {
 	plaintext := []byte("the quick brown fox jumps over the lazy dog")
 	aad := []byte("manifest-header-bytes")
 
-	ciphertext, err := manifestcrypto.Seal(plaintext, dek, aad)
+	ciphertext, err := sealBody(plaintext, dek, aad)
 	if err != nil {
 		t.Fatalf("Seal: %v", err)
 	}
-	got, err := manifestcrypto.Open(ciphertext, dek, aad)
+	got, err := openBody(ciphertext, dek, aad)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -45,7 +44,7 @@ func TestSealOpen_RoundTrip(t *testing.T) {
 
 func TestSealOpen_EmptyPlaintext(t *testing.T) {
 	dek := freshDEK(t)
-	got, err := manifestcrypto.Seal(nil, dek, []byte("aad"))
+	got, err := sealBody(nil, dek, []byte("aad"))
 	if err != nil {
 		t.Fatalf("Seal: %v", err)
 	}
@@ -53,7 +52,7 @@ func TestSealOpen_EmptyPlaintext(t *testing.T) {
 	if len(got) != 12+16 {
 		t.Errorf("ciphertext length: got %d, want 28", len(got))
 	}
-	plain, err := manifestcrypto.Open(got, dek, []byte("aad"))
+	plain, err := openBody(got, dek, []byte("aad"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -65,11 +64,11 @@ func TestSealOpen_EmptyPlaintext(t *testing.T) {
 func TestSealOpen_EmptyAAD(t *testing.T) {
 	dek := freshDEK(t)
 	plaintext := []byte("body")
-	ciphertext, err := manifestcrypto.Seal(plaintext, dek, nil)
+	ciphertext, err := sealBody(plaintext, dek, nil)
 	if err != nil {
 		t.Fatalf("Seal: %v", err)
 	}
-	got, err := manifestcrypto.Open(ciphertext, dek, nil)
+	got, err := openBody(ciphertext, dek, nil)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -80,8 +79,8 @@ func TestSealOpen_EmptyAAD(t *testing.T) {
 
 func TestSeal_OutputIsNondeterministic(t *testing.T) {
 	dek := freshDEK(t)
-	a, _ := manifestcrypto.Seal([]byte("same"), dek, []byte("same"))
-	b, _ := manifestcrypto.Seal([]byte("same"), dek, []byte("same"))
+	a, _ := sealBody([]byte("same"), dek, []byte("same"))
+	b, _ := sealBody([]byte("same"), dek, []byte("same"))
 	if bytes.Equal(a, b) {
 		t.Fatal("Seal must produce a fresh nonce per call; identical output suggests nonce reuse")
 	}
@@ -89,8 +88,8 @@ func TestSeal_OutputIsNondeterministic(t *testing.T) {
 
 func TestSeal_NonceIsPrependedAndUnique(t *testing.T) {
 	dek := freshDEK(t)
-	a, _ := manifestcrypto.Seal([]byte("x"), dek, nil)
-	b, _ := manifestcrypto.Seal([]byte("x"), dek, nil)
+	a, _ := sealBody([]byte("x"), dek, nil)
+	b, _ := sealBody([]byte("x"), dek, nil)
 	// First 12 bytes are the nonce — must differ between calls.
 	if bytes.Equal(a[:12], b[:12]) {
 		t.Error("two Seal calls produced identical nonces")
@@ -102,7 +101,7 @@ func TestSeal_NonceIsPrependedAndUnique(t *testing.T) {
 func TestSeal_RejectsWrongDEKLength(t *testing.T) {
 	for _, n := range []int{0, 16, 31, 33, 64} {
 		dek := make([]byte, n)
-		_, err := manifestcrypto.Seal([]byte("x"), dek, nil)
+		_, err := sealBody([]byte("x"), dek, nil)
 		if err == nil {
 			t.Errorf("DEK length %d: expected error", n)
 		}
@@ -111,10 +110,10 @@ func TestSeal_RejectsWrongDEKLength(t *testing.T) {
 
 func TestOpen_RejectsWrongDEKLength(t *testing.T) {
 	dek := freshDEK(t)
-	good, _ := manifestcrypto.Seal([]byte("x"), dek, nil)
+	good, _ := sealBody([]byte("x"), dek, nil)
 	for _, n := range []int{0, 16, 31, 33, 64} {
 		bad := make([]byte, n)
-		_, err := manifestcrypto.Open(good, bad, nil)
+		_, err := openBody(good, bad, nil)
 		if err == nil {
 			t.Errorf("DEK length %d: expected error", n)
 		}
@@ -126,9 +125,9 @@ func TestOpen_RejectsWrongDEKLength(t *testing.T) {
 func TestOpen_WrongDEK(t *testing.T) {
 	dekA := freshDEK(t)
 	dekB := freshDEK(t)
-	ciphertext, _ := manifestcrypto.Seal([]byte("plaintext"), dekA, nil)
+	ciphertext, _ := sealBody([]byte("plaintext"), dekA, nil)
 
-	_, err := manifestcrypto.Open(ciphertext, dekB, nil)
+	_, err := openBody(ciphertext, dekB, nil)
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("expected ErrDecryptionFailed, got %v", err)
 	}
@@ -136,13 +135,13 @@ func TestOpen_WrongDEK(t *testing.T) {
 
 func TestOpen_TamperedCiphertext(t *testing.T) {
 	dek := freshDEK(t)
-	ciphertext, _ := manifestcrypto.Seal([]byte("plaintext"), dek, nil)
+	ciphertext, _ := sealBody([]byte("plaintext"), dek, nil)
 
 	// Flip a bit in the body (after the nonce).
 	tampered := append([]byte{}, ciphertext...)
 	tampered[15] ^= 0x01
 
-	_, err := manifestcrypto.Open(tampered, dek, nil)
+	_, err := openBody(tampered, dek, nil)
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("expected ErrDecryptionFailed, got %v", err)
 	}
@@ -150,13 +149,13 @@ func TestOpen_TamperedCiphertext(t *testing.T) {
 
 func TestOpen_TamperedNonce(t *testing.T) {
 	dek := freshDEK(t)
-	ciphertext, _ := manifestcrypto.Seal([]byte("plaintext"), dek, nil)
+	ciphertext, _ := sealBody([]byte("plaintext"), dek, nil)
 
 	// Flip a bit in the nonce.
 	tampered := append([]byte{}, ciphertext...)
 	tampered[3] ^= 0x01
 
-	_, err := manifestcrypto.Open(tampered, dek, nil)
+	_, err := openBody(tampered, dek, nil)
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("expected ErrDecryptionFailed, got %v", err)
 	}
@@ -165,11 +164,11 @@ func TestOpen_TamperedNonce(t *testing.T) {
 func TestOpen_TamperedAAD(t *testing.T) {
 	dek := freshDEK(t)
 	aad := []byte("header-v1")
-	ciphertext, _ := manifestcrypto.Seal([]byte("plaintext"), dek, aad)
+	ciphertext, _ := sealBody([]byte("plaintext"), dek, aad)
 
 	// Open with different AAD — auth tag verification fails
 	// even though DEK and ciphertext are correct.
-	_, err := manifestcrypto.Open(ciphertext, dek, []byte("header-v2"))
+	_, err := openBody(ciphertext, dek, []byte("header-v2"))
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("expected ErrDecryptionFailed, got %v", err)
 	}
@@ -177,9 +176,9 @@ func TestOpen_TamperedAAD(t *testing.T) {
 
 func TestOpen_MissingAADWhenSealedWithAAD(t *testing.T) {
 	dek := freshDEK(t)
-	ciphertext, _ := manifestcrypto.Seal([]byte("plaintext"), dek, []byte("aad"))
+	ciphertext, _ := sealBody([]byte("plaintext"), dek, []byte("aad"))
 
-	_, err := manifestcrypto.Open(ciphertext, dek, nil)
+	_, err := openBody(ciphertext, dek, nil)
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("expected ErrDecryptionFailed, got %v", err)
 	}
@@ -191,7 +190,7 @@ func TestOpen_TooShort(t *testing.T) {
 	dek := freshDEK(t)
 	for _, n := range []int{0, 1, 11, 27} {
 		bad := make([]byte, n)
-		_, err := manifestcrypto.Open(bad, dek, nil)
+		_, err := openBody(bad, dek, nil)
 		if err == nil {
 			t.Errorf("ciphertext length %d: expected truncation error", n)
 		}
@@ -210,7 +209,7 @@ func TestOpen_TooShort(t *testing.T) {
 func TestSeal_OutputLayout(t *testing.T) {
 	dek := freshDEK(t)
 	plaintext := []byte("hello") // 5 bytes
-	got, err := manifestcrypto.Seal(plaintext, dek, nil)
+	got, err := sealBody(plaintext, dek, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,11 +235,11 @@ func FuzzSealOpen_RoundTrip(f *testing.F) {
 			dek[i] = byte(i)
 		}
 
-		ciphertext, err := manifestcrypto.Seal(plaintext, dek, aad)
+		ciphertext, err := sealBody(plaintext, dek, aad)
 		if err != nil {
 			t.Fatalf("Seal: %v", err)
 		}
-		got, err := manifestcrypto.Open(ciphertext, dek, aad)
+		got, err := openBody(ciphertext, dek, aad)
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
