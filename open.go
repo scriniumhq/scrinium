@@ -12,8 +12,8 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/plugins"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
 	"scrinium.dev/engine/projection/fsmeta"
@@ -353,6 +353,6 @@ func clearScratchDirIfExists(dir string) {
 // registered. Every Scrinium binary uses sha256 today; pluggable
 // when an actual second hash arrives.
 func defaultHashRegistry() domain.HashRegistry {
-	return plugins.NewHashRegistry().
+	return hashing.NewHashRegistry().
 		Register("sha256", func() hash.Hash { return sha256.New() })
 }

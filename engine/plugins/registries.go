@@ -1,14 +1,9 @@
 package plugins
 
 import (
-	"encoding/hex"
-	"errors"
-	"hash"
-	"strings"
 	"sync"
 
 	"scrinium.dev/engine/coreapi"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
 )
@@ -36,49 +31,6 @@ func (r *transformerRegistry) Register(id string, f coreapi.TransformerFactory) 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.factories[id] = f
-	return r
-}
-
-// hashRegistry implements HashRegistry. Hash identifiers in the
-// project use the "<algo>-<hex>" format (for example,
-// "sha256-abc123...").
-type hashRegistry struct {
-	mu      sync.RWMutex
-	hashers map[string]func() hash.Hash
-}
-
-func (r *hashRegistry) Parse(h string) (algo string, raw []byte, err error) {
-	dash := strings.IndexByte(h, '-')
-	if dash <= 0 || dash == len(h)-1 {
-		return "", nil, errors.New("plugins: invalid hash format, expected '<algo>-<hex>'")
-	}
-	algo = h[:dash]
-	hexPart := h[dash+1:]
-	raw, err = hex.DecodeString(hexPart)
-	if err != nil {
-		return "", nil, errors.New("plugins: invalid hash hex part: " + err.Error())
-	}
-	return algo, raw, nil
-}
-
-func (r *hashRegistry) NewHasher(algo string) (hash.Hash, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	fn, ok := r.hashers[algo]
-	if !ok {
-		return nil, errs.ErrUnsupportedAlgorithm
-	}
-	return fn(), nil
-}
-
-func (r *hashRegistry) Format(algo string, raw []byte) string {
-	return algo + "-" + hex.EncodeToString(raw)
-}
-
-func (r *hashRegistry) Register(algo string, fn func() hash.Hash) domain.HashRegistry {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.hashers[algo] = fn
 	return r
 }
 

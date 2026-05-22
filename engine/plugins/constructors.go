@@ -1,10 +1,7 @@
 package plugins
 
 import (
-	"hash"
-
 	"scrinium.dev/engine/coreapi"
-	"scrinium.dev/engine/domain"
 )
 
 // NewStaticKeyResolver creates a KeyResolver that returns the same
@@ -22,10 +19,4 @@ func NewStaticKeyResolver(dek []byte) coreapi.KeyResolver {
 // The host application registers factories through Register.
 func NewTransformerRegistry() coreapi.TransformerRegistry {
 	return &transformerRegistry{factories: make(map[string]coreapi.TransformerFactory)}
-}
-
-// NewHashRegistry creates an empty hash-algorithm registry.
-// The host application registers factories through Register.
-func NewHashRegistry() domain.HashRegistry {
-	return &hashRegistry{hashers: make(map[string]func() hash.Hash)}
 }
