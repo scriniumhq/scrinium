@@ -267,6 +267,15 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		Reason:  "kek_rotation",
 	})
 
+	if err != nil {
+		// Without this guard the provider error is silently
+		// overwritten by WrapDEK's err below, and the rotation
+		// proceeds to wrap the DEK under an empty/garbage
+		// passphrase and persist it — locking the owner out.
+		// Mirror the first-half "current passphrase" check.
+		return fmt.Errorf("store.RotateKEK: new passphrase: %w", err)
+	}
+
 	cost := domain.KDFParams{
 		Time:    s.crypto.desc.KDFParams.Time,
 		Memory:  s.crypto.desc.KDFParams.Memory,
