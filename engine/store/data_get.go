@@ -17,29 +17,77 @@ import (
 	"scrinium.dev/engine/pipeline"
 )
 
-// asKeyProvider converts a store.KeyResolver into a
-// manifestcodec.KeyProvider, taking care of the typed-nil trap:
-// passing a nil *staticKeyResolver to anj*&$m$Pp61*BkoH8 interface parameter
-// produces a non-nil interface value (with a type but no data),
-// and DecodeFileEncrypted's `if keys == nil` would miss it.
-// Treating "nil resolver" as "no provider" mirrors the spec:
-// Plain manifests don't need a resolver, encrypted ones surface
-// ErrKeyNotFound.
-func asKeyProvider(r pipeline.KeyResolver) manifestcodec.KeyProvider {
-	if r == nil {
-		return nil
+// Get opens an artifact for reading. It reads only the manifest and
+// prepares a ReadHandle; blob bytes stream lazily on the first
+// Read/ReadAt. Inline blobs are served from memory; Target blobs are
+// resolved through the index (not recomputed from the current
+// topology) so the read path follows where the blob was actually
+// written. VerifyOnRead may wrap the handle to re-check the content
+// hash as bytes flow.
+func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (coreapi.ReadHandle, error) {
+	if err := s.enterRead(ctx); err != nil {
+		return nil, err
 	}
-	return r
+	if id == "" {
+		return nil, errs.ErrArtifactNotFound
+	}
+
+	manifest, err := s.loadManifest(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := dispatchManifestType(manifest, "store.Get"); err != nil {
+		return nil, err
+	}
+
+	inner, err := s.openReadHandle(ctx, manifest)
+	if err != nil {
+		return nil, err
+	}
+
+	// VerifyOnRead: empty-pipeline plain media is the case where the
+	// engine is the only guard against silent bit rot. AEAD blobs and
+	// media with native checksums auto-skip; ForceEnabled always wraps;
+	// Disabled never does (see shouldVerifyOnRead).
+	cfg := s.snapshotConfig()
+	if shouldVerifyOnRead(cfg.VerifyOnRead, manifest.Pipeline, s.drv.Capabilities(), s.transformers) {
+		return newVerifyingReadHandle(inner, s)
+	}
+	return inner, nil
 }
 
-// loadManifest reads, verifies, and decodes the manifest file for
-// the given ArtifactID. Used by Get and Delete. Returns
-// errs.ErrArtifactNotFound if the manifest file is absent on disk and
-// errs.ErrCorruptedManifest if the file's hash does not match id.
-//
-// Caller is responsible for any state checks (checkOperational /
-// checkWritable) — this helper is purely about disk → in-memory
-// manifest conversion.
+// openReadHandle builds the layout-appropriate ReadHandle for a
+// dispatched Blob manifest.
+func (s *store) openReadHandle(ctx context.Context, manifest domain.Manifest) (coreapi.ReadHandle, error) {
+	switch manifest.LayoutHeader.BlobStorage {
+	case domain.LayoutInline:
+		return &inlineReadHandle{manifest: manifest, reader: bytes.NewReader(manifest.InlineBlob)}, nil
+
+	case domain.LayoutTarget:
+		addr, err := s.index.Resolve(ctx, string(manifest.BlobRef))
+		if err != nil {
+			return nil, fmt.Errorf("store.Get: resolve blob path: %w", err)
+		}
+		return &targetReadHandle{
+			manifest: manifest,
+			drv:      s.drv,
+			blobPath: addr.Path,
+			ctx:      ctx,
+			store:    s,
+		}, nil
+
+	case domain.LayoutExternalRef:
+		return nil, fmt.Errorf("%w: store.Get on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
+
+	default:
+		return nil, fmt.Errorf("store.Get: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
+	}
+}
+
+// loadManifest reads, verifies, and decodes the manifest file for id.
+// Used by Get, Delete, and Verify. Returns ErrArtifactNotFound when
+// the file is absent and ErrCorruptedManifest when its hash does not
+// match id. State checks are the caller's job.
 func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
 	if id == "" {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
@@ -64,16 +112,11 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 		return domain.Manifest{}, err
 	}
 
-	// Decode dispatches on the file header: Plain bypass any
-	// resolver, encrypted (Sealed / Paranoid) consult the
-	// snapshotted keyResolver. The snapshot is taken under
-	// cryptoMu and held only across the pointer copy — the
-	// resolver itself is an immutable interface, no deeper copy
-	// needed. A Locked Store has keyResolver == nil; for an
-	// encrypted manifest that surfaces ErrKeyNotFound from the
-	// codec, which is the correct refusal.
+	// Decode dispatches on the file header: Plain bypasses the
+	// resolver; encrypted (Sealed/Paranoid) consults the snapshotted
+	// resolver. A Locked Store has a nil resolver, which surfaces
+	// ErrKeyNotFound from the codec — the correct refusal.
 	keyResolver := s.crypto.resolver()
-
 	manifest, err := manifestcodec.DecodeFileEncrypted(raw, asKeyProvider(keyResolver))
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("loadManifest: decode: %w", err)
@@ -82,119 +125,46 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 	return manifest, nil
 }
 
-// Get opens an artifact for reading. The call itself reads only
-// the manifest file and prepares a ReadHandle; the blob bytes
-// stream lazily on the first Read/ReadAt (docs/2. Internals/02 §2.4).
-//
-// M1.4 perimeter: BlobManifest only; Inline and Target layouts;
-// no Pipeline (so no inverse decoder chain); no encryption (so
-// no KeyResolver lookup); no Curator routing (opts.AllowColdRead
-// ignored — it is a Curator-layer flag). TOC, Pack, ExternalRef,
-// Sealed/Paranoid crypto are deferred to later milestones
-// and return explicit errors when reached.
-func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (coreapi.ReadHandle, error) {
-	if err := s.enterRead(ctx); err != nil {
-		return nil, err
-	}
-	if id == "" {
-		return nil, errs.ErrArtifactNotFound
-	}
-
-	manifest, err := s.loadManifest(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// 4. Type dispatch.
-	if err := dispatchManifestType(manifest, "store.Get"); err != nil {
-		return nil, err
-	}
-
-	// 5. Layout dispatch (BlobManifest only).
-	var inner coreapi.ReadHandle
-	switch manifest.LayoutHeader.BlobStorage {
-	case domain.LayoutInline:
-		// Bytes already in memory inside the manifest. No driver
-		// call; the handle is a thin wrapper around bytes.Reader.
-		inner = &inlineReadHandle{
-			manifest: manifest,
-			reader:   bytes.NewReader(manifest.InlineBlob),
-		}
-
-	case domain.LayoutTarget:
-		// PhysicalAddress is sourced from the index — the
-		// authoritative cache populated at IndexManifest time.
-		// Read-path does not recompute the path from the current
-		// PathTopology: per the layout invariant (Internals/01),
-		// manifests carry no placement data, and the path under
-		// which a blob was actually written is what the index
-		// records. This makes future layout changes (Reshuffle
-		// Agent, OQ-21) safe by construction — the read-path
-		// follows whatever the index says, the topology config
-		// only governs where new writes go.
-		addr, err := s.index.Resolve(ctx, string(manifest.BlobRef))
-		if err != nil {
-			return nil, fmt.Errorf("store.Get: resolve blob path: %w", err)
-		}
-		inner = &targetReadHandle{
-			manifest: manifest,
-			drv:      s.drv,
-			blobPath: addr.Path,
-			ctx:      ctx,
-			store:    s,
-		}
-
-	case domain.LayoutExternalRef:
-		return nil, fmt.Errorf("%w: store.Get on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
-
+// dispatchManifestType returns nil for a regular Blob manifest, or the
+// right sentinel otherwise. Get, Delete, and Verify share it: Blob
+// continues, TOC awaits the chunker decorator, Pack is engine-internal
+// (surfaced as not-found), anything else is unknown. op names the
+// operation for the error message.
+func dispatchManifestType(m domain.Manifest, op string) error {
+	switch m.Type {
+	case domain.ManifestTypeBlob:
+		return nil
+	case domain.ManifestTypeTOC:
+		return fmt.Errorf("%w: %s on ManifestTypeTOC requires the chunker decorator", errs.ErrNotImplemented, op)
+	case domain.ManifestTypePack:
+		// Pack manifests are engine-internal; collapse to not-found so
+		// clients need not special-case them.
+		return errs.ErrArtifactNotFound
 	default:
-		return nil, fmt.Errorf("store.Get: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
+		return fmt.Errorf("%s: unknown manifest type %q", op, m.Type)
 	}
-
-	// 6. VerifyOnRead policy.
-	//
-	// Empty pipeline + plain media is the canonical case where the
-	// engine itself is the only line of defence against silent bit
-	// rot; AEAD-protected blobs and media with native checksums are
-	// auto-skipped (see shouldVerifyOnRead). ForceEnabled wraps
-	// unconditionally; Disabled skips even on plain media.
-	cfg := s.snapshotConfig()
-	if shouldVerifyOnRead(cfg.VerifyOnRead, manifest.Pipeline, s.drv.Capabilities(), s.transformers) {
-		wrapped, err := newVerifyingReadHandle(inner, s)
-		if err != nil {
-			return nil, err
-		}
-		return wrapped, nil
-	}
-	return inner, nil
-
-	// no Curator routing (opts.AllowColdRead is a Curator-layer flag
-	// per docs/4. API Reference/03 §3.1 — without a Curator it has no
-	// effect; the argument is accepted for ABI compatibility and
-	// otherwise ignored).
 }
 
-// parseContentHash splits an artifact's ContentHash identifier
-// into a fresh hasher and the expected raw digest. Used by every
-// integrity-check path: Verify, the VerifyOnRead wrapper, and
-// (M3) the Scrub Agent.
-//
-// The algorithm is taken from the ContentHash prefix rather than
-// the current StoreConfig so artifacts written under a previous
-// hasher still validate after a ContentHasher migration. Callers
-// must stream the plaintext bytes through `hasher` and compare
-// hasher.Sum(nil) to `want` with bytes.Equal.
-//
-// Returned errors are wrapped with a stable prefix so callers
-// can format their own context without losing the cause:
-//
-//	algo, want, hasher, err := s.parseContentHash(m.ContentHash)
-//	if err != nil {
-//	    return fmt.Errorf("store.Verify: %w", err)
-//	}
-//
-// `algo` is returned alongside the hasher so callers that need it
-// for diagnostics (mismatch messages) avoid a second Parse.
+// asKeyProvider adapts a pipeline.KeyResolver to a
+// manifestcodec.KeyProvider, mapping a nil resolver to a nil provider.
+// This avoids the typed-nil trap: a nil resolver passed straight into
+// an interface parameter would become a non-nil interface value, and
+// the codec's `keys == nil` check would miss it. "No resolver" must
+// mean "no provider" — Plain manifests need none; encrypted ones then
+// surface ErrKeyNotFound.
+func asKeyProvider(r pipeline.KeyResolver) manifestcodec.KeyProvider {
+	if r == nil {
+		return nil
+	}
+	return r
+}
+
+// parseContentHash splits a ContentHash into a fresh hasher and the
+// expected digest. Used by every integrity path (Verify, the
+// VerifyOnRead wrapper, and later Scrub). The algorithm comes from the
+// ContentHash prefix, not the current config, so artifacts written
+// under a previous hasher still validate after a migration. Callers
+// stream plaintext through hasher and compare hasher.Sum(nil) to want.
 func (s *store) parseContentHash(ch domain.ContentHash) (algo string, want []byte, hasher hash.Hash, err error) {
 	algo, want, err = s.hashes.Parse(string(ch))
 	if err != nil {

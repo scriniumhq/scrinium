@@ -1,49 +1,35 @@
 package store
 
 import (
-	"context"
-	"fmt"
-	"io"
 	"sync"
 
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/systemstore"
 )
 
-// store is the engine's internal implementation of Store. It is
-// not exported: clients receive a Store interface from InitStore
-// and OpenStore.
+// store is the engine's internal Store implementation. Clients
+// receive a Store interface from InitStore / OpenStore; the concrete
+// type is never exported. Its behaviour is split across sibling files
+// by the interface each serves — data_*, admin_*, system_* — plus the
+// lifecycle_/bootstrap_ construction files.
 //
-// Concurrency model: the state field is protected by stateMu. Most
-// data-path methods (Put, Get, Delete) consult state at entry and
-// proceed without holding the lock; long-running operations must
-// not block administrative state transitions. AdminStore methods
-// that mutate state (Unlock, SetMaintenanceMode) take the write
-// lock for the duration of the transition.
+// Concurrency. state is guarded by stateMu; most data-path methods
+// read it once at entry and proceed lock-free, so a long Put never
+// blocks an admin state transition. Mutating admin methods hold the
+// write lock for the transition only.
 //
-// Lock ordering. When more than one of the three mutexes is taken
-// in the same call path, they MUST be acquired in this order:
+// Lock ordering — when more than one mutex is held in a call path,
+// acquire in this order; the reverse deadlocks:
 //
 //	crypto.mu  →  stateMu  →  cfgMu
 //
-// Reverse acquisition (e.g. cfgMu → cryptoMu) is forbidden because
-// it deadlocks against the forward path. snapshotConfig and
-// maintenanceMode helpers take their lock in isolation and release
-// it before returning, so callers free to acquire one of the other
-// two afterwards — what is not allowed is holding cfgMu (or stateMu)
-// and reaching for crypto.mu inside that scope.
-//
-// Current obeyors of the order:
-//   - unlockEncrypted, setPassphraseImpl, rotateKEKImpl: crypto.mu
-//     held for the operation, stateMu taken briefly inside for
-//     the transition.
-//   - Put: snapshotConfig (cfgMu) at the top, released; cryptoMu
-//     taken later in Phase 2 — sequential, not nested.
-//   - Get / loadManifest: crypto.mu only (via accessors).
+// snapshotConfig and maintenanceMode take their lock in isolation and
+// release before returning, so a caller may take another lock after
+// them; what is forbidden is holding cfgMu or stateMu and then
+// reaching for crypto.mu.
 type store struct {
 	// Identity and dependencies.
 	storeID string
@@ -51,85 +37,33 @@ type store struct {
 	index   coreapi.StoreIndex
 	pub     coreapi.Publisher
 
-	// Configuration. activeConfig is the StoreConfig in effect for
-	// new operations; it is replaced atomically by UpdateConfig.
+	// activeConfig is the StoreConfig in effect for new operations,
+	// replaced atomically by UpdateConfig under cfgMu.
 	cfgMu        sync.RWMutex
 	activeConfig domain.StoreConfig
 
-	// State machine.
+	// State machine, guarded by stateMu.
 	stateMu     sync.RWMutex
 	state       domain.StoreState
 	maintenance domain.MaintenanceMode
+	closed      bool
 
-	// Plugin registries — populated at construction; never mutated
-	// after that.
+	// Plugin registries — set at construction, never mutated after.
 	hashes       domain.HashRegistry
 	transformers pipeline.TransformerRegistry
 
-	// SystemStore facade. Initialised once at construction; nil
-	// only in unit tests that build a *store by hand without
-	// going through the full constructor.
+	// SystemStore facade, wired once at construction. nil only in
+	// unit tests that build a *store by hand.
 	system *systemstore.SystemStore
 
-	// Crypto state. The DEK, descriptor, passphrase provider and
-	// derived key resolver, together with the one mutex that guards
-	// them, live in the cryptoState component (crypto_state.go) so the
-	// lock owns exactly the fields it protects. Unlock / SetPassphrase
-	// / RotateKEK rewrite these together under crypto.mu; the data
-	// path reads them through crypto's narrow accessors.
+	// crypto groups the DEK, descriptor, passphrase provider, and key
+	// resolver with the mutex that guards them (crypto_state.go).
 	crypto cryptoState
-
-	// closed is set by Close. Guarded by stateMu. Reads from
-	// non-Close paths use a fast no-op check; the canonical
-	// "operational" gate is checkOperational, which compares
-	// state/maintenance and is unaffected by closed (Close
-	// transitions state to Locked anyway).
-	closed bool
 }
 
-// AdminStore crypto methods — bodies live in core/crypto_admin.go.
-
-func (s *store) Unlock(ctx context.Context) error {
-	return s.unlockEncrypted(ctx)
-}
-
-func (s *store) ExportRecoveryKit(ctx context.Context) ([]byte, error) {
-	return s.exportRecoveryKitImpl(ctx)
-}
-
-func (s *store) RotateKEK(ctx context.Context) error {
-	return s.rotateKEKImpl(ctx)
-}
-
-func (s *store) SetPassphrase(ctx context.Context) error {
-	return s.setPassphraseImpl(ctx)
-}
-
-// --- DataStore: stubs implemented in M1.4 ---
-
-func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error) {
-	// PutBlob is a level-3 decorator entry point used by
-	// chunker.Wrapper (M5.2) to write anonymous chunks without
-	// producing a manifest. Two pending changes converge here:
-	//
-	//   1. The implementation lands with chunker.Wrapper in M5.2.
-	//   2. The method itself is moving off DataStore onto a
-	//      separate BlobStore interface at the start of M5 — see
-	//      docs 7. Planning/backlog.md "ADR-TBD: Вынос PutBlob в
-	//      отдельный интерфейс BlobStore". Application code will
-	//      no longer see PutBlob in DataStore autocomplete.
-	//
-	// Until then the stub here keeps the current DataStore
-	// contract honest: callers who reach for PutBlob today get a
-	// clear "not implemented" rather than silent success.
-	return "", fmt.Errorf("%w: store.PutBlob is deferred to M5 (chunker.Wrapper); the method itself moves to BlobStore at M5 start (backlog ADR-TBD)",
-		errs.ErrNotImplemented)
-}
-
-// Compile-time interface conformance.
-
-// System returns the SystemStore facade. Part of the AdminStore
-// interface.
+// System returns the SystemStore facade. Part of AdminStore; reached
+// only through AdminStore, so DataStore consumers cannot see system
+// state (ADR-57).
 func (s *store) System() coreapi.SystemStore { return s.system }
 
 var _ coreapi.Store = (*store)(nil)

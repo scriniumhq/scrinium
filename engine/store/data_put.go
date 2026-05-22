@@ -19,27 +19,11 @@ import (
 	"scrinium.dev/engine/pipeline"
 )
 
-// Put records an artifact in the Store. Two blob-placement paths
-// are supported:
-//
-//	Target: payload streams to a staging file, content is hashed
-//	on the fly, dedup is checked, the staging file is renamed to
-//	its final hash-derived path.
-//
-//	Inline (chosen when StoreConfig.BlobStorage is InlineFallback
-//	AND len(payload) <= InlineBlobLimit): payload is buffered in
-//	memory and stored inside the manifest. No blob file is
-//	produced; dedup is disabled because inline bytes have no
-//	separate identity in the blobs table (docs §… "Deduplication
-//	is forcibly disabled" for inline blobs).
-//
-// Then the manifest is built, hashed (becomes ArtifactID), and
-// written to its own hash-sharded path under manifests/. Finally
-// the index is updated.
-//
-// ExternalRef, Pipeline, Encryption, HostStorage transit, and
-// Pack volumes are deferred to later milestones. Reaching a code
-// path that needs them returns an explicit error.
+// Put records an artifact and returns its ArtifactID. It orchestrates
+// four phases, each a helper below: materialize the blob (hash +
+// placement), assemble the manifest (with its ArtifactID), persist the
+// manifest file, and index it. A blob may go to a separate file
+// (Target) or be embedded in the manifest (Inline); see materializeBlob.
 func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error) {
 	if err := s.enterWrite(ctx); err != nil {
 		return "", err
@@ -49,287 +33,220 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	}
 
 	cfg := s.snapshotConfig()
-
-	// Pipeline check: every algorithm referenced in the active
-	// config must be present in the TransformerRegistry. This is
-	// per-Put rather than per-Open because a registry can be
-	// extended at runtime (historical-compat use-case from docs
-	// §7.3) and we want errors at the call that needs the algo,
-	// not at startup.
-	if err := s.pipelineRunner().ValidateAlgos(cfg.Pipeline); err != nil {
-		return "", fmt.Errorf("store.Put: %w", err)
+	if err := s.checkPutSupported(cfg, opts); err != nil {
+		return "", err
 	}
 
-	// Reject configurations whose support is not yet wired.
-	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
-		return "", fmt.Errorf("store.Put: BlobType %q not supported (TODO M3)", opts.BlobType)
-	}
-	if cfg.BlobStorage == domain.BlobStorageExternalRef {
-		return "", errors.New("store.Put: BlobStorage: ExternalRef not yet supported")
-	}
-	if cfg.ManifestStorage != domain.ManifestStorageRemote && cfg.ManifestStorage != "" {
-		// Local and Replicated require HostStorage as the transit
-		// buffer (see 2. Internals/01 Topology and 4. API
-		// Reference/05 Configuration §5). Until HostStorage is
-		// wired (TODO M4.2), only Remote (the default) works.
-		return "", fmt.Errorf("store.Put: ManifestStorage %q requires HostStorage (TODO M4.2)",
-			cfg.ManifestStorage)
-	}
-
-	// TODO(M5.x): Two-Pass dedup path. Per docs/2. Internals/02 §2.1.1,
-	// when a.Payload implements io.ReadSeeker AND the driver does not
-	// declare CapSlowRead, we should hash on a first pass, probe the
-	// dedup index, and skip the staging write on a hit. M1.4 ships
-	// with One-Pass only — correct, but writes-then-dedups even on
-	// hits. Acceptable for the M1 perimeter; revisit when S3 driver
-	// arrives in M5 (CapSlowRead becomes a real signal there).
-
-	// --- Phase 1: hash payload, decide inline vs target ---
-	//
-	// We always need the content hash up front: it is the dedup
-	// key, the BlobRef of fresh blobs, and a deterministic input
-	// to the manifest. The placement decision (inline body vs.
-	// separate blob file) depends on size, which is also produced
-	// here.
-	//
-	// For InlineFallback we speculatively read up to
-	// InlineBlobLimit + 1 bytes. If the read returns at most
-	// InlineBlobLimit bytes, the payload fits inline; otherwise
-	// we have already consumed the head and must drain the rest
-	// to staging via MultiReader.
-
-	hashAlgo := string(cfg.ContentHasher)
-
-	// ADR-58 (R6): the engine owns write-key choice. Resolve the
-	// KeyID once and thread it into the blob Pipeline (EncodeContext)
-	// and the manifest-body crypto below, so a blob and its manifest
-	// encrypt under the same KeyID. The default StaticKeyResolver
-	// ignores the namespace and returns "".
-	writeKeyID := s.resolveWriteKeyID(opts.Namespace)
-
-	useInlineFallback := cfg.BlobStorage == domain.BlobStorageInlineFallback &&
-		cfg.InlineBlobLimit > 0
-	inlineLimit := cfg.InlineBlobLimit
-
-	// Inline + Pipeline is reserved (M2-extra in backlog). The
-	// engine refuses early so users do not silently get
-	// untransformed bytes inside the manifest.
-	if useInlineFallback && len(cfg.Pipeline) > 0 {
-		return "", errPipelineWithInline
-	}
-
-	var (
-		contentHash    domain.ContentHash
-		originalSize   int64
-		inlineBytes    []byte // non-nil iff this Put goes inline
-		blobRef        domain.BlobRef
-		blobAddr       domain.PhysicalAddress
-		pipelineStages []domain.PipelineStage
-	)
-
-	if useInlineFallback {
-		// Inline path: no Pipeline (refused above), no dedup probe.
-		// Same as M1.4 — kept verbatim modulo the helper hashes.
-		head, err := io.ReadAll(io.LimitReader(a.Payload, inlineLimit+1))
-		if err != nil {
-			return "", fmt.Errorf("store.Put: read payload head: %w", err)
-		}
-		if int64(len(head)) <= inlineLimit {
-			h, err := s.hashes.NewHasher(hashAlgo)
-			if err != nil {
-				return "", fmt.Errorf("store.Put: hasher: %w", err)
-			}
-			if _, err := h.Write(head); err != nil {
-				return "", fmt.Errorf("store.Put: hash inline: %w", err)
-			}
-			contentHash = domain.ContentHash(s.hashes.Format(hashAlgo, h.Sum(nil)))
-			originalSize = int64(len(head))
-			inlineBytes = head
-			blobRef = domain.BlobRef(contentHash)
-			pipelineStages = []domain.PipelineStage{}
-			// blobAddr stays zero: no driver entry for inline.
-		} else {
-			// Overflowed inline → fall through to Target streaming
-			// using the standard runner. Splice the consumed head
-			// back in front of the remaining Payload.
-			combined := io.MultiReader(bytes.NewReader(head), a.Payload)
-			contentHash, blobRef, originalSize, pipelineStages, blobAddr, err =
-				s.streamThroughPipeline(ctx, cfg, hashAlgo, writeKeyID, combined)
-			if err != nil {
-				return "", err
-			}
-		}
-	} else {
-		// Plain Target path: stream straight through the Pipeline
-		// (which may be empty — runner handles that).
-		var err error
-		contentHash, blobRef, originalSize, pipelineStages, blobAddr, err =
-			s.streamThroughPipeline(ctx, cfg, hashAlgo, writeKeyID, a.Payload)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	// --- Phase 2: build manifest and compute its ArtifactID ---
-	//
-	// LayoutHeader.BlobStorage records HOW this particular blob
-	// is laid out, regardless of the StoreConfig that was in
-	// effect at write time. The read path inspects the header,
-	// not the current config — that is what makes manifests
-	// stable across config changes.
-	//
-	// Per docs §7.2: BlobRef is set on every manifest, including
-	// inline ones (where it equals the ContentHash of the
-	// embedded bytes).
-
-	layout := domain.LayoutTarget
-	if inlineBytes != nil {
-		layout = domain.LayoutInline
-	}
-	createdAt := time.Now().UTC()
-	manifest := domain.Manifest{
-		Type:           domain.ManifestTypeBlob,
-		Namespace:      opts.Namespace,
-		SessionID:      opts.SessionID,
-		CreatedAt:      createdAt,
-		ContentHash:    contentHash,
-		OriginalSize:   originalSize,
-		BlobRef:        blobRef,
-		LayoutHeader:   domain.LayoutHeader{BlobStorage: layout},
-		Pipeline:       pipelineStages,
-		InlineBlob:     inlineBytes,
-		RetentionUntil: opts.RetentionUntil,
-		Ext:            a.Ext,
-		Usr:            a.Usr,
-	}
-	// Snapshot crypto state for non-Plain manifest encryption.
-	// Held briefly under cryptoMu, then released so a parallel
-	// Unlock/RotateKEK is not blocked by a long-running Put.
-	// dek is copied; keyResolver is an immutable interface so a
-	// reference is enough.
-	var dekSnapshot []byte
-	var keyID string
-	if cfg.ManifestCrypto != "" && cfg.ManifestCrypto != domain.ManifestCryptoPlain {
-		dek, derr := s.crypto.dekForWrite(cfg.ManifestCrypto)
-		if derr != nil {
-			return "", derr
-		}
-		dekSnapshot = dek
-		keyID = writeKeyID
-		defer aead.Wipe(dekSnapshot)
-	}
-
-	artifactID, manifestBytes, signedManifest, err := manifestcodec.ComputeArtifactID(
-		manifest, hashAlgo, s.hashes,
-		cfg.ManifestEncoding, cfg.ManifestCrypto,
-		dekSnapshot, keyID,
-	)
+	blob, err := s.materializeBlob(ctx, cfg, a, opts)
 	if err != nil {
-		// On encoding/crypto deferral the blob (if any) is already
-		// committed. We do NOT roll it back: the orphan blob is
-		// harmless (ref_count stays 0, GC reaps it). Rolling back
-		// would require an inverse of Driver.Rename, which can
-		// race against a parallel Put deduping on the same content.
-		return "", fmt.Errorf("store.Put: compute artifact id: %w", err)
+		return "", err
 	}
-	manifest = signedManifest
 
-	// --- Phase 3: write the manifest file ---
-
-	manifestPath, err := blobpath.ManifestPath(artifactID)
+	manifest, manifestBytes, err := s.assembleManifest(cfg, a, opts, blob)
 	if err != nil {
-		return "", fmt.Errorf("store.Put: manifest path: %w", err)
-	}
-	if err := s.drv.Put(ctx, manifestPath, bytes.NewReader(manifestBytes)); err != nil {
-		return "", fmt.Errorf("store.Put: write manifest: %w", err)
+		return "", err
 	}
 
-	// --- Phase 4: index ---
-	//
-	// For inline manifests blobAddr is the zero PhysicalAddress.
-	// IndexManifest dispatches on manifest.LayoutHeader.BlobStorage
-	// to skip the blobs-table insertion for inline; the manifest
-	// itself is still indexed so Walk and GetBySession find it.
-
-	if err := s.index.IndexManifest(ctx, manifest, blobAddr, nil, nil); err != nil {
-		// Manifest file is on disk but unindexed. RebuildIndexAgent
-		// (M3) is the recovery path. We surface the error so the
-		// caller can retry the index step or reissue Put (which
-		// will dedup the blob and re-attempt the manifest).
-		return "", fmt.Errorf("store.Put: index manifest: %w", err)
+	if err := s.persistManifest(ctx, manifest, manifestBytes, blob.addr); err != nil {
+		return "", err
 	}
 
-	// --- Phase 5: emit ---
-
-	s.publish(event.EventManifestSaved, event.ManifestSavedPayload{
-		Manifest:  manifest,
-		IsTransit: false,
-	})
-
-	return artifactID, nil
+	s.publish(event.EventManifestSaved, event.ManifestSavedPayload{Manifest: manifest})
+	return manifest.ArtifactID, nil
 }
 
-// streamThroughPipeline runs the active Pipeline over input and
-// commits the resulting bytes to a blob slot. It is the shared
-// tail of every Put path that ends up on disk.
-//
-// The hashAlgo is taken from cfg.ContentHasher; we accept it as
-// an argument so the caller does not need to read it twice.
-func (s *store) streamThroughPipeline(
-	ctx context.Context,
-	cfg domain.StoreConfig,
-	hashAlgo string,
-	writeKeyID string,
-	input io.Reader,
-) (
-	contentHash domain.ContentHash,
-	blobRef domain.BlobRef,
-	originalSize int64,
-	pipelineStages []domain.PipelineStage,
-	blobAddr domain.PhysicalAddress,
-	err error,
-) {
+// blobResult carries the outcome of materializeBlob: the addressing
+// hashes, the original payload size, the pipeline stages recorded for
+// the manifest, and either a non-nil inline body or a blob address.
+type blobResult struct {
+	contentHash  domain.ContentHash
+	blobRef      domain.BlobRef
+	originalSize int64
+	stages       []domain.PipelineStage
+	inlineBytes  []byte                 // non-nil iff the blob is inline
+	addr         domain.PhysicalAddress // zero for inline
+}
+
+// materializeBlob hashes the payload and places it. For InlineFallback
+// it speculatively reads up to InlineBlobLimit+1 bytes: at or under the
+// limit the bytes are embedded in the manifest; over it, the consumed
+// head is spliced back and the payload streams to a Target blob. Plain
+// stores always stream to Target.
+func (s *store) materializeBlob(ctx context.Context, cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions) (blobResult, error) {
+	hashAlgo := string(cfg.ContentHasher)
+	// ADR-58: resolve the write KeyID once and thread it through both
+	// the blob pipeline and the manifest body, so a blob and its
+	// manifest encrypt under the same key.
+	writeKeyID := s.resolveWriteKeyID(opts.Namespace)
+
+	inlineFallback := cfg.BlobStorage == domain.BlobStorageInlineFallback && cfg.InlineBlobLimit > 0
+
+	if inlineFallback {
+		head, err := io.ReadAll(io.LimitReader(a.Payload, cfg.InlineBlobLimit+1))
+		if err != nil {
+			return blobResult{}, fmt.Errorf("store.Put: read payload head: %w", err)
+		}
+		if int64(len(head)) <= cfg.InlineBlobLimit {
+			return s.materializeInline(hashAlgo, head)
+		}
+		// Overflowed inline: stream head+rest to Target.
+		combined := io.MultiReader(bytes.NewReader(head), a.Payload)
+		return s.streamToTarget(ctx, cfg, hashAlgo, writeKeyID, combined)
+	}
+	return s.streamToTarget(ctx, cfg, hashAlgo, writeKeyID, a.Payload)
+}
+
+// materializeInline hashes an already-buffered payload and returns it
+// as an inline blob. No driver entry, no dedup probe; BlobRef equals
+// the ContentHash of the embedded bytes (docs §7.2).
+func (s *store) materializeInline(hashAlgo string, body []byte) (blobResult, error) {
+	h, err := s.hashes.NewHasher(hashAlgo)
+	if err != nil {
+		return blobResult{}, fmt.Errorf("store.Put: hasher: %w", err)
+	}
+	if _, err := h.Write(body); err != nil {
+		return blobResult{}, fmt.Errorf("store.Put: hash inline: %w", err)
+	}
+	ch := domain.ContentHash(s.hashes.Format(hashAlgo, h.Sum(nil)))
+	return blobResult{
+		contentHash:  ch,
+		blobRef:      domain.BlobRef(ch),
+		originalSize: int64(len(body)),
+		stages:       []domain.PipelineStage{},
+		inlineBytes:  body,
+	}, nil
+}
+
+// streamToTarget runs the active pipeline over input, stages the
+// result, then commits it to a blob slot (dedup hit drops the staging
+// file; miss renames it into place).
+func (s *store) streamToTarget(ctx context.Context, cfg domain.StoreConfig, hashAlgo, writeKeyID string, input io.Reader) (blobResult, error) {
 	stagingPath := s.makeStagingPath()
 
-	streamReader, pp, err := s.pipelineRunner().BuildPut(hashAlgo, input, cfg.Pipeline, pipeline.EncodeContext{
+	stream, pp, err := s.pipelineRunner().BuildPut(hashAlgo, input, cfg.Pipeline, pipeline.EncodeContext{
 		KeyID:          writeKeyID,
 		EncryptedDedup: cfg.EncryptedDedup, // ADR-58: IV mode for the crypto stage
 		SegmentSize:    cfg.SegmentSize,    // ADR-59: segmented AEAD frame size
 	})
 	if err != nil {
-		return "", "", 0, nil, domain.PhysicalAddress{}, fmt.Errorf("store.Put: %w", err)
+		return blobResult{}, fmt.Errorf("store.Put: %w", err)
 	}
 
-	// originalSize must measure the ORIGINAL payload, not the
-	// post-Pipeline output. We count via a tee on the input layer
-	// — the runner already tees content for the hasher, but counter
-	// and hasher are separate concerns.
-	counter := &countingReader{r: streamReader}
-
-	if err := s.drv.Put(ctx, stagingPath, counter); err != nil {
-		return "", "", 0, nil, domain.PhysicalAddress{},
-			fmt.Errorf("store.Put: stage payload: %w", err)
+	if err := s.drv.Put(ctx, stagingPath, stream); err != nil {
+		return blobResult{}, fmt.Errorf("store.Put: stage payload: %w", err)
 	}
 
-	contentHash, blobRef, pipelineStages = pp.Finalize()
-
-	// counter.n now equals the byte count of the FINAL stream
-	// (post-Pipeline). originalSize must come from the
-	// pre-Pipeline tee — see comment below.
-	originalSize = pp.ContentBytesRead()
+	contentHash, blobRef, stages := pp.Finalize()
+	originalSize := pp.ContentBytesRead() // measured on the pre-pipeline input
 
 	commitRef, addr, err := s.commitBlob(ctx, cfg, stagingPath, contentHash,
-		originalSize, blobRef, domain.CryptoIdentityOf(pipelineStages))
+		originalSize, blobRef, domain.CryptoIdentityOf(stages))
 	if err != nil {
-		return "", "", 0, nil, domain.PhysicalAddress{}, err
+		return blobResult{}, err
 	}
-	return contentHash, commitRef, originalSize, pipelineStages, addr, nil
+	return blobResult{
+		contentHash:  contentHash,
+		blobRef:      commitRef,
+		originalSize: originalSize,
+		stages:       stages,
+		addr:         addr,
+	}, nil
 }
 
-// commitBlob is the tail of the Target write path: dedup probe,
-// then either drop the staging file (hit) or rename it to its
-// final hash-derived path (miss). Returns the BlobRef and the
-// PhysicalAddress of where the blob actually lives now.
+// assembleManifest builds the manifest from the blob result and
+// computes its ArtifactID. LayoutHeader records how this blob is laid
+// out, independent of the current config — the read path trusts the
+// header, which is what keeps manifests stable across config changes.
+// For an encrypting config the DEK is borrowed under the crypto lock
+// for the ComputeArtifactID call and wiped immediately after.
+func (s *store) assembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions, blob blobResult) (domain.Manifest, []byte, error) {
+	layout := domain.LayoutTarget
+	if blob.inlineBytes != nil {
+		layout = domain.LayoutInline
+	}
+	manifest := domain.Manifest{
+		Type:           domain.ManifestTypeBlob,
+		Namespace:      opts.Namespace,
+		SessionID:      opts.SessionID,
+		CreatedAt:      time.Now().UTC(),
+		ContentHash:    blob.contentHash,
+		OriginalSize:   blob.originalSize,
+		BlobRef:        blob.blobRef,
+		LayoutHeader:   domain.LayoutHeader{BlobStorage: layout},
+		Pipeline:       blob.stages,
+		InlineBlob:     blob.inlineBytes,
+		RetentionUntil: opts.RetentionUntil,
+		Ext:            a.Ext,
+		Usr:            a.Usr,
+	}
+
+	hashAlgo := string(cfg.ContentHasher)
+	var (
+		signed domain.Manifest
+		raw    []byte
+	)
+	err := s.withWriteDEK(cfg, opts.Namespace, func(dek []byte, keyID string) error {
+		id, fileBytes, sm, cerr := manifestcodec.ComputeArtifactID(
+			manifest, hashAlgo, s.hashes,
+			cfg.ManifestEncoding, cfg.ManifestCrypto, dek, keyID,
+		)
+		if cerr != nil {
+			return cerr
+		}
+		sm.ArtifactID = id
+		signed = sm
+		raw = fileBytes
+		return nil
+	})
+	if err != nil {
+		// A blob (if any) is already committed; we do not roll it
+		// back. An orphan blob is harmless — ref_count stays 0 and GC
+		// reaps it — whereas an inverse Rename could race a parallel
+		// dedup on the same content.
+		return domain.Manifest{}, nil, fmt.Errorf("store.Put: compute artifact id: %w", err)
+	}
+	return signed, raw, nil
+}
+
+// persistManifest writes the manifest file and indexes it. For inline
+// manifests addr is the zero PhysicalAddress; IndexManifest skips the
+// blobs-table insert but still indexes the manifest so Walk and
+// GetBySession find it.
+func (s *store) persistManifest(ctx context.Context, manifest domain.Manifest, manifestBytes []byte, addr domain.PhysicalAddress) error {
+	manifestPath, err := blobpath.ManifestPath(manifest.ArtifactID)
+	if err != nil {
+		return fmt.Errorf("store.Put: manifest path: %w", err)
+	}
+	if err := s.drv.Put(ctx, manifestPath, bytes.NewReader(manifestBytes)); err != nil {
+		return fmt.Errorf("store.Put: write manifest: %w", err)
+	}
+	if err := s.index.IndexManifest(ctx, manifest, addr, nil, nil); err != nil {
+		// Manifest is on disk but unindexed; the rebuild agent is the
+		// recovery path. Surface so the caller can retry.
+		return fmt.Errorf("store.Put: index manifest: %w", err)
+	}
+	return nil
+}
+
+// withWriteDEK borrows a DEK copy for an encrypting write and
+// guarantees it is wiped before returning. For a Plain config it calls
+// fn with a nil DEK and empty keyID. The DEK never escapes fn, so no
+// write path can leak it by forgetting to wipe.
+func (s *store) withWriteDEK(cfg domain.StoreConfig, namespace string, fn func(dek []byte, keyID string) error) error {
+	if cfg.ManifestCrypto == "" || cfg.ManifestCrypto == domain.ManifestCryptoPlain {
+		return fn(nil, "")
+	}
+	dek, err := s.crypto.dekForWrite(cfg.ManifestCrypto)
+	if err != nil {
+		return err
+	}
+	defer aead.Wipe(dek)
+	return fn(dek, s.resolveWriteKeyID(namespace))
+}
+
+// commitBlob is the tail of the Target write path: probe dedup, then
+// drop the staging file (hit) or rename it into place (miss). Returns
+// the BlobRef and the address where the blob now lives.
 func (s *store) commitBlob(
 	ctx context.Context,
 	cfg domain.StoreConfig,
@@ -363,34 +280,20 @@ func (s *store) commitBlob(
 		_ = s.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("store.Put: commit blob: %w", err)
 	}
-	return blobRef, domain.PhysicalAddress{
-		Workspace: domain.WorkspaceLocation,
-		Path:      finalPath,
-	}, nil
+	return blobRef, domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: finalPath}, nil
 }
 
-// dedupProbe is the single point that decides whether a freshly
-// staged blob duplicates one already in the index (ADR-58, the
-// "single dedup-resolver"). It branches on crypto-identity:
+// dedupProbe decides whether a staged blob duplicates an indexed one
+// (ADR-58), branching on crypto-identity:
 //
-//   - Plain (empty identity): probe by (ContentHash, OriginalSize).
-//     Keyless transforms are reproducible, so an existing row is a
-//     genuine byte-duplicate — drop staging, share it. Preserves
-//     T-07 (dedup independent of compression).
-//
-//   - Encrypted (non-empty identity): a duplicate is only safe when
-//     the ciphertext is byte-reproducible. Under Disabled the IV is
-//     random, so the staged BlobRef is unique and we must NOT dedup
-//     — probing by (ContentHash, OriginalSize, identity) would find
-//     a survivor encrypted under a different IV and corrupt this
-//     write (the exact M2 data-loss bug). We therefore probe by the
-//     final-stream BlobRef: a hit means identical ciphertext, which
-//     under Disabled never happens and under Convergent (R8) is
-//     exactly the intended dedup.
-//
-// The crypto-identity is recorded in the blob row regardless (see
-// registerBlob/IndexManifest) — Convergent and cross-store dedup
-// (M4/S1) read it.
+//   - Plain (empty identity): probe by (ContentHash, OriginalSize). A
+//     keyless transform is reproducible, so a hit is a true byte
+//     duplicate — share it (preserves dedup-independent-of-compression).
+//   - Encrypted (non-empty identity): probe by BlobRef. Under random-IV
+//     Disabled the staged BlobRef is unique, so this never hits and we
+//     never dedup; under Convergent identical ciphertext hits, which is
+//     the intended dedup. Probing by content here would risk sharing a
+//     blob encrypted under a different IV.
 func (s *store) dedupProbe(
 	ctx context.Context,
 	contentHash domain.ContentHash,
@@ -401,7 +304,6 @@ func (s *store) dedupProbe(
 	if crypto == "" {
 		return s.index.ExistsByContent(ctx, contentHash, originalSize, "")
 	}
-	// Encrypted: identity is reproducible only via BlobRef equality.
 	if _, err := s.index.Resolve(ctx, string(blobRef)); err != nil {
 		if errors.Is(err, errs.ErrArtifactNotFound) {
 			return "", false, nil
@@ -411,13 +313,11 @@ func (s *store) dedupProbe(
 	return string(blobRef), true, nil
 }
 
-// resolveWriteKeyID asks the KeyResolver which KeyID a new artifact
-// in this namespace should be encrypted under (ADR-58). The
-// resolver reference is snapshotted under cryptoMu but ResolveWriteKey
-// is called without the lock held — it must be cheap and must not
-// block (a map lookup), so a long-running custom resolver cannot
-// stall a parallel Unlock/RotateKEK. Returns "" when no resolver is
-// configured (unencrypted store).
+// resolveWriteKeyID asks the resolver which KeyID a new artifact in
+// this namespace encrypts under (ADR-58). The resolver reference is
+// snapshotted under the crypto lock but ResolveWriteKey runs without
+// it — it must be a cheap, non-blocking lookup. Returns "" for an
+// unencrypted store.
 func (s *store) resolveWriteKeyID(namespace string) string {
 	r := s.crypto.resolver()
 	if r == nil {
@@ -426,12 +326,37 @@ func (s *store) resolveWriteKeyID(namespace string) string {
 	return r.ResolveWriteKey(pipeline.KeyContext{Namespace: namespace})
 }
 
+// checkPutSupported rejects configurations and options whose support
+// is not yet wired, before any I/O. These are invariants of the
+// active config plus the per-call BlobType; catching them here keeps
+// the write helpers free of feature-gate branches.
+func (s *store) checkPutSupported(cfg domain.StoreConfig, opts domain.PutOptions) error {
+	if err := s.pipelineRunner().ValidateAlgos(cfg.Pipeline); err != nil {
+		return fmt.Errorf("store.Put: %w", err)
+	}
+	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
+		return fmt.Errorf("store.Put: BlobType %q not supported (TODO M3)", opts.BlobType)
+	}
+	if cfg.BlobStorage == domain.BlobStorageExternalRef {
+		return errors.New("store.Put: BlobStorage: ExternalRef not yet supported")
+	}
+	if cfg.ManifestStorage != domain.ManifestStorageRemote && cfg.ManifestStorage != "" {
+		// Local and Replicated need HostStorage as the transit buffer,
+		// not yet wired (TODO M4.2); only Remote (the default) works.
+		return fmt.Errorf("store.Put: ManifestStorage %q requires HostStorage (TODO M4.2)", cfg.ManifestStorage)
+	}
+	if cfg.BlobStorage == domain.BlobStorageInlineFallback && cfg.InlineBlobLimit > 0 && len(cfg.Pipeline) > 0 {
+		// Inline + Pipeline is reserved (M2-extra); refuse early so a
+		// user never gets untransformed bytes inside the manifest.
+		return errPipelineWithInline
+	}
+	return nil
+}
+
 // validatePutInputs covers the cheap, side-effect-free checks that
-// must reject before any I/O. Order matches the priority of
-// docs/2. Internals/01 §1.4.
+// reject before any I/O.
 func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	if a.Payload == nil && opts.ExternalURI == "" {
-
 		return errors.New("store.Put: nil Payload and no ExternalURI")
 	}
 	if len(opts.Namespace) > domain.MaxNamespaceLen {
@@ -452,25 +377,18 @@ func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	return nil
 }
 
-// makeStagingPath returns a fresh, unique path under
-// system.state/staging/. Uniqueness is provided by the UUID v4
-// helper. A future improvement (multi-host) is to mix in a
-// host_id (TODO M3.1).
+// makeStagingPath returns a fresh unique path under the staging
+// prefix; uniqueness comes from a UUIDv4.
 func (s *store) makeStagingPath() string {
 	return domain.StagingPrefix + "/" + uuid.NewString()
 }
 
-// countingReader wraps an io.Reader and tracks the number of bytes
-// passed through. We need OriginalSize and the hash in one stream;
-// a TeeReader gives us the hash, but the byte count comes from
-// here.
-type countingReader struct {
-	r io.Reader
-	n int64
-}
-
-func (c *countingReader) Read(p []byte) (int, error) {
-	n, err := c.r.Read(p)
-	c.n += int64(n)
-	return n, err
+// PutBlob is a level-3 decorator entry point for chunker.Wrapper
+// (M5.2) to write anonymous chunks without a manifest. It is deferred
+// to M5 and is slated to move off DataStore onto a dedicated BlobStore
+// interface at the start of M5; until then the stub keeps the contract
+// honest rather than silently succeeding.
+func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error) {
+	return "", fmt.Errorf("%w: store.PutBlob is deferred to M5 (chunker.Wrapper); the method moves to BlobStore at M5 start",
+		errs.ErrNotImplemented)
 }
