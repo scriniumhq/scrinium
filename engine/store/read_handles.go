@@ -105,7 +105,7 @@ func (h *targetReadHandle) Read(p []byte) (int, error) {
 			return 0, err
 		}
 		// Compose the inverse Pipeline (no-op when empty).
-		decoded, err := h.store.buildGetReader(h.manifest.Pipeline, raw)
+		decoded, err := h.store.pipelineRunner().BuildGet(h.manifest.Pipeline, raw)
 		if err != nil {
 			h.mu.Unlock()
 			return 0, err

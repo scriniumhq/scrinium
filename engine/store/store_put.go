@@ -56,7 +56,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	// extended at runtime (historical-compat use-case from docs
 	// §7.3) and we want errors at the call that needs the algo,
 	// not at startup.
-	if err := s.validatePipelineAlgos(cfg.Pipeline); err != nil {
+	if err := s.pipelineRunner().ValidateAlgos(cfg.Pipeline); err != nil {
 		return "", fmt.Errorf("store.Put: %w", err)
 	}
 
@@ -299,7 +299,7 @@ func (s *store) streamThroughPipeline(
 ) {
 	stagingPath := s.makeStagingPath()
 
-	streamReader, pp, err := s.buildPutPipeline(hashAlgo, input, cfg.Pipeline, pipeline.EncodeContext{
+	streamReader, pp, err := s.pipelineRunner().BuildPut(hashAlgo, input, cfg.Pipeline, pipeline.EncodeContext{
 		KeyID:          writeKeyID,
 		EncryptedDedup: cfg.EncryptedDedup, // ADR-58: IV mode for the crypto stage
 		SegmentSize:    cfg.SegmentSize,    // ADR-59: segmented AEAD frame size
@@ -319,12 +319,12 @@ func (s *store) streamThroughPipeline(
 			fmt.Errorf("store.Put: stage payload: %w", err)
 	}
 
-	contentHash, blobRef, pipelineStages = pp.finalize(s.hashes.Format)
+	contentHash, blobRef, pipelineStages = pp.Finalize()
 
 	// counter.n now equals the byte count of the FINAL stream
 	// (post-Pipeline). originalSize must come from the
 	// pre-Pipeline tee — see comment below.
-	originalSize = pp.contentBytesRead()
+	originalSize = pp.ContentBytesRead()
 
 	commitRef, addr, err := s.commitBlob(ctx, cfg, stagingPath, contentHash,
 		originalSize, blobRef, domain.CryptoIdentityOf(pipelineStages))

@@ -94,7 +94,7 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 	// Step 2 — invert the Pipeline. Empty Pipeline returns the
 	// underlying reader unchanged. Closing the plaintext reader
 	// closes the underlying ciphertext reader.
-	plaintext, err := s.buildGetReader(m.Pipeline, ciphertext)
+	plaintext, err := s.pipelineRunner().BuildGet(m.Pipeline, ciphertext)
 	if err != nil {
 		// buildGetReader closed `ciphertext` on its failure path.
 		return fmt.Errorf("store.Verify: build pipeline: %w", err)
