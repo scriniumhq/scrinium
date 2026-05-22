@@ -7,7 +7,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/descriptorcache"
 	"scrinium.dev/engine/store/internal/keyring"
@@ -33,7 +33,7 @@ import (
 // usage is the only supported configuration.
 //
 // Passphrase hygiene: every passphrase byte slice obtained from
-// callProvider is wiped via manifestcrypto.Wipe immediately after the KEK
+// callProvider is wiped via aead.Wipe immediately after the KEK
 // has been derived. KEKs themselves are wiped inside wrapDEK and
 // unwrapDEK helpers; this file does not handle them directly.
 
@@ -87,7 +87,7 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 	}
 
 	dek, err := keyring.UnwrapDEK(s.desc.DEK, *s.desc.KDFParams, passphrase)
-	manifestcrypto.Wipe(passphrase)
+	aead.Wipe(passphrase)
 	if err != nil {
 		return fmt.Errorf("store.Unlock: %w", err)
 	}
@@ -108,7 +108,7 @@ func (s *store) unlockEncrypted(ctx context.Context) error {
 		// Wipe the DEK we just unwrapped — the Store is not
 		// safely operational, holding the key in memory adds
 		// risk without benefit.
-		manifestcrypto.Wipe(s.dek)
+		aead.Wipe(s.dek)
 		s.dek = nil
 		s.stateMu.Lock()
 		s.state = domain.StateLocked
@@ -173,7 +173,7 @@ func (s *store) setPassphraseImpl(ctx context.Context) error {
 	}
 
 	wrapped, kdfParams, err := keyring.WrapDEK(s.dek, passphrase, cost)
-	manifestcrypto.Wipe(passphrase)
+	aead.Wipe(passphrase)
 	if err != nil {
 		return fmt.Errorf("store.SetPassphrase: %w", err)
 	}
@@ -245,12 +245,12 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		return fmt.Errorf("store.RotateKEK: current passphrase: %w", err)
 	}
 	verified, err := keyring.UnwrapDEK(s.desc.DEK, *s.desc.KDFParams, currentPass)
-	manifestcrypto.Wipe(currentPass)
+	aead.Wipe(currentPass)
 	if err != nil {
 		return fmt.Errorf("store.RotateKEK: %w", err)
 	}
 	if !bytes.Equal(verified, s.dek) {
-		manifestcrypto.Wipe(verified)
+		aead.Wipe(verified)
 		// Should never happen: if the passphrase unwrapped, it
 		// must have produced the same DEK that's already in
 		// memory. Surface as corruption since the alternative
@@ -258,7 +258,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		return fmt.Errorf("%w: current-passphrase unwrap produced unexpected DEK",
 			errs.ErrStoreCorrupted)
 	}
-	manifestcrypto.Wipe(verified)
+	aead.Wipe(verified)
 
 	// Second half: obtain new passphrase, wrap with the same
 	// cost parameters as before (rotation does not retune
@@ -274,7 +274,7 @@ func (s *store) rotateKEKImpl(ctx context.Context) error {
 		Threads: s.desc.KDFParams.Threads,
 	}
 	wrapped, kdfParams, err := keyring.WrapDEK(s.dek, newPass, cost)
-	manifestcrypto.Wipe(newPass)
+	aead.Wipe(newPass)
 	if err != nil {
 		return fmt.Errorf("store.RotateKEK: %w", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
@@ -15,7 +16,7 @@ import (
 // one.
 func freshDEK(t *testing.T) []byte {
 	t.Helper()
-	b := make([]byte, manifestcrypto.DEKLen)
+	b := make([]byte, aead.DEKLen)
 	if _, err := rand.Read(b); err != nil {
 		t.Fatalf("crypto/rand: %v", err)
 	}
@@ -230,7 +231,7 @@ func FuzzSealOpen_RoundTrip(f *testing.F) {
 	f.Fuzz(func(t *testing.T, plaintext, aad []byte) {
 		// Fixed DEK for the fuzzer — no need to also fuzz the
 		// key, AES-GCM correctness is established stdlib.
-		dek := make([]byte, manifestcrypto.DEKLen)
+		dek := make([]byte, aead.DEKLen)
 		for i := range dek {
 			dek[i] = byte(i)
 		}

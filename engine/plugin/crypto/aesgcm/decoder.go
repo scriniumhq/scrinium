@@ -15,11 +15,11 @@ import (
 // localised to a single segment (ADR-59 / §03). A tag mismatch
 // surfaces as errs.ErrDecryptionFailed.
 type decoder struct {
-	aead cipher.AEAD
+	gcm cipher.AEAD
 }
 
 func (d *decoder) Transform(r io.Reader) io.Reader {
-	or, err := segaead.Open(r, []cipher.AEAD{d.aead})
+	or, err := segaead.Open(r, []cipher.AEAD{d.gcm})
 	if err != nil {
 		return errReader{err: err}
 	}

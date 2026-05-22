@@ -15,7 +15,7 @@ import (
 // a single streaming pass with O(SegmentSize) memory (ADR-59). There
 // is no whole-blob io.ReadAll any more.
 type encoder struct {
-	aead    cipher.AEAD
+	gcm     cipher.AEAD
 	dek     []byte // HMAC key for convergent IV derivation
 	mode    segaead.IVMode
 	segSize int
@@ -32,7 +32,7 @@ func (e *encoder) Transform(r io.Reader) io.Reader {
 	e.started = true
 
 	sr, err := segaead.Seal(r, segaead.SealParams{
-		AEAD:        e.aead,
+		AEAD:        e.gcm,
 		Mode:        e.mode,
 		DEK:         e.dek,
 		KeyID:       e.keyID,

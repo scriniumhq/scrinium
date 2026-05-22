@@ -14,9 +14,9 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/internal/blobpath"
 	"scrinium.dev/engine/internal/manifestcodec"
-	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
 // Put records an artifact in the Store. Two blob-placement paths
@@ -224,7 +224,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		dekSnapshot = append([]byte{}, s.dek...)
 		keyID = writeKeyID
 		s.cryptoMu.Unlock()
-		defer manifestcrypto.Wipe(dekSnapshot)
+		defer aead.Wipe(dekSnapshot)
 	}
 
 	artifactID, manifestBytes, signedManifest, err := manifestcodec.ComputeArtifactID(

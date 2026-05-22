@@ -22,7 +22,7 @@ import (
 // can branch with errors.Is.
 //
 // The returned slice is owned by the caller and MUST be wiped with
-// manifestcrypto.Wipe once the KEK has been derived. callProvider
+// aead.Wipe once the KEK has been derived. callProvider
 // does not retain a reference.
 func callProvider(ctx context.Context, p PassphraseProvider, hint PassphraseHint) ([]byte, error) {
 	if p == nil {

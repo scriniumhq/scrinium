@@ -1,14 +1,14 @@
-package manifestcrypto_test
+package aead_test
 
 import (
 	"testing"
 
-	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/internal/aead"
 )
 
 func TestWipe(t *testing.T) {
 	b := []byte{1, 2, 3, 4, 5}
-	manifestcrypto.Wipe(b)
+	aead.Wipe(b)
 	for i, v := range b {
 		if v != 0 {
 			t.Errorf("byte %d: got %d, want 0", i, v)
@@ -16,6 +16,6 @@ func TestWipe(t *testing.T) {
 	}
 
 	// Nil and empty are no-op safe.
-	manifestcrypto.Wipe(nil)
-	manifestcrypto.Wipe([]byte{})
+	aead.Wipe(nil)
+	aead.Wipe([]byte{})
 }

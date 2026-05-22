@@ -21,6 +21,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/internal/manifestcrypto"
 )
 
@@ -129,7 +130,7 @@ func DecodeFileEncrypted(data []byte, keys KeyProvider) (domain.Manifest, error)
 	// for the GC to eventually collect.
 	defer func() {
 		for _, k := range candidates {
-			manifestcrypto.Wipe(k)
+			aead.Wipe(k)
 		}
 	}()
 

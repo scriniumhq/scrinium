@@ -10,7 +10,7 @@ import (
 	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/internal/aead"
 )
 
 // transformerRegistry implements TransformerRegistry with an RWMutex
@@ -120,7 +120,7 @@ func (r *staticKeyResolver) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.dek != nil {
-		manifestcrypto.Wipe(r.dek)
+		aead.Wipe(r.dek)
 		r.dek = nil
 	}
 }

@@ -10,7 +10,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/descriptorcache"
 	"scrinium.dev/engine/store/internal/keyring"
@@ -217,19 +217,19 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		// Defensive: a descriptor with DEKEncrypted=true must
 		// have KDFParams (Validate enforces). Reaching this
 		// branch means the Validate contract has drifted.
-		manifestcrypto.Wipe(passphrase)
+		aead.Wipe(passphrase)
 		return nil, fmt.Errorf("%w: descriptor reports DEKEncrypted=true without KDFParams",
 			errs.ErrStoreCorrupted)
 	}
 	dek, err := keyring.UnwrapDEK(desc.DEK, *desc.KDFParams, passphrase)
-	manifestcrypto.Wipe(passphrase)
+	aead.Wipe(passphrase)
 	if err != nil {
 		return nil, wrap("", err)
 	}
 
 	s, err := buildStore(ctx, o, drv, idx, active, desc, dek)
 	if err != nil {
-		manifestcrypto.Wipe(dek)
+		aead.Wipe(dek)
 		return nil, wrap("", err)
 	}
 	s.promoteKeyResolverIfDefault()

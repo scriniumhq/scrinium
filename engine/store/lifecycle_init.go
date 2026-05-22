@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/descriptorcache"
 	"scrinium.dev/engine/store/internal/keyring"
@@ -183,7 +183,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		wrapped, kdfParams, kitBytes, ierr := initEncryptedDEK(
 			ctx, storeID, dek, o.passphrase, cfg.KDFParams)
 		if ierr != nil {
-			manifestcrypto.Wipe(dek)
+			aead.Wipe(dek)
 			return nil, nil, wrap("", ierr)
 		}
 		desc.DEK = wrapped
@@ -199,11 +199,11 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 	}
 
 	if err := descriptor.Persist(ctx, drv, desc); err != nil {
-		manifestcrypto.Wipe(dek)
+		aead.Wipe(dek)
 		return nil, nil, wrap("write descriptor", err)
 	}
 	if err := descriptorcache.Save(ctx, idx, desc); err != nil {
-		manifestcrypto.Wipe(dek)
+		aead.Wipe(dek)
 		return nil, nil, wrap("save L2 cache", err)
 	}
 
@@ -224,12 +224,12 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 
 	s, err := buildStore(ctx, o, drv, idx, cfg, desc, dek)
 	if err != nil {
-		manifestcrypto.Wipe(dek)
+		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
 	}
 	s.promoteKeyResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
-		manifestcrypto.Wipe(dek)
+		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
 	}
 	return s, kit, nil

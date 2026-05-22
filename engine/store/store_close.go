@@ -1,7 +1,7 @@
 package store
 
 import (
-	"scrinium.dev/engine/internal/manifestcrypto"
+	"scrinium.dev/engine/internal/aead"
 )
 
 // Close releases secrets held by the Store. See the AdminStore.Close
@@ -36,7 +36,7 @@ func (s *store) Close() error {
 
 	s.cryptoMu.Lock()
 	if len(s.dek) > 0 {
-		manifestcrypto.Wipe(s.dek)
+		aead.Wipe(s.dek)
 	}
 	s.dek = nil
 	resolver := s.keyResolver
