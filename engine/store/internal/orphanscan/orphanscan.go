@@ -14,12 +14,9 @@ import (
 	"scrinium.dev/engine/internal/blobpath"
 )
 
-// OrphanReport is the result of a bootstrap recoverOrphans pass.
-// Counts are files actually removed from disk; Errors collects
-// non-fatal failures (per-file Driver.Remove rejections, parse
-// glitches, individual Resolve/ManifestExists infrastructure
-// errors) — none of these stop the scan or block the Store from
-// opening.
+// OrphanReport is the result of a RecoverOrphans pass. Counts are
+// files actually removed; Errors collects non-fatal per-file failures
+// that neither stop the scan nor block the Store from opening.
 type OrphanReport struct {
 	StagingRemoved   int
 	BlobsRemoved     int
@@ -28,40 +25,21 @@ type OrphanReport struct {
 	Duration         time.Duration
 }
 
-// recoverOrphans implements the M1 part of the Orphan Scan from
-// docs/2 §10.2: a forward sweep of the filesystem against the
-// index. Three classes of physical orphans are removed:
+// RecoverOrphans is a forward sweep of the filesystem against the
+// index, removing three classes of physical orphan left by crashed
+// writes:
 //
-//  1. system.state/staging/* — every file. Staging is per-Put,
-//     per-process; anything that survived a restart is by
-//     construction garbage from a crashed prior write. Closes the
-//     "partial blob write" Tier 1 scenario.
+//  1. staging/* — every file; staging is per-Put and per-process, so
+//     anything that survived a restart is garbage from a crashed write.
+//  2. blobs/<x>/<y>/<ref> — files whose ref does not resolve through
+//     StoreIndex.Resolve (crash between Rename and IndexManifest).
+//  3. manifests/<x>/<y>/<id> — files absent from the manifests table
+//     (crash between the manifest Put and IndexManifest).
 //
-//  2. blobs/<x>/<y>/<ref> — files whose blob_ref does not resolve
-//     through StoreIndex.Resolve. Closes the crash window between
-//     Driver.Rename(staging→final) and IndexManifest in Put.
-//
-//  3. manifests/<x>/<y>/<id> — files whose artifact_id is not
-//     present in the manifests table. Closes the crash window
-//     between Driver.Put(manifestPath) and IndexManifest.
-//
-// The reverse sweep — index rows pointing at vanished files — is
-// the M3 RebuildIndexAgent's job. In M1 every committed index row
-// goes through IndexManifest's atomic SQLite transaction, so a
-// row's existence implies its files were on disk at some point;
-// the scenarios that produce reverse orphans (interrupted
-// RebuildIndex, crash mid-Bundler, crash mid-Drain) all post-date
-// M1.
-//
-// Driver.ListObjectsWithModTime swallows os.ErrNotExist for the
-// prefix itself (an empty walk is the right answer for a fresh
-// Store), so this function is safe to call after both InitStore
-// (where blobs/ etc. do not exist yet) and OpenStore.
-//
-// TODO(M5): TOC integrity check (chunkRefs in blobs table per
-// §10.2) lands with the chunker.Wrapper milestone; this function
-// is the single place to add it when the TOC manifest type
-// becomes reachable.
+// The reverse sweep (index rows pointing at vanished files) is the
+// rebuild agent's job, not this one. ListObjectsWithModTime treats a
+// missing prefix as an empty walk, so this is safe to call after both
+// InitStore and OpenStore.
 func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (OrphanReport, error) {
 	start := time.Now()
 	report := OrphanReport{}
@@ -164,12 +142,9 @@ func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreInd
 	return report, nil
 }
 
-// publishOrphanReport emits EventOrphanScanCompleted if a Publisher
-// is wired. Counts are always emitted; individual error details
-// stay in engine logs (the event payload carries a count, not the
-// errors themselves — events should not transport mutable
-// structures or platform-specific error types). Used by lifecycle
-// after every successful recoverOrphans call.
+// PublishOrphanReport emits EventOrphanScanCompleted when a Publisher
+// is wired. The payload carries counts, not the error values
+// themselves. No-op on a nil Publisher.
 func PublishOrphanReport(pub coreapi.Publisher, r OrphanReport) {
 	if pub == nil {
 		return
