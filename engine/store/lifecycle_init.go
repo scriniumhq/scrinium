@@ -50,6 +50,11 @@ import (
 //     bytes — the host MUST persist them before reporting
 //     success to the user.
 //
+// The phases above map to helpers: prepareInitLocation (1–2),
+// the DEK lifecycle inline (5–6, kept visible for auditability),
+// and persistInitState (7). The shared construct+unlock tail
+// (buildStore, unlockBootstrap) lives in lifecycle_construct.go.
+//
 // Recovery Kit:
 //   - nil for Plain-DEK Stores (no encryption to recover).
 //   - non-nil text bytes per §10.3 for encrypted Stores.
@@ -65,11 +70,9 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		return nil, nil, errors.New("store.InitStore: nil driver")
 	}
 
-	// wrap is the local error-prefix closure for this function. The
-	// 12+ fmt.Errorf("store.InitStore: ...: %w") sites threaded the
-	// same prefix manually; centralising it here means a single
-	// edit if the prefix ever changes (e.g. a domain-prefixed
-	// errs.Wrap helper lands).
+	// wrap is the local error-prefix closure for this function, also
+	// threaded into the phase helpers so every site reads
+	// "store.InitStore: <stage>: %w" with a single definition.
 	wrap := func(stage string, err error) error {
 		if stage == "" {
 			return fmt.Errorf("store.InitStore: %w", err)
@@ -95,35 +98,10 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		return nil, nil, wrap("invalid config", err)
 	}
 
-	// --- Probe for existing descriptor ---
+	// --- Probe for existing descriptor; honour WithForceReinit ---
 
-	existing, probeErr := descriptor.Read(ctx, drv)
-	switch {
-	case probeErr == nil:
-		// Descriptor present.
-		if !o.forceReinit {
-			return nil, nil, fmt.Errorf("%w: storeId=%s",
-				errs.ErrStoreAlreadyExists, existing.StoreID)
-		}
-		// Force reinit: clean up structural state. We stay
-		// conservative — only the well-known files are touched.
-		// blobs/ stay in place unless purge is also requested
-		// (purge wiring lands in M3 alongside the GC; M1.4 just
-		// honours WithForceReinit for descriptor + index).
-		if err := drv.Remove(ctx, descriptor.Path); err != nil {
-			return nil, nil, wrap("remove old descriptor", err)
-		}
-	case errors.Is(probeErr, os.ErrNotExist):
-		// Fresh Location, the normal path.
-	default:
-		// The descriptor exists but is unreadable. Refuse to
-		// proceed without WithForceReinit; the user must decide
-		// whether they really want to clobber what is there.
-		if !o.forceReinit {
-			return nil, nil, fmt.Errorf("%w: descriptor present but unreadable: %v",
-				errs.ErrStoreCorrupted, probeErr)
-		}
-		_ = drv.Remove(ctx, descriptor.Path)
+	if err := prepareInitLocation(ctx, drv, o.forceReinit, wrap); err != nil {
+		return nil, nil, err
 	}
 
 	// --- Validate the StoreIndex dependency ---
@@ -151,20 +129,16 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 			errs.ErrPassphraseRequired, cfg.ManifestCrypto)
 	}
 
-	// --- Generate identity ---
-
-	storeID := uuid.NewString()
-
-	// --- DEK lifecycle ---
+	// --- Generate identity and DEK ---
 	//
 	// DEK is generated for every Store regardless of crypto
-	// configuration (§3.1). When WithPassphrase is set the DEK
-	// is wrapped with the resulting KEK; otherwise it lives in
-	// the descriptor in plaintext.
-	//
-	// In both branches dek is the in-memory unwrapped value, kept
-	// alive on *store after construction so subsequent writes
-	// have it without re-fetching from descriptor.
+	// configuration (§3.1). When WithPassphrase is set the DEK is
+	// wrapped with the resulting KEK; otherwise it lives in the
+	// descriptor in plaintext. In both branches dek is the in-memory
+	// unwrapped value, kept alive on *store after construction. Its
+	// lifetime is owned here: every error path below wipes it.
+
+	storeID := uuid.NewString()
 
 	dek, err := keyring.GenerateDEK()
 	if err != nil {
@@ -197,26 +171,11 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		desc.DEKEncrypted = false
 	}
 
-	if err := descriptor.Persist(ctx, drv, desc); err != nil {
-		aead.Wipe(dek)
-		return nil, nil, wrap("write descriptor", err)
-	}
-	if err := descriptor.Save(ctx, idx, desc); err != nil {
-		aead.Wipe(dek)
-		return nil, nil, wrap("save L2 cache", err)
-	}
+	// --- Persist descriptor, L2 cache, and system.config ---
 
-	// --- Persist the active StoreConfig as system.config ---
-	//
-	// Per §10.1.4 system.config/current is the source of truth for
-	// projection parameters. It must be writable before the Store
-	// is open for users — Hash registry is therefore required.
-	if o.hashRegistry == nil {
-		return nil, nil, fmt.Errorf(
-			"store.InitStore: WithHashRegistry is required to persist system.config")
-	}
-	if _, err := storeconfig.Write(ctx, drv, configWriter(drv, idx, o.hashRegistry), cfg); err != nil {
-		return nil, nil, wrap("write system.config", err)
+	if err := persistInitState(ctx, drv, idx, o.hashRegistry, cfg, desc, wrap); err != nil {
+		aead.Wipe(dek)
+		return nil, nil, err
 	}
 
 	// --- Construct *store ---
@@ -232,4 +191,63 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		return nil, nil, wrap("", err)
 	}
 	return s, kit, nil
+}
+
+// prepareInitLocation probes the Driver for an existing descriptor and
+// applies the WithForceReinit policy. With no descriptor present it is a
+// no-op (the normal fresh-Location path). A present descriptor refuses
+// with errs.ErrStoreAlreadyExists unless force is set; an unreadable one
+// refuses with errs.ErrStoreCorrupted unless force is set. Under force,
+// the well-known descriptor file is removed — blobs/ are left in place
+// for GC (purge wiring lands in M3).
+func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit bool, wrap func(string, error) error) error {
+	existing, probeErr := descriptor.Read(ctx, drv)
+	switch {
+	case probeErr == nil:
+		// Descriptor present.
+		if !forceReinit {
+			return fmt.Errorf("%w: storeId=%s",
+				errs.ErrStoreAlreadyExists, existing.StoreID)
+		}
+		// Force reinit: clean up structural state. We stay
+		// conservative — only the well-known files are touched.
+		if err := drv.Remove(ctx, descriptor.Path); err != nil {
+			return wrap("remove old descriptor", err)
+		}
+	case errors.Is(probeErr, os.ErrNotExist):
+		// Fresh Location, the normal path.
+	default:
+		// The descriptor exists but is unreadable. Refuse to proceed
+		// without WithForceReinit; the user must decide whether they
+		// really want to clobber what is there.
+		if !forceReinit {
+			return fmt.Errorf("%w: descriptor present but unreadable: %v",
+				errs.ErrStoreCorrupted, probeErr)
+		}
+		_ = drv.Remove(ctx, descriptor.Path)
+	}
+	return nil
+}
+
+// persistInitState writes the descriptor (both replicas), refreshes the
+// L2 cache, and persists the active StoreConfig as system.config. A hash
+// registry is required for the config write (per §10.1.4 system.config
+// must be readable before the Store opens for users). The descriptor and
+// cache are written first so a config-write failure still leaves a
+// readable Store identity behind.
+func persistInitState(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
+	if err := descriptor.Persist(ctx, drv, desc); err != nil {
+		return wrap("write descriptor", err)
+	}
+	if err := descriptor.Save(ctx, idx, desc); err != nil {
+		return wrap("save L2 cache", err)
+	}
+	if hashes == nil {
+		return fmt.Errorf(
+			"store.InitStore: WithHashRegistry is required to persist system.config")
+	}
+	if _, err := storeconfig.Write(ctx, drv, configWriter(drv, idx, hashes), cfg); err != nil {
+		return wrap("write system.config", err)
+	}
+	return nil
 }

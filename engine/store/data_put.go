@@ -12,7 +12,7 @@ import (
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/store/internal/blobwriter"
+	"scrinium.dev/engine/store/internal/artifactwriter"
 )
 
 // Put records an artifact and returns its ArtifactID. It is the
@@ -20,8 +20,8 @@ import (
 // inputs against the active config, resolves the write key and borrows
 // the DEK (the only crypto-locked steps), and delegates the physical
 // mechanics — blob materialization, manifest assembly, persistence — to
-// blobwriter. The store keeps the policy and the secrets; blobwriter
-// keeps the I/O.
+// artifactwriter. The store keeps the policy and the secrets;
+// artifactwriter keeps the I/O.
 func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error) {
 	if err := s.enterWrite(ctx); err != nil {
 		return "", err
@@ -35,14 +35,14 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		return "", err
 	}
 
-	bw := blobwriter.New(s.drv, s.index, s.hashes, s.transformers)
+	aw := artifactwriter.New(s.drv, s.index, s.hashes, s.transformers)
 
 	// ADR-58: resolve the write KeyID once and thread it through both
 	// the blob pipeline and the manifest body, so a blob and its
 	// manifest encrypt under the same key.
 	writeKeyID := s.resolveWriteKeyID(opts.Namespace)
 
-	blob, err := bw.Materialize(ctx, cfg, a, opts, writeKeyID)
+	blob, err := aw.Materialize(ctx, cfg, a, opts, writeKeyID)
 	if err != nil {
 		return "", fmt.Errorf("store.Put: %w", err)
 	}
@@ -56,13 +56,13 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	)
 	if err := s.withWriteDEK(cfg, func(dek []byte) error {
 		var aerr error
-		manifest, manifestBytes, aerr = bw.AssembleManifest(cfg, a, opts, blob, dek, writeKeyID)
+		manifest, manifestBytes, aerr = aw.AssembleManifest(cfg, a, opts, blob, dek, writeKeyID)
 		return aerr
 	}); err != nil {
 		return "", fmt.Errorf("store.Put: %w", err)
 	}
 
-	if err := bw.PersistManifest(ctx, manifest, manifestBytes, blob.Addr); err != nil {
+	if err := aw.PersistManifest(ctx, manifest, manifestBytes, blob.Addr); err != nil {
 		return "", fmt.Errorf("store.Put: %w", err)
 	}
 

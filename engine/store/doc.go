@@ -61,7 +61,7 @@
 //
 //   - data_put.go          — Put orchestrator plus write-path policy
 //     (input validation, feature gates, write-key resolution, DEK
-//     custody). The physical mechanics live in internal/blobwriter.
+//     custody). The physical mechanics live in internal/artifactwriter.
 //   - data_get.go          — Get, read-handle dispatch, loadManifest.
 //   - data_read_handles.go — the ReadHandle implementations (inline,
 //     target, verifying).
@@ -107,7 +107,7 @@
 // separate packages (the boundary along which the engine can be split;
 // see the concurrency model's "Implication for refactoring"):
 //
-//   - blobwriter   — the artifact write-path mechanics: blob
+//   - artifactwriter   — the artifact write-path mechanics: blob
 //     materialization, manifest assembly, and persistence.
 //   - descriptor   — the on-disk descriptor and its L2 cache.
 //   - keyring      — the KDF (Argon2id) and KEK/DEK wrap/unwrap kernels.

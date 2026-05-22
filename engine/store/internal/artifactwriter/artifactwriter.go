@@ -1,4 +1,4 @@
-package blobwriter
+package artifactwriter
 
 import (
 	"bytes"
@@ -29,7 +29,7 @@ type Writer struct {
 }
 
 // New wires a Writer to its dependencies. Mirrors systemstore.New:
-// the store layer owns these objects and injects them so blobwriter
+// the store layer owns these objects and injects them so artifactwriter
 // never reaches into *store internals.
 func New(
 	drv driver.Driver,

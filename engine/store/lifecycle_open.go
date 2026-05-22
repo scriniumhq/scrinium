@@ -107,65 +107,18 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 			"store.OpenStore: WithHashRegistry is required to read system.config")
 	}
 
-	// --- Read both descriptor replicas; reconcile ---
+	// --- Read, reconcile, heal, and cache the descriptor ---
 
-	l0, l1, l0s, l1s, err := reconcile.ReadBoth(ctx, drv)
+	desc, err := loadCanonicalDescriptor(ctx, drv, idx, wrap)
 	if err != nil {
-		// Non-recoverable I/O error from the Driver — propagate.
-		return nil, wrap("read descriptor", err)
-	}
-	rec, err := reconcile.Reconcile(l0, l0s, l1, l1s)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		return nil, errs.ErrStoreNotFound
-	case errors.Is(err, errs.ErrStoreCorrupted):
-		return nil, errs.ErrStoreCorrupted
-	case err != nil:
-		// Split-brain, malformed-replica branches — pass through
-		// unchanged so callers can identify by errors.Is.
-		return nil, wrap("", err)
-	}
-	desc := rec.Canonical
-
-	// --- Heal divergent replicas ---
-	//
-	// Reconcile selected the canonical descriptor; if the on-disk
-	// state diverges from it, write the side that needs updating.
-	// Each heal is a single atomic Put; a crash mid-heal leaves
-	// the same divergence we are recovering from now, and the
-	// next OpenStore re-applies the same step. Idempotent.
-	if err := healReplicas(ctx, drv, desc, rec.Action); err != nil {
-		return nil, wrap("", err)
+		return nil, err
 	}
 
-	// --- Reconcile L2 cache with canonical descriptor ---
-	//
-	// Location is the source of truth; the cache is a fast-start
-	// aid only. Save when absent, when corrupted (load returned
-	// an error), or when checksum diverges. Read errors are
-	// non-fatal — we always have the canonical to fall back to.
-	if err := descriptor.Refresh(ctx, idx, desc); err != nil {
-		return nil, wrap("refresh L2 cache", err)
-	}
+	// --- Load and validate the active StoreConfig ---
 
-	// --- Load the active StoreConfig from system.config/current ---
-
-	active, err := storeconfig.Read(ctx, drv, o.hashRegistry)
+	active, err := loadActiveConfig(ctx, drv, o, wrap)
 	if err != nil {
-		return nil, wrap("read system.config", err)
-	}
-	active = storeconfig.ApplyDefaults(active)
-	if err := storeconfig.ValidateImmutable(active); err != nil {
-		return nil, fmt.Errorf("%w: system.config produced invalid config: %v",
-			errs.ErrStoreCorrupted, err)
-	}
-
-	// --- Validate WithConfig against the active config ---
-
-	if o.cfg != nil {
-		if err := storeconfig.ValidateAgainstActive(*o.cfg, active); err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	// --- Branch on DEK protection state ---
@@ -237,4 +190,69 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		return nil, wrap("", err)
 	}
 	return s, nil
+}
+
+// loadCanonicalDescriptor reads both descriptor replicas, reconciles
+// them into the canonical one, heals any on-disk divergence, and
+// refreshes the L2 cache. Location is the source of truth; the cache is
+// a fast-start aid. Both absent → errs.ErrStoreNotFound; unrecoverable →
+// errs.ErrStoreCorrupted; split-brain and malformed-replica errors pass
+// through so callers can branch with errors.Is.
+func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex, wrap func(string, error) error) (*descriptor.Descriptor, error) {
+	l0, l1, l0s, l1s, err := reconcile.ReadBoth(ctx, drv)
+	if err != nil {
+		// Non-recoverable I/O error from the Driver — propagate.
+		return nil, wrap("read descriptor", err)
+	}
+	rec, err := reconcile.Reconcile(l0, l0s, l1, l1s)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return nil, errs.ErrStoreNotFound
+	case errors.Is(err, errs.ErrStoreCorrupted):
+		return nil, errs.ErrStoreCorrupted
+	case err != nil:
+		// Split-brain, malformed-replica branches — pass through
+		// unchanged so callers can identify by errors.Is.
+		return nil, wrap("", err)
+	}
+	desc := rec.Canonical
+
+	// Reconcile selected the canonical descriptor; if the on-disk state
+	// diverges, write the side that needs updating. Each heal is a single
+	// atomic Put; a crash mid-heal leaves the same divergence and the
+	// next OpenStore re-applies the step. Idempotent.
+	if err := healReplicas(ctx, drv, desc, rec.Action); err != nil {
+		return nil, wrap("", err)
+	}
+
+	// Save the L2 cache when absent, corrupted, or checksum-divergent.
+	// Read errors are non-fatal — the canonical is always the fallback.
+	if err := descriptor.Refresh(ctx, idx, desc); err != nil {
+		return nil, wrap("refresh L2 cache", err)
+	}
+	return desc, nil
+}
+
+// loadActiveConfig reads the active StoreConfig from
+// system.config/current, applies defaults, and validates it. When the
+// caller supplied WithConfig, its immutable fields are checked against
+// the on-disk config (errs.ErrConfigMismatch on divergence); a caller
+// without WithConfig accepts the on-disk config as-is — a legitimate
+// scenario for diagnostic tools and projection-only consumers.
+func loadActiveConfig(ctx context.Context, drv driver.Driver, o storeOptions, wrap func(string, error) error) (domain.StoreConfig, error) {
+	active, err := storeconfig.Read(ctx, drv, o.hashRegistry)
+	if err != nil {
+		return domain.StoreConfig{}, wrap("read system.config", err)
+	}
+	active = storeconfig.ApplyDefaults(active)
+	if err := storeconfig.ValidateImmutable(active); err != nil {
+		return domain.StoreConfig{}, fmt.Errorf("%w: system.config produced invalid config: %v",
+			errs.ErrStoreCorrupted, err)
+	}
+	if o.cfg != nil {
+		if err := storeconfig.ValidateAgainstActive(*o.cfg, active); err != nil {
+			return domain.StoreConfig{}, err
+		}
+	}
+	return active, nil
 }
