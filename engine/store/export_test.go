@@ -51,9 +51,9 @@ func StoreKeyResolver(s coreapi.Store) pipeline.KeyResolver {
 	if !ok {
 		return nil
 	}
-	concrete.cryptoMu.Lock()
-	defer concrete.cryptoMu.Unlock()
-	return concrete.keyResolver
+	concrete.crypto.mu.Lock()
+	defer concrete.crypto.mu.Unlock()
+	return concrete.crypto.keyResolver
 }
 
 // ReadDriverFile reads a file from the Store's underlying Driver.

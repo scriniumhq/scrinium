@@ -210,20 +210,12 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	var dekSnapshot []byte
 	var keyID string
 	if cfg.ManifestCrypto != "" && cfg.ManifestCrypto != domain.ManifestCryptoPlain {
-		s.cryptoMu.Lock()
-		if len(s.dek) == 0 {
-			s.cryptoMu.Unlock()
-			return "", fmt.Errorf("%w: ManifestCrypto=%q requires Unlock",
-				errs.ErrLocked, cfg.ManifestCrypto)
+		dek, derr := s.crypto.dekForWrite(cfg.ManifestCrypto)
+		if derr != nil {
+			return "", derr
 		}
-		if s.keyResolver == nil {
-			s.cryptoMu.Unlock()
-			return "", fmt.Errorf("store.Put: ManifestCrypto=%q requires WithKeyResolver or default-resolver promotion",
-				cfg.ManifestCrypto)
-		}
-		dekSnapshot = append([]byte{}, s.dek...)
+		dekSnapshot = dek
 		keyID = writeKeyID
-		s.cryptoMu.Unlock()
 		defer aead.Wipe(dekSnapshot)
 	}
 
@@ -427,9 +419,7 @@ func (s *store) dedupProbe(
 // stall a parallel Unlock/RotateKEK. Returns "" when no resolver is
 // configured (unencrypted store).
 func (s *store) resolveWriteKeyID(namespace string) string {
-	s.cryptoMu.Lock()
-	r := s.keyResolver
-	s.cryptoMu.Unlock()
+	r := s.crypto.resolver()
 	if r == nil {
 		return ""
 	}

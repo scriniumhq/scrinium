@@ -152,18 +152,20 @@ func buildStore(
 ) (*store, error) {
 	_ = ctx // reserved for future bootstrap-time index probes
 	s := &store{
-		storeID:            desc.StoreID,
-		drv:                drv,
-		index:              idx,
-		pub:                o.publisher,
-		activeConfig:       cfg,
-		state:              domain.StateBootstrapping,
-		hashes:             o.hashRegistry,
-		transformers:       o.readRegistry,
-		keyResolver:        o.keyResolver,
-		desc:               desc,
-		dek:                dek,
-		passphraseProvider: o.passphrase,
+		storeID:      desc.StoreID,
+		drv:          drv,
+		index:        idx,
+		pub:          o.publisher,
+		activeConfig: cfg,
+		state:        domain.StateBootstrapping,
+		hashes:       o.hashRegistry,
+		transformers: o.readRegistry,
+		crypto: cryptoState{
+			desc:        desc,
+			dek:         dek,
+			provider:    o.passphrase,
+			keyResolver: o.keyResolver,
+		},
 	}
 	s.system = systemstore.New(drv, idx, o.hashRegistry, cfg,
 		// ArtifactWriter: the inline-artifact write primitive lives in

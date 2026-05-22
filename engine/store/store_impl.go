@@ -11,7 +11,6 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/systemstore"
 )
 
@@ -29,22 +28,22 @@ import (
 // Lock ordering. When more than one of the three mutexes is taken
 // in the same call path, they MUST be acquired in this order:
 //
-//	cryptoMu  →  stateMu  →  cfgMu
+//	crypto.mu  →  stateMu  →  cfgMu
 //
 // Reverse acquisition (e.g. cfgMu → cryptoMu) is forbidden because
 // it deadlocks against the forward path. snapshotConfig and
 // maintenanceMode helpers take their lock in isolation and release
 // it before returning, so callers free to acquire one of the other
 // two afterwards — what is not allowed is holding cfgMu (or stateMu)
-// and reaching for cryptoMu inside that scope.
+// and reaching for crypto.mu inside that scope.
 //
 // Current obeyors of the order:
-//   - unlockEncrypted, setPassphraseImpl, rotateKEKImpl: cryptoMu
+//   - unlockEncrypted, setPassphraseImpl, rotateKEKImpl: crypto.mu
 //     held for the operation, stateMu taken briefly inside for
 //     the transition.
 //   - Put: snapshotConfig (cfgMu) at the top, released; cryptoMu
 //     taken later in Phase 2 — sequential, not nested.
-//   - Get / loadManifest: cryptoMu only.
+//   - Get / loadManifest: crypto.mu only (via accessors).
 type store struct {
 	// Identity and dependencies.
 	storeID string
@@ -66,36 +65,19 @@ type store struct {
 	// after that.
 	hashes       domain.HashRegistry
 	transformers pipeline.TransformerRegistry
-	keyResolver  pipeline.KeyResolver
 
 	// SystemStore facade. Initialised once at construction; nil
 	// only in unit tests that build a *store by hand without
 	// going through the full constructor.
 	system *systemstore.SystemStore
 
-	// Crypto state. cryptoMu guards the trio (descriptor, dek,
-	// passphraseProvider) because Unlock / SetPassphrase /
-	// RotateKEK rewrite them together.
-	//
-	// descriptor holds the current on-disk descriptor, kept in
-	// memory after bootstrap so RotateKEK and SetPassphrase can
-	// produce a successor (Sequence + 1, fresh KDFParams) without
-	// re-reading from the Driver.
-	//
-	// dek is the unwrapped data-encryption key. nil for Plain
-	// Stores and for encrypted Stores in StateLocked. Populated
-	// at successful Unlock; cleared (aead.Wipe + nil) when the
-	// state machine returns to Locked.
-	//
-	// passphraseProvider is captured from WithPassphrase at
-	// construction. Stays for the Store's lifetime so subsequent
-	// AdminStore operations (RotateKEK after a sleep, etc.) can
-	// re-prompt without the host application threading the
-	// provider through every call.
-	cryptoMu           sync.Mutex
-	desc               *descriptor.Descriptor
-	dek                []byte
-	passphraseProvider PassphraseProvider
+	// Crypto state. The DEK, descriptor, passphrase provider and
+	// derived key resolver, together with the one mutex that guards
+	// them, live in the cryptoState component (crypto_state.go) so the
+	// lock owns exactly the fields it protects. Unlock / SetPassphrase
+	// / RotateKEK rewrite these together under crypto.mu; the data
+	// path reads them through crypto's narrow accessors.
+	crypto cryptoState
 
 	// closed is set by Close. Guarded by stateMu. Reads from
 	// non-Close paths use a fast no-op check; the canonical

@@ -71,9 +71,7 @@ func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.
 	// needed. A Locked Store has keyResolver == nil; for an
 	// encrypted manifest that surfaces ErrKeyNotFound from the
 	// codec, which is the correct refusal.
-	s.cryptoMu.Lock()
-	keyResolver := s.keyResolver
-	s.cryptoMu.Unlock()
+	keyResolver := s.crypto.resolver()
 
 	manifest, err := manifestcodec.DecodeFileEncrypted(raw, asKeyProvider(keyResolver))
 	if err != nil {

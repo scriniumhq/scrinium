@@ -226,7 +226,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
 	}
-	s.promoteKeyResolverIfDefault()
+	s.crypto.promoteResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
