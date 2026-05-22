@@ -13,32 +13,29 @@ import (
 	"scrinium.dev/engine/internal/blobpath"
 )
 
-// Delete logically removes an artifact from the Store. It does
-// not free physical bytes — that is GC Agent territory (TODO M3,
-// docs/2. Internals/05 §5.3). The flow is laid out in §2.2.
+// Delete logically removes an artifact from the Store. It does not free
+// physical bytes — that is the GC Agent's job.
 //
 // Currently supported:
-//   - BlobManifest only (TOC deferred to M5: requires reading the
-//     TOC blob to gather chunk refs).
-//   - Inline blobs are removed by deleting the manifest row
-//     alone — there is no blobs row to decrement (§9.2.1).
+//   - BlobManifest only (TOC needs the chunker decorator to read chunk
+//     refs from the TOC blob).
+//   - Inline blobs are removed by deleting the manifest row alone —
+//     there is no blobs row to decrement.
 //   - Target blobs decrement the single ref_count.
-//   - Pack manifests are invisible to clients (§3.1) and surface
-//     as errs.ErrArtifactNotFound; they would be touched by GC, not by
-//     client Delete.
+//   - Pack manifests are invisible to clients and surface as
+//     errs.ErrArtifactNotFound; GC touches them, not client Delete.
 //
-// Order of operations matches §2.2.Алгоритм:
-//  1. Load manifest (Get's helper does it the same way).
-//  2. Retention check — defends the artifact regardless of
-//     Store policy.
+// Order of operations:
+//  1. Load manifest.
+//  2. Retention check — defends the artifact regardless of Store policy.
 //  3. DeletionPolicy check — Store-level toggle.
-//  4. StoreIndex.DeleteManifest — single transaction, decrement
-//     blob ref_counts, remove the manifest row.
-//  5. Driver.Remove(manifestPath) — physical file gone.
+//  4. StoreIndex.DeleteManifest — one transaction: decrement blob
+//     ref_counts and remove the manifest row.
+//  5. Driver.Remove(manifestPath).
 //  6. EventArtifactDeleted — only after everything succeeded.
 //
-// Crash between (4) and (5) leaves an on-disk manifest with no
-// index row. RebuildIndexAgent (TODO M3.4) is the recovery path.
+// A crash between (4) and (5) leaves an on-disk manifest with no index
+// row; rebuilding the index from manifests is the recovery path.
 func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	if err := s.enterWrite(ctx); err != nil {
 		return err
@@ -54,11 +51,9 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 		return err
 	}
 
-	// Retention precedes policy: §2.2 explicitly orders these.
-	// "Retention is artifact-level protection, stronger than the
-	// Store-level policy" — so a NoDelete store can refuse a
-	// non-retention artifact, but a retention-protected artifact
-	// is refused before the policy is even consulted.
+	// Retention precedes policy: retention is artifact-level protection,
+	// stronger than the Store-level policy. A retention-protected
+	// artifact is refused before the policy is even consulted.
 	if !manifest.RetentionUntil.IsZero() && manifest.RetentionUntil.After(time.Now()) {
 		return errs.ErrRetentionNotExpired
 	}
@@ -83,17 +78,16 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 		}
 		blobRefs = []string{string(manifest.BlobRef)}
 	case domain.LayoutExternalRef:
-		// no blobs row by design (§2.2)
+		// no blobs row by design
 	default:
 		return fmt.Errorf("store.Delete: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
 	}
 
-	// Index transaction. Idempotent at this layer: a re-issued
-	// Delete after a crash between index COMMIT and Driver.Remove
-	// would not reach here because loadManifest above would
-	// already have returned errs.ErrArtifactNotFound (the manifest
-	// file is gone). The "manifest file present, index row
-	// absent" window is RebuildIndexAgent territory.
+	// Idempotent at this layer: a re-issued Delete after a crash between
+	// index COMMIT and Driver.Remove would not reach here, because
+	// loadManifest above would already have returned ErrArtifactNotFound
+	// (the manifest file is gone). The "manifest present, index row
+	// absent" window is recovered by an index rebuild.
 	if err := s.index.DeleteManifest(ctx, id, blobRefs); err != nil {
 		return fmt.Errorf("store.Delete: index: %w", err)
 	}
@@ -103,12 +97,10 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 		return fmt.Errorf("store.Delete: manifest path: %w", err)
 	}
 	if err := s.drv.Remove(ctx, manifestPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		// Index has already removed the row. The manifest file
-		// is now an orphan; RebuildIndex won't help (no row to
-		// reconstruct from), but GC's Orphan Scan in M3 will
-		// reap it on next sweep. We still surface the Remove
-		// error so the caller knows the operation was not
-		// fully clean.
+		// The index row is already gone, so the manifest file is now an
+		// orphan that the GC Orphan Scan reaps on its next sweep. We still
+		// surface the Remove error so the caller knows the operation was
+		// not fully clean.
 		return fmt.Errorf("store.Delete: remove manifest file: %w", err)
 	}
 

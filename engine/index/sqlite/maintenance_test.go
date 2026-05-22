@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/index"
 )
 
 // MarkVerified, DeletePacked, and MarkVerified-related listing
@@ -172,9 +172,9 @@ func TestIndex_ImplementsStoreIndex(t *testing.T) {
 	// in sqlite.go is the real guarantee; this test just confirms
 	// it at runtime so a regression shows up in test output, not
 	// just a build error.
-	var _ coreapi.StoreIndex = (*Index)(nil)
+	var _ index.StoreIndex = (*Index)(nil)
 	idx := newMemoryIndex(t)
-	var asInterface coreapi.StoreIndex = idx
+	var asInterface index.StoreIndex = idx
 	if asInterface == nil {
 		t.Fatal("Index does not satisfy store.StoreIndex")
 	}

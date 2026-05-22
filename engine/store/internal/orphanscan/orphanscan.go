@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/blobpath"
 )
 
@@ -40,7 +40,7 @@ type OrphanReport struct {
 // rebuild agent's job, not this one. ListObjectsWithModTime treats a
 // missing prefix as an empty walk, so this is safe to call after both
 // InitStore and OpenStore.
-func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (OrphanReport, error) {
+func RecoverOrphans(ctx context.Context, drv driver.Driver, idx index.StoreIndex) (OrphanReport, error) {
 	start := time.Now()
 	report := OrphanReport{}
 
@@ -145,7 +145,7 @@ func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreInd
 // PublishOrphanReport emits EventOrphanScanCompleted when a Publisher
 // is wired. The payload carries counts, not the error values
 // themselves. No-op on a nil Publisher.
-func PublishOrphanReport(pub coreapi.Publisher, r OrphanReport) {
+func PublishOrphanReport(pub event.Publisher, r OrphanReport) {
 	if pub == nil {
 		return
 	}

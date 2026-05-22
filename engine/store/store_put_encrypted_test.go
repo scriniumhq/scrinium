@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
@@ -26,7 +25,7 @@ import (
 // the returned Store is ready to Put. The same WithConfig is
 // passed to Init and Open — otherwise OpenStore reports a config
 // mismatch against the persisted system.config artifact.
-func initEncryptedWithCrypto(t *testing.T, crypto domain.ManifestCrypto) coreapi.Store {
+func initEncryptedWithCrypto(t *testing.T, crypto domain.ManifestCrypto) store.Store {
 	t.Helper()
 	cfg := domain.StoreConfig{ManifestCrypto: crypto}
 	_, r := storefx.InitEncrypted(t, "pw", store.WithConfig(cfg))
@@ -149,7 +148,7 @@ func TestPut_Paranoid_NamespaceHiddenOnDisk(t *testing.T) {
 
 // --- Helper: read raw manifest file via Driver, bypassing Get ---
 
-func readManifestRaw(t *testing.T, s coreapi.Store, id domain.ArtifactID) []byte {
+func readManifestRaw(t *testing.T, s store.Store, id domain.ArtifactID) []byte {
 	t.Helper()
 	// Reach into the Store's Driver. core/export_test.go has no
 	// helper for this; use Walk to find the index entry, then

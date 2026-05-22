@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/testutil/storefx"
@@ -16,7 +15,7 @@ import (
 
 // putWithSession is a one-liner Put helper for rollback tests.
 // Returns the resulting ArtifactID.
-func putWithSession(t *testing.T, s coreapi.Store, sid, ns, payload string) domain.ArtifactID {
+func putWithSession(t *testing.T, s store.Store, sid, ns, payload string) domain.ArtifactID {
 	t.Helper()
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: strings.NewReader(payload)},
@@ -29,7 +28,7 @@ func putWithSession(t *testing.T, s coreapi.Store, sid, ns, payload string) doma
 
 // putWithRetention puts an artifact with the given session and an
 // active retention window.
-func putWithRetention(t *testing.T, s coreapi.Store, sid, ns, payload string, until time.Time) domain.ArtifactID {
+func putWithRetention(t *testing.T, s store.Store, sid, ns, payload string, until time.Time) domain.ArtifactID {
 	t.Helper()
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: strings.NewReader(payload)},
@@ -41,7 +40,7 @@ func putWithRetention(t *testing.T, s coreapi.Store, sid, ns, payload string, un
 }
 
 // walkCount returns the number of user-visible manifests.
-func walkCount(t *testing.T, s coreapi.Store) int {
+func walkCount(t *testing.T, s store.Store) int {
 	t.Helper()
 	n := 0
 	if err := s.Walk(context.Background(), "*", func(domain.Manifest) error {

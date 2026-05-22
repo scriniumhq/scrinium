@@ -8,12 +8,6 @@ import (
 	"scrinium.dev/engine/errs"
 )
 
-// access.go — the entry-preamble gate shared by every Store method.
-// Moved out of put.go: these guards are cross-cutting (Get, Delete,
-// Verify, Walk, Capacity, the admin methods all funnel through them)
-// and have nothing to do with the write path that happened to host
-// them.
-
 // checkWritable extends checkOperational with the ReadOnly check.
 // Used at the entry of every mutating method; read-only operations
 // (Walk, Capacity, Get) use checkOperational alone.
@@ -54,10 +48,9 @@ func (s *store) checkWritable() error {
 // enterWrite/enterAdmin — no exceptions, no clever locality.
 
 // enterRead is the canonical entry-preamble for read-path methods
-// (Get, Verify, Walk, WalkSystem, Capacity, ConfigHistory,
-// ExportRecoveryKit). Combines context cancellation with the
-// priority-of-checks gate. Unlock uses enterAdmin instead, since
-// Locked is its working state.
+// (Get, Verify, Walk, Capacity, ConfigHistory, ExportRecoveryKit).
+// Combines context cancellation with the priority-of-checks gate.
+// Unlock uses enterAdmin instead, since Locked is its working state.
 func (s *store) enterRead(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err

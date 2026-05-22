@@ -9,7 +9,6 @@ import (
 	"io"
 	"os"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/blobpath"
@@ -24,7 +23,7 @@ import (
 // topology) so the read path follows where the blob was actually
 // written. VerifyOnRead may wrap the handle to re-check the content
 // hash as bytes flow.
-func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (coreapi.ReadHandle, error) {
+func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (ReadHandle, error) {
 	if err := s.enterRead(ctx); err != nil {
 		return nil, err
 	}
@@ -58,7 +57,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 
 // openReadHandle builds the layout-appropriate ReadHandle for a
 // dispatched Blob manifest.
-func (s *store) openReadHandle(ctx context.Context, manifest domain.Manifest) (coreapi.ReadHandle, error) {
+func (s *store) openReadHandle(ctx context.Context, manifest domain.Manifest) (ReadHandle, error) {
 	switch manifest.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
 		return &inlineReadHandle{manifest: manifest, reader: bytes.NewReader(manifest.InlineBlob)}, nil

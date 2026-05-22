@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/blobpath"
 	"scrinium.dev/engine/internal/manifestcodec"
 )
@@ -17,9 +17,8 @@ import (
 // given reserved namespace, encodes it, computes its ArtifactID,
 // persists the manifest file through the driver, and indexes it.
 //
-// Used by callers that bypass Store.Put's namespace check:
-// InitStore (system.config) and, in M3+, the Scrub/Snapshot/
-// Maintenance agents (system.state).
+// Used by callers that bypass Store.Put's namespace check: InitStore
+// and the maintenance agents.
 //
 // Inline-only: the payload becomes manifest.InlineBlob — no staging,
 // no separate blob file, no dedup, no Pipeline. System artifacts
@@ -27,15 +26,14 @@ import (
 func writeInlineSystemArtifact(
 	ctx context.Context,
 	drv driver.Driver,
-	idx coreapi.StoreIndex,
+	idx index.StoreIndex,
 	hashes domain.HashRegistry,
 	namespace string,
 	sessionID domain.SessionID,
 	payload []byte,
 	hashAlgo string,
 ) (domain.ArtifactID, error) {
-	// 1. Hash the payload — used as ContentHash and BlobRef
-	//    (M1.4: equal because Pipeline is empty).
+	// ContentHash == BlobRef: the Pipeline is empty for system artifacts.
 	contentHasher, err := hashes.NewHasher(hashAlgo)
 	if err != nil {
 		return "", fmt.Errorf("system artifact: content hasher: %w", err)
@@ -45,7 +43,6 @@ func writeInlineSystemArtifact(
 	}
 	contentHash := domain.ContentHash(hashes.Format(hashAlgo, contentHasher.Sum(nil)))
 
-	// 2. Build the manifest.
 	manifest := domain.Manifest{
 		Type:         domain.ManifestTypeBlob,
 		Namespace:    namespace,
@@ -58,8 +55,6 @@ func writeInlineSystemArtifact(
 		CreatedAt:    time.Now().UTC(),
 	}
 
-	// 3. Encode and hash to get the ArtifactID. ComputeArtifactID
-	//    folds the encode+hash+assign cycle into one call.
 	id, fileBytes, manifest, err := manifestcodec.ComputeArtifactID(
 		manifest, hashAlgo, hashes,
 		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain,
@@ -68,7 +63,6 @@ func writeInlineSystemArtifact(
 		return "", fmt.Errorf("system artifact: compute id: %w", err)
 	}
 
-	// 4. Persist the manifest file. drv.Put is atomic.
 	manifestPath, err := blobpath.ManifestPath(id)
 	if err != nil {
 		return "", fmt.Errorf("system artifact: path: %w", err)
@@ -77,7 +71,6 @@ func writeInlineSystemArtifact(
 		return "", fmt.Errorf("system artifact: put manifest: %w", err)
 	}
 
-	// 5. Index. WalkSystem(namespace) reads from here.
 	if err := idx.IndexManifest(ctx, manifest, domain.PhysicalAddress{
 		Workspace: domain.WorkspaceLocation,
 		Path:      manifestPath,
@@ -88,15 +81,8 @@ func writeInlineSystemArtifact(
 	return id, nil
 }
 
-// writeInlineSystemArtifactUnindexed — writeInlineSystemArtifact's
-// twin that skips the StoreIndex.IndexManifest step. Used by
-// SystemStore.Put when called with WithoutIndex() — most notably
-// for StoreIndex snapshots, which cannot live in the index they
-// are snapshotting.
-//
-// The rest of the flow (hash payload, build inline manifest,
-// compute ArtifactID, write manifest file) is identical to
-// writeInlineSystemArtifact; only step 5 (Index) is omitted.
+// writeInlineSystemArtifactUnindexed is writeInlineSystemArtifact without
+// the IndexManifest step (see WithoutIndex).
 func writeInlineSystemArtifactUnindexed(
 	ctx context.Context,
 	drv driver.Driver,

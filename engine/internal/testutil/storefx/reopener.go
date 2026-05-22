@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/localfs"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 )
 
@@ -22,7 +22,7 @@ import (
 // against t.
 type Reopener struct {
 	drv driver.Driver
-	idx coreapi.StoreIndex
+	idx index.StoreIndex
 }
 
 // Driver returns the underlying driver. Tests use this for direct
@@ -30,7 +30,7 @@ type Reopener struct {
 func (r *Reopener) Driver() driver.Driver { return r.drv }
 
 // Index returns the captured StoreIndex.
-func (r *Reopener) Index() coreapi.StoreIndex { return r.idx }
+func (r *Reopener) Index() index.StoreIndex { return r.idx }
 
 // Root returns the localfs root if the underlying driver is a
 // localfs.Driver; empty string otherwise. Used by tests that need
@@ -46,7 +46,7 @@ func (r *Reopener) Root() string {
 // WithHashRegistry are filled in automatically; pass any other
 // option (WithPassphrase, WithAutoUnlock, WithConfig, ...) through
 // extra. Calls t.Fatalf on failure.
-func (r *Reopener) Open(t testing.TB, extra ...store.StoreOption) coreapi.Store {
+func (r *Reopener) Open(t testing.TB, extra ...store.StoreOption) store.Store {
 	t.Helper()
 	opts := append([]store.StoreOption{
 		store.WithStoreIndex(r.idx),
@@ -62,7 +62,7 @@ func (r *Reopener) Open(t testing.TB, extra ...store.StoreOption) coreapi.Store 
 // TryOpen is the non-fatal variant of Open: it returns the error
 // instead of t.Fatalf. Use when the test's assertion is on the
 // failure mode itself (wrong passphrase, ConfigMismatch, ...).
-func (r *Reopener) TryOpen(t testing.TB, extra ...store.StoreOption) (coreapi.Store, error) {
+func (r *Reopener) TryOpen(t testing.TB, extra ...store.StoreOption) (store.Store, error) {
 	t.Helper()
 	opts := append([]store.StoreOption{
 		store.WithStoreIndex(r.idx),

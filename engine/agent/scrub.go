@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/store"
 )
 
 // --- Scrub Agent ---
@@ -63,7 +63,7 @@ type ScrubAgent interface {
 //
 // TODO(M3.3): blob verification with high-water-mark cursor.
 func NewScrubAgent(
-	store coreapi.Store,
+	store store.Store,
 	bus event.EventBus,
 	cfg ScrubConfig,
 ) (ScrubAgent, error) {
@@ -123,7 +123,7 @@ type SnapshotAgent interface {
 
 // NewSnapshotAgent creates a Snapshot Agent instance.
 func NewSnapshotAgent(
-	store coreapi.Store,
+	store store.Store,
 	bus event.EventBus,
 	cfg SnapshotConfig,
 ) (SnapshotAgent, error) {

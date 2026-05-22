@@ -6,10 +6,10 @@ import (
 	"scrinium.dev/engine/pipeline"
 )
 
-// data_pipeline.go — the store↔pipeline glue. The transform engine
-// (Encoder/Decoder chain, three-hash teeing, inverse read chain) lives
-// in pipeline.Runner; what stays here is store policy plus the thin
-// accessor that binds a Runner to this store's registries.
+// The store↔pipeline glue. The transform engine (Encoder/Decoder chain,
+// three-hash teeing, inverse read chain) lives in pipeline.Runner; what
+// stays here is store policy plus the accessor that binds a Runner to
+// this store's registries.
 
 // pipelineRunner returns a Runner bound to this store's hash and
 // transformer registries. A Runner is a cheap wrapper, built per
@@ -22,8 +22,7 @@ func (s *store) pipelineRunner() *pipeline.Runner {
 }
 
 // errPipelineWithInline is returned when an Inline blob would have to
-// flow through a non-empty Pipeline — reserved for a later milestone
-// (backlog "M2-extra: Pipeline on inline blobs"). Store policy, so it
-// lives here rather than in the engine.
+// flow through a non-empty Pipeline — not yet supported. Store policy,
+// so it lives here rather than in the engine.
 var errPipelineWithInline = errors.New(
 	"store.Put: Pipeline transforms on Inline blobs are not supported in M2.1")

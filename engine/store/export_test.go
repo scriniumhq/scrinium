@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"io"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/orphanscan"
 	"scrinium.dev/engine/store/internal/storeconfig"
@@ -26,7 +26,7 @@ const SysConfigPointer = domain.NamespaceSystemConfig + "/current"
 func WriteSystemConfig(
 	ctx context.Context,
 	drv driver.Driver,
-	idx coreapi.StoreIndex,
+	idx index.StoreIndex,
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
 ) (domain.ArtifactID, error) {
@@ -46,7 +46,7 @@ func ReadSystemConfig(
 // tests so they can assert that promoteKeyResolverIfDefault
 // did or did not run. Returns nil for non-*store implementers
 // (e.g. test mocks) so the helper degrades cleanly.
-func StoreKeyResolver(s coreapi.Store) pipeline.KeyResolver {
+func StoreKeyResolver(s Store) pipeline.KeyResolver {
 	concrete, ok := s.(*store)
 	if !ok {
 		return nil
@@ -60,7 +60,7 @@ func StoreKeyResolver(s coreapi.Store) pipeline.KeyResolver {
 // Tests use this to inspect raw on-disk manifest bytes —
 // in particular to verify that Sealed leaves system fields
 // in plaintext while Paranoid hides them.
-func ReadDriverFile(s coreapi.Store, path string) ([]byte, error) {
+func ReadDriverFile(s Store, path string) ([]byte, error) {
 	concrete, ok := s.(*store)
 	if !ok {
 		return nil, fmt.Errorf("ReadDriverFile: not a *store")
@@ -77,7 +77,7 @@ func ReadDriverFile(s coreapi.Store, path string) ([]byte, error) {
 // by tests that need to inject tampered manifest contents to
 // verify integrity-check paths. Bypasses Put — caller is
 // responsible for the resulting on-disk consistency.
-func WriteDriverFile(s coreapi.Store, path string, data []byte) error {
+func WriteDriverFile(s Store, path string, data []byte) error {
 	concrete, ok := s.(*store)
 	if !ok {
 		return fmt.Errorf("WriteDriverFile: not a *store")
@@ -89,6 +89,6 @@ func WriteDriverFile(s coreapi.Store, path string, data []byte) error {
 // recoverOrphans function. Used by recovery_faulty_test.go to
 // drive the function with fake StoreIndex / faulty Driver values
 // directly, bypassing the full Init/Open path.
-func RecoverOrphans(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex) (orphanscan.OrphanReport, error) {
+func RecoverOrphans(ctx context.Context, drv driver.Driver, idx index.StoreIndex) (orphanscan.OrphanReport, error) {
 	return orphanscan.RecoverOrphans(ctx, drv, idx)
 }

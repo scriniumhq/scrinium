@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
+	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
 )
 
@@ -105,7 +106,7 @@ type RebuildStats struct {
 // restore store.json (when lost) and the system.config/current
 // pointer (when dangling).
 type RebuildIndexAgent interface {
-	coreapi.MaintenanceAgent
+	agent.MaintenanceAgent
 
 	// Stats returns a progress snapshot during execution (safe to
 	// call from another goroutine). After Run, returns the final
@@ -121,7 +122,7 @@ type RebuildIndexAgent interface {
 //
 // TODO(M3.4): rebuild StoreIndex from manifests / Recovery Kit.
 func NewRebuildIndexAgent(
-	store coreapi.Store,
+	store store.Store,
 	bus event.EventBus,
 	cfg RebuildConfig,
 ) (RebuildIndexAgent, error) {

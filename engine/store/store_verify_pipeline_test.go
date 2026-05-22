@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
@@ -32,7 +31,7 @@ func initPipelineStore(
 	reg pipeline.TransformerRegistry,
 	pipeline []string,
 	extra ...store.StoreOption,
-) (coreapi.Store, string) {
+) (store.Store, string) {
 	t.Helper()
 	cfg := domain.StoreConfig{Pipeline: pipeline}
 	drv := driverfx.LocalFS(t)
@@ -51,7 +50,7 @@ func initPipelineStore(
 // transformed blob per artifact; the helper resolves its path
 // through the manifest's BlobRef so the tests don't hardcode the
 // shard rule.
-func pipelineBlobPath(t *testing.T, s coreapi.Store, root string, id domain.ArtifactID) string {
+func pipelineBlobPath(t *testing.T, s store.Store, root string, id domain.ArtifactID) string {
 	t.Helper()
 	ref := readBlobRef(t, s, id)
 	return filepath.Join(root, blobPathForRef(t, string(ref)))

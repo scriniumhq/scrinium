@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
@@ -217,7 +216,7 @@ func makePayload(i int, size int) []byte {
 	return p
 }
 
-func readAllAndClose(t *testing.T, rh coreapi.ReadHandle) []byte {
+func readAllAndClose(t *testing.T, rh store.ReadHandle) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(rh); err != nil {
@@ -236,7 +235,7 @@ func readAllAndClose(t *testing.T, rh coreapi.ReadHandle) []byte {
 // backed index keeps page cache bounded (~8 MiB by default) and
 // pushes data into the file, so HeapAlloc actually measures Put-
 // side streaming behaviour.
-func newDiskStore(t *testing.T) (coreapi.Store, string) {
+func newDiskStore(t *testing.T) (store.Store, string) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	root := drv.Root()
@@ -252,7 +251,7 @@ func newDiskStore(t *testing.T) (coreapi.Store, string) {
 // The smoke variant uses Paranoid; pass Sealed to exercise
 // the partial-encryption path. Both modes need WithPassphrase +
 // WithAutoUnlock so the smoke loop never has to prompt.
-func newEncryptedDiskStore(t *testing.T, crypto domain.ManifestCrypto) (coreapi.Store, string) {
+func newEncryptedDiskStore(t *testing.T, crypto domain.ManifestCrypto) (store.Store, string) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	root := drv.Root()

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/pipeline"
@@ -153,7 +152,7 @@ func TestDedup_Matrix(t *testing.T) {
 	}
 }
 
-func assertReadable(t *testing.T, ctx context.Context, s coreapi.Store, ids []domain.ArtifactID, payloads []string) {
+func assertReadable(t *testing.T, ctx context.Context, s store.Store, ids []domain.ArtifactID, payloads []string) {
 	t.Helper()
 	for i, id := range ids {
 		rh, err := s.Get(ctx, id, domain.GetOptions{})

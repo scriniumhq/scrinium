@@ -16,8 +16,8 @@ package store
 // Close does NOT transition state to Locked. "Closed" is its own
 // terminal condition and surfaces as os.ErrClosed; "Locked" is
 // reserved for an encrypted store before a successful Unlock.
-// Conflating the two confused Plain-store users into searching
-// for a passphrase that did not exist.
+// Conflating the two would send Plain-store users hunting for a
+// passphrase that does not exist.
 //
 // Close does NOT close the StoreIndex — its lifetime belongs to the
 // host (see WithStoreIndex doc).
