@@ -21,8 +21,8 @@ package chunker
 import (
 	"fmt"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/multistore"
 )
 
@@ -60,6 +60,6 @@ type factory struct {
 	cfg ChunkerConfig
 }
 
-func (f *factory) Wrap(store coreapi.DataStore, deps multistore.WrapperDeps) (coreapi.DataStore, error) {
+func (f *factory) Wrap(store store.DataStore, deps multistore.WrapperDeps) (store.DataStore, error) {
 	return nil, fmt.Errorf("%w: chunker.Wrap", errs.ErrNotImplemented)
 }

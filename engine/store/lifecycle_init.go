@@ -7,10 +7,10 @@ import (
 	"os"
 
 	"github.com/google/uuid"
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
@@ -65,7 +65,7 @@ import (
 //     encrypted manifests is the worst-of-both-worlds shape:
 //     anyone who reads store.json gets the keys to all the
 //     manifests for free.
-func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (coreapi.Store, []byte, error) {
+func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, []byte, error) {
 	if drv == nil {
 		return nil, nil, errors.New("store.InitStore: nil driver")
 	}
@@ -235,7 +235,7 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 // must be readable before the Store opens for users). The descriptor and
 // cache are written first so a config-write failure still leaves a
 // readable Store identity behind.
-func persistInitState(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
+func persistInitState(ctx context.Context, drv driver.Driver, idx index.StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
 	if err := descriptor.Persist(ctx, drv, desc); err != nil {
 		return wrap("write descriptor", err)
 	}

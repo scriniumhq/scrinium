@@ -13,13 +13,13 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/orphanscan"
 	"scrinium.dev/engine/store/internal/reconcile"
-	"scrinium.dev/engine/store/internal/systemstore"
 )
 
 // buildStore is the common tail shared by InitStore and OpenStore.
@@ -42,7 +42,7 @@ func buildStore(
 	ctx context.Context,
 	o storeOptions,
 	drv driver.Driver,
-	idx coreapi.StoreIndex,
+	idx index.StoreIndex,
 	cfg domain.StoreConfig,
 	desc *descriptor.Descriptor,
 	dek []byte,
@@ -64,7 +64,7 @@ func buildStore(
 			keyResolver: o.keyResolver,
 		},
 	}
-	s.system = systemstore.New(drv, idx, o.hashRegistry, cfg,
+	s.system = newSystemStore(drv, idx, o.hashRegistry, cfg,
 		// ArtifactWriter: the inline-artifact write primitive lives in
 		// store (shared with the config writer); systemstore calls it
 		// through this closure, branching on skipIndex.
@@ -76,7 +76,7 @@ func buildStore(
 		},
 		// InlineHandleFactory: inlineReadHandle is store-private (Get
 		// path); systemstore builds handles through this closure.
-		func(m domain.Manifest) coreapi.ReadHandle {
+		func(m domain.Manifest) ReadHandle {
 			return &inlineReadHandle{manifest: m, reader: bytes.NewReader(m.InlineBlob)}
 		},
 	)
@@ -96,7 +96,7 @@ func buildStore(
 // Errors from the Orphan Scan propagate; the *store is left in
 // StateBootstrapping. The caller decides whether to retry, fall
 // back to Locked, or surface the failure.
-func unlockBootstrap(ctx context.Context, s *store, pub coreapi.Publisher) error {
+func unlockBootstrap(ctx context.Context, s *store, pub event.Publisher) error {
 	report, err := orphanscan.RecoverOrphans(ctx, s.drv, s.index)
 	if err != nil {
 		return fmt.Errorf("orphan scan: %w", err)

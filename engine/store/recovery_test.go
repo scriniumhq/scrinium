@@ -9,10 +9,10 @@ import (
 	"sync"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/blobpath"
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
@@ -30,7 +30,7 @@ import (
 // process.
 type recoveryFixture struct {
 	drv  driver.Driver
-	idx  coreapi.StoreIndex
+	idx  index.StoreIndex
 	root string
 	bus  event.EventBus
 	caps *capturedReports
@@ -58,7 +58,7 @@ func newRecoveryFixture(t *testing.T) *recoveryFixture {
 // initStore runs store.InitStore against the fixture and returns
 // the resulting Store. EventOrphanScanCompleted has been published
 // by the time this returns (the bus is synchronous).
-func (f *recoveryFixture) initStore(t *testing.T) coreapi.Store {
+func (f *recoveryFixture) initStore(t *testing.T) store.Store {
 	t.Helper()
 	s, _, err := store.InitStore(context.Background(), f.drv,
 		store.WithStoreIndex(f.idx),
@@ -73,7 +73,7 @@ func (f *recoveryFixture) initStore(t *testing.T) coreapi.Store {
 
 // openStore runs store.OpenStore on the same Driver+Index. Used for
 // "crash-then-reopen" scenarios.
-func (f *recoveryFixture) openStore(t *testing.T) coreapi.Store {
+func (f *recoveryFixture) openStore(t *testing.T) store.Store {
 	t.Helper()
 	s, err := store.OpenStore(context.Background(), f.drv,
 		store.WithStoreIndex(f.idx),

@@ -28,13 +28,13 @@
 // A live *store is guarded by three mutexes with a fixed lock order
 // (crypto.mu → stateMu → cfgMu). The full model — what each guards, the
 // acquire/release discipline per call path, and the invariants a
-// refactor must preserve — is documented in store.go's header and in
+// refactor must preserve — is documented in store_impl.go's header and in
 // docs Internals "Store Concurrency Model". Read it before touching any
 // locking.
 //
 // # Reading order
 //
-// coreapi (contracts) → store.go (the type + lock order) → access.go
+// coreapi (contracts) → store_impl.go (the type + lock order) → access.go
 // and admin_state.go (the entry gates every method funnels through) →
 // the data_* plane → the admin_* plane and crypto_state.go → the
 // lifecycle_* constructors → the system/config plumbing → the
@@ -44,7 +44,7 @@
 //
 // Core type and wiring:
 //
-//   - store.go        — the *store struct, its fields, the lock-order
+//   - store_impl.go        — the *store struct, its fields, the lock-order
 //     invariant, and System().
 //   - doc.go          — this map.
 //   - options.go      — StoreOption constructors (With…).

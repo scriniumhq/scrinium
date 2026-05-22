@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
@@ -132,7 +131,7 @@ func benchmarkPut(b *testing.B, payloadSize int) {
 // for benchmarks. The fixtures accept testing.TB, so *testing.B
 // works directly. Disk-backed index keeps page cache bounded;
 // in-memory index would inflate HeapAlloc over many iterations.
-func newDiskStoreForBench(b *testing.B) coreapi.Store {
+func newDiskStoreForBench(b *testing.B) store.Store {
 	b.Helper()
 	drv := driverfx.LocalFS(b)
 	idx := indexfx.Disk(b, filepath.Join(b.TempDir(), "store.idx"))

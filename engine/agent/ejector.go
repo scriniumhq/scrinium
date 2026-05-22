@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/store"
 )
 
 // --- Sync Agent (Reserved, D-05) ---
@@ -64,7 +64,7 @@ type Ejector interface {
 // NewEjector creates an Ejector instance.
 // TODO(M6.3): host-driven artifact ejection.
 func NewEjector(
-	source coreapi.DataStore,
+	source store.DataStore,
 	bus event.EventBus,
 	cfg EjectorConfig,
 ) (Ejector, error) {

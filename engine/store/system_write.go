@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/blobpath"
 	"scrinium.dev/engine/internal/manifestcodec"
 )
@@ -27,7 +27,7 @@ import (
 func writeInlineSystemArtifact(
 	ctx context.Context,
 	drv driver.Driver,
-	idx coreapi.StoreIndex,
+	idx index.StoreIndex,
 	hashes domain.HashRegistry,
 	namespace string,
 	sessionID domain.SessionID,
@@ -151,7 +151,7 @@ func writeInlineSystemArtifactUnindexed(
 // withoutIndexOption is the applier returned by WithoutIndex.
 type withoutIndexOption struct{}
 
-func (withoutIndexOption) ApplySystemPut(c *coreapi.SystemPutConfig) {
+func (withoutIndexOption) ApplySystemPut(c *SystemPutConfig) {
 	c.SkipIndex = true
 }
 
@@ -167,6 +167,6 @@ func (withoutIndexOption) ApplySystemPut(c *coreapi.SystemPutConfig) {
 // artifacts where the index access path is cheaper than reading
 // the manifest file twice (once for the pointer's referent, once
 // for the artifact body).
-func WithoutIndex() coreapi.SystemPutOption {
+func WithoutIndex() SystemPutOption {
 	return withoutIndexOption{}
 }

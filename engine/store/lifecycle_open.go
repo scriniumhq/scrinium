@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
@@ -69,7 +69,7 @@ import (
 // What does NOT happen yet (planned milestones in parens):
 //   - location.lock acquisition / lease model (M3.1).
 //   - StoreIndex schema cross-check against descriptor (M3.4).
-func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (coreapi.Store, error) {
+func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, error) {
 	if drv == nil {
 		return nil, errors.New("store.OpenStore: nil driver")
 	}
@@ -198,7 +198,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (cor
 // a fast-start aid. Both absent → errs.ErrStoreNotFound; unrecoverable →
 // errs.ErrStoreCorrupted; split-brain and malformed-replica errors pass
 // through so callers can branch with errors.Is.
-func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx coreapi.StoreIndex, wrap func(string, error) error) (*descriptor.Descriptor, error) {
+func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx index.StoreIndex, wrap func(string, error) error) (*descriptor.Descriptor, error) {
 	l0, l1, l0s, l1s, err := reconcile.ReadBoth(ctx, drv)
 	if err != nil {
 		// Non-recoverable I/O error from the Driver — propagate.

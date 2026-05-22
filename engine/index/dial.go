@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
-
-	"scrinium.dev/engine/coreapi"
 )
 
 // Dialer opens a StoreIndex from a parsed URI. Implementations
@@ -18,7 +16,7 @@ import (
 // backend tunables (e.g. a Publisher) while leaving backend-
 // specific tuning to URI query parameters or backend-specific
 // options.
-type Dialer func(ctx context.Context, u *url.URL, opts ...IndexOption) (coreapi.StoreIndex, error)
+type Dialer func(ctx context.Context, u *url.URL, opts ...IndexOption) (StoreIndex, error)
 
 // dialers holds the registered URI scheme handlers. Populated
 // by package init() in index/<scheme> packages, read by
@@ -67,7 +65,7 @@ func RegisteredSchemes() []string {
 // URIs are new from day one (no legacy "indexPath" config to
 // honour), and a bare path is ambiguous between sqlite, file
 // store, etc. The scheme is mandatory.
-func DialIndex(ctx context.Context, uri string, opts ...IndexOption) (coreapi.StoreIndex, error) {
+func DialIndex(ctx context.Context, uri string, opts ...IndexOption) (StoreIndex, error) {
 	if uri == "" {
 		return nil, fmt.Errorf("index: empty URI")
 	}

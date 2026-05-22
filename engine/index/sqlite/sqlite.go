@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
+	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/index"
 )
 
@@ -58,12 +58,12 @@ type Index struct {
 // Compile-time interface conformance. Catches signature drift
 // between store.StoreIndex and *Index immediately at build time
 // instead of at the first assignment site.
-var _ coreapi.StoreIndex = (*Index)(nil)
+var _ index.StoreIndex = (*Index)(nil)
 
 // options is the resolved configuration. Defaults applied by Open.
 type options struct {
 	busyTimeout time.Duration
-	publisher   coreapi.Publisher
+	publisher   event.Publisher
 	journalMode journalMode
 	syncMode    syncMode
 }

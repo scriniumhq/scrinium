@@ -8,10 +8,10 @@ import (
 	pathpkg "path"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/projection/fsmeta"
 	"scrinium.dev/engine/projection/vfs"
+	"scrinium.dev/engine/store"
 )
 
 // webBackingFS adapts vfs.VFS to web.BackingFS.
@@ -23,10 +23,10 @@ import (
 // directly because its only consumer is HTML rendering.
 type webBackingFS struct {
 	v     *vfs.VFS
-	store coreapi.Store
+	store store.Store
 }
 
-func newWebBackingFS(v *vfs.VFS, store coreapi.Store) *webBackingFS {
+func newWebBackingFS(v *vfs.VFS, store store.Store) *webBackingFS {
 	return &webBackingFS{v: v, store: store}
 }
 
@@ -86,7 +86,7 @@ func (b *webBackingFS) OpenArtifact(ctx context.Context, id domain.ArtifactID) (
 // rather than in shared web because the type is glue
 // between core and the web pkg, owned by each cmd.
 type readHandleAdapter struct {
-	rh   coreapi.ReadHandle
+	rh   store.ReadHandle
 	pos  int64
 	size int64
 }

@@ -1,4 +1,4 @@
-package coreapi
+package index
 
 import (
 	"context"

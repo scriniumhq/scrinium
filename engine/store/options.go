@@ -3,8 +3,9 @@ package store
 import (
 	"context"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
 )
 
@@ -51,8 +52,8 @@ type storeOptions struct {
 	forceReinit   bool
 	purgeOnReinit bool
 	cfg           *domain.StoreConfig
-	storeIndex    coreapi.StoreIndex
-	publisher     coreapi.Publisher
+	storeIndex    index.StoreIndex
+	publisher     event.Publisher
 	hashRegistry  domain.HashRegistry
 	readRegistry  pipeline.TransformerRegistry
 	keyResolver   pipeline.KeyResolver
@@ -83,13 +84,13 @@ func WithConfig(cfg domain.StoreConfig) StoreOption {
 }
 
 // WithStoreIndex provides the StoreIndex implementation. Required.
-func WithStoreIndex(idx coreapi.StoreIndex) StoreOption {
+func WithStoreIndex(idx index.StoreIndex) StoreOption {
 	return func(o *storeOptions) { o.storeIndex = idx }
 }
 
 // WithPublisher provides a Publisher implementation for emitting
 // events.
-func WithPublisher(p coreapi.Publisher) StoreOption {
+func WithPublisher(p event.Publisher) StoreOption {
 	return func(o *storeOptions) { o.publisher = p }
 }
 

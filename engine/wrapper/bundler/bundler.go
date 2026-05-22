@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/multistore"
 )
 
@@ -50,7 +50,7 @@ type BundlerConfig struct {
 // Wrapper is store.DataStore extended with an explicit Flush method
 // for sealing the current batch on demand.
 type Wrapper interface {
-	coreapi.DataStore
+	store.DataStore
 
 	// Flush seals the current batch immediately, regardless of
 	// configuration triggers. Used before a graceful shutdown and
@@ -71,6 +71,6 @@ type factory struct {
 	cfg BundlerConfig
 }
 
-func (f *factory) Wrap(store coreapi.DataStore, deps multistore.WrapperDeps) (coreapi.DataStore, error) {
+func (f *factory) Wrap(store store.DataStore, deps multistore.WrapperDeps) (store.DataStore, error) {
 	return nil, fmt.Errorf("%w: bundler.Wrap", errs.ErrNotImplemented)
 }

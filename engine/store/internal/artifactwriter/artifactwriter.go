@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/blobpath"
 	"scrinium.dev/engine/internal/manifestcodec"
 	"scrinium.dev/engine/pipeline"
@@ -23,7 +23,7 @@ import (
 // thin handle over its dependencies and holds no mutable state.
 type Writer struct {
 	drv          driver.Driver
-	index        coreapi.StoreIndex
+	index        index.StoreIndex
 	hashes       domain.HashRegistry
 	transformers pipeline.TransformerRegistry
 }
@@ -33,7 +33,7 @@ type Writer struct {
 // never reaches into *store internals.
 func New(
 	drv driver.Driver,
-	index coreapi.StoreIndex,
+	index index.StoreIndex,
 	hashes domain.HashRegistry,
 	transformers pipeline.TransformerRegistry,
 ) *Writer {

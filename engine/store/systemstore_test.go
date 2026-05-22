@@ -1,4 +1,4 @@
-package systemstore
+package store
 
 import (
 	"errors"

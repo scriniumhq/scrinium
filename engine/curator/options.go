@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/coreapi"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
 	"scrinium.dev/engine/wrapper/multistore"
 )
@@ -30,14 +30,14 @@ type curatorOptions struct {
 
 type registeredStore struct {
 	id       string
-	store    coreapi.Store
+	store    store.Store
 	cfg      multistore.StoreRegistrationConfig
 	wrappers []multistore.WrapperFactory
 }
 
 type registeredBackup struct {
 	targetID string
-	store    coreapi.Store
+	store    store.Store
 	cfg      multistore.BackupConfig
 	wrappers []multistore.WrapperFactory
 }
@@ -50,7 +50,7 @@ type hostStorageRegistration struct {
 // WithStore registers a Target Store with Curator. Decorators are
 // applied "outside in": the first wrapper is closest to the
 // client, the last is closest to the underlying store.
-func WithStore(id string, store coreapi.Store, cfg multistore.StoreRegistrationConfig, wrappers ...multistore.WrapperFactory) CuratorOption {
+func WithStore(id string, store store.Store, cfg multistore.StoreRegistrationConfig, wrappers ...multistore.WrapperFactory) CuratorOption {
 	return func(o *curatorOptions) {
 		o.stores = append(o.stores, registeredStore{
 			id: id, store: store, cfg: cfg, wrappers: wrappers,
@@ -62,7 +62,7 @@ func WithStore(id string, store coreapi.Store, cfg multistore.StoreRegistrationC
 // Decorators are applied as in WithStore. Note: chunker.Wrapper
 // on a Backup is forbidden by the Rules Engine (see
 // docs/4. API Reference/05 Configuration §5.5).
-func WithBackup(targetID string, store coreapi.Store, cfg multistore.BackupConfig, wrappers ...multistore.WrapperFactory) CuratorOption {
+func WithBackup(targetID string, store store.Store, cfg multistore.BackupConfig, wrappers ...multistore.WrapperFactory) CuratorOption {
 	return func(o *curatorOptions) {
 		o.backups = append(o.backups, registeredBackup{
 			targetID: targetID, store: store, cfg: cfg, wrappers: wrappers,

@@ -32,6 +32,13 @@ func NewEventBus() EventBus {
 	return &syncBus{}
 }
 
+// Publisher is the minimal contract for emitting events; it is passed
+// to Store via WithPublisher. It is satisfied by event.EventBus and by
+// any custom implementation (asynchronous, persistent, filtering).
+type Publisher interface {
+	Publish(e Event)
+}
+
 type syncBus struct {
 	mu          sync.RWMutex
 	subscribers []func(Event)
