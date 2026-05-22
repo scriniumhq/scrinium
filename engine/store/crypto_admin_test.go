@@ -507,3 +507,84 @@ func TestKeyResolverPromotion_OnInitStore(t *testing.T) {
 		t.Error("InitStore on encrypted Store should populate default KeyResolver")
 	}
 }
+
+// TestRotateKEK_NewPassphraseProviderError covers the failure path
+// where the provider succeeds for the current-passphrase prompts
+// (AutoUnlock + the current-pass verify) but errors on the new
+// passphrase. RotateKEK must surface that error and leave the Store
+// exactly as it was — descriptor unchanged, owner not locked out.
+//
+// Regression guard: the new-pass callProvider error used to be
+// overwritten by WrapDEK's err, so the rotation silently wrapped the
+// DEK under an empty passphrase, bumped Sequence, and locked the owner
+// out. See store.RotateKEK "new passphrase" check.
+func TestRotateKEK_NewPassphraseProviderError(t *testing.T) {
+	ctx := context.Background()
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+
+	if _, _, err := store.InitStore(ctx, drv,
+		store.WithPassphrase(storefx.StaticPP("pw")),
+		store.WithStoreIndex(idx),
+		store.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	// Provider answers every "unlock" prompt (AutoUnlock, then the
+	// current-pass verify inside RotateKEK) with the real passphrase,
+	// but fails the "kek_rotation" prompt for the new one.
+	provider := func(_ context.Context, h store.PassphraseHint) ([]byte, error) {
+		if h.Reason == "kek_rotation" {
+			return nil, errors.New("provider unavailable")
+		}
+		return []byte("pw"), nil
+	}
+
+	s, err := store.OpenStore(ctx, drv,
+		store.WithPassphrase(provider),
+		store.WithAutoUnlock(),
+		store.WithStoreIndex(idx),
+		store.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	descBefore, err := descriptor.Read(ctx, drv)
+	if err != nil {
+		t.Fatalf("read descriptor before rotation: %v", err)
+	}
+
+	// 1. The provider error must surface, classified as a provider
+	//    failure (callProvider wraps any provider error with
+	//    ErrPassphraseProvider).
+	rotErr := s.RotateKEK(ctx)
+	if !errors.Is(rotErr, errs.ErrPassphraseProvider) {
+		t.Fatalf("RotateKEK: want ErrPassphraseProvider, got %v", rotErr)
+	}
+
+	// 2. The descriptor must not have been rewritten — a failed
+	//    rotation leaves on-disk crypto state untouched so a retry
+	//    starts from the same point.
+	descAfter, err := descriptor.Read(ctx, drv)
+	if err != nil {
+		t.Fatalf("read descriptor after rotation: %v", err)
+	}
+	if descAfter.Sequence != descBefore.Sequence {
+		t.Errorf("descriptor Sequence changed on failed rotation: before %d, after %d",
+			descBefore.Sequence, descAfter.Sequence)
+	}
+
+	// 3. The owner must still be able to open with the original
+	//    passphrase. This is the real-world consequence of the bug:
+	//    a botched rotation must never lock the user out.
+	if _, err := store.OpenStore(ctx, drv,
+		store.WithPassphrase(storefx.StaticPP("pw")),
+		store.WithAutoUnlock(),
+		store.WithStoreIndex(idx),
+		store.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
+		t.Errorf("original passphrase rejected after failed rotation: %v", err)
+	}
+}
