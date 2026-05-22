@@ -10,10 +10,8 @@ import (
 	"scrinium.dev/engine/errs"
 )
 
-// RollbackSession is a group rollback of every artifact carrying
-// the given SessionID. See docs/4. API Reference/02 Write
-// Operations.md (RollbackSession) and docs/1. Concepts/02
-// Terminology.md (Session) for the contract; the gist:
+// RollbackSession is a group rollback of every artifact carrying the
+// given SessionID:
 //
 //   - Sessions are correlation tags, not transactions. There is no
 //     BeginSession / EndSession — clients pick a SessionID, attach
@@ -68,9 +66,8 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 	for _, id := range ids {
 		m, err := s.loadManifest(ctx, id)
 		if err != nil {
-			// Index row exists but the manifest cannot be
-			// loaded — inconsistent state.
-			// (TODO M3.4: RebuildIndexAgent) is the recovery path.
+			// Index row exists but the manifest cannot be loaded —
+			// inconsistent state; an index rebuild is the recovery path.
 			return fmt.Errorf("store.RollbackSession: load %q: %w", id, err)
 		}
 		if !m.RetentionUntil.IsZero() && m.RetentionUntil.After(now) {

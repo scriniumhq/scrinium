@@ -1,10 +1,5 @@
 package store
 
-// walk.go — Store.Walk and Store.WalkSystem, plus the namespace-syntax
-// validators used at the API boundary. Iteration itself is delegated
-// to StoreIndex.ListByNamespace; the methods here enforce the public
-// contract (4. API Reference/04 §4.1, §4.2).
-
 import (
 	"context"
 	"strings"
@@ -13,16 +8,14 @@ import (
 	"scrinium.dev/engine/errs"
 )
 
-// Walk iterates over user manifests. See docs/4. API Reference/04
-// §4.1 for the contract; this implementation enforces the
-// namespace-syntax rules (reject system.* prefix, length limit)
-// and delegates to the StoreIndex for the actual iteration.
+// Walk iterates over user manifests. It enforces the namespace-syntax
+// rules (reject system.* prefix, length limit) and delegates iteration
+// to the StoreIndex.
 //
-// Pack manifests are excluded by the index (they live in
-// packed_blobs, never in manifests). System namespaces are
-// excluded by both the index ("*" wildcard skips system.*) and by
-// us at the API surface (an explicit "system.foo" gets
-// errs.ErrReservedNamespace before the index sees it).
+// Pack manifests are excluded by the index (they live in packed_blobs,
+// never in manifests). System namespaces are excluded both by the index
+// (the "*" wildcard skips system.*) and here at the API surface (an
+// explicit "system.foo" gets errs.ErrReservedNamespace first).
 func (s *store) Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {
 	if err := s.enterRead(ctx); err != nil {
 		return err
@@ -33,8 +26,7 @@ func (s *store) Walk(ctx context.Context, namespace string, cb func(domain.Manif
 	return s.index.ListByNamespace(ctx, namespace, cb)
 }
 
-// validateUserNamespace enforces the contract of Walk's namespace
-// argument. See docs §4.1.
+// validateUserNamespace enforces the syntax of Walk's namespace argument.
 func validateUserNamespace(ns string) error {
 	if len(ns) > domain.MaxNamespaceLen {
 		return errs.ErrNamespaceTooLong

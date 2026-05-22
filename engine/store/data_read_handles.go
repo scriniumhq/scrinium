@@ -16,18 +16,15 @@ import (
 	"scrinium.dev/engine/event"
 )
 
-// read_handles.go — the coreapi.ReadHandle implementations returned
-// by Get and SystemStore.Get. Three concrete handles, collected here
-// rather than scattered across get.go and a standalone file:
+// The three ReadHandle implementations returned by Get and
+// SystemStore.Get:
 //   - inlineReadHandle    — bytes already in the manifest (inline blobs,
-//                           system artifacts). Trivial buffer reader.
-//   - targetReadHandle    — lazily opens the physical blob via the
-//                           store Get-path; supports range reads.
+//                           system artifacts); a buffer reader.
+//   - targetReadHandle    — lazily opens the physical blob; range reads.
 //   - verifyingReadHandle — decorator that rehashes plaintext on read
 //                           and reports a mismatch through publish.
-// All three stay in package store: target and verifying are bound to
-// *store internals (buildGetReader, publish), so they cannot leave the
-// package without dragging the Get-path with them.
+// All three are bound to *store internals (pipelineRunner, publish) and
+// so stay in package store.
 
 // --- inlineReadHandle: bytes live in the manifest itself ---
 

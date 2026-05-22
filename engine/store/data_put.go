@@ -37,9 +37,9 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 
 	aw := artifactwriter.New(s.drv, s.index, s.hashes, s.transformers)
 
-	// ADR-58: resolve the write KeyID once and thread it through both
-	// the blob pipeline and the manifest body, so a blob and its
-	// manifest encrypt under the same key.
+	// Resolve the write KeyID once and thread it through both the blob
+	// pipeline and the manifest body, so a blob and its manifest encrypt
+	// under the same key.
 	writeKeyID := s.resolveWriteKeyID(opts.Namespace)
 
 	blob, err := aw.Materialize(ctx, cfg, a, opts, writeKeyID)
@@ -88,8 +88,8 @@ func (s *store) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) 
 }
 
 // resolveWriteKeyID asks the resolver which KeyID a new artifact in this
-// namespace encrypts under (ADR-58). The resolver reference is
-// snapshotted under the crypto lock but ResolveWriteKey runs without it
+// namespace encrypts under. The resolver reference is snapshotted under
+// the crypto lock but ResolveWriteKey runs without it
 // — it must be a cheap, non-blocking lookup. Returns "" for an
 // unencrypted store.
 func (s *store) resolveWriteKeyID(namespace string) string {
@@ -151,11 +151,9 @@ func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	return nil
 }
 
-// PutBlob is a level-3 decorator entry point for chunker.Wrapper (M5.2)
-// to write anonymous chunks without a manifest. It is deferred to M5 and
-// is slated to move off DataStore onto a dedicated BlobStore interface
-// at the start of M5; until then the stub keeps the contract honest
-// rather than silently succeeding.
+// PutBlob is the decorator entry point (chunker.Wrapper) for writing
+// anonymous chunks without a manifest. Not yet implemented: the stub
+// returns ErrNotImplemented rather than silently succeeding.
 func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error) {
 	return "", fmt.Errorf("%w: store.PutBlob is deferred to M5 (chunker.Wrapper); the method moves to BlobStore at M5 start",
 		errs.ErrNotImplemented)

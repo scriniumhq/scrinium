@@ -136,17 +136,16 @@ func (s *store) verifyBlobHash(ctx context.Context, m domain.Manifest) error {
 // underlying driver-side resources; for the Inline case Close is
 // a no-op.
 //
-// LayoutExternalRef is rejected here — Verify does not yet know
-// how to fetch external URIs.
+// LayoutExternalRef is rejected here — Verify cannot yet fetch external
+// URIs.
 func (s *store) openBlobBytes(ctx context.Context, m domain.Manifest) (io.ReadCloser, error) {
 	switch m.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
 		return io.NopCloser(bytes.NewReader(m.InlineBlob)), nil
 
 	case domain.LayoutTarget:
-		// PhysicalAddress is sourced from the index — see the
-		// layout invariant in Internals/01. The read-path follows
-		// what the index recorded at IndexManifest time, not what
+		// The physical address is sourced from the index: the read path
+		// follows what the index recorded at IndexManifest time, not what
 		// the current PathTopology would compute.
 		addr, err := s.index.Resolve(ctx, string(m.BlobRef))
 		if err != nil {
