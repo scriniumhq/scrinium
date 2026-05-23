@@ -19,7 +19,7 @@ import (
 // harness wires a Writer over a localfs driver, in-memory index, the
 // artifactfx sha256 registry, and an empty transformer registry (no
 // pipeline stages → Plain content).
-func harness(t *testing.T) (*artifactio.Writer, domain.StoreConfig) {
+func harness(t *testing.T) (*artifactio.IO, domain.StoreConfig) {
 	t.Helper()
 	w := artifactio.New(
 		driverfx.LocalFS(t),

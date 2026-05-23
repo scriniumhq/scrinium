@@ -17,17 +17,17 @@ import (
 	"scrinium.dev/engine/pipeline"
 )
 
-// Writer is the artifact write-path engine bound to a store's Driver,
-// StoreIndex, and registries. Construct once with New; the value is a thin
+// IO is the artifact I/O engine bound to a store's Driver, StoreIndex,
+// and registries. Construct once with New; the value is a thin
 // handle over its dependencies and holds no mutable state.
-type Writer struct {
+type IO struct {
 	drv          driver.Driver
 	index        index.StoreIndex
 	hashes       domain.HashRegistry
 	transformers pipeline.TransformerRegistry
 }
 
-// New wires a Writer to its dependencies. The store layer owns these
+// New wires an IO to its dependencies. The store layer owns these
 // objects and injects them so artifactio never reaches into *store
 // internals.
 func New(
@@ -35,8 +35,8 @@ func New(
 	index index.StoreIndex,
 	hashes domain.HashRegistry,
 	transformers pipeline.TransformerRegistry,
-) *Writer {
-	return &Writer{drv: drv, index: index, hashes: hashes, transformers: transformers}
+) *IO {
+	return &IO{drv: drv, index: index, hashes: hashes, transformers: transformers}
 }
 
 // Result carries the outcome of Materialize: the addressing hashes, the
@@ -55,8 +55,8 @@ type Result struct {
 
 // runner returns a pipeline.Runner bound to this writer's registries. A
 // Runner is a cheap wrapper, built per operation rather than held.
-func (w *Writer) runner() *pipeline.Runner {
-	return pipeline.NewRunner(w.hashes, w.transformers)
+func (x *IO) runner() *pipeline.Runner {
+	return pipeline.NewRunner(x.hashes, x.transformers)
 }
 
 // Materialize hashes the payload and places it. For InlineFallback it
@@ -68,7 +68,7 @@ func (w *Writer) runner() *pipeline.Runner {
 // writeKeyID is resolved once by the caller (ADR-58) and threaded into
 // both the blob pipeline here and the manifest body in AssembleManifest,
 // so a blob and its manifest encrypt under the same key.
-func (w *Writer) Materialize(ctx context.Context, cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions, writeKeyID string) (Result, error) {
+func (x *IO) Materialize(ctx context.Context, cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions, writeKeyID string) (Result, error) {
 	hashAlgo := string(cfg.ContentHasher)
 	inlineFallback := cfg.BlobStorage == domain.BlobStorageInlineFallback && cfg.InlineBlobLimit > 0
 
@@ -78,26 +78,26 @@ func (w *Writer) Materialize(ctx context.Context, cfg domain.StoreConfig, a doma
 			return Result{}, fmt.Errorf("artifactio: read payload head: %w", err)
 		}
 		if int64(len(head)) <= cfg.InlineBlobLimit {
-			return w.materializeInline(hashAlgo, head)
+			return x.materializeInline(hashAlgo, head)
 		}
 		combined := io.MultiReader(bytes.NewReader(head), a.Payload)
-		return w.streamToTarget(ctx, cfg, hashAlgo, writeKeyID, combined)
+		return x.streamToTarget(ctx, cfg, hashAlgo, writeKeyID, combined)
 	}
-	return w.streamToTarget(ctx, cfg, hashAlgo, writeKeyID, a.Payload)
+	return x.streamToTarget(ctx, cfg, hashAlgo, writeKeyID, a.Payload)
 }
 
 // materializeInline hashes an already-buffered payload and returns it as
 // an inline blob. No driver entry, no dedup probe; BlobRef equals the
 // ContentHash of the embedded bytes (docs §7.2).
-func (w *Writer) materializeInline(hashAlgo string, body []byte) (Result, error) {
-	h, err := w.hashes.NewHasher(hashAlgo)
+func (x *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
+	h, err := x.hashes.NewHasher(hashAlgo)
 	if err != nil {
 		return Result{}, fmt.Errorf("artifactio: hasher: %w", err)
 	}
 	if _, err := h.Write(body); err != nil {
 		return Result{}, fmt.Errorf("artifactio: hash inline: %w", err)
 	}
-	ch := domain.ContentHash(w.hashes.Format(hashAlgo, h.Sum(nil)))
+	ch := domain.ContentHash(x.hashes.Format(hashAlgo, h.Sum(nil)))
 	return Result{
 		ContentHash:  ch,
 		BlobRef:      domain.BlobRef(ch),
@@ -110,10 +110,10 @@ func (w *Writer) materializeInline(hashAlgo string, body []byte) (Result, error)
 // streamToTarget runs the active pipeline over input, stages the result,
 // then commits it to a blob slot (dedup hit drops the staging file; miss
 // renames it into place).
-func (w *Writer) streamToTarget(ctx context.Context, cfg domain.StoreConfig, hashAlgo, writeKeyID string, input io.Reader) (Result, error) {
+func (x *IO) streamToTarget(ctx context.Context, cfg domain.StoreConfig, hashAlgo, writeKeyID string, input io.Reader) (Result, error) {
 	stagingPath := makeStagingPath()
 
-	stream, pp, err := w.runner().BuildPut(hashAlgo, input, cfg.Pipeline, pipeline.EncodeContext{
+	stream, pp, err := x.runner().BuildPut(hashAlgo, input, cfg.Pipeline, pipeline.EncodeContext{
 		KeyID:          writeKeyID,
 		EncryptedDedup: cfg.EncryptedDedup, // ADR-58: IV mode for the crypto stage
 		SegmentSize:    cfg.SegmentSize,    // ADR-59: segmented AEAD frame size
@@ -122,14 +122,14 @@ func (w *Writer) streamToTarget(ctx context.Context, cfg domain.StoreConfig, has
 		return Result{}, fmt.Errorf("artifactio: build put pipeline: %w", err)
 	}
 
-	if err := w.drv.Put(ctx, stagingPath, stream); err != nil {
+	if err := x.drv.Put(ctx, stagingPath, stream); err != nil {
 		return Result{}, fmt.Errorf("artifactio: stage payload: %w", err)
 	}
 
 	contentHash, blobRef, stages := pp.Finalize()
 	originalSize := pp.ContentBytesRead() // measured on the pre-pipeline input
 
-	commitRef, addr, err := w.commitBlob(ctx, cfg, stagingPath, contentHash,
+	commitRef, addr, err := x.commitBlob(ctx, cfg, stagingPath, contentHash,
 		originalSize, blobRef, domain.CryptoIdentityOf(stages))
 	if err != nil {
 		return Result{}, err
@@ -146,7 +146,7 @@ func (w *Writer) streamToTarget(ctx context.Context, cfg domain.StoreConfig, has
 // commitBlob is the tail of the Target write path: probe dedup, then drop
 // the staging file (hit) or rename it into place (miss). Returns the
 // BlobRef and the address where the blob now lives.
-func (w *Writer) commitBlob(
+func (x *IO) commitBlob(
 	ctx context.Context,
 	cfg domain.StoreConfig,
 	stagingPath string,
@@ -155,16 +155,16 @@ func (w *Writer) commitBlob(
 	blobRef domain.BlobRef,
 	crypto domain.CryptoIdentity,
 ) (domain.BlobRef, domain.PhysicalAddress, error) {
-	existingRef, found, err := w.dedupProbe(ctx, contentHash, originalSize, blobRef, crypto)
+	existingRef, found, err := x.dedupProbe(ctx, contentHash, originalSize, blobRef, crypto)
 	if err != nil {
-		_ = w.drv.Remove(ctx, stagingPath)
+		_ = x.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: dedup probe: %w", err)
 	}
 	if found {
-		if err := w.drv.Remove(ctx, stagingPath); err != nil {
+		if err := x.drv.Remove(ctx, stagingPath); err != nil {
 			return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: drop staging: %w", err)
 		}
-		addr, err := w.index.Resolve(ctx, existingRef)
+		addr, err := x.index.Resolve(ctx, existingRef)
 		if err != nil {
 			return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: resolve existing blob: %w", err)
 		}
@@ -172,11 +172,11 @@ func (w *Writer) commitBlob(
 	}
 	finalPath, err := artifact.BlobPath(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
 	if err != nil {
-		_ = w.drv.Remove(ctx, stagingPath)
+		_ = x.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: resolve blob path: %w", err)
 	}
-	if err := w.drv.Rename(ctx, stagingPath, finalPath); err != nil {
-		_ = w.drv.Remove(ctx, stagingPath)
+	if err := x.drv.Rename(ctx, stagingPath, finalPath); err != nil {
+		_ = x.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: commit blob: %w", err)
 	}
 	return blobRef, domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: finalPath}, nil
@@ -193,7 +193,7 @@ func (w *Writer) commitBlob(
 //     never dedup; under Convergent identical ciphertext hits, the
 //     intended dedup. Probing by content here would risk sharing a blob
 //     encrypted under a different IV.
-func (w *Writer) dedupProbe(
+func (x *IO) dedupProbe(
 	ctx context.Context,
 	contentHash domain.ContentHash,
 	originalSize int64,
@@ -201,9 +201,9 @@ func (w *Writer) dedupProbe(
 	crypto domain.CryptoIdentity,
 ) (string, bool, error) {
 	if crypto == "" {
-		return w.index.ExistsByContent(ctx, contentHash, originalSize, "")
+		return x.index.ExistsByContent(ctx, contentHash, originalSize, "")
 	}
-	if _, err := w.index.Resolve(ctx, string(blobRef)); err != nil {
+	if _, err := x.index.Resolve(ctx, string(blobRef)); err != nil {
 		if errors.Is(err, errs.ErrArtifactNotFound) {
 			return "", false, nil
 		}
@@ -221,7 +221,7 @@ func (w *Writer) dedupProbe(
 // keyID is empty; for an encrypting config the caller borrows the DEK
 // under the crypto lock and wipes it after this returns. The DEK is used
 // only for ComputeArtifactID and is never retained.
-func (w *Writer) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions, blob Result, dek []byte, keyID string) (domain.Manifest, []byte, error) {
+func (x *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions, blob Result, dek []byte, keyID string) (domain.Manifest, []byte, error) {
 	layout := domain.LayoutTarget
 	if blob.InlineBytes != nil {
 		layout = domain.LayoutInline
@@ -244,7 +244,7 @@ func (w *Writer) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opt
 
 	hashAlgo := string(cfg.ContentHasher)
 	id, fileBytes, sm, err := artifact.ComputeArtifactID(
-		manifest, hashAlgo, w.hashes,
+		manifest, hashAlgo, x.hashes,
 		cfg.ManifestEncoding, cfg.ManifestCrypto, dek, keyID,
 	)
 	if err != nil {
@@ -262,15 +262,15 @@ func (w *Writer) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opt
 // manifests addr is the zero PhysicalAddress; IndexManifest skips the
 // blobs-table insert but still indexes the manifest so Walk and
 // GetBySession find it.
-func (w *Writer) PersistManifest(ctx context.Context, manifest domain.Manifest, manifestBytes []byte, addr domain.PhysicalAddress) error {
+func (x *IO) PersistManifest(ctx context.Context, manifest domain.Manifest, manifestBytes []byte, addr domain.PhysicalAddress) error {
 	manifestPath, err := artifact.ManifestPath(manifest.ArtifactID)
 	if err != nil {
 		return fmt.Errorf("artifactio: manifest path: %w", err)
 	}
-	if err := w.drv.Put(ctx, manifestPath, bytes.NewReader(manifestBytes)); err != nil {
+	if err := x.drv.Put(ctx, manifestPath, bytes.NewReader(manifestBytes)); err != nil {
 		return fmt.Errorf("artifactio: write manifest: %w", err)
 	}
-	if err := w.index.IndexManifest(ctx, manifest, addr, nil, nil); err != nil {
+	if err := x.index.IndexManifest(ctx, manifest, addr, nil, nil); err != nil {
 		// Manifest is on disk but unindexed; the rebuild agent is the
 		// recovery path. Surface so the caller can retry.
 		return fmt.Errorf("artifactio: index manifest: %w", err)
