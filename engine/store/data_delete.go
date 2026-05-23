@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -105,5 +106,8 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	}
 
 	s.publish(event.EventArtifactDeleted, event.ArtifactDeletedPayload{ArtifactID: id})
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "artifact deleted",
+		storeIDAttr(s), artifactIDAttr(id),
+		slog.String("blob_storage", manifest.LayoutHeader.BlobStorage))
 	return nil
 }

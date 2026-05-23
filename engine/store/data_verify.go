@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 
 	"scrinium.dev/engine/domain"
@@ -61,6 +62,12 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 			ArtifactID: id,
 			Err:        err,
 		})
+		// The event notifies; the log explains. Warn — integrity
+		// verification failed for a specific artifact, recoverable at
+		// the operator level (restore from backup / investigate medium).
+		// Lock-free: Verify holds no mutex.
+		s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "verify failed: blob integrity mismatch",
+			storeIDAttr(s), artifactIDAttr(id))
 		return err
 	}
 	return nil

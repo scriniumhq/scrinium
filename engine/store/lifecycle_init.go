@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/google/uuid"
@@ -190,6 +191,11 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
 	}
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store initialised",
+		storeIDAttr(s),
+		slog.Bool("encrypted_dek", desc.DEKEncrypted),
+		manifestCryptoAttr(cfg.ManifestCrypto),
+		slog.Bool("recovery_kit", kit != nil))
 	return s, kit, nil
 }
 

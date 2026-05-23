@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"scrinium.dev/engine/domain"
@@ -101,5 +102,12 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 		}
 	}
 
+	// Lock-free summary: each Delete above already emitted its own
+	// EventArtifactDeleted. Debug — the rolled-back batch size, for
+	// diagnostics. SessionID is a client-chosen correlation tag, not
+	// secret.
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "session rolled back",
+		storeIDAttr(s), slog.String("session_id", string(sessionID)),
+		slog.Int("artifacts", len(ids)))
 	return nil
 }
