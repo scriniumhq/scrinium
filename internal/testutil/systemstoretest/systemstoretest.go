@@ -188,31 +188,25 @@ func testWalkByPrefix(t *testing.T, f Factory) {
 func testWalkEmptyPrefix(t *testing.T, f Factory) {
 	ss, _, cleanup := f.New(t)
 	defer cleanup()
-
 	ctx := context.Background()
-	names := []string{
-		"config/v1",
-		"scrub/cursor",
-		"gc/cursor",
-	}
-	for _, n := range names {
+
+	// A freshly initialised store already carries bootstrap system
+	// artifacts (config/current is surfaced by Walk). Snapshot the
+	// baseline and assert on the delta, not an absolute set — every
+	// real SystemStore backend bootstraps config this way.
+	before := walkNames(t, ss, "")
+
+	for _, n := range []string{"config/v1", "scrub/cursor", "gc/cursor"} {
 		if err := ss.Put(ctx, n, bytes.NewReader([]byte(n))); err != nil {
 			t.Fatalf("Put %q: %v", n, err)
 		}
 	}
 
-	var got []string
-	err := ss.Walk(ctx, "", func(name string, _ domain.Manifest) error {
-		got = append(got, name)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("Walk: %v", err)
-	}
+	got := setDiff(walkNames(t, ss, ""), before)
 	sort.Strings(got)
 	want := []string{"config/v1", "gc/cursor", "scrub/cursor"}
 	if !equalSlices(got, want) {
-		t.Errorf("Walk(\"\"): got %v, want %v", got, want)
+		t.Errorf(`Walk("") delta: got %v, want %v`, got, want)
 	}
 }
 
@@ -256,36 +250,20 @@ func testWithoutIndexSkips(t *testing.T, f Factory) {
 func testConfigPrefixRouting(t *testing.T, f Factory) {
 	ss, idx, cleanup := f.New(t)
 	defer cleanup()
-
 	ctx := context.Background()
+
+	beforeCfg := countNamespace(t, idx, domain.NamespaceSystemConfig)
+	beforeState := countNamespace(t, idx, domain.NamespaceSystemState)
+
 	if err := ss.Put(ctx, "config/v1", bytes.NewReader([]byte(`{"k":"v"}`))); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	// Should appear under system.config in the index.
-	var seen int
-	err := idx.ListByNamespace(ctx, domain.NamespaceSystemConfig, func(_ domain.Manifest) error {
-		seen++
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("ListByNamespace(system.config): %v", err)
+	if d := countNamespace(t, idx, domain.NamespaceSystemConfig) - beforeCfg; d != 1 {
+		t.Errorf("config/v1 not routed to system.config (delta %d, want 1)", d)
 	}
-	if seen != 1 {
-		t.Errorf("config/v1 not routed to system.config (saw %d rows)", seen)
-	}
-
-	// Must NOT appear under system.state.
-	var stateSeen int
-	err = idx.ListByNamespace(ctx, domain.NamespaceSystemState, func(_ domain.Manifest) error {
-		stateSeen++
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("ListByNamespace(system.state): %v", err)
-	}
-	if stateSeen != 0 {
-		t.Errorf("config/v1 leaked into system.state (saw %d rows)", stateSeen)
+	if d := countNamespace(t, idx, domain.NamespaceSystemState) - beforeState; d != 0 {
+		t.Errorf("config/v1 leaked into system.state (delta %d, want 0)", d)
 	}
 }
 
@@ -344,4 +322,47 @@ func equalSlices(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// walkNames collects every name Walk yields under prefix.
+func walkNames(t *testing.T, ss store.SystemStore, prefix string) []string {
+	t.Helper()
+	var names []string
+	err := ss.Walk(context.Background(), prefix, func(name string, _ domain.Manifest) error {
+		names = append(names, name)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Walk(%q): %v", prefix, err)
+	}
+	return names
+}
+
+// countNamespace returns the number of index rows in ns.
+func countNamespace(t *testing.T, idx index.StoreIndex, ns string) int {
+	t.Helper()
+	var n int
+	err := idx.ListByNamespace(context.Background(), ns, func(_ domain.Manifest) error {
+		n++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ListByNamespace(%q): %v", ns, err)
+	}
+	return n
+}
+
+// setDiff returns elements of got that are not in base.
+func setDiff(got, base []string) []string {
+	seen := make(map[string]struct{}, len(base))
+	for _, b := range base {
+		seen[b] = struct{}{}
+	}
+	var out []string
+	for _, g := range got {
+		if _, ok := seen[g]; !ok {
+			out = append(out, g)
+		}
+	}
+	return out
 }

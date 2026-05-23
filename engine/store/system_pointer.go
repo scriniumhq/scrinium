@@ -9,9 +9,11 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 )
 
@@ -22,23 +24,33 @@ import (
 // separately when the prefix admits it, since it does not live under
 // pointers/.
 func (ss *systemStore) gatherNames(ctx context.Context, namespace, prefix string) ([]string, error) {
-	prefixPath := namespace + "/pointers/"
+	// Pointer names are nested ("scrub/cursor", "config/v1"), so the
+	// listing must recurse. drv.List is one level deep — fine for a
+	// prefix that already resolves to a leaf directory, but it drops
+	// nested names under a shallow or empty prefix. Walk the pointers/
+	// subtree recursively instead: ListObjectsWithModTime reports
+	// files only (never directories) and treats a missing prefix as an
+	// empty walk.
+	pointersRoot := namespace + "/pointers/"
+	listPath := pointersRoot
 	if prefix != "" {
-		prefixPath = namespace + "/pointers/" + prefix
+		listPath += prefix
 	}
-	paths, err := ss.drv.List(ctx, prefixPath)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("system store: list %q: %w", prefixPath, err)
-	}
-	out := make([]string, 0, len(paths))
-	pointersPrefix := namespace + "/pointers/"
-	for _, p := range paths {
-		name := strings.TrimPrefix(p, pointersPrefix)
-		if name == "" {
-			continue
+
+	var out []string
+	err := ss.drv.ListObjectsWithModTime(ctx, listPath, time.Time{}, func(o driver.ObjectMeta) error {
+		if name := strings.TrimPrefix(o.Path, pointersRoot); name != "" {
+			out = append(out, name)
 		}
-		out = append(out, name)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("system store: list %q: %w", listPath, err)
 	}
+
+	// config/current keeps a flat path outside pointers/ (its on-disk
+	// format predates the subtree), so the recursive walk never sees
+	// it — surface it explicitly when the prefix would match.
 	if namespace == domain.NamespaceSystemConfig &&
 		(prefix == "" || prefix == "config" || prefix == "config/" || strings.HasPrefix("config/current", prefix)) {
 		if _, err := ss.drv.Stat(ctx, namespace+"/current"); err == nil {
