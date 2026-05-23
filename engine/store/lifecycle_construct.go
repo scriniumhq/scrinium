@@ -60,7 +60,7 @@ func buildStore(
 		},
 		// InlineHandleFactory: inlineReadHandle is store-private (Get
 		// path); systemstore builds handles through this closure.
-		func(m domain.Manifest) ReadHandle {
+		func(m domain.Manifest) domain.ReadHandle {
 			return &inlineReadHandle{manifest: m, reader: bytes.NewReader(m.InlineBlob)}
 		},
 		// Logger: the systemStore logs its own best-effort cleanup

@@ -90,7 +90,7 @@ func (ss *systemStore) writePointer(ctx context.Context, ptrPath string, id doma
 }
 
 // readArtifact returns a ReadHandle over the manifest's inline payload.
-func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (ReadHandle, error) {
+func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (domain.ReadHandle, error) {
 	m, err := ss.loadManifest(ctx, id)
 	if err != nil {
 		return nil, err

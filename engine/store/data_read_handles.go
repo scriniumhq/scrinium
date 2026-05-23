@@ -187,7 +187,7 @@ func (h *targetReadHandle) Manifest() domain.Manifest {
 
 // Compile-time interface conformance.
 var (
-	_ ReadHandle = (*inlineReadHandle)(nil)
+	_ domain.ReadHandle = (*inlineReadHandle)(nil)
 )
 
 // verifyingReadHandle wraps a ReadHandle and rehashes the
@@ -210,7 +210,7 @@ var (
 // The wrapper is created only when shouldVerifyOnRead returns
 // true; otherwise Get returns the inner handle unchanged.
 type verifyingReadHandle struct {
-	inner ReadHandle
+	inner domain.ReadHandle
 	store *store
 
 	algo   string
@@ -234,7 +234,7 @@ type verifyingReadHandle struct {
 // manifest has no ContentHash to verify against; that branch
 // keeps the wrapper layered cleanly over old or unusual
 // manifests without forcing a special case at every call site.
-func newVerifyingReadHandle(inner ReadHandle, s *store) (ReadHandle, error) {
+func newVerifyingReadHandle(inner domain.ReadHandle, s *store) (domain.ReadHandle, error) {
 	m := inner.Manifest()
 	if m.ContentHash == "" {
 		return inner, nil
@@ -366,4 +366,4 @@ func (h *verifyingReadHandle) Close() error {
 }
 
 // Compile-time interface conformance.
-var _ ReadHandle = (*verifyingReadHandle)(nil)
+var _ domain.ReadHandle = (*verifyingReadHandle)(nil)

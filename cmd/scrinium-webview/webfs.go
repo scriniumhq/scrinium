@@ -86,7 +86,7 @@ func (b *webBackingFS) OpenArtifact(ctx context.Context, id domain.ArtifactID) (
 // rather than in shared web because the type is glue
 // between core and the web pkg, owned by each cmd.
 type readHandleAdapter struct {
-	rh   store.ReadHandle
+	rh   domain.ReadHandle
 	pos  int64
 	size int64
 }

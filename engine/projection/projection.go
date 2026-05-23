@@ -26,7 +26,6 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/event"
-	"scrinium.dev/engine/store"
 )
 
 // --- Source ---
@@ -38,7 +37,7 @@ import (
 // when needed — keeps curator out of projection's import graph.
 type ProjectionSource interface {
 	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
-	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (store.ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (domain.ReadHandle, error)
 }
 
 // SourceKind labels the type of source backing a View. Governs

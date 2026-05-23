@@ -216,7 +216,7 @@ func makePayload(i int, size int) []byte {
 	return p
 }
 
-func readAllAndClose(t *testing.T, rh store.ReadHandle) []byte {
+func readAllAndClose(t *testing.T, rh domain.ReadHandle) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(rh); err != nil {
