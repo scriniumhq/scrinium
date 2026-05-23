@@ -11,9 +11,8 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/projection"
-	"scrinium.dev/engine/projection/fsmeta"
 	"scrinium.dev/internal/testutil/projectionfx"
+	viewfx "scrinium.dev/internal/testutil/viefx"
 )
 
 // newTestFS builds a webdavFS wired against an in-memory
@@ -21,38 +20,8 @@ import (
 // they survive backfill.
 func newTestFS(t *testing.T, manifests ...domain.Manifest) (*webdavFS, *projectionfx.FakeSource) {
 	t.Helper()
-	src := projectionfx.New()
-	for _, m := range manifests {
-		src.Add(m, nil)
-	}
-	v, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
-	if err != nil {
-		t.Fatalf("NewView: %v", err)
-	}
-	t.Cleanup(func() { v.Close() })
-
-	o, err := projection.NewFSOps(v,
-		projection.WithStore(src),
-		projection.WithNamespace("files"),
-		projection.WithScratchDir(t.TempDir()),
-		projection.WithEditingPolicy(projection.EditingOn()),
-	)
-	if err != nil {
-		t.Fatalf("NewFSOps: %v", err)
-	}
-
-	return newWebdavFS(v, o, projection.RoutingConfig{
-		ServicePrefix:   "_scrinium",
-		RootView:        projection.RootByPath,
-		ShowStats:       true,
-		ShowByArtifact:  true,
-		ShowOrphaned:    true,
-		ShowByDate:      true,
-		ShowBySession:   true,
-		ShowByNamespace: true,
-		ShowRaw:         false,
-	}, true /* rejectJunk */, nil /* statsProvider — fall back to View-only */), src
+	v, o, src := viewfx.Stack(t, manifests...)
+	return newWebdavFS(v, o, viewfx.RoutingAll(), true /* rejectJunk */, nil /* statsProvider */), src
 }
 
 // --- cleanWebDAVPath ---
