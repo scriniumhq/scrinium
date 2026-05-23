@@ -1,5 +1,10 @@
 package store
 
+import (
+	"context"
+	"log/slog"
+)
+
 // Close releases secrets held by the Store. See the AdminStore.Close
 // doc-comment for contract. Idempotent.
 //
@@ -35,6 +40,12 @@ func (s *store) Close() error {
 	if r, ok := resolver.(interface{ Close() }); ok {
 		r.Close()
 	}
+
+	// Lock-free diagnostic trace (ADR-60): all locks are released and
+	// secrets are wiped by this point. context.Background() because Close
+	// takes no ctx; the record carries no cancellation semantics.
+	s.componentLogger("store").LogAttrs(context.Background(), slog.LevelDebug,
+		"store closed", storeIDAttr(s))
 
 	return nil
 }

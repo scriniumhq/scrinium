@@ -1,6 +1,7 @@
 package store
 
 import (
+	"log/slog"
 	"sync"
 
 	"scrinium.dev/engine/domain"
@@ -36,6 +37,12 @@ type store struct {
 	drv     driver.Driver
 	index   index.StoreIndex
 	pub     event.Publisher
+
+	// log is the diagnostic logger, namespaced to the "scrinium" group
+	// at construction (ADR-60). Never read directly — go through
+	// logger() / componentLogger(), which substitute a discard logger
+	// when nil so call sites never need a guard.
+	log *slog.Logger
 
 	// activeConfig is the StoreConfig in effect for new operations,
 	// replaced atomically by UpdateConfig under cfgMu.

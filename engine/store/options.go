@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"log/slog"
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/event"
@@ -55,6 +56,7 @@ type storeOptions struct {
 	keyResolver   pipeline.KeyResolver
 	passphrase    PassphraseProvider
 	autoUnlock    bool
+	logger        *slog.Logger
 }
 
 // WithForceReinit allows InitStore to run on top of an existing
