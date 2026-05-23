@@ -63,6 +63,11 @@ func buildStore(
 		func(m domain.Manifest) ReadHandle {
 			return &inlineReadHandle{manifest: m, reader: bytes.NewReader(m.InlineBlob)}
 		},
+		// Logger: the systemStore logs its own best-effort cleanup
+		// failures (dropPredecessor) which have no caller to surface
+		// them. resolveLogger was already applied to s.log in the
+		// struct literal above; reuse it so the component tag is "store".
+		s.log,
 	)
 	return s, nil
 }

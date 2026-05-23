@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -89,7 +90,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	// (the manifest file is gone). The "manifest present, index row
 	// absent" window is recovered by an index rebuild.
 	if err := s.index.DeleteManifest(ctx, id, blobRefs); err != nil {
-		return fmt.Errorf("store.Delete: index: %w", err)
+		return s.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: index: %w", err), artifactIDAttr(id), slog.String("stage", "index"))
 	}
 
 	manifestPath, err := blobpath.ManifestPath(id)
@@ -101,9 +102,12 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 		// orphan that the GC Orphan Scan reaps on its next sweep. We still
 		// surface the Remove error so the caller knows the operation was
 		// not fully clean.
-		return fmt.Errorf("store.Delete: remove manifest file: %w", err)
+		return s.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: remove manifest file: %w", err), artifactIDAttr(id), slog.String("stage", "remove"))
 	}
 
 	s.publish(event.EventArtifactDeleted, event.ArtifactDeletedPayload{ArtifactID: id})
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "artifact deleted",
+		storeIDAttr(s), artifactIDAttr(id),
+		slog.String("blob_storage", manifest.LayoutHeader.BlobStorage))
 	return nil
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -44,6 +45,7 @@ type systemStore struct {
 	cfg        domain.StoreConfig
 	writeArt   ArtifactWriter
 	makeHandle InlineHandleFactory
+	log        *slog.Logger
 }
 
 // Compile-time check that the concrete type satisfies the contract.
@@ -58,6 +60,7 @@ func newSystemStore(
 	cfg domain.StoreConfig,
 	writeArt ArtifactWriter,
 	makeHandle InlineHandleFactory,
+	log *slog.Logger,
 ) *systemStore {
 	return &systemStore{
 		drv:        drv,
@@ -66,6 +69,7 @@ func newSystemStore(
 		cfg:        cfg,
 		writeArt:   writeArt,
 		makeHandle: makeHandle,
+		log:        log,
 	}
 }
 

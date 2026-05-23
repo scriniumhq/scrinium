@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"log/slog"
 	"os"
 
 	"scrinium.dev/engine/domain"
@@ -49,7 +50,14 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 	// media with native checksums auto-skip; ForceEnabled always wraps;
 	// Disabled never does (see shouldVerifyOnRead).
 	cfg := s.snapshotConfig()
-	if shouldVerifyOnRead(cfg.VerifyOnRead, manifest.Pipeline, s.drv.Capabilities(), s.transformers) {
+	verify := shouldVerifyOnRead(cfg.VerifyOnRead, manifest.Pipeline, s.drv.Capabilities(), s.transformers)
+	if log := s.componentLogger("store"); log.Enabled(ctx, slog.LevelDebug) {
+		log.LogAttrs(ctx, slog.LevelDebug, "get opened",
+			storeIDAttr(s), artifactIDAttr(id),
+			slog.String("blob_storage", manifest.LayoutHeader.BlobStorage),
+			slog.Bool("verify_on_read", verify))
+	}
+	if verify {
 		return newVerifyingReadHandle(inner, s)
 	}
 	return inner, nil

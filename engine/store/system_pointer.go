@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -131,13 +132,35 @@ func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (
 
 // dropPredecessor removes the manifest file and index row of a
 // superseded artifact. Best-effort: Orphan Scan reclaims survivors.
+//
+// Failures here are invisible to the caller — the pointer flip already
+// returned success — so they are logged at Warn: the operation is
+// logically complete but left an orphan for GC. No error is returned
+// (that is the "best-effort" contract); the log is the only signal.
 func (ss *systemStore) dropPredecessor(ctx context.Context, id domain.ArtifactID) {
 	m, err := ss.loadManifest(ctx, id)
 	if err == nil {
 		blobRefs := []string{string(m.BlobRef)}
-		_ = ss.index.DeleteManifest(ctx, id, blobRefs)
+		if delErr := ss.index.DeleteManifest(ctx, id, blobRefs); delErr != nil {
+			ss.logger().LogAttrs(ctx, slog.LevelWarn,
+				"superseded artifact left in index (best-effort cleanup failed)",
+				artifactIDAttr(id), slog.String("error", delErr.Error()))
+		}
 	}
 	if manifestPath, pErr := blobpath.ManifestPath(id); pErr == nil {
-		_ = ss.drv.Remove(ctx, manifestPath)
+		if rmErr := ss.drv.Remove(ctx, manifestPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			ss.logger().LogAttrs(ctx, slog.LevelWarn,
+				"superseded manifest file left on disk (best-effort cleanup failed)",
+				artifactIDAttr(id), slog.String("error", rmErr.Error()))
+		}
 	}
+}
+
+// logger returns the systemStore's logger, never nil. Mirrors the
+// store-level nil-safety so call sites need no guard.
+func (ss *systemStore) logger() *slog.Logger {
+	if ss.log == nil {
+		return discardLogger
+	}
+	return ss.log
 }

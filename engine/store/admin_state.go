@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"scrinium.dev/engine/domain"
@@ -53,7 +54,11 @@ func (s *store) SetMaintenanceMode(ctx context.Context, mode domain.MaintenanceM
 
 	// No event is emitted yet: a log-only signal would create surprise
 	// state for the host, so deliberate silence is the safer default
-	// until a proper MaintenanceModeChanged event exists.
+	// until a proper MaintenanceModeChanged event exists. A Debug log is
+	// not a host-visible event — safe to record the transition for
+	// diagnostics. Lock-free: stateMu released above.
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "maintenance mode set",
+		storeIDAttr(s), maintenanceModeAttr(mode))
 	return nil
 }
 

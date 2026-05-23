@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"log/slog"
 
 	"scrinium.dev/engine/domain"
@@ -78,6 +79,15 @@ func (s *store) componentLogger(component string) *slog.Logger {
 	return s.logger().With(slog.String("component", component))
 }
 
+// optsLogger builds the lifecycle-phase logger for the package-level
+// constructors (InitStore / OpenStore and their helpers), which run
+// before a *store exists. It mirrors what buildStore will install on the
+// store: resolveLogger applies the "scrinium" group, and the component
+// tag marks the construction phase. Never nil — silent by default.
+func optsLogger(o storeOptions, component string) *slog.Logger {
+	return resolveLogger(o.logger).With(slog.String("component", component))
+}
+
 // --- redaction (ADR-60 §"Безопасность", Concurrency Model §3.4) ---------
 //
 // Secret-bearing values carry a LogValuer so that an accidental
@@ -123,4 +133,57 @@ func storeIDAttr(s *store) slog.Attr {
 // mode (Plain / Sealed / Paranoid) is not secret.
 func manifestCryptoAttr(m domain.ManifestCrypto) slog.Attr {
 	return slog.String("manifest_crypto", string(m))
+}
+
+// stateAttr records a Store state (e.g. Unlocked, Locked, Degraded).
+// Safe: the state name carries no secret material.
+func stateAttr(st domain.StoreState) slog.Attr {
+	return slog.String("state", string(st))
+}
+
+// artifactIDAttr records an ArtifactID. Safe: it is a content-derived
+// public identifier, not key material.
+func artifactIDAttr(id domain.ArtifactID) slog.Attr {
+	return slog.String("artifact_id", string(id))
+}
+
+// maintenanceModeAttr renders a MaintenanceMode by name (it is a uint8
+// enum with no String method). Falls back to the numeric value for an
+// unknown mode so a future addition still logs something meaningful.
+func maintenanceModeAttr(m domain.MaintenanceMode) slog.Attr {
+	switch m {
+	case domain.MaintenanceModeNone:
+		return slog.String("mode", "none")
+	case domain.MaintenanceModeReadOnly:
+		return slog.String("mode", "read_only")
+	case domain.MaintenanceModeOffline:
+		return slog.String("mode", "offline")
+	default:
+		return slog.Int("mode", int(m))
+	}
+}
+
+// errAttr renders an error for a log record. Safe: engine errors are
+// sentinel/format strings, never key material.
+func errAttr(err error) slog.Attr {
+	return slog.String("error", err.Error())
+}
+
+// traceErr logs an operation's error return at Debug and returns the
+// error unchanged, so a call site reads `return s.traceErr(ctx, "Put", err, attrs...)`.
+//
+// This is the ADR-60 "Debug-on-error-return" pattern: the error is still
+// returned to the caller (no swallowing), and the Debug record gives an
+// operator a trace of WHICH boundary refused and WHY without the caller
+// having to log it themselves. It is NOT log-and-return in the forbidden
+// sense — that prohibition targets duplicate Warn/Error reporting; a
+// Debug trace is silent in production (DiscardHandler / level>Debug) and
+// exists purely for diagnostics. err must be non-nil.
+func (s *store) traceErr(ctx context.Context, op string, err error, attrs ...slog.Attr) error {
+	log := s.componentLogger("store")
+	if log.Enabled(ctx, slog.LevelDebug) {
+		rec := append([]slog.Attr{storeIDAttr(s), slog.String("op", op), errAttr(err)}, attrs...)
+		log.LogAttrs(ctx, slog.LevelDebug, "operation failed", rec...)
+	}
+	return err
 }
