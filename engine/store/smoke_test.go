@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/humanize"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"

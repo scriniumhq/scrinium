@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/internal/blobpath"
+	"scrinium.dev/engine/store/internal/blobpath"
 )
 
 // --- Resolve: Sharded ---

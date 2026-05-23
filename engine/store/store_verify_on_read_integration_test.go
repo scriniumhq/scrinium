@@ -11,8 +11,8 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
-	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/store/internal/storefx"
 )
 
 // localScrubCapture mirrors store_verify_test.go's scrubCapture for use

@@ -13,9 +13,9 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/blobpath"
-	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/store/internal/blobpath"
+	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
 )

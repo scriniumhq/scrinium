@@ -9,7 +9,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/engine/store/internal/manifestcodec"
 )
 
 // freshDEK returns a 32-byte DEK from crypto/rand.

@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/blobpath"
+	"scrinium.dev/engine/store/internal/blobpath"
 )
 
 // OrphanReport is the result of a RecoverOrphans pass. Counts are

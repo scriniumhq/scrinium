@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/engine/store/internal/manifestcodec"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 

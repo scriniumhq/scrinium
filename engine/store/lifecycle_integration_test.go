@@ -11,9 +11,9 @@ import (
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/errs"
 	sqliteindex "scrinium.dev/engine/index/sqlite"
-	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/engine/store/internal/storefx"
 )
 
 // TestStore_FullLifecycle_DiskBacked is the end-to-end smoke test

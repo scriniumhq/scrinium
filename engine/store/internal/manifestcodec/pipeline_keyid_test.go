@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/engine/store/internal/manifestcodec"
 )
 
 // TestEncodeDecodeFile_PipelineKeyIDRoundTrip exercises the

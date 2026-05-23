@@ -13,9 +13,9 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/blobpath"
-	"scrinium.dev/engine/internal/manifestcodec"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/engine/store/internal/blobpath"
+	"scrinium.dev/engine/store/internal/manifestcodec"
 )
 
 // Writer is the artifact write-path engine bound to a store's Driver,
