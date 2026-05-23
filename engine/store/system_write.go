@@ -9,8 +9,8 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/blobpath"
-	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/engine/store/internal/blobpath"
+	"scrinium.dev/engine/store/internal/manifestcodec"
 )
 
 // writeInlineSystemArtifact builds an Inline blob manifest in the

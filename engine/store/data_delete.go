@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
-	"scrinium.dev/engine/internal/blobpath"
+	"scrinium.dev/engine/store/internal/blobpath"
 )
 
 // Delete logically removes an artifact from the Store. It does not free

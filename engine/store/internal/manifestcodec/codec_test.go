@@ -11,8 +11,8 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/manifestcodec"
-	"scrinium.dev/engine/internal/testutil/storefx"
+	"scrinium.dev/engine/store/internal/manifestcodec"
+	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 

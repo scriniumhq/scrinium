@@ -12,8 +12,8 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/blobpath"
-	"scrinium.dev/engine/internal/manifestcodec"
+	"scrinium.dev/engine/store/internal/blobpath"
+	"scrinium.dev/engine/store/internal/manifestcodec"
 )
 
 // gatherNames lists pointer paths under namespace/pointers/<prefix>

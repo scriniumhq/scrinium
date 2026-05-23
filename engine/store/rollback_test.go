@@ -9,8 +9,8 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/store/internal/storefx"
 )
 
 // putWithSession is a one-liner Put helper for rollback tests.

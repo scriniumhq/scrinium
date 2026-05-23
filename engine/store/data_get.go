@@ -12,9 +12,9 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/blobpath"
-	"scrinium.dev/engine/internal/manifestcodec"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/engine/store/internal/blobpath"
+	"scrinium.dev/engine/store/internal/manifestcodec"
 )
 
 // Get opens an artifact for reading. It reads only the manifest and
