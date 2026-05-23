@@ -224,3 +224,32 @@ func TestIDFromManifestPath_RejectsBad(t *testing.T) {
 		t.Fatal("expected error on bad manifest segment")
 	}
 }
+
+func TestRefFromBlobPath_FlatPathSingleSegment(t *testing.T) {
+	ref := "sha256-1234" + strings.Repeat("a", 60)
+	got, err := artifact.RefFromBlobPath(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != ref {
+		t.Errorf("got %q, want %q", got, ref)
+	}
+}
+
+func TestRefFromBlobPath_RoundTripsBlobPath(t *testing.T) {
+	ref := "sha256-cafebabe" + strings.Repeat("f", 56)
+
+	for _, topo := range []domain.PathTopology{domain.PathTopologySharded, domain.PathTopologyFlat} {
+		path, err := artifact.BlobPath(topo, domain.BlobTypeRegular, ref)
+		if err != nil {
+			t.Fatalf("BlobPath(%s): %v", topo, err)
+		}
+		got, err := artifact.RefFromBlobPath(path)
+		if err != nil {
+			t.Fatalf("RefFromBlobPath(%q): %v", path, err)
+		}
+		if got != ref {
+			t.Errorf("topology %s: got %q, want %q", topo, got, ref)
+		}
+	}
+}

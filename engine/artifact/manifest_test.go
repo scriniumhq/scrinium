@@ -181,6 +181,65 @@ func TestDecodeEncrypted_PlainForwards(t *testing.T) {
 	}
 }
 
+func TestEncode_ManifestTooLarge(t *testing.T) {
+	huge := make([]byte, domain.MaxManifestSize)
+	huge[0] = '"'
+	for i := 1; i < len(huge)-1; i++ {
+		huge[i] = 'x'
+	}
+	huge[len(huge)-1] = '"'
+
+	m := artifactfx.Manifest(func(m *domain.Manifest) { m.Ext = huge })
+
+	_, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if !errors.Is(err, errs.ErrManifestTooLarge) {
+		t.Fatalf("Encode: got %v, want errs.ErrManifestTooLarge", err)
+	}
+}
+
+func TestEncode_ManifestUnderLimit_OK(t *testing.T) {
+	huge := make([]byte, domain.MaxManifestSize/2)
+	huge[0] = '"'
+	for i := 1; i < len(huge)-1; i++ {
+		huge[i] = 'x'
+	}
+	huge[len(huge)-1] = '"'
+
+	m := artifactfx.Manifest(func(m *domain.Manifest) { m.Ext = huge })
+
+	bs, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	if len(bs) > domain.MaxManifestSize {
+		t.Fatalf("encoded size %d exceeds limit %d", len(bs), domain.MaxManifestSize)
+	}
+}
+
+func TestEncodeDecode_PipelineKeyIDRoundTrip(t *testing.T) {
+	m := artifactfx.Manifest(func(m *domain.Manifest) {
+		m.Pipeline = []domain.PipelineStage{
+			{
+				Algorithm: "aes-gcm",
+				Hash:      "sha256-abcdef",
+				IV:        []byte{0x10, 0x20, 0x30},
+				KeyID:     "tenant-42",
+			},
+		}
+	})
+	bs, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	got, err := artifact.Decode(bs)
+	if err != nil {
+		t.Fatalf("Decode: %v", err)
+	}
+	if got.Pipeline[0].KeyID != "tenant-42" {
+		t.Errorf("crypto stage KeyID: got %q, want %q", got.Pipeline[0].KeyID, "tenant-42")
+	}
+}
+
 // emptyKeys resolves to zero candidates, exercising the ErrKeyNotFound
 // branch that artifactfx.Keys (which always returns at least one) cannot.
 type emptyKeys struct{}
