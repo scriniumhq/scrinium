@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	"scrinium.dev/engine/domain"
@@ -67,6 +68,22 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	}
 
 	s.publish(event.EventManifestSaved, event.ManifestSavedPayload{Manifest: manifest})
+
+	// Lock-free diagnostic trace (ADR-60): emitted after the manifest is
+	// persisted, with every crypto lock released and the DEK copy already
+	// wiped by withWriteDEK. Logs the opaque write KeyID, never the key.
+	// LogAttrs avoids allocating an []any; on a discard logger Enabled is
+	// false and the attrs are never evaluated further.
+	log := s.componentLogger("store")
+	if log.Enabled(ctx, slog.LevelDebug) {
+		log.LogAttrs(ctx, slog.LevelDebug, "put committed",
+			storeIDAttr(s),
+			slog.String("artifact_id", string(manifest.ArtifactID)),
+			slog.String("namespace", opts.Namespace),
+			manifestCryptoAttr(cfg.ManifestCrypto),
+			keyIDAttr(writeKeyID),
+		)
+	}
 	return manifest.ArtifactID, nil
 }
 

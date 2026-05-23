@@ -36,6 +36,7 @@ func buildStore(
 		drv:          drv,
 		index:        idx,
 		pub:          o.publisher,
+		log:          resolveLogger(o.logger),
 		activeConfig: cfg,
 		state:        domain.StateBootstrapping,
 		hashes:       o.hashRegistry,

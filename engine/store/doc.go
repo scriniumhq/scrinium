@@ -30,6 +30,10 @@
 // must preserve — lives in store_impl.go's header. Read it before touching
 // any locking.
 //
+// This package is the canonical (foundation) instance of the system-wide
+// concurrency model; the normative description and cross-layer invariants
+// live in docs/2 Internals/13 Concurrency Model.md.
+//
 // # Reading order
 //
 // store.go (contracts) → store_impl.go (the type and lock order) →
