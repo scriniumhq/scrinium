@@ -224,6 +224,14 @@ type verifyingReadHandle struct {
 	read   int64
 	limit  int64 // declared OriginalSize; -1 if unknown
 
+	// onMismatch is invoked once, the first time finalize detects
+	// corruption, with the artifact's ID and the failure error. It lets
+	// the store publish EventScrubFailed without artifactio importing the
+	// event bus: the mechanism (rehash) lives here, the consequence
+	// (publish) is injected. nil is allowed — the error still propagates
+	// through Read; only the side-effect is skipped.
+	onMismatch func(domain.ArtifactID, error)
+
 	mu      sync.Mutex
 	closed  bool
 	eofSeen bool
@@ -234,7 +242,12 @@ type verifyingReadHandle struct {
 // mismatch. Returns inner unchanged when the manifest has no ContentHash
 // to check. Parses the hash up front so a malformed ContentHash fails here
 // (the open boundary), not at first Read.
-func (x *IO) WrapVerifying(inner domain.ReadHandle) (domain.ReadHandle, error) {
+//
+// onMismatch is invoked once when streaming detects corruption (it fires
+// inside the caller's Read, after Get has returned, so the store cannot
+// observe the error directly — the callback is how EventScrubFailed gets
+// published). It may be nil.
+func (x *IO) WrapVerifying(inner domain.ReadHandle, onMismatch func(domain.ArtifactID, error)) (domain.ReadHandle, error) {
 	m := inner.Manifest()
 	if m.ContentHash == "" {
 		return inner, nil
@@ -248,7 +261,7 @@ func (x *IO) WrapVerifying(inner domain.ReadHandle) (domain.ReadHandle, error) {
 	if m.OriginalSize > 0 {
 		limit = m.OriginalSize
 	}
-	return &verifyingReadHandle{inner: inner, algo: algo, want: want, hasher: hasher, limit: limit}, nil
+	return &verifyingReadHandle{inner: inner, algo: algo, want: want, hasher: hasher, limit: limit, onMismatch: onMismatch}, nil
 }
 
 func (h *verifyingReadHandle) Read(p []byte) (int, error) {
@@ -290,12 +303,25 @@ func (h *verifyingReadHandle) finalize() error {
 	// Length cross-check: a short stream that hashed to the expected value
 	// would still be corrupt. OriginalSize is authoritative when populated.
 	if limit >= 0 && read != limit {
-		return fmt.Errorf("%w: read %d bytes, manifest declares %d", errs.ErrCorruptedBlob, read, limit)
+		err := fmt.Errorf("%w: read %d bytes, manifest declares %d", errs.ErrCorruptedBlob, read, limit)
+		h.reportMismatch(err)
+		return err
 	}
 	if !bytes.Equal(h.hasher.Sum(nil), h.want) {
-		return fmt.Errorf("%w: ContentHash mismatch (algo=%s)", errs.ErrCorruptedBlob, h.algo)
+		err := fmt.Errorf("%w: ContentHash mismatch (algo=%s)", errs.ErrCorruptedBlob, h.algo)
+		h.reportMismatch(err)
+		return err
 	}
 	return nil
+}
+
+// reportMismatch fires the injected onMismatch callback (if any) with the
+// artifact's ID and the corruption error, so the store can publish
+// EventScrubFailed. Called from finalize, outside the mutex.
+func (h *verifyingReadHandle) reportMismatch(err error) {
+	if h.onMismatch != nil {
+		h.onMismatch(h.inner.Manifest().ArtifactID, err)
+	}
 }
 
 func (h *verifyingReadHandle) ReadAt(p []byte, off int64) (int, error) {

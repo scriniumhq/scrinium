@@ -13,7 +13,7 @@ import (
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/store/internal/artifactwriter"
+	"scrinium.dev/engine/store/internal/artifactio"
 )
 
 // Put records an artifact and returns its ArtifactID. It is the
@@ -21,8 +21,8 @@ import (
 // inputs against the active config, resolves the write key and borrows
 // the DEK (the only crypto-locked steps), and delegates the physical
 // mechanics — blob materialization, manifest assembly, persistence — to
-// artifactwriter. The store keeps the policy and the secrets;
-// artifactwriter keeps the I/O.
+// artifactio. The store keeps the policy and the secrets; artifactio
+// keeps the I/O.
 func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error) {
 	if err := s.enterWrite(ctx); err != nil {
 		return "", err
@@ -36,14 +36,14 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		return "", err
 	}
 
-	aw := artifactwriter.New(s.drv, s.index, s.hashes, s.transformers)
+	aio := artifactio.New(s.drv, s.index, s.hashes, s.transformers)
 
 	// Resolve the write KeyID once and thread it through both the blob
 	// pipeline and the manifest body, so a blob and its manifest encrypt
 	// under the same key.
 	writeKeyID := s.resolveWriteKeyID(opts.Namespace)
 
-	blob, err := aw.Materialize(ctx, cfg, a, opts, writeKeyID)
+	blob, err := aio.Materialize(ctx, cfg, a, opts, writeKeyID)
 	if err != nil {
 		return "", s.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "materialize"))
 	}
@@ -57,13 +57,13 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 	)
 	if err := s.withWriteDEK(cfg, func(dek []byte) error {
 		var aerr error
-		manifest, manifestBytes, aerr = aw.AssembleManifest(cfg, a, opts, blob, dek, writeKeyID)
+		manifest, manifestBytes, aerr = aio.AssembleManifest(cfg, a, opts, blob, dek, writeKeyID)
 		return aerr
 	}); err != nil {
 		return "", s.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "assemble"))
 	}
 
-	if err := aw.PersistManifest(ctx, manifest, manifestBytes, blob.Addr); err != nil {
+	if err := aio.PersistManifest(ctx, manifest, manifestBytes, blob.Addr); err != nil {
 		return "", s.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "persist"))
 	}
 

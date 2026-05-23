@@ -1,29 +1,32 @@
 package store
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
-	"hash"
-	"io"
 	"log/slog"
-	"os"
 
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
+	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/store/internal/blobpath"
-	"scrinium.dev/engine/store/internal/manifestcodec"
+	"scrinium.dev/engine/store/internal/artifactio"
 )
+
+// artifactIO builds an artifactio.IO bound to this store's driver, index,
+// and registries. The value is a cheap stateless handle, constructed per
+// operation rather than held as a field.
+func (s *store) artifactIO() *artifactio.IO {
+	return artifactio.New(s.drv, s.index, s.hashes, s.transformers)
+}
 
 // Get opens an artifact for reading. It reads only the manifest and
 // prepares a ReadHandle; blob bytes stream lazily on the first
 // Read/ReadAt. Inline blobs are served from memory; Target blobs are
-// resolved through the index (not recomputed from the current
-// topology) so the read path follows where the blob was actually
-// written. VerifyOnRead may wrap the handle to re-check the content
-// hash as bytes flow.
+// resolved through the index (not recomputed from the current topology)
+// so the read path follows where the blob was actually written.
+// VerifyOnRead may wrap the handle to re-check the content hash as bytes
+// flow.
 func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (domain.ReadHandle, error) {
 	if err := s.enterRead(ctx); err != nil {
 		return nil, err
@@ -40,7 +43,8 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 		return nil, err
 	}
 
-	inner, err := s.openReadHandle(ctx, manifest)
+	aio := s.artifactIO()
+	inner, err := aio.OpenHandle(ctx, manifest)
 	if err != nil {
 		return nil, err
 	}
@@ -58,78 +62,28 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOp
 			slog.Bool("verify_on_read", verify))
 	}
 	if verify {
-		return newVerifyingReadHandle(inner, s)
+		return aio.WrapVerifying(inner, func(aid domain.ArtifactID, vErr error) {
+			// Fires inside the caller's Read (after Get returned), so the
+			// store could not observe vErr directly. Publish the scrub
+			// event here; the error itself still propagates to the reader.
+			s.publish(event.EventScrubFailed, event.ScrubFailedPayload{ArtifactID: aid, Err: vErr})
+		})
 	}
 	return inner, nil
 }
 
-// openReadHandle builds the layout-appropriate ReadHandle for a
-// dispatched Blob manifest.
-func (s *store) openReadHandle(ctx context.Context, manifest domain.Manifest) (domain.ReadHandle, error) {
-	switch manifest.LayoutHeader.BlobStorage {
-	case domain.LayoutInline:
-		return &inlineReadHandle{manifest: manifest, reader: bytes.NewReader(manifest.InlineBlob)}, nil
-
-	case domain.LayoutTarget:
-		addr, err := s.index.Resolve(ctx, string(manifest.BlobRef))
-		if err != nil {
-			return nil, fmt.Errorf("store.Get: resolve blob path: %w", err)
-		}
-		return &targetReadHandle{
-			manifest: manifest,
-			drv:      s.drv,
-			blobPath: addr.Path,
-			ctx:      ctx,
-			store:    s,
-		}, nil
-
-	case domain.LayoutExternalRef:
-		return nil, fmt.Errorf("%w: store.Get on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
-
-	default:
-		return nil, fmt.Errorf("store.Get: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
-	}
-}
-
-// loadManifest reads, verifies, and decodes the manifest file for id.
-// Used by Get, Delete, and Verify. Returns ErrArtifactNotFound when
-// the file is absent and ErrCorruptedManifest when its hash does not
-// match id. State checks are the caller's job.
+// loadManifest reads, verifies, and decodes the manifest file for id via
+// the artifact I/O layer. Used by Get, Delete, and Verify. Returns
+// ErrArtifactNotFound when the file is absent and ErrCorruptedManifest
+// when its hash does not match id. State checks are the caller's job.
+//
+// Decode dispatches on the file header: Plain bypasses the resolver;
+// encrypted (Sealed/Paranoid) consults the snapshotted resolver. A Locked
+// Store has a nil resolver, which surfaces ErrKeyNotFound — the correct
+// refusal. asKeyProvider maps a nil resolver to a nil provider (the
+// typed-nil guard).
 func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	if id == "" {
-		return domain.Manifest{}, errs.ErrArtifactNotFound
-	}
-	manifestPath, err := blobpath.ManifestPath(id)
-	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("loadManifest: path: %w", err)
-	}
-	rc, err := s.drv.Get(ctx, manifestPath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return domain.Manifest{}, errs.ErrArtifactNotFound
-		}
-		return domain.Manifest{}, fmt.Errorf("loadManifest: read: %w", err)
-	}
-	raw, err := io.ReadAll(rc)
-	_ = rc.Close()
-	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("loadManifest: read body: %w", err)
-	}
-	if err := manifestcodec.VerifyArtifactID(id, raw, s.hashes); err != nil {
-		return domain.Manifest{}, err
-	}
-
-	// Decode dispatches on the file header: Plain bypasses the
-	// resolver; encrypted (Sealed/Paranoid) consults the snapshotted
-	// resolver. A Locked Store has a nil resolver, which surfaces
-	// ErrKeyNotFound from the codec — the correct refusal.
-	keyResolver := s.crypto.resolver()
-	manifest, err := manifestcodec.DecodeFileEncrypted(raw, asKeyProvider(keyResolver))
-	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("loadManifest: decode: %w", err)
-	}
-	manifest.ArtifactID = id
-	return manifest, nil
+	return s.artifactIO().Load(ctx, id, asKeyProvider(s.crypto.resolver()))
 }
 
 // dispatchManifestType returns nil for a regular Blob manifest, or the
@@ -152,34 +106,15 @@ func dispatchManifestType(m domain.Manifest, op string) error {
 	}
 }
 
-// asKeyProvider adapts a pipeline.KeyResolver to a
-// manifestcodec.KeyProvider, mapping a nil resolver to a nil provider.
-// This avoids the typed-nil trap: a nil resolver passed straight into
-// an interface parameter would become a non-nil interface value, and
-// the codec's `keys == nil` check would miss it. "No resolver" must
-// mean "no provider" — Plain manifests need none; encrypted ones then
-// surface ErrKeyNotFound.
-func asKeyProvider(r pipeline.KeyResolver) manifestcodec.KeyProvider {
+// asKeyProvider adapts a pipeline.KeyResolver to an artifact.KeyProvider,
+// mapping a nil resolver to a nil provider. This avoids the typed-nil
+// trap: a nil resolver passed straight into an interface parameter would
+// become a non-nil interface value, and the codec's `keys == nil` check
+// would miss it. "No resolver" must mean "no provider" — Plain manifests
+// need none; encrypted ones then surface ErrKeyNotFound.
+func asKeyProvider(r pipeline.KeyResolver) artifact.KeyProvider {
 	if r == nil {
 		return nil
 	}
 	return r
-}
-
-// parseContentHash splits a ContentHash into a fresh hasher and the
-// expected digest. Used by every integrity path (Verify, the
-// VerifyOnRead wrapper, and later Scrub). The algorithm comes from the
-// ContentHash prefix, not the current config, so artifacts written
-// under a previous hasher still validate after a migration. Callers
-// stream plaintext through hasher and compare hasher.Sum(nil) to want.
-func (s *store) parseContentHash(ch domain.ContentHash) (algo string, want []byte, hasher hash.Hash, err error) {
-	algo, want, err = s.hashes.Parse(string(ch))
-	if err != nil {
-		return "", nil, nil, fmt.Errorf("parse ContentHash: %w", err)
-	}
-	hasher, err = s.hashes.NewHasher(algo)
-	if err != nil {
-		return "", nil, nil, fmt.Errorf("hasher %q: %w", algo, err)
-	}
-	return algo, want, hasher, nil
 }

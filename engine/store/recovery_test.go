@@ -9,12 +9,12 @@ import (
 	"sync"
 	"testing"
 
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/store/internal/blobpath"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
 	"scrinium.dev/internal/testutil/storefx"
@@ -154,15 +154,15 @@ func (c *capturedReports) count() int {
 }
 
 // blobPathForRef computes the on-disk Sharded path for a blob ref
-// using the same blobpath helper that core uses internally. Tests
+// using the same artifact path helper that the store uses internally. Tests
 // stage orphan files at the same paths the real Put pipeline would
 // produce — the only difference is that nothing was inserted into
 // the index.
 func blobPathForRef(t *testing.T, ref string) string {
 	t.Helper()
-	p, err := blobpath.Resolve(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
+	p, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
 	if err != nil {
-		t.Fatalf("blobpath.Resolve(%q): %v", ref, err)
+		t.Fatalf("artifact.BlobPath(%q): %v", ref, err)
 	}
 	return p
 }
@@ -170,9 +170,9 @@ func blobPathForRef(t *testing.T, ref string) string {
 // manifestPathForID is the manifest-side counterpart.
 func manifestPathForID(t *testing.T, id domain.ArtifactID) string {
 	t.Helper()
-	p, err := blobpath.ManifestPath(id)
+	p, err := artifact.ManifestPath(id)
 	if err != nil {
-		t.Fatalf("blobpath.ManifestPath(%q): %v", id, err)
+		t.Fatalf("artifact.ManifestPath(%q): %v", id, err)
 	}
 	return p
 }

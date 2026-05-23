@@ -3,6 +3,7 @@ package artifactio_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -181,7 +182,7 @@ func TestOpenHandle_TargetStreamsAndVerifies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenHandle: %v", err)
 	}
-	vh, err := r.WrapVerifying(inner)
+	vh, err := r.WrapVerifying(inner, nil)
 	if err != nil {
 		t.Fatalf("WrapVerifying: %v", err)
 	}
@@ -205,7 +206,7 @@ func TestOpenHandle_TargetStreamsAndVerifies(t *testing.T) {
 func TestWrapVerifying_NoContentHashReturnsInner(t *testing.T) {
 	_, r, _, _, _ := rwHarness(t)
 	inner := artifactio.NewInlineHandle(domain.Manifest{InlineBlob: []byte("x")}) // no ContentHash
-	wrapped, err := r.WrapVerifying(inner)
+	wrapped, err := r.WrapVerifying(inner, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,3 +236,52 @@ func TestVerifyBlob_DetectsCorruption(t *testing.T) {
 		t.Fatal("VerifyBlob must fail on a corrupted blob")
 	}
 }
+
+// WrapVerifying must invoke onMismatch when streaming detects corruption —
+// the hook the store uses to publish EventScrubFailed (the failure fires
+// inside Read, after Get returned, so the store cannot observe it directly).
+func TestWrapVerifying_OnMismatchFiresOnCorruption(t *testing.T) {
+	w, r, drv, idx, cfg := rwHarness(t)
+	id := write(t, w, cfg, "will be corrupted under a verifying handle")
+	m, err := r.Load(context.Background(), id, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, err := idx.Resolve(context.Background(), string(m.BlobRef))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := drv.Put(context.Background(), addr.Path, bytes.NewReader([]byte("garbage"))); err != nil {
+		t.Fatal(err)
+	}
+
+	inner, err := r.OpenHandle(context.Background(), m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var firedID domain.ArtifactID
+	var firedErr error
+	calls := 0
+	vh, err := r.WrapVerifying(inner, func(aid domain.ArtifactID, e error) {
+		calls++
+		firedID, firedErr = aid, e
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer vh.Close()
+
+	_, _ = io.ReadAll(vh) // drives the stream to EOF, triggering finalize
+
+	if calls != 1 {
+		t.Fatalf("onMismatch fired %d times, want 1", calls)
+	}
+	if firedID != id {
+		t.Errorf("onMismatch id: got %q, want %q", firedID, id)
+	}
+	if !errorsIsCorrupted(firedErr) {
+		t.Errorf("onMismatch err: %v, want ErrCorruptedBlob", firedErr)
+	}
+}
+
+func errorsIsCorrupted(err error) bool { return errors.Is(err, errs.ErrCorruptedBlob) }

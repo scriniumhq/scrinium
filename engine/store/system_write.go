@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/store/internal/blobpath"
-	"scrinium.dev/engine/store/internal/manifestcodec"
 )
 
 // writeInlineSystemArtifact builds an Inline blob manifest in the
@@ -55,7 +54,7 @@ func writeInlineSystemArtifact(
 		CreatedAt:    time.Now().UTC(),
 	}
 
-	id, fileBytes, manifest, err := manifestcodec.ComputeArtifactID(
+	id, fileBytes, manifest, err := artifact.ComputeArtifactID(
 		manifest, hashAlgo, hashes,
 		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain,
 		nil, "")
@@ -63,7 +62,7 @@ func writeInlineSystemArtifact(
 		return "", fmt.Errorf("system artifact: compute id: %w", err)
 	}
 
-	manifestPath, err := blobpath.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(id)
 	if err != nil {
 		return "", fmt.Errorf("system artifact: path: %w", err)
 	}
@@ -113,7 +112,7 @@ func writeInlineSystemArtifactUnindexed(
 		CreatedAt:    time.Now().UTC(),
 	}
 
-	id, fileBytes, _, err := manifestcodec.ComputeArtifactID(
+	id, fileBytes, _, err := artifact.ComputeArtifactID(
 		manifest, hashAlgo, hashes,
 		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain,
 		nil, "")
@@ -121,7 +120,7 @@ func writeInlineSystemArtifactUnindexed(
 		return "", fmt.Errorf("system artifact (no-index): compute id: %w", err)
 	}
 
-	manifestPath, err := blobpath.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(id)
 	if err != nil {
 		return "", fmt.Errorf("system artifact (no-index): path: %w", err)
 	}
