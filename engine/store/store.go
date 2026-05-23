@@ -38,7 +38,7 @@ type DataStore interface {
 	// Get opens an artifact for reading. It returns a ReadHandle —
 	// a streaming primitive with lazy resolution of the physical
 	// address.
-	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (domain.ReadHandle, error)
 
 	// Management and verification.
 
@@ -172,7 +172,7 @@ type SystemStore interface {
 
 	// Get opens the artifact currently pointed at by name. Returns
 	// errs.ErrArtifactNotFound when no pointer exists.
-	Get(ctx context.Context, name string) (ReadHandle, error)
+	Get(ctx context.Context, name string) (domain.ReadHandle, error)
 
 	// Delete removes the pointer and the artifact it points at.
 	// Idempotent: deleting an absent name returns nil.

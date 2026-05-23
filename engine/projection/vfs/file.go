@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
+	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/projection"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/pathx"
 )
 
@@ -55,7 +55,7 @@ type File interface {
 // satisfy io.Reader/io.Seeker since store.ReadHandle is
 // offset-addressable via ReadAt only.
 type readHandleFile struct {
-	rh    store.ReadHandle
+	rh    domain.ReadHandle
 	name  string
 	path  string
 	size  int64

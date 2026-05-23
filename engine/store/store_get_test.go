@@ -11,7 +11,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/store/internal/storefx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // --- Round-trip: Put → Get → ReadAll ---

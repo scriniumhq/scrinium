@@ -13,9 +13,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/store/internal/blobpath"
-	"scrinium.dev/engine/store/internal/manifestcodec"
 )
 
 // OnDisk wraps a localfs root for physical inspection. Construct
@@ -41,7 +40,7 @@ func OnDiskAt(root string) OnDisk {
 // Returns an empty string if blobpath rejects the ID — callers
 // should treat that as a test setup error and fail explicitly.
 func (d OnDisk) ManifestPath(id domain.ArtifactID) string {
-	rel, err := blobpath.ManifestPath(id)
+	rel, err := artifact.ManifestPath(id)
 	if err != nil {
 		return ""
 	}
@@ -75,7 +74,7 @@ func (d OnDisk) ReadManifest(t testing.TB, id domain.ArtifactID) domain.Manifest
 	if err != nil {
 		t.Fatalf("storefx.OnDisk.ReadManifest: read %s: %v", p, err)
 	}
-	m, err := manifestcodec.DecodeFile(raw)
+	m, err := artifact.Decode(raw)
 	if err != nil {
 		t.Fatalf("storefx.OnDisk.ReadManifest: decode %s: %v", p, err)
 	}

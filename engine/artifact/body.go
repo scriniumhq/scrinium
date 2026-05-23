@@ -1,12 +1,11 @@
-package manifestcodec
+package artifact
 
-// body_json.go — deterministic JSON body encoding per docs/2.
-// Internals/07 §7.2 + §7.5. The body has top-level fields
-// (sys, ext, usr, inline_blob) with sys carrying every system
-// field defined by §7.2. Determinism: top-level and sys-level
-// fields are declared in alphabetical JSON-tag order so
-// encoding/json's declaration-order emission produces sorted
-// output without round-tripping through a map.
+// body.go — deterministic JSON body encoding per docs/2 Internals/07
+// §7.2 + §7.5. The body has top-level fields (sys, ext, usr, inline_blob)
+// with sys carrying every system field. Determinism: top-level and
+// sys-level fields are declared in alphabetical JSON-tag order so
+// encoding/json's declaration-order emission produces sorted output
+// without round-tripping through a map.
 
 import (
 	"bytes"
@@ -20,13 +19,9 @@ import (
 	"scrinium.dev/engine/internal/timefmt"
 )
 
-// --- Body JSON encoding (deterministic, sorted keys, RFC 3339) ---
-
-// jsonBody is the on-disk top-level shape of a manifest body.
-// Per ADR-54 the body has three named blocks (sys, ext, usr)
-// plus an optional inline_blob. Field declaration order matches
-// alphabetical JSON-tag order so the output is deterministic
-// without map-round-tripping.
+// jsonBody is the on-disk top-level shape of a manifest body (ADR-54:
+// three named blocks sys/ext/usr plus an optional inline_blob). Field
+// declaration order matches alphabetical JSON-tag order for determinism.
 type jsonBody struct {
 	Ext        json.RawMessage `json:"ext,omitempty"`
 	InlineBlob string          `json:"inline_blob,omitempty"` // base64
@@ -34,9 +29,9 @@ type jsonBody struct {
 	Usr        json.RawMessage `json:"usr,omitempty"`
 }
 
-// jsonSys is the on-disk shape of the sys block. Holds every
-// system-level field. Optional fields use omitempty +
-// pointer-where-needed so unset values do not appear in output.
+// jsonSys is the on-disk shape of the sys block — every system-level
+// field. Optional fields use omitempty (+ pointer where a zero value is
+// meaningful) so unset values do not appear in output.
 type jsonSys struct {
 	BlobRef       string              `json:"blob_ref"`
 	ContentHash   string              `json:"content_hash,omitempty"`
@@ -69,12 +64,10 @@ type jsonSystemFlags struct {
 	TOCSize   int64 `json:"toc_size"`
 }
 
-// marshalBodyJSON produces deterministic JSON bytes per §7.5:
-// alphabetical key order, no whitespace. Determinism comes from
-// declaring fields in alphabetical-by-JSON-tag order at both
-// the top level and within jsonSys; encoding/json emits in
-// declaration order. TestEncodeFile_KeysAreAlphabetical guards
-// the contract.
+// marshalBodyJSON produces deterministic JSON bytes per §7.5: alphabetical
+// key order, no whitespace. Determinism comes from declaring fields in
+// alphabetical-by-JSON-tag order at both levels; encoding/json emits in
+// declaration order.
 func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 	body := jsonBody{
 		Ext: m.Ext,
@@ -111,20 +104,18 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 	return json.Marshal(&body)
 }
 
-// unmarshalBodyJSON parses body bytes and returns a
-// domain.Manifest. Forgives input field order (any order is
-// allowed; only the *output* of marshalBodyJSON is sorted).
-// Rejects unknown fields to catch typos in hand-edited
-// manifests.
+// unmarshalBodyJSON parses body bytes into a domain.Manifest. Input field
+// order is forgiven (only marshal output is sorted); unknown fields are
+// rejected to catch typos in hand-edited manifests.
 func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 	var b jsonBody
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&b); err != nil {
-		return domain.Manifest{}, fmt.Errorf("manifestcodec: parse body: %w", err)
+		return domain.Manifest{}, fmt.Errorf("artifact: parse body: %w", err)
 	}
 	if dec.More() {
-		return domain.Manifest{}, errors.New("manifestcodec: trailing content after body")
+		return domain.Manifest{}, errors.New("artifact: trailing content after body")
 	}
 
 	if b.Sys.SchemaVersion != SchemaVersion {
@@ -152,21 +143,21 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 	if b.InlineBlob != "" {
 		raw, err := base64.StdEncoding.DecodeString(b.InlineBlob)
 		if err != nil {
-			return domain.Manifest{}, fmt.Errorf("manifestcodec: inline_blob base64: %w", err)
+			return domain.Manifest{}, fmt.Errorf("artifact: inline_blob base64: %w", err)
 		}
 		m.InlineBlob = raw
 	}
 	if b.Sys.CreatedAt != "" {
 		t, err := timefmt.Parse(b.Sys.CreatedAt)
 		if err != nil {
-			return domain.Manifest{}, fmt.Errorf("manifestcodec: created_at: %w", err)
+			return domain.Manifest{}, fmt.Errorf("artifact: created_at: %w", err)
 		}
 		m.CreatedAt = t
 	}
 	if b.Sys.RetentionTime != "" {
 		t, err := timefmt.Parse(b.Sys.RetentionTime)
 		if err != nil {
-			return domain.Manifest{}, fmt.Errorf("manifestcodec: retention_until: %w", err)
+			return domain.Manifest{}, fmt.Errorf("artifact: retention_until: %w", err)
 		}
 		m.RetentionUntil = t
 	}
@@ -181,9 +172,9 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 
 func pipelineToJSON(stages []domain.PipelineStage) []jsonPipelineStage {
 	if len(stages) == 0 {
-		// §7.2 requires the pipeline field to always be present
-		// (empty array allowed but not null/missing). Returning a
-		// non-nil empty slice keeps json.Marshal emitting "[]".
+		// §7.2 requires the pipeline field to always be present (empty
+		// array allowed, but not null/missing). A non-nil empty slice
+		// keeps json.Marshal emitting "[]".
 		return []jsonPipelineStage{}
 	}
 	out := make([]jsonPipelineStage, 0, len(stages))
@@ -217,12 +208,10 @@ func pipelineFromJSON(stages []jsonPipelineStage) []domain.PipelineStage {
 			if err == nil {
 				ps.IV = raw
 			}
-			// Decode failures are silent here: the manifest format
-			// guarantees IV is base64 if present, and a decode error
-			// at unmarshal time means the manifest itself is corrupt.
-			// That is caught upstream by VerifyArtifactID — here we
-			// keep the partial result and let the upstream check
-			// surface the corruption.
+			// Decode failures are silent here: the format guarantees IV is
+			// base64 if present, so a decode error means the manifest is
+			// corrupt — caught upstream by VerifyArtifactID. We keep the
+			// partial result and let that check surface the corruption.
 		}
 		out = append(out, ps)
 	}

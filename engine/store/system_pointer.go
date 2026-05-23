@@ -10,10 +10,9 @@ import (
 	"os"
 	"strings"
 
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/store/internal/blobpath"
-	"scrinium.dev/engine/store/internal/manifestcodec"
 )
 
 // gatherNames lists pointer paths under namespace/pointers/<prefix>
@@ -90,7 +89,7 @@ func (ss *systemStore) writePointer(ctx context.Context, ptrPath string, id doma
 }
 
 // readArtifact returns a ReadHandle over the manifest's inline payload.
-func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (ReadHandle, error) {
+func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (domain.ReadHandle, error) {
 	m, err := ss.loadManifest(ctx, id)
 	if err != nil {
 		return nil, err
@@ -103,7 +102,7 @@ func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (
 }
 
 func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	manifestPath, err := blobpath.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(id)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("manifest path: %w", err)
 	}
@@ -119,10 +118,10 @@ func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("read manifest: %w", err)
 	}
-	if err := manifestcodec.VerifyArtifactID(id, fileBytes, ss.hashes); err != nil {
+	if err := artifact.VerifyArtifactID(id, fileBytes, ss.hashes); err != nil {
 		return domain.Manifest{}, fmt.Errorf("verify manifest: %w", err)
 	}
-	m, err := manifestcodec.DecodeFile(fileBytes)
+	m, err := artifact.Decode(fileBytes)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("decode manifest: %w", err)
 	}
@@ -147,7 +146,7 @@ func (ss *systemStore) dropPredecessor(ctx context.Context, id domain.ArtifactID
 				artifactIDAttr(id), slog.String("error", delErr.Error()))
 		}
 	}
-	if manifestPath, pErr := blobpath.ManifestPath(id); pErr == nil {
+	if manifestPath, pErr := artifact.ManifestPath(id); pErr == nil {
 		if rmErr := ss.drv.Remove(ctx, manifestPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
 			ss.logger().LogAttrs(ctx, slog.LevelWarn,
 				"superseded manifest file left on disk (best-effort cleanup failed)",

@@ -5,7 +5,6 @@ package store
 // transition. Kept here so neither constructor reaches into the other.
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/store/internal/artifactio"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/orphanscan"
 	"scrinium.dev/engine/store/internal/reconcile"
@@ -58,10 +58,10 @@ func buildStore(
 			}
 			return writeInlineSystemArtifact(ctx, drv, idx, o.hashRegistry, ns, sid, payload, hashAlgo)
 		},
-		// InlineHandleFactory: inlineReadHandle is store-private (Get
-		// path); systemstore builds handles through this closure.
-		func(m domain.Manifest) ReadHandle {
-			return &inlineReadHandle{manifest: m, reader: bytes.NewReader(m.InlineBlob)}
+		// InlineHandleFactory: systemstore builds inline handles through
+		// this closure; the implementation lives in artifactio.
+		func(m domain.Manifest) domain.ReadHandle {
+			return artifactio.NewInlineHandle(m)
 		},
 		// Logger: the systemStore logs its own best-effort cleanup
 		// failures (dropPredecessor) which have no caller to surface

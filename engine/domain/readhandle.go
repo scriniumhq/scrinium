@@ -1,10 +1,8 @@
-package store
+package domain
 
 import (
 	"context"
 	"io"
-
-	"scrinium.dev/engine/domain"
 )
 
 // ReadHandle is the read primitive returned by Get. It hides the
@@ -29,5 +27,5 @@ type ReadHandle interface {
 	// Manifest returns the parsed manifest of the artifact. Available
 	// immediately after Get, before the first Read. It does not block
 	// or perform I/O.
-	Manifest() domain.Manifest
+	Manifest() Manifest
 }

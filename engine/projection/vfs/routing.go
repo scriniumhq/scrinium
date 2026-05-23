@@ -8,7 +8,6 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
-	"scrinium.dev/engine/store"
 )
 
 // openRoot is the FSOps-backed side of OpenFile.
@@ -97,7 +96,7 @@ func serviceList(view *projection.View, tree projection.RootView, sub string) pr
 }
 
 // serviceOpen dispatches an Open on the right tree.
-func serviceOpen(ctx context.Context, view *projection.View, tree projection.RootView, sub string) (store.ReadHandle, error) {
+func serviceOpen(ctx context.Context, view *projection.View, tree projection.RootView, sub string) (domain.ReadHandle, error) {
 	switch tree {
 	case projection.RootByPath:
 		return view.OpenByPath(ctx, sub, domain.GetOptions{})

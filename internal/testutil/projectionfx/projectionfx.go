@@ -12,7 +12,6 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 
@@ -111,7 +110,7 @@ func (f *FakeSource) Get(
 	ctx context.Context,
 	id domain.ArtifactID,
 	opts domain.GetOptions,
-) (store.ReadHandle, error) {
+) (domain.ReadHandle, error) {
 	f.mu.RLock()
 	getErr := f.getErr
 	payload, hasPayload := f.payloads[id]
@@ -333,7 +332,7 @@ func (h *FakeReadHandle) Close() error {
 }
 
 // Compile-time guard.
-var _ store.ReadHandle = (*FakeReadHandle)(nil)
+var _ domain.ReadHandle = (*FakeReadHandle)(nil)
 
 // --- Manifest builders ---
 

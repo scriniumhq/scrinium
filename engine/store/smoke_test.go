@@ -14,10 +14,10 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/humanize"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // TestSmoke_MillionSmallFiles is the M1 exit-criterion smoke:
@@ -216,7 +216,7 @@ func makePayload(i int, size int) []byte {
 	return p
 }
 
-func readAllAndClose(t *testing.T, rh store.ReadHandle) []byte {
+func readAllAndClose(t *testing.T, rh domain.ReadHandle) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(rh); err != nil {

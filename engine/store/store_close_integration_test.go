@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"scrinium.dev/engine/store/internal/storefx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // --- Integration: Close on a real Store ---

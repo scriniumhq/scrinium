@@ -8,10 +8,10 @@ import (
 	"os"
 	"time"
 
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
-	"scrinium.dev/engine/store/internal/blobpath"
 )
 
 // Delete logically removes an artifact from the Store. It does not free
@@ -93,7 +93,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 		return s.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: index: %w", err), artifactIDAttr(id), slog.String("stage", "index"))
 	}
 
-	manifestPath, err := blobpath.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(id)
 	if err != nil {
 		return fmt.Errorf("store.Delete: manifest path: %w", err)
 	}
