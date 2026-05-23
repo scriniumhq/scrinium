@@ -45,7 +45,7 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 
 	blob, err := aw.Materialize(ctx, cfg, a, opts, writeKeyID)
 	if err != nil {
-		return "", fmt.Errorf("store.Put: %w", err)
+		return "", s.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "materialize"))
 	}
 
 	// Borrow the DEK under the crypto lock only for the duration of the
@@ -60,11 +60,11 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		manifest, manifestBytes, aerr = aw.AssembleManifest(cfg, a, opts, blob, dek, writeKeyID)
 		return aerr
 	}); err != nil {
-		return "", fmt.Errorf("store.Put: %w", err)
+		return "", s.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "assemble"))
 	}
 
 	if err := aw.PersistManifest(ctx, manifest, manifestBytes, blob.Addr); err != nil {
-		return "", fmt.Errorf("store.Put: %w", err)
+		return "", s.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "persist"))
 	}
 
 	s.publish(event.EventManifestSaved, event.ManifestSavedPayload{Manifest: manifest})

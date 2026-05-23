@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"log/slog"
 
 	"scrinium.dev/engine/domain"
@@ -160,4 +161,29 @@ func maintenanceModeAttr(m domain.MaintenanceMode) slog.Attr {
 	default:
 		return slog.Int("mode", int(m))
 	}
+}
+
+// errAttr renders an error for a log record. Safe: engine errors are
+// sentinel/format strings, never key material.
+func errAttr(err error) slog.Attr {
+	return slog.String("error", err.Error())
+}
+
+// traceErr logs an operation's error return at Debug and returns the
+// error unchanged, so a call site reads `return s.traceErr(ctx, "Put", err, attrs...)`.
+//
+// This is the ADR-60 "Debug-on-error-return" pattern: the error is still
+// returned to the caller (no swallowing), and the Debug record gives an
+// operator a trace of WHICH boundary refused and WHY without the caller
+// having to log it themselves. It is NOT log-and-return in the forbidden
+// sense — that prohibition targets duplicate Warn/Error reporting; a
+// Debug trace is silent in production (DiscardHandler / level>Debug) and
+// exists purely for diagnostics. err must be non-nil.
+func (s *store) traceErr(ctx context.Context, op string, err error, attrs ...slog.Attr) error {
+	log := s.componentLogger("store")
+	if log.Enabled(ctx, slog.LevelDebug) {
+		rec := append([]slog.Attr{storeIDAttr(s), slog.String("op", op), errAttr(err)}, attrs...)
+		log.LogAttrs(ctx, slog.LevelDebug, "operation failed", rec...)
+	}
+	return err
 }
