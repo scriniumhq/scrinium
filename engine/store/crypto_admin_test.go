@@ -12,9 +12,9 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/recoverykit"
-	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // --- Unlock ---

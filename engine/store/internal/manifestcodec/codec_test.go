@@ -12,8 +12,8 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/store/internal/manifestcodec"
-	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/testutil/manifestfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 var (

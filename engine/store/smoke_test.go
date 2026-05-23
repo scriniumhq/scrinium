@@ -14,10 +14,10 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/humanize"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // TestSmoke_MillionSmallFiles is the M1 exit-criterion smoke:

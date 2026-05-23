@@ -15,9 +15,9 @@ import (
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/blobpath"
-	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // --- shared test fixtures and helpers ---------------------------

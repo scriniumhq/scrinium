@@ -11,8 +11,8 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/reconcile"
-	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/testutil/driverfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // --- ErrStoreNotFound at fresh Location ---

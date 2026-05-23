@@ -26,9 +26,9 @@ import (
 
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // --- fault-injection driver wrapper ---

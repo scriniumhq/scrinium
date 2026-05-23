@@ -13,7 +13,7 @@ import (
 	sqliteindex "scrinium.dev/engine/index/sqlite"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
-	"scrinium.dev/engine/store/internal/storefx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // TestStore_FullLifecycle_DiskBacked is the end-to-end smoke test

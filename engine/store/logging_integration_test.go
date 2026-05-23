@@ -10,8 +10,8 @@ import (
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/store/internal/storefx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // --- public capturing handler (black-box) --------------------------------
