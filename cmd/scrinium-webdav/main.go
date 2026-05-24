@@ -2,17 +2,41 @@
 // Cross-platform — Linux/macOS/Windows clients connect over HTTP
 // without kernel extensions or root.
 //
-// Subcommands:
+// Since R11 the daemon is a thin loader over composer: it reads a
+// declarative config document and serves the surfaces it declares.
 //
-//	scrinium-webdav serve --store-path=... --listen=:8080 [flags]
-//	scrinium-webdav help
+//	scrinium-webdav serve --config /etc/scrinium/webdav.yaml
+//
+// The config is a composer document with a webdav surface, e.g.:
+//
+//	store:
+//	  driver: file:///var/lib/scrinium
+//	  policy:
+//	    encryption:
+//	      passphrase: file:/etc/scrinium/passphrase
+//	projection:
+//	  namespace: files
+//	surfaces:
+//	  - kind: webdav
+//	    config:
+//	      listen: ":8080"
+//	      allowOsJunk: false
 //
 // See docs/4 §15 WebDAV Mount for the full specification.
 package main
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
+
+	"scrinium.dev/composer"
+
+	// Surface + built-in backends, registered by import side effect.
+	_ "scrinium.dev/engine/surface/webdav"
 )
 
 func main() {
@@ -21,8 +45,6 @@ func main() {
 		os.Exit(2)
 	}
 	switch os.Args[1] {
-	case "init":
-		os.Exit(runInit(os.Args[2:]))
 	case "serve":
 		os.Exit(runServe(os.Args[2:]))
 	case "-h", "--help", "help":
@@ -35,17 +57,50 @@ func main() {
 	}
 }
 
+func runServe(args []string) int {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	configPath := fs.String("config", "", "Path to a composer YAML config file (required).")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *configPath == "" {
+		fmt.Fprintln(os.Stderr, "scrinium-webdav serve: --config is required")
+		return 2
+	}
+
+	data, err := os.ReadFile(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "scrinium-webdav serve: read config: %v\n", err)
+		return 2
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	rt, err := composer.LoadOrInitYAML(ctx, data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "scrinium-webdav: %v\n", err)
+		return 1
+	}
+	defer rt.Close()
+
+	fmt.Fprintf(os.Stderr, "Mount session: %s\n", rt.MountSession())
+	if err := rt.Run(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "scrinium-webdav: %v\n", err)
+		return 1
+	}
+	return 0
+}
+
 const usageText = `scrinium-webdav — expose a Scrinium store via WebDAV.
 
 Usage:
-  scrinium-webdav <command> [flags]
+  scrinium-webdav serve --config <file>
 
 Commands:
-  init      Create and initialise a new Scrinium store.
-  serve     Start the WebDAV server.
+  serve     Load a composer config and serve its surfaces.
   help      Show this help message.
-
-Run "scrinium-webdav <command> --help" for command-specific flags.
 
 Specification: docs/4 §15 WebDAV Mount.
 `

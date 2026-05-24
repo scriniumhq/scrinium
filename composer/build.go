@@ -198,7 +198,14 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ runtime.Runt
 		return surfaces, nil
 	}
 
-	rt, err := runtime.New(st, idx, view, fsops, mountSession, buildSurfaces, closeFn)
+	info := runtime.Info{StoreURI: spec.Driver}
+	if effProj != nil {
+		info.Namespace = effProj.Namespace
+		info.Editing = effProj.Editing
+		info.ReadOnly = effProj.ReadOnly
+	}
+
+	rt, err := runtime.New(st, idx, view, fsops, mountSession, info, buildSurfaces, closeFn)
 	if err != nil {
 		return nil, err
 	}

@@ -58,6 +58,11 @@ type Runtime interface {
 	// MountSession is the boot-unique identifier for this runtime.
 	MountSession() domain.SessionID
 
+	// Info returns assembly metadata surfaces use for diagnostics
+	// (stats rendering): the store URI, namespace, editing policy,
+	// read-only flag. It is a snapshot, cheap to call.
+	Info() Info
+
 	// Surface returns the configured surface registered under name, or
 	// errs.ErrNotFound if there is none.
 	Surface(name string) (Surface, error)
@@ -77,6 +82,16 @@ type Runtime interface {
 	Close() error
 }
 
+// Info is assembly metadata a runtime exposes for diagnostics. It is
+// what surfaces render in their stats endpoint; the runtime itself
+// does not act on it.
+type Info struct {
+	StoreURI  string
+	Namespace string
+	Editing   string
+	ReadOnly  bool
+}
+
 // rt is the private concrete Runtime composer populates. Unexported
 // (ADR-52): callers depend on the interface, so the assembled shape
 // can grow without an API break.
@@ -86,6 +101,7 @@ type rt struct {
 	view         *projection.View
 	fsops        *projection.FSOps
 	mountSession domain.SessionID
+	info         Info
 	surfaces     []Surface
 	closeFn      func() error
 }
@@ -108,6 +124,7 @@ func New(
 	view *projection.View,
 	fsops *projection.FSOps,
 	mountSession domain.SessionID,
+	info Info,
 	buildSurfaces func(Runtime) ([]Surface, error),
 	closeFn func() error,
 ) (Runtime, error) {
@@ -117,6 +134,7 @@ func New(
 		view:         view,
 		fsops:        fsops,
 		mountSession: mountSession,
+		info:         info,
 		closeFn:      closeFn,
 	}
 	if buildSurfaces != nil {
@@ -134,6 +152,7 @@ func (r *rt) Index() index.StoreIndex        { return r.index }
 func (r *rt) View() *projection.View         { return r.view }
 func (r *rt) FSOps() *projection.FSOps       { return r.fsops }
 func (r *rt) MountSession() domain.SessionID { return r.mountSession }
+func (r *rt) Info() Info                     { return r.info }
 
 func (r *rt) Surface(name string) (Surface, error) {
 	for _, s := range r.surfaces {

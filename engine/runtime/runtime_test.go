@@ -36,7 +36,7 @@ func (f *fakeSurface) Close() error {
 }
 
 func newRT(surfaces ...Surface) *rt {
-	r, _ := New(nil, nil, nil, nil, "", func(Runtime) ([]Surface, error) {
+	r, _ := New(nil, nil, nil, nil, "", Info{}, func(Runtime) ([]Surface, error) {
 		return surfaces, nil
 	}, nil)
 	return r.(*rt)
