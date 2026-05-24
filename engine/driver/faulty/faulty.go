@@ -165,11 +165,11 @@ func (d *Driver) gate(ctx context.Context, method string) error {
 
 // --- Driver method wrappers ---
 
-func (d *Driver) Put(ctx context.Context, path string, r io.Reader) error {
+func (d *Driver) Put(ctx context.Context, path string, r io.Reader, opts ...driver.PutOption) error {
 	if err := d.gate(ctx, MethodPut); err != nil {
 		return err
 	}
-	return d.inner.Put(ctx, path, r)
+	return d.inner.Put(ctx, path, r, opts...)
 }
 
 func (d *Driver) Get(ctx context.Context, path string) (io.ReadCloser, error) {

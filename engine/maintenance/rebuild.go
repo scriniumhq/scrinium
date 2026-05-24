@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/store"
@@ -106,7 +106,7 @@ type RebuildStats struct {
 // restore store.json (when lost) and the system.config/current
 // pointer (when dangling).
 type RebuildIndexAgent interface {
-	agent.MaintenanceAgent
+	domain.MaintenanceAgent
 
 	// Stats returns a progress snapshot during execution (safe to
 	// call from another goroutine). After Run, returns the final

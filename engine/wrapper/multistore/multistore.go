@@ -14,12 +14,14 @@ import (
 // Eventually consistent by nature — fully derivable from the
 // physical state of the underlying StoreIndexes.
 //
-// ctx threading on the point methods is added in chunk R9 (F-110);
-// only PruneStale carries a ctx today.
+// Every method carries a context.Context (F-110, chunk R9): the
+// backing implementation talks to a shared Postgres or SQLite, so
+// each point method is a potentially blocking query that must honour
+// cancellation and deadlines.
 type MultistoreIndex interface {
 	// ResolveArtifact returns the list of Stores in which the
 	// artifact is registered. Used when reading through Curator.
-	ResolveArtifact(id domain.ArtifactID) ([]domain.StoreID, error)
+	ResolveArtifact(ctx context.Context, id domain.ArtifactID) ([]domain.StoreID, error)
 
 	// ExistsAny is a batch presence check across every Store, keyed
 	// by the full dedup key (ADR-58). It carries the same
@@ -29,18 +31,18 @@ type MultistoreIndex interface {
 	// matches only on identical content under the same key. Returns a
 	// presence map keyed by the queried key. Used by the Ingester to
 	// aggregate requests before physical writes.
-	ExistsAny(keys []domain.BlobDedupKey) (map[domain.BlobDedupKey]bool, error)
+	ExistsAny(ctx context.Context, keys []domain.BlobDedupKey) (map[domain.BlobDedupKey]bool, error)
 
 	// RegisterArtifact records that an artifact is present in a
 	// given Store, together with its blob dedup key so cross-store
 	// resolution carries the crypto-identity (ADR-58). Called by
 	// Curator after a successful write or Drain.
-	RegisterArtifact(id domain.ArtifactID, storeID domain.StoreID, key domain.BlobDedupKey) error
+	RegisterArtifact(ctx context.Context, id domain.ArtifactID, storeID domain.StoreID, key domain.BlobDedupKey) error
 
 	// MarkStale marks a record as stale (Read-Repair on a cache
 	// miss: the index has a route but the artifact is physically
 	// missing from the Location).
-	MarkStale(id domain.ArtifactID) error
+	MarkStale(ctx context.Context, id domain.ArtifactID) error
 
 	// PruneStale periodically clears stale records. May be invoked
 	// in the background or on demand.

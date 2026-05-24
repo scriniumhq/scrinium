@@ -28,7 +28,7 @@ const (
 
 	// EventAgentCycle — one unit of work completed (a full GC
 	// pass, a single Scrub batch, one Ingester flush). Payload:
-	// store.AgentResult with the cycle's stats. The same payload
+	// domain.AgentResult with the cycle's stats. The same payload
 	// shape is reused by EventAgentCompleted; the difference is
 	// semantic — Cycle means "one unit done, agent continues",
 	// Completed means "agent finished, Run returned".
@@ -51,12 +51,12 @@ const (
 	EventAgentCancelled = "agent.cancelled"
 
 	// EventAgentStaleLease — agent took over a lease whose owner
-	// stopped renewing. Payload: store.LeaseTakeoverPayload (same
-	// shape as store.EventStaleLeaseTakeover; see core/events.go).
-	// The struct lives in core because the stale-lease concept is
-	// shared with the core-level Store lease takeover; declaring
-	// it once and reusing it keeps the two events decoder-
-	// compatible.
+	// stopped renewing. Payload: event.LeaseTakeoverPayload (same
+	// shape as event.EventStaleLeaseTakeover; see
+	// event/store_payloads.go). The struct lives in the event
+	// package because the stale-lease concept is shared with the
+	// store-level Store lease takeover; declaring it once and
+	// reusing it keeps the two events decoder-compatible.
 	EventAgentStaleLease = "agent.stale_lease"
 )
 

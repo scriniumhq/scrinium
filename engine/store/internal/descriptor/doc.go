@@ -14,5 +14,5 @@
 // reconcile owns the recovery decision over them.
 //
 // Depends only on driver.Driver, errs, and a narrow MetaStore. No
-// imports from coreapi, domain, or any consumer package.
+// imports from store, domain, or any consumer package.
 package descriptor
