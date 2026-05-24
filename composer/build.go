@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"scrinium.dev/engine/assembly"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
@@ -18,7 +19,6 @@ import (
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
-	"scrinium.dev/engine/runtime"
 	"scrinium.dev/engine/store"
 
 	// Built-in URI dialers, registered by import side effect — the
@@ -36,12 +36,12 @@ const (
 	modeOpenOrInit
 )
 
-// build turns a validated, defaulted Config into a running runtime.
+// build turns a validated, defaulted Config into an assembled stack.
 // For R10 it assembles the single-store path (the one the engine fully
 // supports today); everything that depends on not-yet-wired components
 // returns errs.ErrNotImplemented with a pointer to the chunk that
 // lands it.
-func build(ctx context.Context, c *Config, mode buildMode) (runtime.Runtime, error) {
+func build(ctx context.Context, c *Config, mode buildMode) (assembly.Assembly, error) {
 	if len(c.Stores) > 0 {
 		return nil, fmt.Errorf("composer: multistore assembly is not wired yet (M4/S1): %w", errs.ErrNotImplemented)
 	}
@@ -54,7 +54,7 @@ func build(ctx context.Context, c *Config, mode buildMode) (runtime.Runtime, err
 	return buildSingle(ctx, c, mode)
 }
 
-func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ runtime.Runtime, retErr error) {
+func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ assembly.Assembly, retErr error) {
 	spec := c.Store
 	if err := guardUnsupportedPolicy(spec.Policy); err != nil {
 		return nil, err
@@ -135,13 +135,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ runtime.Runt
 	}
 
 	// 6. Read-side View + read/write FSOps from the projection section.
-	//    When surfaces are configured but no projection block was given,
-	//    synthesise the defaults so the surfaces have an FSOps to wrap.
 	effProj := c.Projection
-	if effProj == nil && len(c.Surfaces) > 0 {
-		effProj = &Projection{}
-		applyProjectionDefaults(effProj)
-	}
 
 	view, err := buildView(ctx, st, fsidx, effProj)
 	if err != nil {
@@ -163,7 +157,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ runtime.Runt
 		}
 	}
 
-	// closeFn unwinds in LIFO order; idempotency is the runtime's job.
+	// closeFn unwinds in LIFO order; idempotency is the assembly's job.
 	closeFn := func() error {
 		var firstErr error
 		if err := view.Close(); err != nil && firstErr == nil {
@@ -178,38 +172,14 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ runtime.Runt
 		return firstErr
 	}
 
-	// buildSurfaces is invoked by runtime.New with the constructed
-	// runtime so each surface factory can bind to it. An unregistered
-	// surface kind is a hard error.
-	buildSurfaces := func(rt runtime.Runtime) ([]runtime.Surface, error) {
-		surfaces := make([]runtime.Surface, 0, len(c.Surfaces))
-		for i, sf := range c.Surfaces {
-			factory, ok := reg.surface(sf.Kind)
-			if !ok {
-				return nil, fmt.Errorf("composer: surfaces[%d]: no surface registered for kind %q "+
-					"(import its package for the side-effect registration)", i, sf.Kind)
-			}
-			s, err := factory(rt, sf.Config)
-			if err != nil {
-				return nil, fmt.Errorf("composer: surface %q: %w", sf.Kind, err)
-			}
-			surfaces = append(surfaces, s)
-		}
-		return surfaces, nil
-	}
-
-	info := runtime.Info{StoreURI: spec.Driver}
+	info := assembly.Info{StoreURI: spec.Driver}
 	if effProj != nil {
 		info.Namespace = effProj.Namespace
 		info.Editing = effProj.Editing
 		info.ReadOnly = effProj.ReadOnly
 	}
 
-	rt, err := runtime.New(st, idx, view, fsops, mountSession, info, buildSurfaces, closeFn)
-	if err != nil {
-		return nil, err
-	}
-	return rt, nil
+	return assembly.New(st, idx, view, fsops, mountSession, info, closeFn), nil
 }
 
 // guardUnsupportedPolicy rejects policy features whose components are
@@ -266,7 +236,7 @@ func initStore(ctx context.Context, drv driver.Driver, encrypted bool, opts []st
 	}
 	if encrypted && len(kit) > 0 {
 		// An encrypted Init produces a recovery kit the host MUST
-		// persist out of band, but runtime.Runtime has no channel to
+		// persist out of band, but assembly.Assembly has no channel to
 		// hand it back. Rather than silently drop the only path back
 		// into an encrypted store, refuse: encrypted initialisation
 		// goes through the engine Init for now (kit handling lands

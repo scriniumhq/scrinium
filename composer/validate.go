@@ -55,11 +55,6 @@ func validate(c *Config) error {
 		validatePolicy(name, s.Policy, add)
 	}
 
-	for i, sf := range c.Surfaces {
-		if strings.TrimSpace(sf.Kind) == "" {
-			add("surfaces[%d]: empty `kind:`", i)
-		}
-	}
 	for i, ag := range c.Agents {
 		if strings.TrimSpace(ag.Kind) == "" {
 			add("agents[%d]: empty `kind:`", i)

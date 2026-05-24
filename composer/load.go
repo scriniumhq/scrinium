@@ -7,38 +7,38 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"scrinium.dev/engine/runtime"
+	"scrinium.dev/engine/assembly"
 )
 
 // LoadYAML parses a YAML config and opens the described store,
-// returning a running runtime. The store must already exist.
-func LoadYAML(ctx context.Context, data []byte) (runtime.Runtime, error) {
+// returning a assembled stack. The store must already exist.
+func LoadYAML(ctx context.Context, data []byte) (assembly.Assembly, error) {
 	return loadAndBuild(ctx, data, unmarshalYAML, modeOpen)
 }
 
 // LoadInitYAML parses a YAML config and creates a fresh store. Errors
 // if the store already exists.
-func LoadInitYAML(ctx context.Context, data []byte) (runtime.Runtime, error) {
+func LoadInitYAML(ctx context.Context, data []byte) (assembly.Assembly, error) {
 	return loadAndBuild(ctx, data, unmarshalYAML, modeInit)
 }
 
 // LoadOrInitYAML opens the described store, creating it if absent.
-func LoadOrInitYAML(ctx context.Context, data []byte) (runtime.Runtime, error) {
+func LoadOrInitYAML(ctx context.Context, data []byte) (assembly.Assembly, error) {
 	return loadAndBuild(ctx, data, unmarshalYAML, modeOpenOrInit)
 }
 
 // LoadJSON parses a JSON config and opens the described store.
-func LoadJSON(ctx context.Context, data []byte) (runtime.Runtime, error) {
+func LoadJSON(ctx context.Context, data []byte) (assembly.Assembly, error) {
 	return loadAndBuild(ctx, data, unmarshalJSON, modeOpen)
 }
 
 // LoadInitJSON parses a JSON config and creates a fresh store.
-func LoadInitJSON(ctx context.Context, data []byte) (runtime.Runtime, error) {
+func LoadInitJSON(ctx context.Context, data []byte) (assembly.Assembly, error) {
 	return loadAndBuild(ctx, data, unmarshalJSON, modeInit)
 }
 
 // LoadOrInitJSON opens the described store, creating it if absent.
-func LoadOrInitJSON(ctx context.Context, data []byte) (runtime.Runtime, error) {
+func LoadOrInitJSON(ctx context.Context, data []byte) (assembly.Assembly, error) {
 	return loadAndBuild(ctx, data, unmarshalJSON, modeOpenOrInit)
 }
 
@@ -83,7 +83,7 @@ func detectUnmarshal(data []byte) unmarshalFunc {
 	return unmarshalYAML
 }
 
-func loadAndBuild(ctx context.Context, data []byte, um unmarshalFunc, mode buildMode) (runtime.Runtime, error) {
+func loadAndBuild(ctx context.Context, data []byte, um unmarshalFunc, mode buildMode) (assembly.Assembly, error) {
 	c, err := parse(data, um)
 	if err != nil {
 		return nil, err

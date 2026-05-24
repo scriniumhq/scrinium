@@ -94,11 +94,7 @@ func TestValidateProjectionEnums(t *testing.T) {
 	}, "scratchQuota")
 }
 
-func TestValidateSurfaceAgentKinds(t *testing.T) {
-	wantErr(t, &Config{
-		Store:    &StoreSpec{Driver: "file:///d"},
-		Surfaces: []ComponentSpec{{Kind: ""}},
-	}, "surfaces[0]")
+func TestValidateAgentKinds(t *testing.T) {
 	wantErr(t, &Config{
 		Store:  &StoreSpec{Driver: "file:///d"},
 		Agents: []ComponentSpec{{Kind: ""}},

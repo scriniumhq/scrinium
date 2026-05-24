@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-package fuse
+package main
 
 import (
 	"context"

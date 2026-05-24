@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
+	"scrinium.dev/engine/assembly"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/runtime"
 )
 
 // Extension factory signatures. Hosts register implementations through
@@ -36,32 +36,26 @@ type (
 	PipelineStageFactory func(params map[string]any) (pipeline.TransformerFactory, error)
 
 	// AgentFactory builds a user background agent bound to the
-	// assembled runtime, from its config block.
-	AgentFactory func(rt runtime.Runtime, config map[string]any) (any, error)
-
-	// SurfaceFactory builds an external-access surface (FUSE, WebDAV,
-	// …) bound to the assembled runtime, from its config block.
-	SurfaceFactory func(rt runtime.Runtime, config map[string]any) (runtime.Surface, error)
+	// assembled stack, from its config block.
+	AgentFactory func(a assembly.Assembly, config map[string]any) (any, error)
 )
 
 // registries holds the process-wide extension tables. A single guard
-// covers all five — registration is a startup-time, low-contention
+// covers all four — registration is a startup-time, low-contention
 // operation.
 type registries struct {
-	mu       sync.RWMutex
-	drivers  map[string]DriverFactory
-	indexes  map[string]IndexFactory
-	stages   map[string]PipelineStageFactory
-	agents   map[string]AgentFactory
-	surfaces map[string]SurfaceFactory
+	mu      sync.RWMutex
+	drivers map[string]DriverFactory
+	indexes map[string]IndexFactory
+	stages  map[string]PipelineStageFactory
+	agents  map[string]AgentFactory
 }
 
 var reg = &registries{
-	drivers:  map[string]DriverFactory{},
-	indexes:  map[string]IndexFactory{},
-	stages:   map[string]PipelineStageFactory{},
-	agents:   map[string]AgentFactory{},
-	surfaces: map[string]SurfaceFactory{},
+	drivers: map[string]DriverFactory{},
+	indexes: map[string]IndexFactory{},
+	stages:  map[string]PipelineStageFactory{},
+	agents:  map[string]AgentFactory{},
 }
 
 // RegisterDriver registers an extension driver under a URI scheme
@@ -92,13 +86,6 @@ func RegisterPipelineStage(kind string, f PipelineStageFactory) {
 func RegisterAgent(kind string, f AgentFactory) {
 	mustRegister(kind, f == nil, "agent", func() {
 		reg.agents[kind] = f
-	})
-}
-
-// RegisterSurface registers a surface under a kind (e.g. "fuse").
-func RegisterSurface(kind string, f SurfaceFactory) {
-	mustRegister(kind, f == nil, "surface", func() {
-		reg.surfaces[kind] = f
 	})
 }
 
@@ -139,12 +126,5 @@ func (r *registries) agent(kind string) (AgentFactory, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	f, ok := r.agents[kind]
-	return f, ok
-}
-
-func (r *registries) surface(kind string) (SurfaceFactory, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	f, ok := r.surfaces[kind]
 	return f, ok
 }

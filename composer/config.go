@@ -26,7 +26,6 @@ type Config struct {
 	Multistore *MultistoreSpec       `yaml:"multistore,omitempty" json:"multistore,omitempty"`
 	Policies   map[string]*Policy    `yaml:"policies,omitempty" json:"policies,omitempty"`
 	Projection *Projection           `yaml:"projection,omitempty" json:"projection,omitempty"`
-	Surfaces   []ComponentSpec       `yaml:"surfaces,omitempty" json:"surfaces,omitempty"`
 	Agents     []ComponentSpec       `yaml:"agents,omitempty" json:"agents,omitempty"`
 }
 
@@ -142,8 +141,8 @@ type ScrubSchedule struct {
 	PerStageVerification bool   `yaml:"perStageVerification,omitempty" json:"perStageVerification,omitempty"`
 }
 
-// ComponentSpec is a generic kind+config block, used for surfaces and
-// user agents. Config is left as a raw map for the registered factory
+// ComponentSpec is a generic kind+config block, used for user
+// agents. Config is left as a raw map for the registered factory
 // to decode into its own typed struct.
 type ComponentSpec struct {
 	Kind   string         `yaml:"kind" json:"kind"`
