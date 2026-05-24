@@ -12,7 +12,7 @@ import (
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/internal/testutil/projectionfx"
-	viewfx "scrinium.dev/internal/testutil/viefx"
+	viewfx "scrinium.dev/internal/testutil/viewfx"
 )
 
 // newTestFS builds a webdavFS wired against an in-memory

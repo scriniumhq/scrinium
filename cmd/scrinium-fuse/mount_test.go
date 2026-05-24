@@ -12,7 +12,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"scrinium.dev/internal/testutil/projectionfx"
-	viewfx "scrinium.dev/internal/testutil/viefx"
+	viewfx "scrinium.dev/internal/testutil/viewfx"
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"

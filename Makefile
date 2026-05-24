@@ -42,6 +42,11 @@ RACE_FLAG := $(if $(filter 1,$(RACE)),-race,)
 # the seed corpus, which takes seconds.
 FUZZTIME ?= 30s
 
+# Benchmark knobs (see the Benchmarks section for details).
+BENCH      ?= .
+BENCHPKG   ?= ./engine/artifact/ ./engine/store/
+BENCHCOUNT ?= 10
+
 # Default target.
 .DEFAULT_GOAL := help
 
@@ -62,7 +67,11 @@ help:
 	@echo "  fuzz        — active fuzzing of one target;"
 	@echo "                P=<pkg> F=<FuzzName> [T=<duration>]"
 	@echo "  fuzz-list   — list every Fuzz* in the tree with its package"
+	@echo "  fuzz-all    — active-fuzz every target, FUZZTIME each (nightly)"
 	@echo "  fuzz-clean  — remove generated fuzz corpora (testdata/fuzz/)"
+	@echo "  bench       — run benchmarks (-benchmem -count=$(BENCHCOUNT)); BENCH=, BENCHPKG="
+	@echo "  bench-cmp   — run + benchstat diff vs committed bench-baseline.txt"
+	@echo "  bench-baseline — refresh bench-baseline.txt from a fresh run"
 	@echo "  ci          — fmt-check + vet + test + fuzz-smoke"
 	@echo "  clean       — remove build artefacts (also runs fuzz-clean)"
 	@echo ""
@@ -271,6 +280,52 @@ fuzz-clean:
 	    find "$$d" -mindepth 2 -type f ! -name 'README*' -print -delete 2>/dev/null; \
 	done
 
+# --- Benchmarks ---
+# Micro-benchmarks track CPU/allocation cost of hot paths (manifest
+# codec, Put). NOT part of `make test`/`ci`: benchmarks are slow and
+# sec/op is machine-dependent, so CI cannot gate on them honestly. The
+# durable, machine-independent signal is B/op + allocs/op; the committed
+# reference lives in the benchmark files' header comments and in
+# bench-baseline.txt.
+#
+# BENCHPKG lists the packages that actually contain benchmarks — NOT
+# ./..., which scans the whole tree and would (a) waste time building
+# every package and (b) interleave per-package status lines into the
+# saved file. The recipe also greps the output down to benchstat-
+# relevant lines, so bench-new.txt stays clean regardless. Add packages
+# to BENCHPKG as new benchmarks appear.
+#
+# Usage:
+#   make bench                  # run -> bench-new.txt (+ full log)
+#   make bench BENCH=Manifest   # restrict to matching benchmark names
+#   make bench BENCHPKG=./engine/artifact/   # one package
+#   make bench-cmp              # run + benchstat diff vs bench-baseline.txt
+#   make bench-baseline         # seed/refresh bench-baseline.txt from a run
+#
+# benchstat reads only Benchmark/goos/goarch/pkg/cpu lines, so the grep
+# filter below produces exactly what it needs. The full run (including
+# any FAIL) is streamed live and saved to bench-full.txt for debugging.
+
+.PHONY: bench
+bench:
+	@$(GO) test -run=^$$ -bench=$(BENCH) -benchmem -count=$(BENCHCOUNT) $(BENCHPKG) | tee bench-full.txt
+	@grep -E '^(goos:|goarch:|pkg:|cpu:|Benchmark)' bench-full.txt > bench-new.txt || \
+	  { echo "no benchmark output captured — did the run fail? see bench-full.txt"; exit 1; }
+	@echo "-> bench-new.txt (clean benchstat input); full log: bench-full.txt"
+
+.PHONY: bench-cmp
+bench-cmp: bench
+	@command -v benchstat >/dev/null 2>&1 || { \
+	  echo "benchstat not found: go install golang.org/x/perf/cmd/benchstat@latest"; exit 1; }
+	@test -f bench-baseline.txt || { \
+	  echo "no bench-baseline.txt — run 'make bench-baseline' first"; exit 1; }
+	benchstat bench-baseline.txt bench-new.txt
+
+.PHONY: bench-baseline
+bench-baseline: bench
+	@cp bench-new.txt bench-baseline.txt
+	@echo "baseline saved to bench-baseline.txt — commit it"
+
 # --- Quality gates ---
 
 .PHONY: fmt
@@ -299,8 +354,10 @@ tidy:
 ci: fmt-check vet test fuzz-smoke
 
 # --- Housekeeping ---
-
+#
+# bench-baseline.txt is a committed reference and is NOT removed here.
+# bench-new.txt / bench-full.txt are transient — add them to .gitignore.
 .PHONY: clean
 clean: fuzz-clean
 	$(GO) clean ./...
-	rm -f *.test *.out
+	rm -f *.test *.out bench-new.txt bench-full.txt

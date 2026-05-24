@@ -23,3 +23,6 @@ coverage.html
 # Local test artifacts
 /tmp/
 /.scrinium-test/
+
+bench-full.txt
+bench-new.txt
