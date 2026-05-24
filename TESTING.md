@@ -68,8 +68,30 @@ write a plain `*_test.go` in the implementation's package (external
 moment a second real implementation lands. (This is why the SystemStore
 conformance suite was collapsed back into `engine/store`.)
 
-The `Driver` interface is a conformance candidate (localfs, faulty,
-future s3) and does not yet have a `drivertest` suite — open work.
+The `Driver` interface is a conformance candidate, but a `drivertest`
+suite is **deliberately deferred until a second real implementation
+lands** (s3 is currently a stub, exactly like the postgres index). The
+reasoning is the same one that made us collapse the SystemStore suite:
+with a single implementation, a `Factory`-indirected suite is an
+abstraction ahead of need — it hides the tests from the code they cover
+and proves nothing beyond the direct tests. There is no shared
+high-level driver layer to test once and reuse; `engine/driver` is just
+the interface plus DTOs plus the dialer registry, and `localfs`
+implements all 17 methods itself. So the portable contract currently
+lives where it belongs: as direct tests in `engine/driver/localfs`
+(~34 of them — round-trip, not-found, ReadAt ranges, rename, clone,
+list, tombstone, etc.).
+
+These localfs tests are already written portably (assert
+`errors.Is(err, fs.ErrNotExist)` rather than an OS-specific error;
+compare `List` results as a set, not an ordered slice), so that on the
+day s3 becomes real, the move is mechanical: lift the backend-agnostic
+cases into `internal/testutil/drivertest`, parameterise them over a
+`Factory`, and run the suite against both drivers. Backend-specific
+behaviour stays put — localfs path-safety/traversal, `CreatesMissingRoot`,
+`PruneEmptyDirs` (POSIX directories; s3 has none), `Open` URI schemes,
+and faulty's failure-rate/latency tests are not part of the portable
+contract and do not move.
 
 ### 4. Stateful components → model-based + crash-consistency
 
