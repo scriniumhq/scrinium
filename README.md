@@ -17,26 +17,37 @@ scrinium/
 ├── *.go                     # high-level wrapper API: scrinium.Open / scrinium.Init
 │
 ├── engine/                  # the engine itself
-│   ├── core/                # Store implementation
-│   ├── domain/              # types (Manifest, Artifact, ...)
-│   ├── driver/              # storage backends (localfs, ...)
-│   ├── index/               # metadata index backends (sqlite, ...)
-│   ├── plugin/              # encoders/decoders (zstd, aes-gcm, ...)
-│   ├── projection/          # read-side: View, FSOps, fsmeta
-│   ├── agent/, curator/, maintenance/   # workers
+│   ├── store/               # Store implementation (Put/Get/Delete/Walk, lifecycle)
+│   ├── domain/              # types (Manifest, Artifact, config, ...)
+│   ├── artifact/            # manifest codec, on-disk paths, header/crypto
+│   ├── driver/              # storage backends (localfs; faulty for tests; s3 stub)
+│   ├── index/               # metadata index backends (sqlite; postgres stub)
+│   ├── pipeline/            # blob transform stages (stage/zstd, stage/aesgcm; segaead)
+│   ├── projection/          # read-side: View, FSOps, fsmeta, fsindex, vfs
+│   ├── wrapper/             # composition helpers (bundler, chunker, host, multistore)
+│   ├── hashing/             # content-hash registry
+│   ├── agent/, curator/, maintenance/   # workers (agent: interfaces, impl in progress)
 │   ├── errs/, event/        # cross-cutting types
-│   └── internal/            # engine-private helpers
+│   └── internal/            # engine-private helpers (aead, timefmt, uriresolve)
 │
 ├── cmd/                     # reference binaries
 │   ├── scrinium-fuse/       # FUSE mount (build tag: fuse)
 │   ├── scrinium-webdav/     # WebDAV server
 │   └── scrinium-webview/    # HTML browser
 │
+├── internal/testutil/       # shared test fixtures (see TESTING.md)
+│
 └── examples/                # example programs
     ├── hello/               # smallest open + put + get
     ├── ingest/              # batch ingest from a directory tree
     └── browse/              # read-only inspector
 ```
+
+Some backends are intentionally stubs until their milestone: the s3
+driver and the postgres index return `ErrNotImplemented`, and the
+`agent` workers (gc, scrub, ingester, ejector) are interfaces and
+constructors with implementations still in progress. See `TESTING.md`
+for how this affects test coverage.
 
 ## Quick start
 
@@ -92,7 +103,18 @@ See `examples/` for runnable variations (`go run ./hello`, `./ingest`, `./browse
 ```bash
 go build ./...                  # build everything
 go test ./...                   # test everything (FUSE included on Linux/macOS)
-make ci                         # fmt + vet + test + fuzz-smoke
+make ci                         # fmt-check + vet + test + fuzz-smoke
+```
+
+`make help` lists the full set of targets (tests, fuzzing, benchmarks,
+smoke runs). A few worth knowing:
+
+```bash
+make test-pkg P=engine/store    # test a single package
+RACE=1 make test                # with the race detector
+make fuzz-smoke                 # seed-corpus pass over every Fuzz*
+make smoke                      # long-running million-files smoke
+make bench-cmp                  # benchmarks vs the committed baseline
 ```
 
 To run a single example or binary directly:
@@ -135,8 +157,9 @@ For applications that want to host Scrinium directly, use the top-level
 Production daemons typically separate "init" and "serve" subcommands
 so an operator can audit when a brand-new store is being created.
 
-For full control over wiring, compose `engine/core`, `engine/projection`,
-and friends directly. The top-level package is a convenience over them.
+For full control over wiring, compose `engine/store`,
+`engine/projection`, and friends directly. The top-level package is a
+convenience over them.
 
 ## License
 

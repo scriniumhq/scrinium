@@ -46,6 +46,7 @@ type Driver struct {
 	failures map[string]float64
 	latency  map[string]time.Duration
 	calls    map[string]int64
+	failOn   map[string]int64
 }
 
 // Compile-time interface conformance check.
@@ -95,6 +96,7 @@ func New(inner driver.Driver, opts ...Option) *Driver {
 		failures: make(map[string]float64),
 		latency:  make(map[string]time.Duration),
 		calls:    make(map[string]int64),
+		failOn:   make(map[string]int64),
 	}
 	for _, fn := range opts {
 		fn(d)
@@ -135,6 +137,7 @@ func (d *Driver) Reset(seed int64) {
 func (d *Driver) gate(ctx context.Context, method string) error {
 	d.mu.Lock()
 	d.calls[method]++
+	trip := d.failOn[method] != 0 && d.calls[method] == d.failOn[method]
 	rate := d.failures[method]
 	lat := d.latency[method]
 	var roll float64
@@ -142,6 +145,9 @@ func (d *Driver) gate(ctx context.Context, method string) error {
 		roll = d.rng.Float64()
 	}
 	d.mu.Unlock()
+	if trip {
+		return errs.ErrInjected
+	}
 
 	if lat > 0 {
 		select {
@@ -267,4 +273,26 @@ func (d *Driver) IsTombstone(ctx context.Context, path string) (bool, error) {
 		return false, err
 	}
 	return d.inner.IsTombstone(ctx, path)
+}
+
+// WithFailOnCall makes the n-th invocation of method (1-based,
+// counting from construction) return errs.ErrInjected exactly once.
+// Deterministic and position-precise — the basis for torn-write sweeps.
+// n <= 0 disables.
+func WithFailOnCall(method string, n int64) Option {
+	return func(d *Driver) {
+		if n > 0 {
+			d.failOn[method] = n
+		}
+	}
+}
+
+// SetFailOnCall installs the same deterministic trip at runtime, so a
+// test can arm it AFTER bootstrap writes have run. Pairs with
+// CallCount: arm at CallCount(m)+k to fail on the k-th write of the
+// next operation.
+func (d *Driver) SetFailOnCall(method string, n int64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.failOn[method] = n
 }
