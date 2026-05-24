@@ -107,10 +107,18 @@ func TestStore_RoundTrip_Seeded(t *testing.T) {
 }
 
 // checkContentAddressing is the body of the content-addressing law:
-// identical content yields the same ArtifactID and deduplicates to one
-// blob; distinct content yields a distinct ID and a second blob. Plain
-// mode (the only mode where this holds — encrypted blobs use a random
-// IV by design).
+// identical payload bytes deduplicate to a single on-disk blob, and
+// distinct payloads occupy distinct blobs and yield distinct
+// ArtifactIDs. Plain mode only (encrypted blobs use a random IV, so
+// identical plaintext produces distinct ciphertext by design).
+//
+// IMPORTANT: ArtifactID is NOT a pure function of content. It hashes
+// the manifest, which carries a second-resolution CreatedAt (plus
+// session, namespace, ext). Two Puts of identical bytes therefore need
+// not share an ID — under load (notably `-race`) they can land in
+// different wall-clock seconds and get distinct IDs by design. So this
+// law makes NO equal-content ID claim; the content-addressed invariant
+// lives at the blob layer, which is what we assert.
 func checkContentAddressing(t *testing.T, a, b []byte) {
 	t.Helper()
 	s, root := storefx.InitWithRoot(t)
@@ -120,27 +128,25 @@ func checkContentAddressing(t *testing.T, a, b []byte) {
 	if err != nil {
 		t.Fatalf("Put a #1: %v", err)
 	}
-	id1b, err := s.Put(ctx, mkArtifact(a), domain.PutOptions{Namespace: "u"})
-	if err != nil {
+	// A second Put of the same bytes must not create a second blob,
+	// whether it reuses the manifest (same second) or writes a new one
+	// (the blob is still deduped on content hash).
+	if _, err := s.Put(ctx, mkArtifact(a), domain.PutOptions{Namespace: "u"}); err != nil {
 		t.Fatalf("Put a #2: %v", err)
-	}
-	if id1 != id1b {
-		t.Fatalf("same content, different IDs: %s vs %s", id1, id1b)
 	}
 
 	id2, err := s.Put(ctx, mkArtifact(b), domain.PutOptions{Namespace: "u"})
 	if err != nil {
 		t.Fatalf("Put b: %v", err)
 	}
-	if bytes.Equal(a, b) {
-		if id1 != id2 {
-			t.Fatalf("equal content a==b but IDs differ: %s vs %s", id1, id2)
-		}
-	} else if id1 == id2 {
+	// Distinct content must not collide on ID (the content hash feeds
+	// the manifest). Equal content makes no ID claim — see above.
+	if !bytes.Equal(a, b) && id1 == id2 {
 		t.Fatalf("distinct content collided on ID %s", id1)
 	}
 
-	// Dedup: distinct blobs on disk == distinct contents.
+	// Content-addressing proper: identical payloads share one blob,
+	// distinct payloads occupy distinct blobs.
 	wantBlobs := 1
 	if !bytes.Equal(a, b) {
 		wantBlobs = 2

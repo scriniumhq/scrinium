@@ -32,8 +32,11 @@ import (
 //   - TestStoreModel_Randomized runs a batch of fixed-seed programs so
 //     `make test` (no -fuzz) still exercises the model every run.
 //
-// Plain mode only: the model predicts dedup and ID-stability, which
-// are Plain-mode laws.
+// Plain mode only: the model predicts blob-level dedup (one blob per
+// distinct live content), which is a Plain-mode law. It does NOT
+// predict ArtifactID stability across re-Puts — the ID hashes a
+// second-resolution timestamp, so identical content can yield a new id
+// in a later second; the model keys on the id the store returns.
 
 // opKind enumerates the operations the interpreter can apply.
 type opKind uint8
@@ -61,15 +64,6 @@ type model struct {
 func (m *model) findByID(id domain.ArtifactID) int {
 	for i := range m.live {
 		if m.live[i].id == id {
-			return i
-		}
-	}
-	return -1
-}
-
-func (m *model) findByContentNS(content []byte, ns string) int {
-	for i := range m.live {
-		if m.live[i].ns == ns && bytes.Equal(m.live[i].content, content) {
 			return i
 		}
 	}
@@ -131,14 +125,15 @@ func runModelProgram(t *testing.T, program []byte) {
 			if err != nil {
 				t.Fatalf("step %d Put(ns=%s,len=%d): %v", step, ns, len(content), err)
 			}
-			// Dedup expectation: identical (content) already live ⇒ same id.
-			// We key the model entry on id; a duplicate Put of live content
-			// must return the existing id and must not add a model entry.
-			if i := m.findByContentNS(content, ns); i >= 0 {
-				if m.live[i].id != id {
-					t.Fatalf("step %d dedup: same content/ns returned new id %s (had %s)", step, id, m.live[i].id)
-				}
-			} else if m.findByID(id) < 0 {
+			// A Put of content already live in this namespace may return
+			// the SAME id (a same-second idempotent manifest) or a NEW id
+			// (a fresh manifest stamped in a later wall-clock second).
+			// Both are valid: the two artifacts share one deduped blob and
+			// both appear in Walk. Mirror the store exactly — add a model
+			// entry only for an id we have not seen. (Keying dedup on id
+			// rather than content is what makes this race-safe; the blob
+			// dedup invariant is reconciled separately on distinct content.)
+			if m.findByID(id) < 0 {
 				m.live = append(m.live, modelEntry{id: id, content: content, ns: ns})
 			}
 
