@@ -25,8 +25,49 @@ type Config struct {
 	Stores     map[string]*StoreSpec `yaml:"stores,omitempty" json:"stores,omitempty"`
 	Multistore *MultistoreSpec       `yaml:"multistore,omitempty" json:"multistore,omitempty"`
 	Policies   map[string]*Policy    `yaml:"policies,omitempty" json:"policies,omitempty"`
+	Projection *Projection           `yaml:"projection,omitempty" json:"projection,omitempty"`
 	Surfaces   []ComponentSpec       `yaml:"surfaces,omitempty" json:"surfaces,omitempty"`
 	Agents     []ComponentSpec       `yaml:"agents,omitempty" json:"agents,omitempty"`
+}
+
+// Projection holds the read/write-surface defaults the runtime applies
+// when assembling its FSOps/View. Hybrid model (ADR-52 follow-up):
+// these are the shared defaults; an individual surface may override
+// any field in its own config block. Omitting the whole section
+// leaves engine defaults in place (editing off, root view by path).
+type Projection struct {
+	// RootView selects the default tree presented at the root
+	// (byPath, byDate, bySession, byNamespace, byArtifact, byOrphaned).
+	RootView string `yaml:"rootView,omitempty" json:"rootView,omitempty"`
+	// ByPathFallback is what the byPath tree does with manifests that
+	// carry no path: "orphaned" or "synthetic".
+	ByPathFallback string `yaml:"byPathFallback,omitempty" json:"byPathFallback,omitempty"`
+
+	// Editing controls in-place edits: "off" (strict CAS), "on", or
+	// "custom" (consult the Allow* flags). Empty = off.
+	Editing       string `yaml:"editing,omitempty" json:"editing,omitempty"`
+	AllowRename   *bool  `yaml:"allowRename,omitempty" json:"allowRename,omitempty"`
+	AllowSetattr  *bool  `yaml:"allowSetattr,omitempty" json:"allowSetattr,omitempty"`
+	AllowTruncate *bool  `yaml:"allowTruncate,omitempty" json:"allowTruncate,omitempty"`
+	AllowAppend   *bool  `yaml:"allowAppend,omitempty" json:"allowAppend,omitempty"`
+
+	// Namespace constrains writes/visibility to a single namespace.
+	// Empty = global.
+	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+
+	// ScratchDir / ScratchQuota govern the staging area for in-flight
+	// FSOps writes. Empty dir defaults under a local store; 0 quota is
+	// unlimited.
+	ScratchDir   string `yaml:"scratchDir,omitempty" json:"scratchDir,omitempty"`
+	ScratchQuota Size   `yaml:"scratchQuota,omitempty" json:"scratchQuota,omitempty"`
+
+	// ReadOnly disables writes through FSOps.
+	ReadOnly bool `yaml:"readOnly,omitempty" json:"readOnly,omitempty"`
+
+	// Default POSIX bits for artifacts written without explicit ones.
+	DefaultMode uint32 `yaml:"defaultMode,omitempty" json:"defaultMode,omitempty"`
+	DefaultUID  uint32 `yaml:"defaultUid,omitempty" json:"defaultUid,omitempty"`
+	DefaultGID  uint32 `yaml:"defaultGid,omitempty" json:"defaultGid,omitempty"`
 }
 
 // StoreSpec is one store: a backend URI, optional credentials, and a

@@ -66,10 +66,36 @@ func validate(c *Config) error {
 		}
 	}
 
+	validateProjection(c.Projection, add)
+
 	if len(errs) > 0 {
 		return fmt.Errorf("composer config: %s", strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+func validateProjection(p *Projection, add func(string, ...any)) {
+	if p == nil {
+		return
+	}
+	switch p.Editing {
+	case "", "off", "on", "custom":
+	default:
+		add("projection.editing %q is not one of {off, on, custom}", p.Editing)
+	}
+	switch p.RootView {
+	case "", "by-path", "by-date", "by-session", "by-namespace", "by-artifact", "by-orphaned":
+	default:
+		add("projection.rootView %q is not a known tree", p.RootView)
+	}
+	switch p.ByPathFallback {
+	case "", "orphaned", "synthetic":
+	default:
+		add("projection.byPathFallback %q is not one of {orphaned, synthetic}", p.ByPathFallback)
+	}
+	if p.ScratchQuota < 0 {
+		add("projection.scratchQuota is negative")
+	}
 }
 
 func validatePolicy(store string, p *Policy, add func(string, ...any)) {

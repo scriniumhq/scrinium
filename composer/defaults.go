@@ -21,6 +21,30 @@ func applyDefaults(c *Config) {
 	for _, s := range c.allStores() {
 		applyPolicyDefaults(s.Policy)
 	}
+	applyProjectionDefaults(c.Projection)
+}
+
+// applyProjectionDefaults fills the shared projection defaults when the
+// section is present. Absence leaves the whole thing to engine
+// defaults at build time. Kept deterministic (no os.Getuid here) so
+// the result is reproducible and testable; the runtime fills
+// uid/gid/scratch-path defaults that depend on the environment.
+func applyProjectionDefaults(p *Projection) {
+	if p == nil {
+		return
+	}
+	if p.Editing == "" {
+		p.Editing = "off"
+	}
+	if p.RootView == "" {
+		p.RootView = "by-path"
+	}
+	if p.ByPathFallback == "" {
+		p.ByPathFallback = "orphaned"
+	}
+	if p.DefaultMode == 0 {
+		p.DefaultMode = 0o644
+	}
 }
 
 // applyPolicyDefaults defaults a single (already-resolved, inline)
@@ -80,13 +104,50 @@ func resolvePolicyRefs(c *Config) error {
 		if !ok {
 			return fmt.Errorf("store %q: policyRef %q not found in policies", name, s.PolicyRef)
 		}
-		// Shallow copy is enough: policies are treated as immutable
-		// templates and defaults are applied to each store's own copy.
-		cp := *p
-		s.Policy = &cp
+		// Deep copy: policies are immutable templates, and defaults are
+		// applied to each store's own copy. A shallow copy would alias
+		// the template's nested pointers (Encryption, Chunking, …), so
+		// defaulting or editing one store's policy would bleed into the
+		// template and every other store that references it.
+		s.Policy = clonePolicy(p)
 		s.PolicyRef = ""
 	}
 	return nil
+}
+
+// clonePolicy returns an independent deep copy of p (nil-safe).
+func clonePolicy(p *Policy) *Policy {
+	if p == nil {
+		return nil
+	}
+	cp := *p // copies value fields; pointer/slice fields cloned below.
+	if p.Encryption != nil {
+		e := *p.Encryption
+		cp.Encryption = &e
+	}
+	if p.Chunking != nil {
+		c := *p.Chunking
+		cp.Chunking = &c
+	}
+	if p.Bundling != nil {
+		b := *p.Bundling
+		cp.Bundling = &b
+	}
+	if p.GC != nil {
+		g := *p.GC
+		cp.GC = &g
+	}
+	if p.Scrub != nil {
+		s := *p.Scrub
+		cp.Scrub = &s
+	}
+	if p.Pipeline != nil {
+		cp.Pipeline = append([]PipelineStage(nil), p.Pipeline...)
+	}
+	if p.PipelineExtra != nil {
+		cp.PipelineExtra = append([]PipelineStage(nil), p.PipelineExtra...)
+	}
+	return &cp
 }
 
 // allStores returns every StoreSpec in the config (the single Store or
