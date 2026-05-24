@@ -245,6 +245,21 @@ fuzz-list:
 	          }' | sort -u; \
 	fi
 
+# fuzz-all — active-fuzz EVERY target for FUZZTIME each, sequentially.
+# Go's -fuzz takes one target in one package per invocation, so there is
+# no single-command way to fuzz the whole tree; this loops the inventory.
+# Total wall time ≈ (number of targets) × FUZZTIME. Stops at the first
+# crash (seed written under testdata/fuzz/). Nightly/manual — never `make test`.
+.PHONY: fuzz-all
+fuzz-all:
+	@set -e; \
+	for pkg in $$($(GO) list ./...); do \
+	  for fn in $$($(GO) test -list '^Fuzz' $$pkg 2>/dev/null | grep '^Fuzz' || true); do \
+	    echo "==> $$pkg $$fn (fuzztime=$(FUZZTIME))"; \
+	    $(GO) test -run=^$$ -fuzz=^$$fn$$ -fuzztime=$(FUZZTIME) $$pkg; \
+	  done; \
+	done
+
 # Wipe generated fuzz corpora. testdata/fuzz/ accumulates between
 # active runs; trim it before commits to keep `git status` clean.
 # Manually-curated regression seeds (committed under
