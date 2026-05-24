@@ -41,7 +41,7 @@ type (
 
 	// SurfaceFactory builds an external-access surface (FUSE, WebDAV,
 	// …) bound to the assembled runtime, from its config block.
-	SurfaceFactory func(rt runtime.Runtime, config map[string]any) (any, error)
+	SurfaceFactory func(rt runtime.Runtime, config map[string]any) (runtime.Surface, error)
 )
 
 // registries holds the process-wide extension tables. A single guard

@@ -18,7 +18,6 @@ import (
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
-	"scrinium.dev/engine/projection/fsmeta"
 	"scrinium.dev/engine/runtime"
 	"scrinium.dev/engine/store"
 
@@ -46,19 +45,17 @@ func build(ctx context.Context, c *Config, mode buildMode) (runtime.Runtime, err
 	if len(c.Stores) > 0 {
 		return nil, fmt.Errorf("composer: multistore assembly is not wired yet (M4/S1): %w", errs.ErrNotImplemented)
 	}
-	if len(c.Surfaces) > 0 {
-		return nil, fmt.Errorf("composer: surfaces are wired by the runtime in R11: %w", errs.ErrNotImplemented)
-	}
 	if len(c.Agents) > 0 {
-		return nil, fmt.Errorf("composer: user agents are wired by the runtime in R11: %w", errs.ErrNotImplemented)
+		return nil, fmt.Errorf("composer: user agents are wired in M3: %w", errs.ErrNotImplemented)
 	}
 	if c.Store == nil {
 		return nil, fmt.Errorf("composer: no store to build")
 	}
-	return buildSingle(ctx, c.Store, mode)
+	return buildSingle(ctx, c, mode)
 }
 
-func buildSingle(ctx context.Context, spec *StoreSpec, mode buildMode) (_ runtime.Runtime, retErr error) {
+func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ runtime.Runtime, retErr error) {
+	spec := c.Store
 	if err := guardUnsupportedPolicy(spec.Policy); err != nil {
 		return nil, err
 	}
@@ -137,16 +134,18 @@ func buildSingle(ctx context.Context, spec *StoreSpec, mode buildMode) (_ runtim
 		return nil, fmt.Errorf("composer: store is locked; check the encryption passphrase")
 	}
 
-	// 6. Read-side View (cheap on a fresh store; backfills on an
-	//    existing one). FSOps is intentionally left nil for R10 — the
-	//    composer config does not describe projection/editing policy;
-	//    that arrives with the surface wiring in R11.
-	view, err := projection.NewView(ctx, st,
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithFSIndex(fsidx),
-	)
+	// 6. Read-side View + read/write FSOps from the projection section.
+	//    When surfaces are configured but no projection block was given,
+	//    synthesise the defaults so the surfaces have an FSOps to wrap.
+	effProj := c.Projection
+	if effProj == nil && len(c.Surfaces) > 0 {
+		effProj = &Projection{}
+		applyProjectionDefaults(effProj)
+	}
+
+	view, err := buildView(ctx, st, fsidx, effProj)
 	if err != nil {
-		return nil, fmt.Errorf("composer: build view: %w", err)
+		return nil, fmt.Errorf("composer: %w", err)
 	}
 	cleanups = append(cleanups, func() {
 		if err := view.Close(); err != nil {
@@ -156,7 +155,15 @@ func buildSingle(ctx context.Context, spec *StoreSpec, mode buildMode) (_ runtim
 
 	mountSession := domain.NewMountSessionID()
 
-	// closeFn unwinds in LIFO order, idempotency is the runtime's job.
+	var fsops *projection.FSOps
+	if effProj != nil {
+		fsops, err = buildFSOps(view, st, effProj, mountSession, spec.Driver)
+		if err != nil {
+			return nil, fmt.Errorf("composer: %w", err)
+		}
+	}
+
+	// closeFn unwinds in LIFO order; idempotency is the runtime's job.
 	closeFn := func() error {
 		var firstErr error
 		if err := view.Close(); err != nil && firstErr == nil {
@@ -171,7 +178,30 @@ func buildSingle(ctx context.Context, spec *StoreSpec, mode buildMode) (_ runtim
 		return firstErr
 	}
 
-	rt := runtime.New(st, idx, view, nil, mountSession, closeFn)
+	// buildSurfaces is invoked by runtime.New with the constructed
+	// runtime so each surface factory can bind to it. An unregistered
+	// surface kind is a hard error.
+	buildSurfaces := func(rt runtime.Runtime) ([]runtime.Surface, error) {
+		surfaces := make([]runtime.Surface, 0, len(c.Surfaces))
+		for i, sf := range c.Surfaces {
+			factory, ok := reg.surface(sf.Kind)
+			if !ok {
+				return nil, fmt.Errorf("composer: surfaces[%d]: no surface registered for kind %q "+
+					"(import its package for the side-effect registration)", i, sf.Kind)
+			}
+			s, err := factory(rt, sf.Config)
+			if err != nil {
+				return nil, fmt.Errorf("composer: surface %q: %w", sf.Kind, err)
+			}
+			surfaces = append(surfaces, s)
+		}
+		return surfaces, nil
+	}
+
+	rt, err := runtime.New(st, idx, view, fsops, mountSession, buildSurfaces, closeFn)
+	if err != nil {
+		return nil, err
+	}
 	return rt, nil
 }
 
