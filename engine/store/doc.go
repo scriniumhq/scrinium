@@ -63,10 +63,9 @@
 // Data plane (DataStore):
 //
 //   - data_put.go          — Put orchestrator and write-path policy; the
-//     physical mechanics live in internal/artifactwriter.
+//     physical mechanics live in internal/artifactio.
 //   - data_get.go          — Get, read-handle dispatch, manifest loading.
-//   - data_read_handles.go — the ReadHandle implementations (inline,
-//     target, verifying).
+//     The ReadHandle implementations live in internal/artifactio.
 //   - data_delete.go       — Delete.
 //   - data_verify.go       — Verify and the VerifyOnRead policy.
 //   - data_walk.go         — Walk.
@@ -103,8 +102,9 @@
 // internal/ subpackages — concerns that own their state and so are
 // separate packages (the boundary along which the engine can be split):
 //
-//   - artifactwriter — the artifact write-path mechanics: blob
-//     materialization, manifest assembly, and persistence.
+//   - artifactio    — the artifact I/O mechanics over the engine/artifact
+//     format: blob materialization, manifest assembly/persistence (write)
+//     and manifest load, blob open, and verification (read).
 //   - descriptor   — the on-disk descriptor and its L2 cache.
 //   - keyring      — the KDF (Argon2id) and KEK/DEK wrap/unwrap kernels.
 //   - storeconfig  — the StoreConfig format, defaults, validation, and

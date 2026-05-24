@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"scrinium.dev/engine/domain"
@@ -100,7 +101,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Read, reconcile, heal, and cache the descriptor ---
 
-	desc, err := loadCanonicalDescriptor(ctx, drv, idx, wrap)
+	desc, err := loadCanonicalDescriptor(ctx, drv, idx, optsLogger(o, "store"), wrap)
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +126,9 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 			return nil, wrap("", err)
 		}
+		s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
+			storeIDAttr(s), stateAttr(domain.StateUnlocked),
+			slog.Bool("encrypted_dek", false))
 		return s, nil
 	}
 
@@ -142,6 +146,9 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		s.stateMu.Lock()
 		s.state = domain.StateLocked
 		s.stateMu.Unlock()
+		s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
+			storeIDAttr(s), stateAttr(domain.StateLocked),
+			slog.Bool("encrypted_dek", true))
 		return s, nil
 	}
 
@@ -180,6 +187,9 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		return nil, wrap("", err)
 	}
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
+		storeIDAttr(s), stateAttr(domain.StateUnlocked),
+		slog.Bool("encrypted_dek", true), slog.Bool("auto_unlock", true))
 	return s, nil
 }
 
@@ -189,7 +199,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 // a fast-start aid. Both absent → errs.ErrStoreNotFound; unrecoverable →
 // errs.ErrStoreCorrupted; split-brain and malformed-replica errors pass
 // through so callers can branch with errors.Is.
-func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx index.StoreIndex, wrap func(string, error) error) (*descriptor.Descriptor, error) {
+func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx index.StoreIndex, log *slog.Logger, wrap func(string, error) error) (*descriptor.Descriptor, error) {
 	l0, l1, l0s, l1s, err := reconcile.ReadBoth(ctx, drv)
 	if err != nil {
 		// Non-recoverable I/O error from the Driver — propagate.
@@ -212,6 +222,18 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx index.S
 	// diverges, write the side that needs updating. Each heal is a single
 	// atomic Put; a crash mid-heal leaves the same divergence and the
 	// next OpenStore re-applies the step. Idempotent.
+	//
+	// A heal means the two descriptor replicas were out of sync on disk —
+	// operator-relevant (Warn): it explains why a Store may have come up
+	// after an interrupted admin write. Logged before the heal so a heal
+	// failure below is preceded by the diagnosis. Lock-free: no *store
+	// exists yet.
+	if rec.Action != reconcile.HealNone {
+		log.LogAttrs(ctx, slog.LevelWarn, "descriptor replicas diverged; healing",
+			slog.String("store_id", desc.StoreID),
+			slog.Uint64("sequence", desc.Sequence),
+			slog.String("heal_action", rec.Action.String()))
+	}
 	if err := healReplicas(ctx, drv, desc, rec.Action); err != nil {
 		return nil, wrap("", err)
 	}

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/blobpath"
 )
 
 // OrphanReport is the result of a RecoverOrphans pass. Counts are
@@ -79,7 +79,7 @@ func RecoverOrphans(ctx context.Context, drv driver.Driver, idx index.StoreIndex
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			ref, err := blobpath.RefFromPath(om.Path)
+			ref, err := artifact.RefFromBlobPath(om.Path)
 			if err != nil {
 				report.Errors = append(report.Errors,
 					fmt.Errorf("recoverOrphans: blobs parse: %w", err))
@@ -111,7 +111,7 @@ func RecoverOrphans(ctx context.Context, drv driver.Driver, idx index.StoreIndex
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			id, err := blobpath.ArtifactIDFromManifestPath(om.Path)
+			id, err := artifact.IDFromManifestPath(om.Path)
 			if err != nil {
 				report.Errors = append(report.Errors,
 					fmt.Errorf("recoverOrphans: manifests parse: %w", err))

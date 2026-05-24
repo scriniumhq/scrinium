@@ -1,0 +1,54 @@
+package artifact_test
+
+import (
+	"bytes"
+	"testing"
+
+	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/domain"
+	"scrinium.dev/internal/testutil/artifactfx"
+)
+
+func FuzzDecode(f *testing.F) {
+	valid, err := artifact.Encode(artifactfx.Manifest(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if err != nil {
+		f.Fatalf("seed encode: %v", err)
+	}
+
+	f.Add(valid)
+	f.Add([]byte{})
+	f.Add([]byte{0x00, 'S', 'C', '1'})
+	f.Add([]byte{0x00, 'S', 'C', '1', 0x00})
+	f.Add([]byte{0x00, 'S', 'C', '2', 0x00})
+	f.Add([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0x00})
+	f.Add([]byte{0x00, 'S', 'C', '1', 0x00, '{'})
+	f.Add([]byte{0x00, 'S', 'C', '1', 0x00, '{', '}'})
+	f.Add([]byte{0x00, 'S', 'C', '1', 0x01})
+
+	flipped := append([]byte(nil), valid...)
+	flipped[4] = 0xFF
+	f.Add(flipped)
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		m, err := artifact.Decode(data)
+		if err != nil {
+			return
+		}
+
+		reencoded, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+		if err != nil {
+			t.Fatalf("re-encode failed for input that decoded cleanly: input=%x err=%v", data, err)
+		}
+
+		m2, err := artifact.Decode(reencoded)
+		if err != nil {
+			t.Fatalf("re-decoded re-encoded bytes failed: input=%x reencoded=%x err=%v", data, reencoded, err)
+		}
+
+		bs1, _ := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+		bs2, _ := artifact.Encode(m2, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+		if !bytes.Equal(bs1, bs2) {
+			t.Errorf("round-trip changed the manifest:\n  decode1=%s\n  decode2=%s", bs1, bs2)
+		}
+	})
+}

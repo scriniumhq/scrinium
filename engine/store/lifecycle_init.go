@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/google/uuid"
@@ -100,7 +101,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Probe for existing descriptor; honour WithForceReinit ---
 
-	if err := prepareInitLocation(ctx, drv, o.forceReinit, wrap); err != nil {
+	if err := prepareInitLocation(ctx, drv, o.forceReinit, optsLogger(o, "store"), wrap); err != nil {
 		return nil, nil, err
 	}
 
@@ -190,6 +191,11 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
 	}
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store initialised",
+		storeIDAttr(s),
+		slog.Bool("encrypted_dek", desc.DEKEncrypted),
+		manifestCryptoAttr(cfg.ManifestCrypto),
+		slog.Bool("recovery_kit", kit != nil))
 	return s, kit, nil
 }
 
@@ -200,7 +206,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 // refuses with errs.ErrStoreCorrupted unless force is set. Under force,
 // the well-known descriptor file is removed — blobs/ are left in place
 // for GC.
-func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit bool, wrap func(string, error) error) error {
+func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit bool, log *slog.Logger, wrap func(string, error) error) error {
 	existing, probeErr := descriptor.Read(ctx, drv)
 	switch {
 	case probeErr == nil:
@@ -214,6 +220,8 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 		if err := drv.Remove(ctx, descriptor.Path); err != nil {
 			return wrap("remove old descriptor", err)
 		}
+		log.LogAttrs(ctx, slog.LevelWarn, "force-reinit: removed existing descriptor",
+			slog.String("store_id", existing.StoreID))
 	case errors.Is(probeErr, os.ErrNotExist):
 		// Fresh Location, the normal path.
 	default:
@@ -224,7 +232,14 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 			return fmt.Errorf("%w: descriptor present but unreadable: %v",
 				errs.ErrStoreCorrupted, probeErr)
 		}
-		_ = drv.Remove(ctx, descriptor.Path)
+		// Best-effort removal of the unreadable descriptor. A failure
+		// here is not fatal (the subsequent Persist overwrites it), but
+		// it is operator-relevant — Warn rather than swallow.
+		if rmErr := drv.Remove(ctx, descriptor.Path); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			log.LogAttrs(ctx, slog.LevelWarn,
+				"force-reinit: could not remove unreadable descriptor (will overwrite)",
+				slog.String("error", rmErr.Error()))
+		}
 	}
 	return nil
 }

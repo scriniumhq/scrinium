@@ -38,7 +38,7 @@ type DataStore interface {
 	// Get opens an artifact for reading. It returns a ReadHandle —
 	// a streaming primitive with lazy resolution of the physical
 	// address.
-	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (domain.ReadHandle, error)
 
 	// Management and verification.
 
@@ -154,6 +154,20 @@ type AdminStore interface {
 	// graceful-shutdown path.
 	Close() error
 
+	// RunMaintenance executes a one-shot MaintenanceAgent under the
+	// Store: it Validates the agent against the current Store state
+	// and, if that passes, runs it to completion, returning the
+	// agent's AgentResult. The agent owns its maintenance lease and
+	// its own progress/outcome events (it is constructed with the
+	// event bus); RunMaintenance is the sanctioned entry point that
+	// guarantees Validate-before-Run ordering and lives on AdminStore
+	// so DataStore consumers cannot start an agent. The host is
+	// expected to have set the maintenance mode the agent requires
+	// (see SetMaintenanceMode); Validate reports a mismatch. The
+	// contract lives in domain (domain.MaintenanceAgent).
+	// Full semantics: 3. Reference/06 Agents/00 Contract.md.
+	RunMaintenance(ctx context.Context, agent domain.MaintenanceAgent) (*domain.AgentResult, error)
+
 	// System returns the facade for engine-internal service artifacts
 	// (configuration, agent cursors, index snapshots, …). Reached only
 	// through AdminStore, so DataStore consumers cannot see system state.
@@ -172,7 +186,7 @@ type SystemStore interface {
 
 	// Get opens the artifact currently pointed at by name. Returns
 	// errs.ErrArtifactNotFound when no pointer exists.
-	Get(ctx context.Context, name string) (ReadHandle, error)
+	Get(ctx context.Context, name string) (domain.ReadHandle, error)
 
 	// Delete removes the pointer and the artifact it points at.
 	// Idempotent: deleting an absent name returns nil.

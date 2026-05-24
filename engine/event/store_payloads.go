@@ -9,7 +9,7 @@ import (
 // store_payloads.go — event-type name constants and their payload
 // structs. Pure data: every field is a domain type or stdlib. No
 // dependency on *store or the event bus, so this file is the unit
-// that moves to the event package (or coreapi) wholesale — the
+// that moves to the event package wholesale — the
 // publish method that consumes them stays behind in events.go.
 
 const (

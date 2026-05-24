@@ -10,11 +10,10 @@ import (
 	"os"
 	"strings"
 
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/blobpath"
-	"scrinium.dev/engine/internal/manifestcodec"
 )
 
 const (
@@ -102,7 +101,7 @@ func LoadByID(
 	hashes domain.HashRegistry,
 	id domain.ArtifactID,
 ) (domain.StoreConfig, error) {
-	manifestPath, err := blobpath.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(id)
 	if err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("%w: %v", errs.ErrCorruptedConfigPointer, err)
 	}
@@ -119,10 +118,10 @@ func LoadByID(
 		return domain.StoreConfig{}, fmt.Errorf("system config: read manifest: %w", err)
 	}
 
-	if err := manifestcodec.VerifyArtifactID(id, fileBytes, hashes); err != nil {
+	if err := artifact.VerifyArtifactID(id, fileBytes, hashes); err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("system config: verify: %w", err)
 	}
-	manifest, err := manifestcodec.DecodeFile(fileBytes)
+	manifest, err := artifact.Decode(fileBytes)
 	if err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("system config: decode: %w", err)
 	}

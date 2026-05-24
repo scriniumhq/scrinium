@@ -16,7 +16,6 @@ import (
 	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/pathx"
 )
 
@@ -719,22 +718,22 @@ func (v *View) WalkByDate(prefix string) NodeSeq      { return v.walkInTree(v.by
 func (v *View) WalkByArtifact(prefix string) NodeSeq  { return v.walkInTree(v.byArtifact, prefix) }
 func (v *View) WalkByOrphaned(prefix string) NodeSeq  { return v.walkInTree(v.byOrphaned, prefix) }
 
-func (v *View) OpenByPath(ctx context.Context, path string, opts domain.GetOptions) (store.ReadHandle, error) {
+func (v *View) OpenByPath(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
 	return v.openInTree(ctx, v.byPath, path, opts)
 }
-func (v *View) OpenBySession(ctx context.Context, path string, opts domain.GetOptions) (store.ReadHandle, error) {
+func (v *View) OpenBySession(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
 	return v.openInTree(ctx, v.bySession, path, opts)
 }
-func (v *View) OpenByNamespace(ctx context.Context, path string, opts domain.GetOptions) (store.ReadHandle, error) {
+func (v *View) OpenByNamespace(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
 	return v.openInTree(ctx, v.byNamespace, path, opts)
 }
-func (v *View) OpenByDate(ctx context.Context, path string, opts domain.GetOptions) (store.ReadHandle, error) {
+func (v *View) OpenByDate(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
 	return v.openInTree(ctx, v.byDate, path, opts)
 }
-func (v *View) OpenByArtifact(ctx context.Context, path string, opts domain.GetOptions) (store.ReadHandle, error) {
+func (v *View) OpenByArtifact(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
 	return v.openInTree(ctx, v.byArtifact, path, opts)
 }
-func (v *View) OpenByOrphaned(ctx context.Context, path string, opts domain.GetOptions) (store.ReadHandle, error) {
+func (v *View) OpenByOrphaned(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
 	return v.openInTree(ctx, v.byOrphaned, path, opts)
 }
 
@@ -771,7 +770,7 @@ func (v *View) ListIn(rv RootView, path string) NodeSeq {
 }
 
 // OpenIn dispatches OpenByX based on rv.
-func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts domain.GetOptions) (store.ReadHandle, error) {
+func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
 	tree := v.treeFor(rv)
 	if tree == nil {
 		return nil, errs.ErrPathNotFound
@@ -893,7 +892,7 @@ func (v *View) openInTree(
 	tree map[string]*viewNode,
 	path string,
 	opts domain.GetOptions,
-) (store.ReadHandle, error) {
+) (domain.ReadHandle, error) {
 	if v.closed.Load() {
 		return nil, os.ErrClosed
 	}

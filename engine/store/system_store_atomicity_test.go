@@ -25,10 +25,10 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // --- fault-injection driver wrapper ---
@@ -48,14 +48,14 @@ func newFaultDriver(d driver.Driver) *faultDriver {
 	return fd
 }
 
-func (f *faultDriver) Put(ctx context.Context, path string, r io.Reader) error {
+func (f *faultDriver) Put(ctx context.Context, path string, r io.Reader, opts ...driver.PutOption) error {
 	if f.failPutOn != "" && path == f.failPutOn && f.armed.CompareAndSwap(true, false) {
 		// Drain the reader so the body is consumed (avoids
 		// leaving the caller's reader in an undefined state).
 		_, _ = io.Copy(io.Discard, r)
 		return errors.New("faultDriver: injected Put failure")
 	}
-	return f.Driver.Put(ctx, path, r)
+	return f.Driver.Put(ctx, path, r, opts...)
 }
 
 func (f *faultDriver) Remove(ctx context.Context, path string) error {

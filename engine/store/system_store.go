@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -35,7 +36,7 @@ type ArtifactWriter func(
 ) (domain.ArtifactID, error)
 
 // InlineHandleFactory builds a ReadHandle over an inline manifest's payload.
-type InlineHandleFactory func(domain.Manifest) ReadHandle
+type InlineHandleFactory func(domain.Manifest) domain.ReadHandle
 
 type systemStore struct {
 	drv        driver.Driver
@@ -44,6 +45,7 @@ type systemStore struct {
 	cfg        domain.StoreConfig
 	writeArt   ArtifactWriter
 	makeHandle InlineHandleFactory
+	log        *slog.Logger
 }
 
 // Compile-time check that the concrete type satisfies the contract.
@@ -58,6 +60,7 @@ func newSystemStore(
 	cfg domain.StoreConfig,
 	writeArt ArtifactWriter,
 	makeHandle InlineHandleFactory,
+	log *slog.Logger,
 ) *systemStore {
 	return &systemStore{
 		drv:        drv,
@@ -66,6 +69,7 @@ func newSystemStore(
 		cfg:        cfg,
 		writeArt:   writeArt,
 		makeHandle: makeHandle,
+		log:        log,
 	}
 }
 
@@ -183,7 +187,7 @@ func (ss *systemStore) Put(ctx context.Context, name string, payload io.Reader, 
 	return nil
 }
 
-func (ss *systemStore) Get(ctx context.Context, name string) (ReadHandle, error) {
+func (ss *systemStore) Get(ctx context.Context, name string) (domain.ReadHandle, error) {
 	ptrPath, err := pointerPath(name)
 	if err != nil {
 		return nil, err

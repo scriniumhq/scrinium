@@ -6,13 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
+	"time"
 
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/internal/blobpath"
-	"scrinium.dev/engine/internal/manifestcodec"
 )
 
 // gatherNames lists pointer paths under namespace/pointers/<prefix>
@@ -22,23 +24,33 @@ import (
 // separately when the prefix admits it, since it does not live under
 // pointers/.
 func (ss *systemStore) gatherNames(ctx context.Context, namespace, prefix string) ([]string, error) {
-	prefixPath := namespace + "/pointers/"
+	// Pointer names are nested ("scrub/cursor", "config/v1"), so the
+	// listing must recurse. drv.List is one level deep — fine for a
+	// prefix that already resolves to a leaf directory, but it drops
+	// nested names under a shallow or empty prefix. Walk the pointers/
+	// subtree recursively instead: ListObjectsWithModTime reports
+	// files only (never directories) and treats a missing prefix as an
+	// empty walk.
+	pointersRoot := namespace + "/pointers/"
+	listPath := pointersRoot
 	if prefix != "" {
-		prefixPath = namespace + "/pointers/" + prefix
+		listPath += prefix
 	}
-	paths, err := ss.drv.List(ctx, prefixPath)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("system store: list %q: %w", prefixPath, err)
-	}
-	out := make([]string, 0, len(paths))
-	pointersPrefix := namespace + "/pointers/"
-	for _, p := range paths {
-		name := strings.TrimPrefix(p, pointersPrefix)
-		if name == "" {
-			continue
+
+	var out []string
+	err := ss.drv.ListObjectsWithModTime(ctx, listPath, time.Time{}, func(o driver.ObjectMeta) error {
+		if name := strings.TrimPrefix(o.Path, pointersRoot); name != "" {
+			out = append(out, name)
 		}
-		out = append(out, name)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("system store: list %q: %w", listPath, err)
 	}
+
+	// config/current keeps a flat path outside pointers/ (its on-disk
+	// format predates the subtree), so the recursive walk never sees
+	// it — surface it explicitly when the prefix would match.
 	if namespace == domain.NamespaceSystemConfig &&
 		(prefix == "" || prefix == "config" || prefix == "config/" || strings.HasPrefix("config/current", prefix)) {
 		if _, err := ss.drv.Stat(ctx, namespace+"/current"); err == nil {
@@ -89,7 +101,7 @@ func (ss *systemStore) writePointer(ctx context.Context, ptrPath string, id doma
 }
 
 // readArtifact returns a ReadHandle over the manifest's inline payload.
-func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (ReadHandle, error) {
+func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (domain.ReadHandle, error) {
 	m, err := ss.loadManifest(ctx, id)
 	if err != nil {
 		return nil, err
@@ -102,7 +114,7 @@ func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (
 }
 
 func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	manifestPath, err := blobpath.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(id)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("manifest path: %w", err)
 	}
@@ -118,10 +130,10 @@ func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("read manifest: %w", err)
 	}
-	if err := manifestcodec.VerifyArtifactID(id, fileBytes, ss.hashes); err != nil {
+	if err := artifact.VerifyArtifactID(id, fileBytes, ss.hashes); err != nil {
 		return domain.Manifest{}, fmt.Errorf("verify manifest: %w", err)
 	}
-	m, err := manifestcodec.DecodeFile(fileBytes)
+	m, err := artifact.Decode(fileBytes)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("decode manifest: %w", err)
 	}
@@ -131,13 +143,35 @@ func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (
 
 // dropPredecessor removes the manifest file and index row of a
 // superseded artifact. Best-effort: Orphan Scan reclaims survivors.
+//
+// Failures here are invisible to the caller — the pointer flip already
+// returned success — so they are logged at Warn: the operation is
+// logically complete but left an orphan for GC. No error is returned
+// (that is the "best-effort" contract); the log is the only signal.
 func (ss *systemStore) dropPredecessor(ctx context.Context, id domain.ArtifactID) {
 	m, err := ss.loadManifest(ctx, id)
 	if err == nil {
 		blobRefs := []string{string(m.BlobRef)}
-		_ = ss.index.DeleteManifest(ctx, id, blobRefs)
+		if delErr := ss.index.DeleteManifest(ctx, id, blobRefs); delErr != nil {
+			ss.logger().LogAttrs(ctx, slog.LevelWarn,
+				"superseded artifact left in index (best-effort cleanup failed)",
+				artifactIDAttr(id), slog.String("error", delErr.Error()))
+		}
 	}
-	if manifestPath, pErr := blobpath.ManifestPath(id); pErr == nil {
-		_ = ss.drv.Remove(ctx, manifestPath)
+	if manifestPath, pErr := artifact.ManifestPath(id); pErr == nil {
+		if rmErr := ss.drv.Remove(ctx, manifestPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			ss.logger().LogAttrs(ctx, slog.LevelWarn,
+				"superseded manifest file left on disk (best-effort cleanup failed)",
+				artifactIDAttr(id), slog.String("error", rmErr.Error()))
+		}
 	}
+}
+
+// logger returns the systemStore's logger, never nil. Mirrors the
+// store-level nil-safety so call sites need no guard.
+func (ss *systemStore) logger() *slog.Logger {
+	if ss.log == nil {
+		return discardLogger
+	}
+	return ss.log
 }

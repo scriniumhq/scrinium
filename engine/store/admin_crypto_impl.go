@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/errs"
@@ -15,7 +16,15 @@ import (
 // Unlock transitions an encrypted Store from Locked to Unlocked.
 // Idempotent in Unlocked.
 func (s *store) Unlock(ctx context.Context) error {
-	return s.unlockEncrypted(ctx)
+	if err := s.unlockEncrypted(ctx); err != nil {
+		return err
+	}
+	// Lock-free: unlockEncrypted has released crypto.mu. Info — an
+	// unlock is an operator-relevant access-boundary event. No secret
+	// is logged; the DEK never appears.
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store unlocked",
+		storeIDAttr(s))
+	return nil
 }
 
 // ExportRecoveryKit returns the current Recovery Kit. Available in
@@ -27,14 +36,30 @@ func (s *store) ExportRecoveryKit(ctx context.Context) ([]byte, error) {
 // RotateKEK re-wraps the DEK under a new KEK. On-disk data is not
 // rewritten; the prior Recovery Kit is invalidated.
 func (s *store) RotateKEK(ctx context.Context) error {
-	return s.rotateKEKImpl(ctx)
+	if err := s.rotateKEKImpl(ctx); err != nil {
+		return err
+	}
+	// Lock-free: rotateKEKImpl has released crypto.mu. Warn — KEK
+	// rotation invalidates the prior Recovery Kit, which the operator
+	// must re-export; surfacing it above Info reduces the chance of an
+	// orphaned kit. No key material is logged.
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "KEK rotated; prior recovery kit invalidated",
+		storeIDAttr(s))
+	return nil
 }
 
 // SetPassphrase enables encryption on a Store initialised with a
 // plaintext DEK. Refuses with errs.ErrPassphraseAlreadySet when the
 // DEK is already wrapped — use RotateKEK then.
 func (s *store) SetPassphrase(ctx context.Context) error {
-	return s.setPassphraseImpl(ctx)
+	if err := s.setPassphraseImpl(ctx); err != nil {
+		return err
+	}
+	// Lock-free: setPassphraseImpl has released crypto.mu. Info — the
+	// Store transitioned from plaintext-DEK to passphrase-wrapped.
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "passphrase set; DEK now wrapped",
+		storeIDAttr(s))
+	return nil
 }
 
 // Shared discipline for the crypto methods below:

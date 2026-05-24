@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel stale runs on the same ref — saves minutes on private repos.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # fmt-check + vet + test + fuzz-smoke — exactly `make ci`, so CI and
+  # local runs never diverge. Also covers cmd/scrinium-fuse (its
+  # linux||darwin build tag is satisfied on ubuntu).
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'   # from mise.toml; go.mod requires 1.26.0 minimum
+          cache: true            # module cache keyed on go.sum
+      - run: make ci
+
+  # Race detector in its own job: -race adds 5-10x, too slow to run
+  # tree-wide on every PR otherwise. Full tree here; narrow to
+  # P=engine/store (and engine/agent once covered) if it gets heavy.
+  race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.2'
+          cache: true
+      - run: RACE=1 make test

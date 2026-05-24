@@ -25,7 +25,10 @@ func buildWebStatsData(
 	exts []web.StatsExtension,
 	startedAt time.Time,
 	mountSession domain.SessionID,
-	cfg Config,
+	storePath string,
+	readOnly bool,
+	editing string,
+	namespace string,
 ) web.StatsData {
 	stats := view.Stats
 
@@ -35,7 +38,7 @@ func buildWebStatsData(
 			StartedAt:    startedAt,
 			Uptime:       formatStatsUptime(time.Since(startedAt)),
 			MountSession: string(mountSession),
-			StorePath:    cfg.Daemon.Store,
+			StorePath:    storePath,
 		},
 		View: web.StatsView{
 			TotalNodes:     stats.TotalNodes,
@@ -63,11 +66,11 @@ func buildWebStatsData(
 		d.HasStorage = true
 	}
 
-	if cfg.Daemon.ReadOnly || cfg.Daemon.Editing != "" || cfg.Daemon.Namespace != "" {
+	if readOnly || editing != "" || namespace != "" {
 		d.Config = web.StatsConfig{
-			ReadOnly:  cfg.Daemon.ReadOnly,
-			Editing:   cfg.Daemon.Editing,
-			Namespace: cfg.Daemon.Namespace,
+			ReadOnly:  readOnly,
+			Editing:   editing,
+			Namespace: namespace,
 		}
 		d.HasConfig = true
 	}

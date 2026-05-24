@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -69,11 +70,17 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	}
 
 	s.cfgMu.Lock()
-	defer s.cfgMu.Unlock()
 	if _, err := storeconfig.Write(ctx, s.drv, configWriter(s.drv, s.index, s.hashes), requested); err != nil {
+		s.cfgMu.Unlock()
 		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	s.activeConfig = requested
+	s.cfgMu.Unlock()
+
+	// Lock-free (cfgMu released): the active config was swapped on disk
+	// and in memory. Info — a config change is operator-relevant.
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "config updated",
+		storeIDAttr(s), manifestCryptoAttr(requested.ManifestCrypto))
 	return nil
 }
 

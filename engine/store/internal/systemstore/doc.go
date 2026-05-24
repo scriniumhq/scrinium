@@ -1,9 +1,9 @@
-// Package systemstore implements coreapi.SystemStore — the
+// Package systemstore implements store.SystemStore — the
 // engine-internal API for service artifacts (configuration history,
 // agent cursors, index snapshots, lease coordination), addressed by
 // name through per-name pointer files (ADR-57).
 //
-// It depends only on coreapi/domain/driver plus two primitives
+// It depends only on store/domain/driver plus two primitives
 // injected by the store layer (artifact write + inline read-handle
 // construction), so it carries none of *store's private state. The
 // store wires it once at construction via New and exposes it through

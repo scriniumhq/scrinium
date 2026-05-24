@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/internal/testutil/storefx"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/internal/testutil/storefx"
 )
 
 // BenchmarkPut measures the Put pipeline's per-call cost across
