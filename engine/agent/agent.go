@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"time"
 )
 
 // AgentState is the state of a background agent reported by Status.
@@ -50,31 +49,4 @@ type BackgroundAgent interface {
 	// Status returns the current state and the last error. Must be
 	// safe for concurrent calls with Run.
 	Status() (AgentState, error)
-}
-
-// MaintenanceAgent is the contract of a one-shot administrative
-// operation. Declared here (rather than in agent/) so that Store can
-// require a MaintenanceAgent to be validated through Validate without
-// depending on higher layers.
-type MaintenanceAgent interface {
-	// Validate checks whether the operation is applicable to the
-	// current state of the Store: required maintenance mode, presence
-	// of required parameters, availability of dependencies.
-	Validate(ctx context.Context) error
-
-	// Run starts the operation. It acquires a maintenance/lease,
-	// performs the work, and releases the lease. It returns the result
-	// with accumulated statistics.
-	Run(ctx context.Context) (*AgentResult, error)
-}
-
-// AgentResult is the result of an agent's work (one-shot or one
-// background cycle). Used in EventAgentCompleted and EventAgentCycle.
-type AgentResult struct {
-	AgentType   string
-	StoreID     string
-	StartedAt   time.Time
-	CompletedAt time.Time
-	Stats       map[string]int64
-	Partial     bool // true if the work was interrupted and completed only partially
 }

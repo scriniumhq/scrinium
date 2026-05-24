@@ -10,7 +10,7 @@ import (
 
 // factoryResolver is the resolver-backed AES-GCM TransformerFactory.
 // Unlike the pinned-DEK factory it holds no AEAD primitive: the DEK
-// is resolved per operation through a coreapi.KeyResolver, which lets
+// is resolved per operation through a pipeline.KeyResolver, which lets
 // a single factory cover key rotation, multi-tenant stores, and
 // crypto-shredding.
 //

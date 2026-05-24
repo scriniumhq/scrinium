@@ -42,7 +42,7 @@ type ObjectMeta struct {
 // as filepath.WalkDir. Both are matched via errors.Is.
 type Driver interface {
 	// I/O.
-	Put(ctx context.Context, path string, r io.Reader) error
+	Put(ctx context.Context, path string, r io.Reader, opts ...PutOption) error
 	Get(ctx context.Context, path string) (io.ReadCloser, error)
 	ReadAt(ctx context.Context, path string, offset, size int64) (io.ReadCloser, error)
 	Open(ctx context.Context, uri string) (io.ReadCloser, error)

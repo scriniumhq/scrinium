@@ -42,7 +42,7 @@
 // # Pinned vs resolver
 //
 // New(key) pins a single DEK and records an empty KeyID. NewWithResolver
-// resolves the DEK per operation through a coreapi.KeyResolver — the
+// resolves the DEK per operation through a pipeline.KeyResolver — the
 // engine picks the write KeyID via ResolveWriteKey and threads it
 // through EncodeContext; on read the Decoder enumerates the resolver's
 // candidate keys per segment to support rotation and multi-tenant

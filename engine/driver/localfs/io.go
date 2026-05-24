@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/url"
 	"os"
 	"path/filepath"
 
+	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/errs"
 )
 
@@ -18,18 +20,25 @@ import (
 //  1. Create a sibling temp file ".<basename>.tmp.<random>".
 //  2. Stream r into it.
 //  3. fsync the temp file (if WithFsync(true), the default).
-//  4. Rename it onto the final path. POSIX rename(2) is atomic for
-//     observers: a parallel Get either sees the previous contents
-//     (or os.ErrNotExist) or the new contents — never a partial
-//     write.
-//  5. fsync the parent directory so the rename survives a crash.
+//  4. Commit it onto the final path:
+//     - default: os.Rename. POSIX rename(2) is atomic for observers
+//     and unconditionally overwrites any existing target.
+//     - WithExclusive(): os.Link, which refuses (EEXIST) to overwrite
+//     an existing target — the atomic create-if-absent the engine
+//     needs for shared Locations (ADR-26). Maps the conflict to
+//     errs.ErrAlreadyExists. The temp and final path briefly share
+//     an inode; the temp name is then dropped.
+//  5. fsync the parent directory so the commit survives a crash.
 //
-// On error the temp file is best-effort removed. The final path is
-// not touched until the rename succeeds.
-func (d *Driver) Put(ctx context.Context, path string, r io.Reader) error {
+// A parallel Get either sees the previous contents (or os.ErrNotExist)
+// or the new contents — never a partial write. On error the temp file
+// is best-effort removed. The final path is not touched until the
+// commit succeeds.
+func (d *Driver) Put(ctx context.Context, path string, r io.Reader, opts ...driver.PutOption) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	cfg := driver.NewPutConfig(opts...)
 
 	full, err := d.resolve(path)
 	if err != nil {
@@ -47,7 +56,9 @@ func (d *Driver) Put(ctx context.Context, path string, r io.Reader) error {
 	}
 	tmpPath := tmp.Name()
 
-	// Cleanup on any path that does not commit the rename.
+	// Cleanup on any path that does not commit. After a successful
+	// commit the temp name is dropped explicitly (rename moves it;
+	// the exclusive link leaves it behind to be removed).
 	committed := false
 	defer func() {
 		if !committed {
@@ -71,10 +82,24 @@ func (d *Driver) Put(ctx context.Context, path string, r io.Reader) error {
 		return fmt.Errorf("localfs: close temp: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, full); err != nil {
-		return fmt.Errorf("localfs: rename: %w", err)
+	if cfg.Exclusive {
+		// os.Link is the atomic create-if-absent: it fails with
+		// EEXIST rather than clobbering an existing target.
+		if err := os.Link(tmpPath, full); err != nil {
+			if errors.Is(err, fs.ErrExist) {
+				return errs.ErrAlreadyExists
+			}
+			return fmt.Errorf("localfs: exclusive link: %w", err)
+		}
+		committed = true
+		// The temp now shares an inode with full; drop its name.
+		_ = os.Remove(tmpPath)
+	} else {
+		if err := os.Rename(tmpPath, full); err != nil {
+			return fmt.Errorf("localfs: rename: %w", err)
+		}
+		committed = true
 	}
-	committed = true
 
 	if d.opts.fsyncOnWrite {
 		// Best-effort: a parent fsync makes the rename durable. We
