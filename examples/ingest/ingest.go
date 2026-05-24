@@ -1,16 +1,16 @@
-// ingest scans a directory tree and stores every regular file
-// as an artifact, with its relative path attached as fsmeta so
-// the projection View renders it under by-path/.
+// ingest scans a directory tree and stores every regular file as an
+// artifact, with its relative path attached as fsmeta so the
+// projection View renders it under by-path/.
 //
 // Demonstrates:
 //
-//   - Scrinium.Init for first-run, scrinium.Open for subsequent
-//     runs against the same store.
+//   - composer.LoadOrInitYAML to assemble (creating on first run) a
+//     store from an inline config.
 //   - filepath.WalkDir for batch traversal.
 //   - Attaching fsmeta metadata so artifacts have a virtual path.
-//   - SessionID + RollbackSession idiom for atomic-ish batches:
-//     a failure mid-ingest leaves a known set of artifacts to roll
-//     back, not orphans scattered across timestamps.
+//   - SessionID + RollbackSession idiom for atomic-ish batches: a
+//     failure mid-ingest leaves a known set of artifacts to roll back,
+//     not orphans scattered across timestamps.
 //
 // Usage:
 //
@@ -30,7 +30,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"scrinium.dev"
+	"scrinium.dev/composer"
 	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/projection/fsmeta"
 )
@@ -54,33 +54,25 @@ func main() {
 func run(srcDir, storeURI, namespace string) error {
 	ctx := context.Background()
 
-	// Open existing or create new via the OpenOrInit helper.
-	// OpenOrInit only falls through to Init when Open returned
-	// errs.ErrStoreNotFound (bridges to fs.ErrNotExist) — a
-	// typo'd URI or a permission error surfaces directly,
-	// avoiding the "silently created an empty store somewhere
-	// unexpected" trap. Production code typically chooses one
-	// path explicitly — separating "init" and "ingest"
-	// subcommands.
-	cfg := scrinium.DefaultConfig()
-	cfg.Store = storeURI
-
-	s, _, created, err := scrinium.OpenOrInit(ctx, cfg)
+	// Assemble, creating on first run. LoadOrInitYAML only initialises
+	// when the store does not yet exist; a typo'd URI or a permission
+	// error surfaces directly, avoiding the "silently created an empty
+	// store somewhere unexpected" trap. Production code typically
+	// chooses one path explicitly (separate "init" and "ingest"
+	// subcommands).
+	config := fmt.Sprintf("store:\n  driver: %s\n", storeURI)
+	asm, err := composer.LoadOrInitYAML(ctx, []byte(config))
 	if err != nil {
-		return fmt.Errorf("open-or-init: %w", err)
-	}
-	if created {
-		fmt.Fprintln(os.Stderr, "initialised a new store")
+		return fmt.Errorf("assemble: %w", err)
 	}
 	defer func() {
-		if err := s.Close(); err != nil {
+		if err := asm.Close(); err != nil {
 			log.Printf("close: %v", err)
 		}
 	}()
 
-	// One SessionID per ingest run. RollbackSession on this
-	// id wipes everything we wrote in this run — useful for
-	// failed batches.
+	// One SessionID per ingest run. RollbackSession on this id wipes
+	// everything we wrote in this run — useful for failed batches.
 	sessionID := domain.SessionID("ingest-" + uuid.New().String())
 	fmt.Printf("session: %s\n", sessionID)
 
@@ -104,8 +96,8 @@ func run(srcDir, storeURI, namespace string) error {
 		if err != nil {
 			return err
 		}
-		// Normalise to forward slashes (fsmeta's contract) and
-		// guard against accidental ".." parents.
+		// Normalise to forward slashes (fsmeta's contract) and guard
+		// against accidental ".." parents.
 		virtualPath := filepath.ToSlash(rel)
 		if strings.HasPrefix(virtualPath, "../") || strings.Contains(virtualPath, "/../") {
 			return fmt.Errorf("escapes source root: %s", rel)
@@ -126,8 +118,8 @@ func run(srcDir, storeURI, namespace string) error {
 			}
 		}()
 
-		// Attach virtual-path metadata so the View can render
-		// the artifact under by-path/.
+		// Attach virtual-path metadata so the View can render the
+		// artifact under by-path/.
 		md, err := fsmeta.Encode(fsmeta.FileSystem{
 			Kind:    fsmeta.Marker,
 			Path:    virtualPath,
@@ -138,7 +130,7 @@ func run(srcDir, storeURI, namespace string) error {
 			return fmt.Errorf("encode fsmeta: %w", err)
 		}
 
-		id, err := s.Store.Put(ctx,
+		id, err := asm.Store().Put(ctx,
 			domain.Artifact{Payload: f, Ext: md},
 			domain.PutOptions{
 				SessionID: sessionID,
@@ -156,12 +148,11 @@ func run(srcDir, storeURI, namespace string) error {
 	})
 
 	if walkErr != nil {
-		// Best-effort rollback. Failures here are logged; a
-		// retry of the ingest with the same SessionID-prefix
-		// scheme would resume cleanly because RollbackSession
-		// is idempotent.
+		// Best-effort rollback. Failures here are logged; a retry of
+		// the ingest with the same SessionID-prefix scheme would resume
+		// cleanly because RollbackSession is idempotent.
 		fmt.Fprintf(os.Stderr, "walk failed, rolling back: %v\n", walkErr)
-		if rbErr := s.Store.RollbackSession(ctx, sessionID); rbErr != nil && !errors.Is(rbErr, context.Canceled) {
+		if rbErr := asm.Store().RollbackSession(ctx, sessionID); rbErr != nil && !errors.Is(rbErr, context.Canceled) {
 			fmt.Fprintf(os.Stderr, "rollback: %v\n", rbErr)
 		}
 		return walkErr

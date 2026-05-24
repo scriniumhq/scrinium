@@ -40,8 +40,8 @@ type StoreID string
 type SessionID string
 
 // NewMountSessionID generates a fresh SessionID with the "mount-"
-// prefix and a UUID v4 suffix. Used by scrinium.Open and
-// scrinium.Init so every runtime gets a unique mount-scoped
+// prefix and a UUID v4 suffix. Used during store assembly and
+// init so every runtime gets a unique mount-scoped
 // identifier without callers reaching for uuid.NewString themselves.
 func NewMountSessionID() SessionID {
 	return SessionID("mount-" + uuid.NewString())

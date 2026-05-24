@@ -1,7 +1,11 @@
-// hello is the smallest Scrinium program: it creates (or opens)
-// a store, puts one artifact, reads it back, and closes. About
-// 120 lines, all of which serve a purpose — feel free to copy
-// it as a starting point for your own integration.
+// hello is the smallest Scrinium program: it assembles (creating if
+// needed) a store from an inline composer config, puts one artifact,
+// reads it back, and closes. About 100 lines, all of which serve a
+// purpose — copy it as a starting point for your own integration.
+//
+// It shows the modern entry point: describe the store declaratively
+// (a composer YAML document) and let composer.LoadOrInitYAML assemble
+// it, then work with the returned assembly.Assembly from code.
 //
 // Usage:
 //
@@ -18,7 +22,7 @@ import (
 	"log"
 	"os"
 
-	"scrinium.dev"
+	"scrinium.dev/composer"
 	"scrinium.dev/engine/domain"
 )
 
@@ -34,9 +38,9 @@ func main() {
 func run(storePath string) error {
 	ctx := context.Background()
 
-	// Resolve where the store lives. Empty flag → ephemeral
-	// temp dir; explicit path → persistent. Real applications
-	// typically want the explicit form.
+	// Resolve where the store lives. Empty flag → ephemeral temp dir;
+	// explicit path → persistent. Real applications typically want the
+	// explicit form.
 	var (
 		dir       string
 		ephemeral bool
@@ -62,32 +66,28 @@ func run(storePath string) error {
 		}
 	}()
 
-	// Open existing store or create a fresh one. OpenOrInit
-	// detects the not-initialised case via errors.Is(err,
-	// errs.ErrStoreNotFound) and runs Init only then; any
-	// other failure (bad URI, no permission, etc.) is surfaced
-	// without silently reinitialising on top. Production code
-	// typically chooses one path explicitly — separating "init"
-	// and "run" subcommands gives operators an audit trail.
-	cfg := scrinium.DefaultConfig()
-	cfg.Store = "file://" + dir
-	s, _, created, err := scrinium.OpenOrInit(ctx, cfg)
+	// Describe the store declaratively. This is the entire composer
+	// document — a single local store, no encryption, default policy.
+	// LoadOrInitYAML opens it if it exists, initialises it otherwise;
+	// a typo'd URI or permission error surfaces directly rather than
+	// silently creating a store somewhere unexpected. Production code
+	// often picks one path explicitly (separate "init" and "run"
+	// subcommands give operators an audit trail).
+	config := fmt.Sprintf("store:\n  driver: file://%s\n", dir)
+	asm, err := composer.LoadOrInitYAML(ctx, []byte(config))
 	if err != nil {
-		return fmt.Errorf("open-or-init: %w", err)
-	}
-	if created {
-		fmt.Println("(initialised a new store)")
+		return fmt.Errorf("assemble: %w", err)
 	}
 	defer func() {
-		if err := s.Close(); err != nil {
+		if err := asm.Close(); err != nil {
 			log.Printf("scrinium close: %v", err)
 		}
 	}()
 
-	// Put one artifact. Payload is anything that satisfies
-	// io.Reader; here a byte slice.
+	// Put one artifact. Payload is anything that satisfies io.Reader;
+	// here a byte slice.
 	body := []byte("hello, scrinium!\n")
-	id, err := s.Store.Put(ctx,
+	id, err := asm.Store().Put(ctx,
 		domain.Artifact{Payload: bytes.NewReader(body)},
 		domain.PutOptions{Namespace: "demo"},
 	)
@@ -96,9 +96,9 @@ func run(storePath string) error {
 	}
 	fmt.Printf("stored: %s\n", id)
 
-	// Read it back. Get returns a streaming ReadHandle — Close
-	// it when done.
-	rh, err := s.Store.Get(ctx, id, domain.GetOptions{})
+	// Read it back. Get returns a streaming ReadHandle — Close it when
+	// done.
+	rh, err := asm.Store().Get(ctx, id, domain.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
