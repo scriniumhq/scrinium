@@ -35,15 +35,15 @@ import (
 // Currently supports BlobManifest with Inline and Target layouts. TOC,
 // Pack, ExternalRef return explicit "not yet implemented" errors via the
 // dispatchManifestType / layout switch paths.
-func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
-	if err := s.enterRead(ctx); err != nil {
+func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
+	if err := d.enterRead(ctx); err != nil {
 		return err
 	}
 	if id == "" {
 		return errs.ErrArtifactNotFound
 	}
 
-	manifest, err := s.loadManifest(ctx, id)
+	manifest, err := d.loadManifest(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -51,8 +51,8 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 		return err
 	}
 
-	if err := s.artifactIO().VerifyBlob(ctx, manifest); err != nil {
-		s.publish(event.EventScrubFailed, event.ScrubFailedPayload{
+	if err := d.artifactIO().VerifyBlob(ctx, manifest); err != nil {
+		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: id,
 			Err:        err,
 		})
@@ -60,8 +60,8 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 		// verification failed for a specific artifact, recoverable at the
 		// operator level (restore from backup / investigate medium).
 		// Lock-free: Verify holds no mutex.
-		s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "verify failed: blob integrity mismatch",
-			storeIDAttr(s), artifactIDAttr(id))
+		d.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "verify failed: blob integrity mismatch",
+			storeIDAttr(d.core), artifactIDAttr(id))
 		return err
 	}
 	return nil

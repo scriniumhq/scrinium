@@ -11,11 +11,19 @@ import (
 	"scrinium.dev/store/pipeline"
 )
 
-// store is the engine's internal Store implementation. Clients
-// receive a Store interface from InitStore / OpenStore; the concrete
-// type is never exported. Its behaviour is split across sibling files
-// by the interface each serves — data_*, admin_*, system_* — plus the
-// lifecycle_/bootstrap_ construction files.
+// core holds the entire internal state of a Store. It is never
+// exported and never returned directly: clients receive a Store
+// interface from InitStore / OpenStore, implemented by the *store
+// wrapper below, whose three facets (data/admin/system) all share one
+// *core. Splitting the surface into facets keeps the artifact-facing
+// methods (dataFacet) free of the administrative ones (adminFacet)
+// while both operate on the same underlying state.
+//
+// Behaviour is split across sibling files by the facet each serves —
+// data_*, admin_*, system_* — plus the lifecycle_/bootstrap_
+// construction files. The private helpers (enterRead/Write/Admin,
+// withWriteDEK, loadManifest, snapshotConfig, publish, …) stay on
+// *core, reachable by every facet.
 //
 // Concurrency. state is guarded by stateMu; most data-path methods
 // read it once at entry and proceed lock-free, so a long Put never
@@ -31,7 +39,7 @@ import (
 // release before returning, so a caller may take another lock after
 // them; what is forbidden is holding cfgMu or stateMu and then
 // reaching for crypto.mu.
-type store struct {
+type core struct {
 	// Identity and dependencies.
 	storeID string
 	drv     driver.Driver
@@ -60,7 +68,7 @@ type store struct {
 	transformers pipeline.TransformerRegistry
 
 	// SystemStore facade, wired once at construction. nil only in
-	// unit tests that build a *store by hand.
+	// unit tests that build a *core by hand.
 	system *systemStore
 
 	// crypto groups the DEK, descriptor, passphrase provider, and key
@@ -68,17 +76,45 @@ type store struct {
 	crypto cryptoState
 }
 
-// System returns the SystemStore facade. Reached only through
-// AdminStore, so DataStore consumers cannot see system state.
-func (s *store) System() SystemStore { return s.system }
+// dataFacet is the artifact-facing facet (DataStore): Put, Get, Walk,
+// and friends. Methods live in data_*.go.
+type dataFacet struct{ *core }
+
+// adminFacet is the administrative facet (AdminStore): State, Unlock,
+// crypto rotation, Close, RunMaintenance, and the System() accessor.
+// Methods live in admin_*.go, maintenance.go.
+type adminFacet struct{ *core }
+
+// store is the concrete Store handed to clients. It is a thin wrapper
+// embedding the data and admin facets over one shared *core, so the
+// flat Store = DataStore + AdminStore interface is satisfied by method
+// promotion. systemFacet is NOT embedded here — it is reached through
+// adminFacet.System(), which keeps the system Put/Get/Delete/Walk from
+// colliding with the data ones of the same name.
+type store struct {
+	dataFacet
+	adminFacet
+}
 
 var _ Store = (*store)(nil)
 
+// newStore wraps a freshly built *core into the client-facing store.
+func newStore(c *core) *store {
+	return &store{
+		dataFacet:  dataFacet{c},
+		adminFacet: adminFacet{c},
+	}
+}
+
+// System returns the SystemStore facade. Reached only through
+// AdminStore, so DataStore consumers cannot see system state.
+func (a adminFacet) System() SystemStore { return a.core.system }
+
 // publish emits an event when a Publisher is configured. Cheap when
 // nil — the common case for tests and minimal-stack hosts.
-func (s *store) publish(typ string, payload any) {
-	if s.pub == nil {
+func (c *core) publish(typ string, payload any) {
+	if c.pub == nil {
 		return
 	}
-	s.pub.Publish(event.Event{Type: typ, Payload: payload})
+	c.pub.Publish(event.Event{Type: typ, Payload: payload})
 }

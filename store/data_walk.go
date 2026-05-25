@@ -16,14 +16,14 @@ import (
 // never in manifests). System namespaces are excluded both by the index
 // (the "*" wildcard skips system.*) and here at the API surface (an
 // explicit "system.foo" gets errs.ErrReservedNamespace first).
-func (s *store) Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {
-	if err := s.enterRead(ctx); err != nil {
+func (d dataFacet) Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {
+	if err := d.enterRead(ctx); err != nil {
 		return err
 	}
 	if err := validateUserNamespace(namespace); err != nil {
 		return err
 	}
-	return s.index.ListByNamespace(ctx, namespace, cb)
+	return d.index.ListByNamespace(ctx, namespace, cb)
 }
 
 // validateUserNamespace enforces the syntax of Walk's namespace argument.

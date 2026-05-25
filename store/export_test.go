@@ -51,9 +51,9 @@ func StoreKeyResolver(s Store) pipeline.KeyResolver {
 	if !ok {
 		return nil
 	}
-	concrete.crypto.mu.Lock()
-	defer concrete.crypto.mu.Unlock()
-	return concrete.crypto.keyResolver
+	concrete.dataFacet.core.crypto.mu.Lock()
+	defer concrete.dataFacet.core.crypto.mu.Unlock()
+	return concrete.dataFacet.core.crypto.keyResolver
 }
 
 // ReadDriverFile reads a file from the Store's underlying Driver.
@@ -65,7 +65,7 @@ func ReadDriverFile(s Store, path string) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("ReadDriverFile: not a *store")
 	}
-	rc, err := concrete.drv.Get(context.Background(), path)
+	rc, err := concrete.dataFacet.core.drv.Get(context.Background(), path)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func WriteDriverFile(s Store, path string, data []byte) error {
 	if !ok {
 		return fmt.Errorf("WriteDriverFile: not a *store")
 	}
-	return concrete.drv.Put(context.Background(), path, bytes.NewReader(data))
+	return concrete.dataFacet.core.drv.Put(context.Background(), path, bytes.NewReader(data))
 }
 
 // RecoverOrphans is the test alias for the package-private

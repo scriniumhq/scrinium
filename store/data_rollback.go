@@ -38,8 +38,8 @@ import (
 // system without session-level locks (sessions are correlation
 // tags, not transactions). The next RollbackSession call observes
 // only the surviving artifacts and proceeds normally.
-func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID) error {
-	if err := s.enterWrite(ctx); err != nil {
+func (d dataFacet) RollbackSession(ctx context.Context, sessionID domain.SessionID) error {
+	if err := d.enterWrite(ctx); err != nil {
 		return err
 	}
 	if sessionID == "" {
@@ -50,7 +50,7 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 	}
 
 	// 1. Resolve the artifact set through the index.
-	ids, err := s.index.GetBySession(ctx, sessionID)
+	ids, err := d.index.GetBySession(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("store.RollbackSession: index lookup: %w", err)
 	}
@@ -65,7 +65,7 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 	//    free of active retention, or the whole call refuses.
 	now := time.Now()
 	for _, id := range ids {
-		m, err := s.loadManifest(ctx, id)
+		m, err := d.loadManifest(ctx, id)
 		if err != nil {
 			// Index row exists but the manifest cannot be loaded —
 			// inconsistent state; an index rebuild is the recovery path.
@@ -78,7 +78,7 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 
 	// 3. Atomic DeletionPolicy pre-check. Mirrors Delete:
 	//    DeletionPolicyNoDelete refuses regardless of retention.
-	cfg := s.snapshotConfig()
+	cfg := d.snapshotConfig()
 	if cfg.DeletionPolicy == domain.DeletionPolicyNoDelete {
 		return errs.ErrDeletionForbidden
 	}
@@ -94,7 +94,7 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := s.Delete(ctx, id); err != nil {
+		if err := d.Delete(ctx, id); err != nil {
 			if errors.Is(err, errs.ErrArtifactNotFound) {
 				continue
 			}
@@ -106,8 +106,8 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 	// EventArtifactDeleted. Debug — the rolled-back batch size, for
 	// diagnostics. SessionID is a client-chosen correlation tag, not
 	// secret.
-	s.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "session rolled back",
-		storeIDAttr(s), slog.String("session_id", string(sessionID)),
+	d.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "session rolled back",
+		storeIDAttr(d.core), slog.String("session_id", string(sessionID)),
 		slog.Int("artifacts", len(ids)))
 	return nil
 }

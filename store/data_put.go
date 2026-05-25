@@ -23,29 +23,29 @@ import (
 // mechanics — blob materialization, manifest assembly, persistence — to
 // artifactio. The store keeps the policy and the secrets; artifactio
 // keeps the I/O.
-func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error) {
-	if err := s.enterWrite(ctx); err != nil {
+func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error) {
+	if err := d.enterWrite(ctx); err != nil {
 		return "", err
 	}
 	if err := validatePutInputs(a, opts); err != nil {
 		return "", err
 	}
 
-	cfg := s.snapshotConfig()
-	if err := s.checkPutSupported(cfg, opts); err != nil {
+	cfg := d.snapshotConfig()
+	if err := d.checkPutSupported(cfg, opts); err != nil {
 		return "", err
 	}
 
-	aio := artifactio.New(s.drv, s.index, s.hashes, s.transformers)
+	aio := artifactio.New(d.drv, d.index, d.hashes, d.transformers)
 
 	// Resolve the write KeyID once and thread it through both the blob
 	// pipeline and the manifest body, so a blob and its manifest encrypt
 	// under the same key.
-	writeKeyID := s.resolveWriteKeyID(opts.Namespace)
+	writeKeyID := d.resolveWriteKeyID(opts.Namespace)
 
 	blob, err := aio.Materialize(ctx, cfg, a, opts, writeKeyID)
 	if err != nil {
-		return "", s.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "materialize"))
+		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "materialize"))
 	}
 
 	// Borrow the DEK under the crypto lock only for the duration of the
@@ -55,29 +55,29 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 		manifest      domain.Manifest
 		manifestBytes []byte
 	)
-	if err := s.withWriteDEK(cfg, func(dek []byte) error {
+	if err := d.withWriteDEK(cfg, func(dek []byte) error {
 		var aerr error
 		manifest, manifestBytes, aerr = aio.AssembleManifest(cfg, a, opts, blob, dek, writeKeyID)
 		return aerr
 	}); err != nil {
-		return "", s.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "assemble"))
+		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "assemble"))
 	}
 
 	if err := aio.PersistManifest(ctx, manifest, manifestBytes, blob.Addr); err != nil {
-		return "", s.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "persist"))
+		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "persist"))
 	}
 
-	s.publish(event.EventManifestSaved, event.ManifestSavedPayload{Manifest: manifest})
+	d.publish(event.EventManifestSaved, event.ManifestSavedPayload{Manifest: manifest})
 
 	// Lock-free diagnostic trace (ADR-60): emitted after the manifest is
 	// persisted, with every crypto lock released and the DEK copy already
 	// wiped by withWriteDEK. Logs the opaque write KeyID, never the key.
 	// LogAttrs avoids allocating an []any; on a discard logger Enabled is
 	// false and the attrs are never evaluated further.
-	log := s.componentLogger("store")
+	log := d.componentLogger("store")
 	if log.Enabled(ctx, slog.LevelDebug) {
 		log.LogAttrs(ctx, slog.LevelDebug, "put committed",
-			storeIDAttr(s),
+			storeIDAttr(d.core),
 			slog.String("artifact_id", string(manifest.ArtifactID)),
 			slog.String("namespace", opts.Namespace),
 			manifestCryptoAttr(cfg.ManifestCrypto),
@@ -92,11 +92,11 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptio
 // nil DEK. The DEK never escapes fn, so no write path can leak it by
 // forgetting to wipe. The write KeyID is resolved by the caller (Put)
 // and no longer threaded here — withWriteDEK is now purely DEK custody.
-func (s *store) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) error {
+func (c *core) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) error {
 	if cfg.ManifestCrypto == "" || cfg.ManifestCrypto == domain.ManifestCryptoPlain {
 		return fn(nil)
 	}
-	dek, err := s.crypto.dekForWrite(cfg.ManifestCrypto)
+	dek, err := c.crypto.dekForWrite(cfg.ManifestCrypto)
 	if err != nil {
 		return err
 	}
@@ -109,8 +109,8 @@ func (s *store) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) 
 // the crypto lock but ResolveWriteKey runs without it
 // — it must be a cheap, non-blocking lookup. Returns "" for an
 // unencrypted store.
-func (s *store) resolveWriteKeyID(namespace string) string {
-	r := s.crypto.resolver()
+func (c *core) resolveWriteKeyID(namespace string) string {
+	r := c.crypto.resolver()
 	if r == nil {
 		return ""
 	}
@@ -121,8 +121,8 @@ func (s *store) resolveWriteKeyID(namespace string) string {
 // not yet wired, before any I/O. These are invariants of the active
 // config plus the per-call BlobType; catching them here keeps the write
 // path free of feature-gate branches.
-func (s *store) checkPutSupported(cfg domain.StoreConfig, opts domain.PutOptions) error {
-	if err := s.pipelineRunner().ValidateAlgos(cfg.Pipeline); err != nil {
+func (c *core) checkPutSupported(cfg domain.StoreConfig, opts domain.PutOptions) error {
+	if err := c.pipelineRunner().ValidateAlgos(cfg.Pipeline); err != nil {
 		return fmt.Errorf("store.Put: %w", err)
 	}
 	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
@@ -171,7 +171,7 @@ func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 // PutBlob is the decorator entry point (chunker.Wrapper) for writing
 // anonymous chunks without a manifest. Not yet implemented: the stub
 // returns ErrNotImplemented rather than silently succeeding.
-func (s *store) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error) {
+func (d dataFacet) PutBlob(ctx context.Context, r io.Reader, blobType domain.BlobType) (domain.ContentHash, error) {
 	return "", fmt.Errorf("%w: store.PutBlob is deferred to M5 (chunker.Wrapper); the method moves to BlobStore at M5 start",
 		errs.ErrNotImplemented)
 }

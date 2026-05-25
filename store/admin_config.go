@@ -15,17 +15,17 @@ import (
 // Config returns a snapshot of the active StoreConfig. A pure
 // in-memory reader, so it skips the enter* gate (like State /
 // Capabilities).
-func (s *store) Config() domain.StoreConfig {
-	return s.snapshotConfig()
+func (a adminFacet) Config() domain.StoreConfig {
+	return a.snapshotConfig()
 }
 
 // snapshotConfig returns the active config under cfgMu.RLock(). The
 // single in-memory read used by Config() and by every method that
 // needs the current config without re-reading disk.
-func (s *store) snapshotConfig() domain.StoreConfig {
-	s.cfgMu.RLock()
-	defer s.cfgMu.RUnlock()
-	return s.activeConfig
+func (c *core) snapshotConfig() domain.StoreConfig {
+	c.cfgMu.RLock()
+	defer c.cfgMu.RUnlock()
+	return c.activeConfig
 }
 
 // UpdateConfig swaps the active StoreConfig. Only mutable fields
@@ -42,12 +42,12 @@ func (s *store) snapshotConfig() domain.StoreConfig {
 // serialise here; the last writer wins, but each transaction is
 // internally consistent. Readers (Config, snapshotConfig) take
 // cfgMu.RLock() and so block only for the brief swap window.
-func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {
-	if err := s.enterWrite(ctx); err != nil {
+func (a adminFacet) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {
+	if err := a.enterWrite(ctx); err != nil {
 		return err
 	}
 
-	current := s.snapshotConfig()
+	current := a.snapshotConfig()
 	requested := storeconfig.ApplyDefaults(cfg)
 
 	if err := storeconfig.ValidateImmutable(requested); err != nil {
@@ -69,18 +69,18 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 			errs.ErrConfigMismatch)
 	}
 
-	s.cfgMu.Lock()
-	if _, err := storeconfig.Write(ctx, s.drv, configWriter(s.drv, s.index, s.hashes), requested); err != nil {
-		s.cfgMu.Unlock()
+	a.cfgMu.Lock()
+	if _, err := storeconfig.Write(ctx, a.drv, configWriter(a.drv, a.index, a.hashes), requested); err != nil {
+		a.cfgMu.Unlock()
 		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
-	s.activeConfig = requested
-	s.cfgMu.Unlock()
+	a.activeConfig = requested
+	a.cfgMu.Unlock()
 
 	// Lock-free (cfgMu released): the active config was swapped on disk
 	// and in memory. Info — a config change is operator-relevant.
-	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "config updated",
-		storeIDAttr(s), manifestCryptoAttr(requested.ManifestCrypto))
+	a.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "config updated",
+		storeIDAttr(a.core), manifestCryptoAttr(requested.ManifestCrypto))
 	return nil
 }
 
@@ -93,12 +93,12 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 // rollback. Sorting purely by time would put the discarded version
 // first; promoting the pointer's target keeps the result honest about
 // which config is in effect.
-func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
-	if err := s.enterRead(ctx); err != nil {
+func (a adminFacet) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
+	if err := a.enterRead(ctx); err != nil {
 		return nil, err
 	}
 
-	currentID, err := storeconfig.ReadPointer(ctx, s.drv, s.hashes)
+	currentID, err := storeconfig.ReadPointer(ctx, a.drv, a.hashes)
 	if err != nil {
 		return nil, fmt.Errorf("store.ConfigHistory: %w", err)
 	}
@@ -115,8 +115,8 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 		createdAt time.Time
 	}
 	var entries []entry
-	listErr := s.index.ListByNamespace(ctx, domain.NamespaceSystemConfig, func(m domain.Manifest) error {
-		cfg, err := storeconfig.LoadByID(ctx, s.drv, s.hashes, m.ArtifactID)
+	listErr := a.index.ListByNamespace(ctx, domain.NamespaceSystemConfig, func(m domain.Manifest) error {
+		cfg, err := storeconfig.LoadByID(ctx, a.drv, a.hashes, m.ArtifactID)
 		if err != nil {
 			return fmt.Errorf("decode %s: %w", m.ArtifactID, err)
 		}

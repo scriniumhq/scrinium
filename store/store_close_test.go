@@ -30,12 +30,12 @@ func (r *fakeKeyResolver) close()                                     { r.closed
 // Close. It does not stand up the Driver, Index, descriptor, or
 // publisher — Close does not touch any of them.
 func newTestStore() *store {
-	return &store{
+	return newStore(&core{
 		state: domain.StateUnlocked,
 		crypto: cryptoState{
 			dek: []byte{1, 2, 3, 4, 5, 6, 7, 8},
 		},
-	}
+	})
 }
 
 // --- Idempotency ---
@@ -58,15 +58,15 @@ func TestClose_Idempotent(t *testing.T) {
 
 func TestClose_WipesDEK(t *testing.T) {
 	s := newTestStore()
-	original := append([]byte(nil), s.crypto.dek...) // capture for length check
-	dekRef := s.crypto.dek                           // grab the slice header — observe its bytes after Close
+	original := append([]byte(nil), s.dataFacet.core.crypto.dek...) // capture for length check
+	dekRef := s.dataFacet.core.crypto.dek                           // grab the slice header — observe its bytes after Close
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	if s.crypto.dek != nil {
-		t.Errorf("s.crypto.dek: want nil after Close, got %v", s.crypto.dek)
+	if s.dataFacet.core.crypto.dek != nil {
+		t.Errorf("s.crypto.dek: want nil after Close, got %v", s.dataFacet.core.crypto.dek)
 	}
 	if !allZero(dekRef) {
 		t.Errorf("dek bytes should be zeroed, got %v (was %v)", dekRef, original)
@@ -76,36 +76,36 @@ func TestClose_WipesDEK(t *testing.T) {
 // --- Edge cases: nil/empty fields ---
 
 func TestClose_NilDEK_NoPanic(t *testing.T) {
-	s := &store{
+	s := newStore(&core{
 		state: domain.StateLocked,
 		crypto: cryptoState{
 			dek: nil,
 		},
-	}
+	})
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on nil dek: %v", err)
 	}
 }
 
 func TestClose_EmptyDEK_NoPanic(t *testing.T) {
-	s := &store{
+	s := newStore(&core{
 		state: domain.StateUnlocked,
 		crypto: cryptoState{
 			dek: []byte{},
 		},
-	}
+	})
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on empty dek: %v", err)
 	}
 }
 
 func TestClose_NoCapabilityToken_NoPanic(t *testing.T) {
-	s := &store{
+	s := newStore(&core{
 		state: domain.StateUnlocked,
 		crypto: cryptoState{
 			dek: []byte{1, 2, 3},
 		},
-	}
+	})
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on nil token: %v", err)
 	}
@@ -133,12 +133,12 @@ func TestClose_MarksClosed(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newTestStore()
-			s.state = tc.from
+			s.dataFacet.core.state = tc.from
 
 			if err := s.Close(); err != nil {
 				t.Fatalf("Close: %v", err)
 			}
-			if !s.closed {
+			if !s.dataFacet.core.closed {
 				t.Errorf("s.closed: want true after Close")
 			}
 		})
@@ -162,12 +162,12 @@ func TestClose_OperationsReturnErrClosed(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newTestStore()
-			s.state = tc.from
+			s.dataFacet.core.state = tc.from
 
 			if err := s.Close(); err != nil {
 				t.Fatalf("Close: %v", err)
 			}
-			err := s.checkOperational()
+			err := s.dataFacet.core.checkOperational()
 			if !errors.Is(err, os.ErrClosed) {
 				t.Errorf("checkOperational after Close: got %v, want os.ErrClosed", err)
 			}
@@ -185,13 +185,13 @@ func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 	dek := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	resolver := pipeline.NewStaticKeyResolver(dek)
 
-	s := &store{
+	s := newStore(&core{
 		state: domain.StateUnlocked,
 		crypto: cryptoState{
 			dek:         append([]byte(nil), dek...),
 			keyResolver: resolver,
 		},
-	}
+	})
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -211,13 +211,13 @@ func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 
 func TestClose_CustomKeyResolver_NotTouched(t *testing.T) {
 	resolver := &fakeKeyResolver{}
-	s := &store{
+	s := newStore(&core{
 		state: domain.StateUnlocked,
 		crypto: cryptoState{
 			dek:         []byte{1, 2, 3},
 			keyResolver: resolver,
 		},
-	}
+	})
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -229,13 +229,13 @@ func TestClose_CustomKeyResolver_NotTouched(t *testing.T) {
 }
 
 func TestClose_NilKeyResolver_NoPanic(t *testing.T) {
-	s := &store{
+	s := newStore(&core{
 		state: domain.StateUnlocked,
 		crypto: cryptoState{
 			dek:         []byte{1, 2, 3},
 			keyResolver: nil,
 		},
-	}
+	})
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -250,13 +250,13 @@ func TestClose_RaceWithGetKeys(t *testing.T) {
 	dek := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	resolver := pipeline.NewStaticKeyResolver(dek)
 
-	s := &store{
+	s := newStore(&core{
 		state: domain.StateUnlocked,
 		crypto: cryptoState{
 			dek:         append([]byte(nil), dek...),
 			keyResolver: resolver,
 		},
-	}
+	})
 
 	const N = 100
 	var wg sync.WaitGroup
@@ -304,11 +304,11 @@ func TestClose_RaceWithItself(t *testing.T) {
 	}
 	wg.Wait()
 
-	if !s.closed {
+	if !s.dataFacet.core.closed {
 		t.Errorf("s.closed: want true after concurrent Closes")
 	}
-	if s.crypto.dek != nil {
-		t.Errorf("s.crypto.dek: want nil after concurrent Closes, got %v", s.crypto.dek)
+	if s.dataFacet.core.crypto.dek != nil {
+		t.Errorf("s.crypto.dek: want nil after concurrent Closes, got %v", s.dataFacet.core.crypto.dek)
 	}
 }
 
