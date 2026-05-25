@@ -349,6 +349,9 @@ func storeConfigFromPolicy(p *Policy) (domain.StoreConfig, bool) {
 	if p.Retention != 0 {
 		cfg.RetentionPeriod = p.Retention.Std()
 	}
+	if p.DefaultPutNamespace != "" {
+		cfg.DefaultPutNamespace = p.DefaultPutNamespace
+	}
 
 	return cfg, encrypted
 }

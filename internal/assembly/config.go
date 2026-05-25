@@ -85,16 +85,17 @@ type Credentials map[string]secretref.Ref
 
 // Policy is the set of behaviours applied to a store.
 type Policy struct {
-	Encryption      *Encryption     `yaml:"encryption,omitempty" json:"encryption,omitempty"`
-	Chunking        *Chunking       `yaml:"chunking,omitempty" json:"chunking,omitempty"`
-	Bundling        *Bundling       `yaml:"bundling,omitempty" json:"bundling,omitempty"`
-	Pipeline        []PipelineStage `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
-	PipelineExtra   []PipelineStage `yaml:"pipelineExtra,omitempty" json:"pipelineExtra,omitempty"`
-	DeletionPolicy  string          `yaml:"deletionPolicy,omitempty" json:"deletionPolicy,omitempty"`
-	Retention       Duration        `yaml:"retention,omitempty" json:"retention,omitempty"`
-	MaxArtifactSize Size            `yaml:"maxArtifactSize,omitempty" json:"maxArtifactSize,omitempty"`
-	GC              *Schedule       `yaml:"gc,omitempty" json:"gc,omitempty"`
-	Scrub           *ScrubSchedule  `yaml:"scrub,omitempty" json:"scrub,omitempty"`
+	Encryption          *Encryption     `yaml:"encryption,omitempty" json:"encryption,omitempty"`
+	Chunking            *Chunking       `yaml:"chunking,omitempty" json:"chunking,omitempty"`
+	Bundling            *Bundling       `yaml:"bundling,omitempty" json:"bundling,omitempty"`
+	Pipeline            []PipelineStage `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
+	PipelineExtra       []PipelineStage `yaml:"pipelineExtra,omitempty" json:"pipelineExtra,omitempty"`
+	DeletionPolicy      string          `yaml:"deletionPolicy,omitempty" json:"deletionPolicy,omitempty"`
+	DefaultPutNamespace string          `yaml:"defaultPutNamespace,omitempty" json:"defaultPutNamespace,omitempty"`
+	Retention           Duration        `yaml:"retention,omitempty" json:"retention,omitempty"`
+	MaxArtifactSize     Size            `yaml:"maxArtifactSize,omitempty" json:"maxArtifactSize,omitempty"`
+	GC                  *Schedule       `yaml:"gc,omitempty" json:"gc,omitempty"`
+	Scrub               *ScrubSchedule  `yaml:"scrub,omitempty" json:"scrub,omitempty"`
 }
 
 // Encryption enables manifest+blob encryption. Passphrase is required
