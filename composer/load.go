@@ -88,10 +88,21 @@ func loadAndBuild(ctx context.Context, data []byte, um unmarshalFunc, mode build
 	if err != nil {
 		return nil, err
 	}
-	if err := prepare(c); err != nil {
-		return nil, err
+	// Load* is "parse, then Build": the byte-oriented entry points are
+	// thin wrappers over the programmatic one. modeToPublic keeps the
+	// internal enum out of Build's public signature.
+	return Build(ctx, *c, WithMode(modeToPublic(mode)))
+}
+
+func modeToPublic(m buildMode) Mode {
+	switch m {
+	case modeOpen:
+		return ModeOpen
+	case modeInit:
+		return ModeInit
+	default:
+		return ModeOpenOrInit
 	}
-	return build(ctx, c, mode)
 }
 
 func parse(data []byte, um unmarshalFunc) (*Config, error) {
