@@ -29,11 +29,10 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
+	"scrinium.dev/internal/assembly"
 
-	"scrinium.dev/composer"
 	"scrinium.dev/domain"
 	"scrinium.dev/projection"
-	"scrinium.dev/store/assembly"
 	"scrinium.dev/store/index"
 )
 
@@ -84,7 +83,7 @@ func runMount(args []string) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	asm, err := composer.LoadOrInitYAML(ctx, data)
+	asm, err := assembly.LoadOrInitYAML(ctx, data)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-fuse: %v\n", err)
 		return 1

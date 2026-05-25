@@ -23,8 +23,8 @@ import (
 	"os"
 	"sort"
 
-	"scrinium.dev/composer"
 	"scrinium.dev/domain"
+	"scrinium.dev/internal/assembly"
 	"scrinium.dev/store/index"
 )
 
@@ -49,7 +49,7 @@ func run(storeURI string) error {
 	// initialises); the projection section's readOnly flag means no
 	// writes are possible and no scratch directory is created.
 	config := fmt.Sprintf("store:\n  driver: %s\nprojection:\n  readOnly: true\n", storeURI)
-	asm, err := composer.LoadYAML(ctx, []byte(config))
+	asm, err := assembly.LoadYAML(ctx, []byte(config))
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
 	}

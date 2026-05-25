@@ -1,4 +1,4 @@
-package composer
+package assembly
 
 import (
 	"context"
@@ -16,7 +16,6 @@ import (
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsindex"
 	"scrinium.dev/store"
-	"scrinium.dev/store/assembly"
 	"scrinium.dev/store/driver"
 	"scrinium.dev/store/hashing"
 	"scrinium.dev/store/index"
@@ -41,7 +40,7 @@ const (
 // supports today); everything that depends on not-yet-wired components
 // returns errs.ErrNotImplemented with a pointer to the chunk that
 // lands it.
-func build(ctx context.Context, c *Config, mode buildMode) (assembly.Assembly, error) {
+func build(ctx context.Context, c *Config, mode buildMode) (Assembly, error) {
 	if len(c.Stores) > 0 {
 		return nil, fmt.Errorf("composer: multistore assembly is not wired yet (M4/S1): %w", errs.ErrNotImplemented)
 	}
@@ -54,7 +53,7 @@ func build(ctx context.Context, c *Config, mode buildMode) (assembly.Assembly, e
 	return buildSingle(ctx, c, mode)
 }
 
-func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ assembly.Assembly, retErr error) {
+func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, retErr error) {
 	spec := c.Store
 	if err := guardUnsupportedPolicy(spec.Policy); err != nil {
 		return nil, err
@@ -172,14 +171,14 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ assembly.Ass
 		return firstErr
 	}
 
-	info := assembly.Info{StoreURI: spec.Driver}
+	info := Info{StoreURI: spec.Driver}
 	if effProj != nil {
 		info.Namespace = effProj.Namespace
 		info.Editing = effProj.Editing
 		info.ReadOnly = effProj.ReadOnly
 	}
 
-	return assembly.New(st, idx, view, fsops, mountSession, info, closeFn), nil
+	return New(st, idx, view, fsops, mountSession, info, closeFn), nil
 }
 
 // guardUnsupportedPolicy rejects policy features whose components are

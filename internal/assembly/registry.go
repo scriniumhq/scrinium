@@ -1,10 +1,9 @@
-package composer
+package assembly
 
 import (
 	"context"
 	"sync"
 
-	"scrinium.dev/store/assembly"
 	"scrinium.dev/store/driver"
 	"scrinium.dev/store/index"
 	"scrinium.dev/store/pipeline"
@@ -37,7 +36,7 @@ type (
 
 	// AgentFactory builds a user background agent bound to the
 	// assembled stack, from its config block.
-	AgentFactory func(a assembly.Assembly, config map[string]any) (any, error)
+	AgentFactory func(a Assembly, config map[string]any) (any, error)
 )
 
 // registries holds the process-wide extension tables. A single guard

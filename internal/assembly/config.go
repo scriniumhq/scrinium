@@ -1,4 +1,4 @@
-package composer
+package assembly
 
 import (
 	"encoding/json"
@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-
-	"scrinium.dev/composer/secretref"
+	"scrinium.dev/internal/secretref"
 )
 
 // Config is the typed in-memory form a composer YAML/JSON document

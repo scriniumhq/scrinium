@@ -29,11 +29,10 @@ import (
 	"time"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
-	"scrinium.dev/composer"
 	"scrinium.dev/domain"
+	"scrinium.dev/internal/assembly"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
-	"scrinium.dev/store/assembly"
 	"scrinium.dev/store/index"
 )
 
@@ -83,7 +82,7 @@ func runServe(args []string) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	asm, err := composer.LoadOrInitYAML(ctx, data)
+	asm, err := assembly.LoadOrInitYAML(ctx, data)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-webview: %v\n", err)
 		return 1

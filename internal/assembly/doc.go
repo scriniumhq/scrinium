@@ -38,4 +38,4 @@
 // (recovery-kit handoff, R11). The returned assembly.Assembly is itself
 // the R10 seed of the fuller runtime (R11/R12): Store/Index/View and
 // Close are live; Run and the surface/agent lookups are stubs.
-package composer
+package assembly

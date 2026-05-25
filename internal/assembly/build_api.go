@@ -1,9 +1,7 @@
-package composer
+package assembly
 
 import (
 	"context"
-
-	"scrinium.dev/store/assembly"
 )
 
 // Mode selects what Build does when the described store does or does
@@ -48,7 +46,7 @@ func (m Mode) internal() buildMode {
 //
 // The Config is treated as owned by Build for the duration of the call
 // (defaults are applied in place); do not mutate it concurrently.
-func Build(ctx context.Context, cfg Config, opts ...BuildOption) (assembly.Assembly, error) {
+func Build(ctx context.Context, cfg Config, opts ...BuildOption) (Assembly, error) {
 	o := buildOptions{mode: ModeOpenOrInit}
 	for _, opt := range opts {
 		opt(&o)

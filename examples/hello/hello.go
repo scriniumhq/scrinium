@@ -25,9 +25,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"scrinium.dev/composer"
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
+	"scrinium.dev/internal/assembly"
 	"scrinium.dev/store"
 	"scrinium.dev/store/driver"
 	"scrinium.dev/store/index"
@@ -75,7 +75,7 @@ func fromYAML(ctx context.Context, path string) (store.Store, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	asm, err := composer.LoadOrInitYAML(ctx, data)
+	asm, err := assembly.LoadOrInitYAML(ctx, data)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -87,8 +87,8 @@ func fromYAML(ctx context.Context, path string) (store.Store, func(), error) {
 // flags, env, or a database. Defaults are applied by Build, so a lone
 // Store driver is already a complete, working store.
 func fromConfig(ctx context.Context, dir string) (store.Store, func(), error) {
-	asm, err := composer.Build(ctx, composer.Config{
-		Store: &composer.StoreSpec{Driver: "file://" + dir},
+	asm, err := assembly.Build(ctx, assembly.Config{
+		Store: &assembly.StoreSpec{Driver: "file://" + dir},
 	})
 	if err != nil {
 		return nil, nil, err

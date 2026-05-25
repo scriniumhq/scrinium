@@ -29,8 +29,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"scrinium.dev/internal/assembly"
 
-	"scrinium.dev/composer"
 	"scrinium.dev/domain"
 	"scrinium.dev/projection/fsmeta"
 )
@@ -61,7 +61,7 @@ func run(srcDir, storeURI, namespace string) error {
 	// chooses one path explicitly (separate "init" and "ingest"
 	// subcommands).
 	config := fmt.Sprintf("store:\n  driver: %s\n", storeURI)
-	asm, err := composer.LoadOrInitYAML(ctx, []byte(config))
+	asm, err := assembly.LoadOrInitYAML(ctx, []byte(config))
 	if err != nil {
 		return fmt.Errorf("assemble: %w", err)
 	}
