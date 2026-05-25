@@ -42,10 +42,10 @@ func buildView(
 }
 
 // buildFSOps constructs the read/write facade from the projection
-// section, mirroring scrinium.Open's FSOps wiring. storeURI is used to
+// section, mirroring the legacy FSOps wiring. storeURI is used to
 // default the scratch directory under a local store. uid/gid default
 // to the running process when left at zero (matching the old
-// scrinium.DefaultConfig behaviour).
+// the historical default behaviour).
 func buildFSOps(
 	view *projection.View,
 	st store.Store,

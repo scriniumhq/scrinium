@@ -22,7 +22,7 @@ import (
 	"scrinium.dev/engine/store"
 
 	// Built-in URI dialers, registered by import side effect — the
-	// same set scrinium.Open relies on. Hosts that want to constrain
+	// same set the assembler relies on. Hosts that want to constrain
 	// the available schemes import composer with these trimmed.
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"
@@ -97,7 +97,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ assembly.Ass
 	})
 
 	// 4. fsindex extension — must precede store open so the first
-	//    IndexManifest dispatches into it (mirrors scrinium.Open).
+	//    IndexManifest dispatches into it (single-store assembly path).
 	fsidx := fsindex.New()
 	if extIdx, ok := idx.(index.ExtensionHost); ok {
 		if err := extIdx.Extensions().Register(ctx, fsidx); err != nil {

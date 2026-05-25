@@ -1,0 +1,4 @@
+# Minimal Scrinium config: a single local store, all defaults.
+# Used by:  go run ./hello yaml examples/hello/store.yaml
+store:
+  driver: file:///tmp/scrinium-hello-yaml

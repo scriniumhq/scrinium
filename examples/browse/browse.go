@@ -1,14 +1,14 @@
-// browse opens an existing Scrinium store read-only and prints
-// a summary: total artifact count, total bytes referenced,
-// per-namespace breakdown, and capacity from the underlying
-// driver.
+// browse opens an existing Scrinium store read-only and prints a
+// summary: total artifact count, total bytes referenced, per-namespace
+// breakdown, and capacity from the underlying driver.
 //
 // Demonstrates:
 //
-//   - Opening a store with ReadOnly=true (no writes possible,
-//     no scratch directory needed).
+//   - Assembling a store read-only from a composer config
+//     (projection.readOnly: true — no writes, no scratch dir needed).
 //   - Iterating manifests via Store.Walk.
 //   - Pulling capacity figures via Store.Capacity.
+//   - Listing index extensions via the ExtensionLister capability.
 //
 // Usage:
 //
@@ -23,8 +23,9 @@ import (
 	"os"
 	"sort"
 
-	"scrinium.dev"
+	"scrinium.dev/composer"
 	"scrinium.dev/engine/domain"
+	"scrinium.dev/engine/index"
 )
 
 func main() {
@@ -44,16 +45,16 @@ func main() {
 func run(storeURI string) error {
 	ctx := context.Background()
 
-	cfg := scrinium.DefaultConfig()
-	cfg.Store = storeURI
-	cfg.ReadOnly = true
-
-	s, err := scrinium.Open(ctx, cfg)
+	// Assemble read-only. LoadYAML opens an existing store (never
+	// initialises); the projection section's readOnly flag means no
+	// writes are possible and no scratch directory is created.
+	config := fmt.Sprintf("store:\n  driver: %s\nprojection:\n  readOnly: true\n", storeURI)
+	asm, err := composer.LoadYAML(ctx, []byte(config))
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
 	defer func() {
-		if err := s.Close(); err != nil {
+		if err := asm.Close(); err != nil {
 			log.Printf("close: %v", err)
 		}
 	}()
@@ -65,7 +66,7 @@ func run(storeURI string) error {
 	}
 	byNS := make(map[string]*nsStats)
 
-	if err := s.Store.Walk(ctx, "*", func(m domain.Manifest) error {
+	if err := asm.Store().Walk(ctx, "*", func(m domain.Manifest) error {
 		st, ok := byNS[m.Namespace]
 		if !ok {
 			st = &nsStats{}
@@ -78,15 +79,13 @@ func run(storeURI string) error {
 		return fmt.Errorf("walk: %w", err)
 	}
 
-	// Capacity is best-effort: a slow driver shouldn't hang
-	// `browse`. Plain Open already capped its own probes; here
-	// we accept whatever Capacity returns.
-	cap, capErr := s.Store.Capacity(ctx)
+	// Capacity is best-effort: a slow driver shouldn't hang `browse`.
+	cap, capErr := asm.Store().Capacity(ctx)
 
 	// --- Render ---
 
 	fmt.Printf("Store: %s\n", storeURI)
-	fmt.Printf("State: %s\n", s.Store.State())
+	fmt.Printf("State: %s\n", asm.Store().State())
 	fmt.Println()
 
 	if len(byNS) == 0 {
@@ -127,11 +126,15 @@ func run(storeURI string) error {
 		fmt.Printf("Capacity: unavailable (%v)\n", capErr)
 	}
 
-	exts := s.ListExtensions()
-	if len(exts) > 0 {
-		fmt.Println("\nIndex extensions:")
-		for _, e := range exts {
-			fmt.Printf("  %s (schema v%d)\n", e.Name, e.SchemaVersion)
+	// Index extensions are an optional capability — present only if the
+	// index backend implements ExtensionLister.
+	if lister, ok := asm.Index().(index.ExtensionLister); ok {
+		exts := lister.ListExtensions()
+		if len(exts) > 0 {
+			fmt.Println("\nIndex extensions:")
+			for _, e := range exts {
+				fmt.Printf("  %s (schema v%d)\n", e.Name, e.SchemaVersion)
+			}
 		}
 	}
 
