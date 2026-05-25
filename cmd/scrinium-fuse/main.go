@@ -32,9 +32,9 @@ import (
 
 	"scrinium.dev/composer"
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/assembly"
-	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/projection"
+	"scrinium.dev/projection"
+	"scrinium.dev/store/assembly"
+	"scrinium.dev/store/index"
 )
 
 func main() {

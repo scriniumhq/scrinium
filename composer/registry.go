@@ -4,10 +4,10 @@ import (
 	"context"
 	"sync"
 
-	"scrinium.dev/engine/assembly"
-	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/store/assembly"
+	"scrinium.dev/store/driver"
+	"scrinium.dev/store/index"
+	"scrinium.dev/store/pipeline"
 )
 
 // Extension factory signatures. Hosts register implementations through

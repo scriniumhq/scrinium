@@ -3,9 +3,9 @@ package driverfx
 import (
 	"testing"
 
-	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/driver/faulty"
-	"scrinium.dev/engine/driver/localfs"
+	"scrinium.dev/store/driver"
+	"scrinium.dev/store/driver/faulty"
+	"scrinium.dev/store/driver/localfs"
 )
 
 // LocalFS returns a fresh localfs.Driver in t.TempDir() with fsync off.

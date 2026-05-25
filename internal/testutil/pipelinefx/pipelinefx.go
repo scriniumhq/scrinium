@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/pipeline/stage/aesgcm"
-	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/store/pipeline"
+	"scrinium.dev/store/pipeline/stage/aesgcm"
+	scriniumzstd "scrinium.dev/store/pipeline/stage/zstd"
+	"scrinium.dev/store/store"
 )
 
 // DEK is the fixed 32-byte test data-encryption key used by the aes-gcm

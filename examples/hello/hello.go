@@ -27,10 +27,10 @@ import (
 
 	"scrinium.dev/composer"
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
+	"scrinium.dev/store/driver"
+	"scrinium.dev/store/index"
+	"scrinium.dev/store/store"
 )
 
 func main() {

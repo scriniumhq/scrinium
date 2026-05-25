@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/projection"
-	"scrinium.dev/engine/projection/fsindex"
-	"scrinium.dev/engine/projection/fsmeta"
-	"scrinium.dev/engine/store"
+	"scrinium.dev/projection"
+	"scrinium.dev/projection/fsindex"
+	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/store/store"
 )
 
 // buildView constructs the read-side projection. The projection

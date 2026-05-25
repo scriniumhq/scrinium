@@ -3,7 +3,7 @@ package composer
 import (
 	"context"
 
-	"scrinium.dev/engine/assembly"
+	"scrinium.dev/store/assembly"
 )
 
 // Mode selects what Build does when the described store does or does

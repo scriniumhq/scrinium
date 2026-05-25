@@ -32,7 +32,7 @@ import (
 
 	"scrinium.dev/composer"
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/projection/fsmeta"
 )
 
 func main() {

@@ -25,7 +25,7 @@ import (
 
 	"scrinium.dev/composer"
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/index"
+	"scrinium.dev/store/index"
 )
 
 func main() {

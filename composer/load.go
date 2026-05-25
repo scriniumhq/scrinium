@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"scrinium.dev/engine/assembly"
+	"scrinium.dev/store/assembly"
 )
 
 // LoadYAML parses a YAML config and opens the described store,

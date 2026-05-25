@@ -31,10 +31,10 @@ import (
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/composer"
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/assembly"
-	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/projection"
-	"scrinium.dev/engine/projection/vfs"
+	"scrinium.dev/projection"
+	"scrinium.dev/projection/vfs"
+	"scrinium.dev/store/assembly"
+	"scrinium.dev/store/index"
 )
 
 func main() {

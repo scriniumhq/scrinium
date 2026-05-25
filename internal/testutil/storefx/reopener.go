@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/driver/localfs"
-	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/store"
+	"scrinium.dev/store/driver"
+	"scrinium.dev/store/driver/localfs"
+	"scrinium.dev/store/index"
+	"scrinium.dev/store/store"
 )
 
 // Reopener captures the (Driver, StoreIndex) pair so a test can

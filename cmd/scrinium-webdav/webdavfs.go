@@ -8,9 +8,9 @@ import (
 	"syscall"
 
 	"golang.org/x/net/webdav"
-	"scrinium.dev/engine/projection"
-	"scrinium.dev/engine/projection/vfs"
 	"scrinium.dev/internal/pathx"
+	"scrinium.dev/projection"
+	"scrinium.dev/projection/vfs"
 )
 
 // webdavFS adapts vfs.VFS to webdav.FileSystem. Almost all

@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
+	"scrinium.dev/store/artifact"
 )
 
 // OnDisk wraps a localfs root for physical inspection. Construct

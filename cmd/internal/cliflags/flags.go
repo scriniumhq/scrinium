@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"scrinium.dev/engine/projection"
+	"scrinium.dev/projection"
 )
 
 // RootViewFlag binds a CLI flag to *projection.RootView with
