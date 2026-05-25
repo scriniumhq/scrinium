@@ -46,7 +46,7 @@ func mkArtifact(b []byte) domain.Artifact {
 // any error. The handle is always closed.
 func getBytes(t *testing.T, s store.Store, id domain.ArtifactID) []byte {
 	t.Helper()
-	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+	rh, err := s.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("Get(%s): %v", id, err)
 	}
@@ -85,7 +85,7 @@ func randBytes(rng *rand.Rand, n int) []byte {
 func checkRoundTrip(t *testing.T, payload []byte) {
 	t.Helper()
 	s := storefx.Init(t)
-	id, err := s.Put(context.Background(), mkArtifact(payload), domain.PutOptions{Namespace: "u"})
+	id, err := s.Put(context.Background(), mkArtifact(payload), store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -124,18 +124,18 @@ func checkContentAddressing(t *testing.T, a, b []byte) {
 	s, root := storefx.InitWithRoot(t)
 	ctx := context.Background()
 
-	id1, err := s.Put(ctx, mkArtifact(a), domain.PutOptions{Namespace: "u"})
+	id1, err := s.Put(ctx, mkArtifact(a), store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put a #1: %v", err)
 	}
 	// A second Put of the same bytes must not create a second blob,
 	// whether it reuses the manifest (same second) or writes a new one
 	// (the blob is still deduped on content hash).
-	if _, err := s.Put(ctx, mkArtifact(a), domain.PutOptions{Namespace: "u"}); err != nil {
+	if _, err := s.Put(ctx, mkArtifact(a), store.WithNamespace("u")); err != nil {
 		t.Fatalf("Put a #2: %v", err)
 	}
 
-	id2, err := s.Put(ctx, mkArtifact(b), domain.PutOptions{Namespace: "u"})
+	id2, err := s.Put(ctx, mkArtifact(b), store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put b: %v", err)
 	}
@@ -188,7 +188,7 @@ func checkReopenStable(t *testing.T, payload []byte) {
 	s, r := storefx.InitPlain(t)
 	ctx := context.Background()
 
-	id, err := s.Put(ctx, mkArtifact(payload), domain.PutOptions{Namespace: "u"})
+	id, err := s.Put(ctx, mkArtifact(payload), store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 				Payload: bytes.NewReader(payload),
 				Usr:     json.RawMessage(`{"k":"` + usrSecret + `"}`),
 			}
-			id, err := s.Put(ctx, art, domain.PutOptions{Namespace: ns})
+			id, err := s.Put(ctx, art, store.WithNamespace(ns))
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}

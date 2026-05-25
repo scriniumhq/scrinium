@@ -133,7 +133,7 @@ func TestDedup_Matrix(t *testing.T) {
 			for i, p := range tc.payloads {
 				id, err := s.Put(ctx,
 					domain.Artifact{Payload: bytes.NewReader([]byte(p))},
-					domain.PutOptions{Namespace: "ns"})
+					store.WithNamespace("ns"))
 				if err != nil {
 					t.Fatalf("Put #%d: %v", i, err)
 				}
@@ -155,7 +155,7 @@ func TestDedup_Matrix(t *testing.T) {
 func assertReadable(t *testing.T, ctx context.Context, s store.Store, ids []domain.ArtifactID, payloads []string) {
 	t.Helper()
 	for i, id := range ids {
-		rh, err := s.Get(ctx, id, domain.GetOptions{})
+		rh, err := s.Get(ctx, id)
 		if err != nil {
 			t.Fatalf("Get id[%d]: %v", i, err)
 		}

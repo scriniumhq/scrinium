@@ -15,11 +15,11 @@ import (
 
 // putWithSession is a one-liner Put helper for rollback tests.
 // Returns the resulting ArtifactID.
-func putWithSession(t *testing.T, s store.Store, sid, ns, payload string) domain.ArtifactID {
+func putWithSession(t *testing.T, s store.Store, sid domain.SessionID, ns, payload string) domain.ArtifactID {
 	t.Helper()
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: strings.NewReader(payload)},
-		domain.PutOptions{SessionID: domain.SessionID(sid), Namespace: ns})
+		store.WithNamespace(ns), store.WithSession(sid))
 	if err != nil {
 		t.Fatalf("Put(sid=%q): %v", sid, err)
 	}
@@ -28,11 +28,11 @@ func putWithSession(t *testing.T, s store.Store, sid, ns, payload string) domain
 
 // putWithRetention puts an artifact with the given session and an
 // active retention window.
-func putWithRetention(t *testing.T, s store.Store, sid, ns, payload string, until time.Time) domain.ArtifactID {
+func putWithRetention(t *testing.T, s store.Store, sid domain.SessionID, ns, payload string, until time.Time) domain.ArtifactID {
 	t.Helper()
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: strings.NewReader(payload)},
-		domain.PutOptions{SessionID: domain.SessionID(sid), Namespace: ns, RetentionUntil: until})
+		store.WithSession(sid), store.WithNamespace(ns), store.WithRetention(until))
 	if err != nil {
 		t.Fatalf("Put(sid=%q, retention): %v", sid, err)
 	}
@@ -81,7 +81,7 @@ func TestRollbackSession_SingleArtifactDeleted(t *testing.T) {
 		t.Fatalf("RollbackSession: %v", err)
 	}
 
-	if _, err := s.Get(context.Background(), id, domain.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
+	if _, err := s.Get(context.Background(), id); !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Fatalf("artifact should be gone, got Get err = %v", err)
 	}
 	if got := walkCount(t, s); got != 0 {
@@ -120,7 +120,7 @@ func TestRollbackSession_OtherSessionsUntouched(t *testing.T) {
 	}
 
 	for _, kept := range []domain.ArtifactID{keep1, keep2} {
-		if _, err := s.Get(context.Background(), kept, domain.GetOptions{}); err != nil {
+		if _, err := s.Get(context.Background(), kept); err != nil {
 			t.Errorf("artifact %q should still exist, got Get err = %v", kept, err)
 		}
 	}
@@ -144,7 +144,7 @@ func TestRollbackSession_RetentionBlocksWholeSession(t *testing.T) {
 
 	// Atomicity: NONE of the three should be gone.
 	for _, id := range []domain.ArtifactID{a, b, c} {
-		if _, err := s.Get(context.Background(), id, domain.GetOptions{}); err != nil {
+		if _, err := s.Get(context.Background(), id); err != nil {
 			t.Errorf("artifact %q must survive blocked rollback, got %v", id, err)
 		}
 	}
@@ -184,7 +184,7 @@ func TestRollbackSession_NoDeletePolicyRefusesAtomically(t *testing.T) {
 
 	// Both artifacts must still be there.
 	for _, id := range []domain.ArtifactID{a, b} {
-		if _, err := s.Get(context.Background(), id, domain.GetOptions{}); err != nil {
+		if _, err := s.Get(context.Background(), id); err != nil {
 			t.Errorf("artifact %q must survive blocked rollback, got %v", id, err)
 		}
 	}
@@ -268,7 +268,7 @@ func TestRollbackSession_ResumesAfterPartialDelete(t *testing.T) {
 	}
 
 	for _, id := range []domain.ArtifactID{a, b, c} {
-		if _, err := s.Get(context.Background(), id, domain.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
+		if _, err := s.Get(context.Background(), id); !errors.Is(err, errs.ErrArtifactNotFound) {
 			t.Errorf("artifact %q should be gone, got %v", id, err)
 		}
 	}

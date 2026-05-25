@@ -33,13 +33,17 @@ func harness(t *testing.T) (*artifactio.IO, domain.StoreConfig) {
 
 func payload(s string) domain.Artifact { return domain.Artifact{Payload: strings.NewReader(s)} }
 
+// nsOpts is the writer-level DTO the artifactio layer consumes directly
+// (the public store.PutOption surface is resolved before reaching here).
+func nsOpts() domain.PutOptions { return domain.PutOptions{Namespace: "ns"} }
+
 // --- Target path: materialize → assemble → persist round-trip ---
 
 func TestWritePath_TargetRoundTrip(t *testing.T) {
 	w, cfg := harness(t)
 	ctx := context.Background()
 
-	blob, err := w.Materialize(ctx, cfg, payload("hello target"), domain.PutOptions{Namespace: "ns"}, "")
+	blob, err := w.Materialize(ctx, cfg, payload("hello target"), nsOpts(), "")
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
@@ -50,7 +54,7 @@ func TestWritePath_TargetRoundTrip(t *testing.T) {
 		t.Fatal("Materialize produced empty addressing")
 	}
 
-	m, mb, err := w.AssembleManifest(cfg, payload(""), domain.PutOptions{Namespace: "ns"}, blob, nil, "")
+	m, mb, err := w.AssembleManifest(cfg, payload(""), nsOpts(), blob, nil, "")
 	if err != nil {
 		t.Fatalf("AssembleManifest: %v", err)
 	}
@@ -123,18 +127,18 @@ func TestWritePath_DedupHitSharesBlob(t *testing.T) {
 	const content = "dedup me"
 
 	// First write commits a new blob and indexes it.
-	b1, err := w.Materialize(ctx, cfg, payload(content), domain.PutOptions{Namespace: "ns"}, "")
+	b1, err := w.Materialize(ctx, cfg, payload(content), nsOpts(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	m1, mb1, _ := w.AssembleManifest(cfg, payload(""), domain.PutOptions{Namespace: "ns"}, b1, nil, "")
+	m1, mb1, _ := w.AssembleManifest(cfg, payload(""), nsOpts(), b1, nil, "")
 	if err := w.PersistManifest(ctx, m1, mb1, b1.Addr); err != nil {
 		t.Fatal(err)
 	}
 
 	// Second write of identical content should dedup-hit: same BlobRef and
 	// the same committed address as the first.
-	b2, err := w.Materialize(ctx, cfg, payload(content), domain.PutOptions{Namespace: "ns"}, "")
+	b2, err := w.Materialize(ctx, cfg, payload(content), nsOpts(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

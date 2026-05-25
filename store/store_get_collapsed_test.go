@@ -44,11 +44,11 @@ func TestGet_ReadAt(t *testing.T) {
 			} else {
 				s, _ = storefx.InitWithRoot(t)
 			}
-			id, err := s.Put(context.Background(), payload(tc.content), domain.PutOptions{})
+			id, err := s.Put(context.Background(), payload(tc.content))
 			if err != nil {
 				t.Fatal(err)
 			}
-			rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+			rh, err := s.Get(context.Background(), id)
 			if err != nil {
 				t.Fatalf("Get: %v", err)
 			}
@@ -76,7 +76,7 @@ func TestGet_ReadAt(t *testing.T) {
 func TestGet_Integrity(t *testing.T) {
 	t.Run("corrupted manifest", func(t *testing.T) {
 		s, root := storefx.InitWithRoot(t)
-		id, err := s.Put(context.Background(), payload("tamper me"), domain.PutOptions{Namespace: "t"})
+		id, err := s.Put(context.Background(), payload("tamper me"), store.WithNamespace("t"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,14 +92,14 @@ func TestGet_Integrity(t *testing.T) {
 		if err := os.WriteFile(path, raw, 0o644); err != nil {
 			t.Fatalf("rewrite manifest: %v", err)
 		}
-		if _, err := s.Get(context.Background(), id, domain.GetOptions{}); !errors.Is(err, errs.ErrCorruptedManifest) {
+		if _, err := s.Get(context.Background(), id); !errors.Is(err, errs.ErrCorruptedManifest) {
 			t.Fatalf("got %v, want errs.ErrCorruptedManifest", err)
 		}
 	})
 
 	t.Run("missing blob", func(t *testing.T) {
 		s, root := storefx.InitWithRoot(t)
-		id, err := s.Put(context.Background(), payload("blob will vanish"), domain.PutOptions{Namespace: "v"})
+		id, err := s.Put(context.Background(), payload("blob will vanish"), store.WithNamespace("v"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -108,7 +108,7 @@ func TestGet_Integrity(t *testing.T) {
 		}
 		// Get reads only the manifest, so it still succeeds; the
 		// failure surfaces on the first Read.
-		rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+		rh, err := s.Get(context.Background(), id)
 		if err != nil {
 			t.Fatalf("Get with missing blob should succeed: %v", err)
 		}
@@ -124,11 +124,11 @@ func TestGet_Integrity(t *testing.T) {
 func TestGet_ReadHandleSemantics(t *testing.T) {
 	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("semantics"),
-		domain.PutOptions{Namespace: "ns", SessionID: "sess-x"})
+		store.WithNamespace("ns"), store.WithSession("sess-x"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+	rh, err := s.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}

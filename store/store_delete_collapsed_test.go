@@ -46,7 +46,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 			} else {
 				s, root = storefx.InitWithRoot(t)
 			}
-			id, err := s.Put(context.Background(), payload("delete me"), domain.PutOptions{Namespace: "d"})
+			id, err := s.Put(context.Background(), payload("delete me"), store.WithNamespace("d"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -70,7 +70,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 				t.Errorf("Walk after delete: got %d, want 0", seen)
 			}
 
-			if _, err := s.Get(context.Background(), id, domain.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
+			if _, err := s.Get(context.Background(), id); !errors.Is(err, errs.ErrArtifactNotFound) {
 				t.Errorf("Get after delete: got %v, want errs.ErrArtifactNotFound", err)
 			}
 
@@ -97,12 +97,12 @@ func TestStore_RefCountLifecycle(t *testing.T) {
 	const text = "shared content for delete"
 
 	idA, err := s.Put(context.Background(), payload(text),
-		domain.PutOptions{Namespace: "ns", SessionID: "a"})
+		store.WithNamespace("ns"), store.WithSession("a"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	idB, err := s.Put(context.Background(), payload(text),
-		domain.PutOptions{Namespace: "ns", SessionID: "b"})
+		store.WithNamespace("ns"), store.WithSession("b"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,10 +117,10 @@ func TestStore_RefCountLifecycle(t *testing.T) {
 		t.Fatalf("Delete A: %v", err)
 	}
 
-	if _, err := s.Get(context.Background(), idA, domain.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
+	if _, err := s.Get(context.Background(), idA); !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Errorf("Get(A) after delete: got %v, want errs.ErrArtifactNotFound", err)
 	}
-	rh, err := s.Get(context.Background(), idB, domain.GetOptions{})
+	rh, err := s.Get(context.Background(), idB)
 	if err != nil {
 		t.Fatalf("Get(B) after deleting A: %v", err)
 	}

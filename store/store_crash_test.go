@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
 	"scrinium.dev/internal/testutil/storefx"
@@ -95,7 +94,7 @@ func TestCrash_PutTornAtEveryWrite_IsAtomic(t *testing.T) {
 			base := env.fd.CallCount(faulty.MethodPut)
 			env.fd.SetFailOnCall(faulty.MethodPut, base+k)
 
-			id, putErr := s.Put(ctx, mkArtifact(payload), domain.PutOptions{Namespace: ns})
+			id, putErr := s.Put(ctx, mkArtifact(payload), store.WithNamespace(ns))
 			_ = s.Close()
 
 			// 3. Recover and reconcile.
@@ -139,7 +138,7 @@ func measurePutWrites(t *testing.T, payload []byte, ns string) int64 {
 	defer s.Close()
 
 	base := fd.CallCount(faulty.MethodPut)
-	if _, err := s.Put(context.Background(), mkArtifact(payload), domain.PutOptions{Namespace: ns}); err != nil {
+	if _, err := s.Put(context.Background(), mkArtifact(payload), store.WithNamespace("ns")); err != nil {
 		t.Fatalf("measure Put: %v", err)
 	}
 	return fd.CallCount(faulty.MethodPut) - base

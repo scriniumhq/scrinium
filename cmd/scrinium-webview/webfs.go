@@ -49,7 +49,7 @@ func (b *webBackingFS) OpenFile(ctx context.Context, name string, flag int, perm
 // store. Open-and-close pattern: web only needs the
 // manifest, not bytes.
 func (b *webBackingFS) LookupManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, bool, error) {
-	rh, err := b.store.Get(ctx, id, domain.GetOptions{})
+	rh, err := b.store.Get(ctx, id)
 	if err != nil {
 		// "Not found" and infrastructure errors aren't
 		// distinguished here; treat both as "not found"
@@ -63,7 +63,7 @@ func (b *webBackingFS) LookupManifest(ctx context.Context, id domain.ArtifactID)
 // OpenArtifact opens artifact bytes by id. Used by /_view
 // and /_download endpoints which don't have a path.
 func (b *webBackingFS) OpenArtifact(ctx context.Context, id domain.ArtifactID) (web.File, web.ArtifactMeta, error) {
-	rh, err := b.store.Get(ctx, id, domain.GetOptions{})
+	rh, err := b.store.Get(ctx, id)
 	if err != nil {
 		return nil, web.ArtifactMeta{}, err
 	}

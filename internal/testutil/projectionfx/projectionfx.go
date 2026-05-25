@@ -13,6 +13,7 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/manifestfx"
 	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/store"
 )
 
 // --- FakeSource ---
@@ -109,7 +110,7 @@ func (f *FakeSource) Walk(
 func (f *FakeSource) Get(
 	ctx context.Context,
 	id domain.ArtifactID,
-	opts domain.GetOptions,
+	opts ...store.GetOption,
 ) (domain.ReadHandle, error) {
 	f.mu.RLock()
 	getErr := f.getErr
@@ -144,7 +145,7 @@ func (f *FakeSource) Get(
 func (f *FakeSource) Put(
 	ctx context.Context,
 	a domain.Artifact,
-	opts domain.PutOptions,
+	opts ...store.PutOption,
 ) (domain.ArtifactID, error) {
 	f.mu.Lock()
 	if f.putErr != nil {
@@ -166,14 +167,15 @@ func (f *FakeSource) Put(
 		payload = buf
 	}
 
+	po := store.ResolvePutOptions(opts...)
 	id := domain.ArtifactID(fmt.Sprintf("sha256-%064x", counter))
 	hash := domain.ContentHash(fmt.Sprintf("sha256-%064x", counter+0x10000))
 
 	m := domain.Manifest{
 		ArtifactID:   id,
 		Type:         domain.ManifestTypeBlob,
-		Namespace:    opts.Namespace,
-		SessionID:    opts.SessionID,
+		Namespace:    po.Namespace,
+		SessionID:    po.SessionID,
 		CreatedAt:    time.Now().UTC(),
 		ContentHash:  hash,
 		BlobRef:      domain.BlobRef(hash),

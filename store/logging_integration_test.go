@@ -120,11 +120,11 @@ func TestLog_PutGetDeleteEmissions(t *testing.T) {
 	s := storefx.Init(t, store.WithLogger(l))
 	ctx := context.Background()
 
-	id, err := s.Put(ctx, storefx.Payload("hello logs"), domain.PutOptions{Namespace: "ns"})
+	id, err := s.Put(ctx, storefx.Payload("hello logs"), store.WithNamespace("ns"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	rh, err := s.Get(ctx, id, domain.GetOptions{})
+	rh, err := s.Get(ctx, id)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestLog_NoSecretLeak(t *testing.T) {
 	if err := s.Unlock(ctx); err != nil {
 		t.Fatalf("Unlock: %v", err)
 	}
-	id, err := s.Put(ctx, storefx.Payload("secret-bearing op"), domain.PutOptions{Namespace: "ns"})
+	id, err := s.Put(ctx, storefx.Payload("secret-bearing op"), store.WithNamespace("ns"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestLog_SilentByDefault_FullLifecycle(t *testing.T) {
 	// No WithLogger: the engine must run the whole lifecycle silently.
 	s := storefx.Init(t)
 	ctx := context.Background()
-	id, err := s.Put(ctx, storefx.Payload("quiet"), domain.PutOptions{Namespace: "ns"})
+	id, err := s.Put(ctx, storefx.Payload("quiet"), store.WithNamespace("ns"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestLog_ErrorReturnTracedAtDebug(t *testing.T) {
 	// stage may or may not trace depending on path. Instead use a Put of
 	// an artifact, then Delete it, then Verify the now-missing one which
 	// returns an error to the caller.
-	id, err := s.Put(context.Background(), storefx.Payload("x"), domain.PutOptions{Namespace: "ns"})
+	id, err := s.Put(context.Background(), storefx.Payload("x"), store.WithNamespace("ns"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

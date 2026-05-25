@@ -20,6 +20,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/store"
 )
 
 // TestPut_OnDiskLayout is the single physical-layout sanity check: a
@@ -31,7 +32,7 @@ func TestPut_OnDiskLayout(t *testing.T) {
 	s, root := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("hello scrinium"),
-		domain.PutOptions{Namespace: "users"})
+		store.WithNamespace("users"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -69,12 +70,12 @@ func TestPut_SharedBlobAcrossArtifacts(t *testing.T) {
 	const text = "shared content"
 
 	id1, err := s.Put(context.Background(), payload(text),
-		domain.PutOptions{Namespace: "n", SessionID: "a"})
+		store.WithNamespace("n"), store.WithSession("a"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	id2, err := s.Put(context.Background(), payload(text),
-		domain.PutOptions{Namespace: "n", SessionID: "b"})
+		store.WithNamespace("n"), store.WithSession("b"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,27 +112,27 @@ func TestPut_InputValidation(t *testing.T) {
 	cases := []struct {
 		name    string
 		art     domain.Artifact
-		opts    domain.PutOptions
+		opts    []store.PutOption
 		wantErr error // nil means "any non-nil error"
 	}{
 		{"reserved system namespace", payload("x"),
-			domain.PutOptions{Namespace: "system.config"}, errs.ErrReservedNamespace},
+			[]store.PutOption{store.WithNamespace("system.config")}, errs.ErrReservedNamespace},
 		{"wildcard namespace", payload("x"),
-			domain.PutOptions{Namespace: "*"}, errs.ErrReservedNamespace},
+			[]store.PutOption{store.WithNamespace("*")}, errs.ErrReservedNamespace},
 		{"namespace too long", payload("x"),
-			domain.PutOptions{Namespace: strings.Repeat("a", 256)}, errs.ErrNamespaceTooLong},
+			[]store.PutOption{store.WithNamespace(strings.Repeat("a", 256))}, errs.ErrNamespaceTooLong},
 		{"session id too long", payload("x"),
-			domain.PutOptions{SessionID: domain.SessionID(strings.Repeat("a", 256))}, errs.ErrSessionIDTooLong},
+			[]store.PutOption{store.WithSession(domain.SessionID(strings.Repeat("a", 256)))}, errs.ErrSessionIDTooLong},
 		{"ext too large",
 			domain.Artifact{Payload: strings.NewReader("ok"), Ext: append([]byte(`"`), append(huge, '"')...)},
-			domain.PutOptions{}, errs.ErrExtTooLarge},
-		{"nil payload", domain.Artifact{Payload: nil}, domain.PutOptions{}, nil},
+			nil, errs.ErrExtTooLarge},
+		{"nil payload", domain.Artifact{Payload: nil}, nil, nil},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s, _ := storefx.InitWithRoot(t)
-			_, err := s.Put(context.Background(), tc.art, tc.opts)
+			_, err := s.Put(context.Background(), tc.art, tc.opts...)
 			if tc.wantErr == nil {
 				if err == nil {
 					t.Fatalf("expected an error, got nil")
@@ -172,7 +173,7 @@ func TestPut_InlinePolicy(t *testing.T) {
 			s, root := newInlineStore(t, tc.limit)
 			id, err := s.Put(context.Background(),
 				payload(tc.content),
-				domain.PutOptions{Namespace: "inline"})
+				store.WithNamespace("inline"))
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}
@@ -193,9 +194,9 @@ func TestPut_InlinePolicy(t *testing.T) {
 	t.Run("no dedup for inline", func(t *testing.T) {
 		s, root := newInlineStore(t, 100)
 		const content = "shared inline"
-		for _, sid := range []string{"a", "b"} {
+		for _, sid := range []domain.SessionID{"a", "b"} {
 			if _, err := s.Put(context.Background(), payload(content),
-				domain.PutOptions{Namespace: "ns", SessionID: domain.SessionID(sid)}); err != nil {
+				store.WithNamespace("ns"), store.WithSession(sid)); err != nil {
 				t.Fatal(err)
 			}
 		}

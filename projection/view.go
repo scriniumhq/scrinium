@@ -17,6 +17,7 @@ import (
 	"scrinium.dev/event"
 	"scrinium.dev/internal/pathx"
 	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/store"
 )
 
 // View is the read side of the projection. It holds five
@@ -256,7 +257,7 @@ func (v *View) populateExt(ctx context.Context, m *domain.Manifest) {
 	//
 	// FakeSource and similar in-memory test stubs already return
 	// complete manifests; doing a Get on top is a cheap no-op.
-	rh, err := v.source.Get(ctx, m.ArtifactID, domain.GetOptions{})
+	rh, err := v.source.Get(ctx, m.ArtifactID)
 	if err != nil {
 		return
 	}
@@ -718,23 +719,23 @@ func (v *View) WalkByDate(prefix string) NodeSeq      { return v.walkInTree(v.by
 func (v *View) WalkByArtifact(prefix string) NodeSeq  { return v.walkInTree(v.byArtifact, prefix) }
 func (v *View) WalkByOrphaned(prefix string) NodeSeq  { return v.walkInTree(v.byOrphaned, prefix) }
 
-func (v *View) OpenByPath(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byPath, path, opts)
+func (v *View) OpenByPath(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
+	return v.openInTree(ctx, v.byPath, path, opts...)
 }
-func (v *View) OpenBySession(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.bySession, path, opts)
+func (v *View) OpenBySession(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
+	return v.openInTree(ctx, v.bySession, path, opts...)
 }
-func (v *View) OpenByNamespace(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byNamespace, path, opts)
+func (v *View) OpenByNamespace(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
+	return v.openInTree(ctx, v.byNamespace, path, opts...)
 }
-func (v *View) OpenByDate(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byDate, path, opts)
+func (v *View) OpenByDate(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
+	return v.openInTree(ctx, v.byDate, path, opts...)
 }
-func (v *View) OpenByArtifact(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byArtifact, path, opts)
+func (v *View) OpenByArtifact(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
+	return v.openInTree(ctx, v.byArtifact, path, opts...)
 }
-func (v *View) OpenByOrphaned(ctx context.Context, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byOrphaned, path, opts)
+func (v *View) OpenByOrphaned(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
+	return v.openInTree(ctx, v.byOrphaned, path, opts...)
 }
 
 // --- Root-view dispatchers ---
@@ -770,12 +771,12 @@ func (v *View) ListIn(rv RootView, path string) NodeSeq {
 }
 
 // OpenIn dispatches OpenByX based on rv.
-func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts domain.GetOptions) (domain.ReadHandle, error) {
+func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
 	tree := v.treeFor(rv)
 	if tree == nil {
 		return nil, errs.ErrPathNotFound
 	}
-	return v.openInTree(ctx, tree, path, opts)
+	return v.openInTree(ctx, tree, path, opts...)
 }
 
 // treeFor returns the internal tree for the given RootView, or
@@ -891,7 +892,7 @@ func (v *View) openInTree(
 	ctx context.Context,
 	tree map[string]*viewNode,
 	path string,
-	opts domain.GetOptions,
+	opts ...store.GetOption,
 ) (domain.ReadHandle, error) {
 	if v.closed.Load() {
 		return nil, os.ErrClosed
@@ -905,7 +906,7 @@ func (v *View) openInTree(
 	if n.fs.IsDir {
 		return nil, fmt.Errorf("%w: %q", errs.ErrIsADirectory, path)
 	}
-	rh, err := v.source.Get(ctx, n.artifact.ArtifactID, opts)
+	rh, err := v.source.Get(ctx, n.artifact.ArtifactID, opts...)
 	if err != nil {
 		return nil, mapSourceError(err)
 	}

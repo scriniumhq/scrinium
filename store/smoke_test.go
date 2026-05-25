@@ -100,7 +100,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 		p := makePayload(i, payloadSize)
 		id, err := s.Put(ctx,
 			domain.Artifact{Payload: bytes.NewReader(p)},
-			domain.PutOptions{Namespace: "smoke"})
+			store.WithNamespace("smoke"))
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
@@ -162,7 +162,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 			sampleIdx = n - 1
 		}
 		want := makePayload(sampleIdx, payloadSize)
-		rh, err := s.Get(ctx, id, domain.GetOptions{})
+		rh, err := s.Get(ctx, id)
 		if err != nil {
 			t.Fatalf("Get sample #%d (id=%q): %v", sampleIdx, id, err)
 		}
@@ -356,7 +356,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 		p := makePayload(i, payloadSize)
 		id, err := s.Put(ctx,
 			domain.Artifact{Payload: bytes.NewReader(p)},
-			domain.PutOptions{Namespace: "smoke-enc"})
+			store.WithNamespace("smoke-enc"))
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
@@ -391,7 +391,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 	// truncates, or shifts bytes) is caught here rather than
 	// surfacing far downstream.
 	for _, sm := range samples {
-		rh, err := s.Get(ctx, sm.id, domain.GetOptions{})
+		rh, err := s.Get(ctx, sm.id)
 		if err != nil {
 			t.Fatalf("Get sample idx=%d (id=%q): %v", sm.idx, sm.id, err)
 		}

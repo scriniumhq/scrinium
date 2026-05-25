@@ -16,6 +16,7 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/pathx"
 	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/store"
 )
 
 // FSOps is the filesystem-shaped operations layer over a View.
@@ -79,9 +80,9 @@ type FSOps struct {
 // store.Store satisfies this interface naturally (subset typing
 // in Go).
 type StoreClient interface {
-	Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error)
+	Put(ctx context.Context, a domain.Artifact, opts ...store.PutOption) (domain.ArtifactID, error)
 	Delete(ctx context.Context, id domain.ArtifactID) error
-	Get(ctx context.Context, id domain.ArtifactID, opts domain.GetOptions) (domain.ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts ...store.GetOption) (domain.ReadHandle, error)
 }
 
 // FileInfo is the POSIX-shaped descriptor that Stat/Listdir
@@ -470,7 +471,7 @@ func (o *FSOps) listInRoot(path string) NodeSeq {
 }
 
 func (o *FSOps) openInRoot(ctx context.Context, path string) (domain.ReadHandle, error) {
-	return o.view.OpenIn(ctx, o.view.RootView(), path, domain.GetOptions{})
+	return o.view.OpenIn(ctx, o.view.RootView(), path)
 }
 
 // fileInfoFromNode converts a Node into a FileInfo, applying
@@ -1208,11 +1209,9 @@ func (f *writeFile) Close() error {
 			// block, not Usr (host-opaque).
 			Ext: metadata,
 		},
-		domain.PutOptions{
-			SessionID: f.fsops.mountSession,
-			Namespace: f.fsops.namespace,
-			BlobType:  domain.BlobTypeRegular,
-		},
+		store.WithSession(f.fsops.mountSession),
+		store.WithNamespace(f.fsops.namespace),
+		store.WithBlobType(domain.BlobTypeRegular),
 	)
 	if err != nil {
 		return err
@@ -1230,7 +1229,7 @@ func (f *writeFile) Close() error {
 	}
 
 	// Fetch the resulting manifest to update the View.
-	rh, err := f.fsops.store.Get(context.Background(), id, domain.GetOptions{})
+	rh, err := f.fsops.store.Get(context.Background(), id)
 	if err != nil {
 		return fmt.Errorf("projection.FSOps: refetch new manifest: %w", err)
 	}

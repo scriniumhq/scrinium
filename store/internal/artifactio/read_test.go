@@ -39,11 +39,12 @@ func rwHarness(t *testing.T) (*artifactio.IO, *artifactio.IO, driver.Driver, ind
 func write(t *testing.T, w *artifactio.IO, cfg domain.StoreConfig, content string) domain.ArtifactID {
 	t.Helper()
 	ctx := context.Background()
-	blob, err := w.Materialize(ctx, cfg, domain.Artifact{Payload: strings.NewReader(content)}, domain.PutOptions{Namespace: "ns"}, "")
+	opts := domain.PutOptions{Namespace: "ns"}
+	blob, err := w.Materialize(ctx, cfg, domain.Artifact{Payload: strings.NewReader(content)}, opts, "")
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
-	m, mb, err := w.AssembleManifest(cfg, domain.Artifact{}, domain.PutOptions{Namespace: "ns"}, blob, nil, "")
+	m, mb, err := w.AssembleManifest(cfg, domain.Artifact{}, opts, blob, nil, "")
 	if err != nil {
 		t.Fatalf("AssembleManifest: %v", err)
 	}

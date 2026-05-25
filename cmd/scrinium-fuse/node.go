@@ -445,7 +445,7 @@ func (n *treeNode) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint3
 		// Direct open via View — FSOps would route the same way
 		// but service-tree paths aren't in the FSOps root tree
 		// universe.
-		rh, err := n.root.view.OpenIn(ctx, n.tree, n.subPath, domain.GetOptions{})
+		rh, err := n.root.view.OpenIn(ctx, n.tree, n.subPath)
 		if err != nil {
 			return nil, 0, errnoFromError(err)
 		}

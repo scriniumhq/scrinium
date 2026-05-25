@@ -33,11 +33,11 @@ type storeOp struct {
 
 var (
 	putOp = storeOp{"Put", func(ctx context.Context, s store.Store, _ domain.ArtifactID) error {
-		_, err := s.Put(ctx, payload("x"), domain.PutOptions{Namespace: "u"})
+		_, err := s.Put(ctx, payload("x"), store.WithNamespace("u"))
 		return err
 	}}
 	getOp = storeOp{"Get", func(ctx context.Context, s store.Store, id domain.ArtifactID) error {
-		rh, err := s.Get(ctx, id, domain.GetOptions{})
+		rh, err := s.Get(ctx, id)
 		if err == nil {
 			rh.Close()
 		}
@@ -51,7 +51,7 @@ var (
 // mustPut seeds a fresh artifact and returns its id.
 func mustPut(t *testing.T, s store.Store) domain.ArtifactID {
 	t.Helper()
-	id, err := s.Put(context.Background(), payload("seed"), domain.PutOptions{Namespace: "seed"})
+	id, err := s.Put(context.Background(), payload("seed"), store.WithNamespace("seed"))
 	if err != nil {
 		t.Fatalf("seed Put: %v", err)
 	}
@@ -133,11 +133,11 @@ func TestStore_NotFoundAndIDValidation(t *testing.T) {
 		run  func(ctx context.Context, s store.Store) error
 	}{
 		{"Get missing", func(ctx context.Context, s store.Store) error {
-			_, e := s.Get(ctx, missing, domain.GetOptions{})
+			_, e := s.Get(ctx, missing)
 			return e
 		}},
 		{"Get empty id", func(ctx context.Context, s store.Store) error {
-			_, e := s.Get(ctx, "", domain.GetOptions{})
+			_, e := s.Get(ctx, "")
 			return e
 		}},
 		{"Delete missing", func(ctx context.Context, s store.Store) error {
@@ -179,7 +179,7 @@ func TestStore_Retention(t *testing.T) {
 		s, _ := storefx.InitWithRoot(t)
 		when := future()
 		id, err := s.Put(context.Background(), payload("retained"),
-			domain.PutOptions{Namespace: "vault", RetentionUntil: when})
+			store.WithNamespace("vault"), store.WithRetention(when))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -200,7 +200,7 @@ func TestStore_Retention(t *testing.T) {
 	t.Run("Delete blocked by active retention", func(t *testing.T) {
 		s, _ := storefx.InitWithRoot(t)
 		id, err := s.Put(context.Background(), payload("retained"),
-			domain.PutOptions{Namespace: "v", RetentionUntil: future()})
+			store.WithNamespace("v"), store.WithRetention(future()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -213,7 +213,7 @@ func TestStore_Retention(t *testing.T) {
 		s, _ := storefx.InitWithRoot(t)
 		past := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
 		id, err := s.Put(context.Background(), payload("expired"),
-			domain.PutOptions{Namespace: "v", RetentionUntil: past})
+			store.WithNamespace("v"), store.WithRetention(past))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -226,7 +226,7 @@ func TestStore_Retention(t *testing.T) {
 		cfg := domain.StoreConfig{DeletionPolicy: domain.DeletionPolicyNoDelete}
 		s, _ := storefx.InitWithRoot(t, store.WithConfig(cfg))
 		id, err := s.Put(context.Background(), payload("both"),
-			domain.PutOptions{RetentionUntil: future()})
+			store.WithRetention(future()))
 		if err != nil {
 			t.Fatal(err)
 		}

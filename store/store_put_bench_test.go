@@ -120,7 +120,7 @@ func benchmarkPut(b *testing.B, payloadSize int) {
 		binary.LittleEndian.PutUint64(payload[:8], uint64(i))
 		_, err := s.Put(ctx,
 			domain.Artifact{Payload: bytes.NewReader(payload)},
-			domain.PutOptions{Namespace: "bench"})
+			store.WithNamespace("bench"))
 		if err != nil {
 			b.Fatalf("Put #%d: %v", i, err)
 		}

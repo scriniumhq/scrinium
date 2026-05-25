@@ -41,11 +41,11 @@ func TestPipeline_RoundTrip(t *testing.T) {
 
 			id, err := s.Put(context.Background(),
 				domain.Artifact{Payload: bytes.NewReader(original)},
-				domain.PutOptions{Namespace: "ns"})
+				store.WithNamespace("ns"))
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}
-			rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+			rh, err := s.Get(context.Background(), id)
 			if err != nil {
 				t.Fatalf("Get: %v", err)
 			}
@@ -102,7 +102,7 @@ func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 		s, root := pipelinefx.Stack(t, "aes-gcm")
 		id, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader(marker)},
-			domain.PutOptions{Namespace: "secret"})
+			store.WithNamespace("secret"))
 		if err != nil {
 			t.Fatalf("Put: %v", err)
 		}
@@ -122,7 +122,7 @@ func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 		}
 
 		// Confidentiality must not cost correctness: it still round-trips.
-		rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+		rh, err := s.Get(context.Background(), id)
 		if err != nil {
 			t.Fatalf("Get: %v", err)
 		}
@@ -137,7 +137,7 @@ func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 		s, root := storefx.InitWithRoot(t)
 		if _, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader(marker)},
-			domain.PutOptions{Namespace: "plain"}); err != nil {
+			store.WithNamespace("plain")); err != nil {
 			t.Fatalf("Put: %v", err)
 		}
 		found := false
@@ -169,7 +169,7 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 			store.WithConfig(domain.StoreConfig{Pipeline: []string{"zstd"}}))
 		_, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-			domain.PutOptions{Namespace: "ns"})
+			store.WithNamespace("ns"))
 		if !errors.Is(err, errs.ErrUnsupportedAlgorithm) {
 			t.Fatalf("Put: got %v, want errs.ErrUnsupportedAlgorithm", err)
 		}
@@ -195,7 +195,7 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 		}
 		if _, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-			domain.PutOptions{Namespace: "ns"}); err == nil {
+			store.WithNamespace("ns")); err == nil {
 			t.Fatal("Put: expected refusal for inline+pipeline, got nil")
 		}
 	})

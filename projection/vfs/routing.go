@@ -99,17 +99,17 @@ func serviceList(view *projection.View, tree projection.RootView, sub string) pr
 func serviceOpen(ctx context.Context, view *projection.View, tree projection.RootView, sub string) (domain.ReadHandle, error) {
 	switch tree {
 	case projection.RootByPath:
-		return view.OpenByPath(ctx, sub, domain.GetOptions{})
+		return view.OpenByPath(ctx, sub)
 	case projection.RootBySession:
-		return view.OpenBySession(ctx, sub, domain.GetOptions{})
+		return view.OpenBySession(ctx, sub)
 	case projection.RootByNamespace:
-		return view.OpenByNamespace(ctx, sub, domain.GetOptions{})
+		return view.OpenByNamespace(ctx, sub)
 	case projection.RootByDate:
-		return view.OpenByDate(ctx, sub, domain.GetOptions{})
+		return view.OpenByDate(ctx, sub)
 	case projection.RootByArtifact:
-		return view.OpenByArtifact(ctx, sub, domain.GetOptions{})
+		return view.OpenByArtifact(ctx, sub)
 	case projection.RootByOrphaned:
-		return view.OpenByOrphaned(ctx, sub, domain.GetOptions{})
+		return view.OpenByOrphaned(ctx, sub)
 	}
 	return nil, errs.ErrPathNotFound
 }

@@ -294,7 +294,7 @@ func TestOpenByArtifact_File(t *testing.T) {
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	rh, err := v.OpenByArtifact(context.Background(), "aa/bb/sha256-aabbccdd", domain.GetOptions{})
+	rh, err := v.OpenByArtifact(context.Background(), "aa/bb/sha256-aabbccdd")
 	if err != nil {
 		t.Fatalf("OpenByArtifact: %v", err)
 	}
@@ -315,7 +315,7 @@ func TestOpenByArtifact_Directory(t *testing.T) {
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	_, err := v.OpenByArtifact(context.Background(), "aa", domain.GetOptions{})
+	_, err := v.OpenByArtifact(context.Background(), "aa")
 	if !errors.Is(err, errs.ErrIsADirectory) {
 		t.Errorf("expected ErrIsADirectory, got %v", err)
 	}
@@ -326,7 +326,7 @@ func TestOpenByArtifact_NotFound(t *testing.T) {
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	_, err := v.OpenByArtifact(context.Background(), "nope", domain.GetOptions{})
+	_, err := v.OpenByArtifact(context.Background(), "nope")
 	if !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("expected ErrPathNotFound, got %v", err)
 	}
@@ -343,7 +343,7 @@ func TestOpenByArtifact_SourceArtifactNotFound(t *testing.T) {
 
 	src.SetGetErr(errs.ErrArtifactNotFound)
 
-	_, err := v.OpenByArtifact(context.Background(), "aa/bb/sha256-aabbccdd", domain.GetOptions{})
+	_, err := v.OpenByArtifact(context.Background(), "aa/bb/sha256-aabbccdd")
 	if !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("expected ErrPathNotFound, got %v", err)
 	}
@@ -357,7 +357,7 @@ func TestOpenByArtifact_SourceLocked(t *testing.T) {
 
 	src.SetGetErr(errs.ErrLocked)
 
-	_, err := v.OpenByArtifact(context.Background(), "aa/bb/sha256-aabbccdd", domain.GetOptions{})
+	_, err := v.OpenByArtifact(context.Background(), "aa/bb/sha256-aabbccdd")
 	if !errors.Is(err, errs.ErrArtifactUnreadable) {
 		t.Errorf("expected ErrArtifactUnreadable, got %v", err)
 	}

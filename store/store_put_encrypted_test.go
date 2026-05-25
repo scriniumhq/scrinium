@@ -52,7 +52,7 @@ func payloadReader(s string) (a domain.Artifact, raw []byte) {
 func TestPut_PlainStillWorks(t *testing.T) {
 	s, _ := storefx.InitWithRoot(t)
 	a, _ := payloadReader("plain payload")
-	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	id, err := s.Put(context.Background(), a, store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestPut_PlainStillWorks(t *testing.T) {
 func TestPut_Sealed_Succeeds(t *testing.T) {
 	s := initEncryptedWithCrypto(t, domain.ManifestCryptoSealed)
 	a, _ := payloadReader("sealed payload")
-	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	id, err := s.Put(context.Background(), a, store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestPut_Sealed_Succeeds(t *testing.T) {
 func TestPut_Paranoid_Succeeds(t *testing.T) {
 	s := initEncryptedWithCrypto(t, domain.ManifestCryptoParanoid)
 	a, _ := payloadReader("Paranoid payload")
-	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	id, err := s.Put(context.Background(), a, store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestPut_EncryptedManifestRejectedWhenLocked(t *testing.T) {
 	)
 
 	a, _ := payloadReader("payload")
-	_, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	_, err := s.Put(context.Background(), a, store.WithNamespace("u"))
 	if !errors.Is(err, errs.ErrLocked) {
 		t.Fatalf("expected ErrLocked on Put while Locked, got %v", err)
 	}
@@ -114,7 +114,7 @@ func TestPut_Sealed_NamespaceVisibleOnDisk(t *testing.T) {
 	a, _ := payloadReader("payload")
 	a.Usr = json.RawMessage(`{"secret":"do-not-leak"}`)
 
-	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "tenant-a"})
+	id, err := s.Put(context.Background(), a, store.WithNamespace("tenant-a"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestPut_Paranoid_NamespaceHiddenOnDisk(t *testing.T) {
 	s := initEncryptedWithCrypto(t, domain.ManifestCryptoParanoid)
 	a, _ := payloadReader("payload")
 
-	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "tenant-secret"})
+	id, err := s.Put(context.Background(), a, store.WithNamespace("tenant-secret"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -183,12 +183,12 @@ func TestPutGet_Sealed_RoundTrip(t *testing.T) {
 	a, raw := payloadReader("sealed end-to-end")
 	a.Usr = json.RawMessage(`{"tag":"value"}`)
 
-	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	id, err := s.Put(context.Background(), a, store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+	rh, err := s.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -207,12 +207,12 @@ func TestPutGet_Paranoid_RoundTrip(t *testing.T) {
 	s := initEncryptedWithCrypto(t, domain.ManifestCryptoParanoid)
 	a, raw := payloadReader("Paranoid end-to-end")
 
-	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "secret"})
+	id, err := s.Put(context.Background(), a, store.WithNamespace("secret"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+	rh, err := s.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
 		store.WithConfig(cfg),
 	)
 	a, _ := payloadReader("payload")
-	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	id, err := s.Put(context.Background(), a, store.WithNamespace("u"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
 	// We do NOT reach the codec layer here; that path is for
 	// future scenarios where a Store is Plain-DEK but has
 	// encrypted manifests via a custom KeyResolver.
-	_, err = locked.Get(context.Background(), id, domain.GetOptions{})
+	_, err = locked.Get(context.Background(), id)
 	if !errors.Is(err, errs.ErrLocked) {
 		t.Fatalf("expected ErrLocked, got %v", err)
 	}
@@ -306,7 +306,7 @@ func TestPut_EncryptedBlobsDoNotDedup(t *testing.T) {
 	ids := make([]domain.ArtifactID, 0, 3)
 	for i := 0; i < 3; i++ {
 		a, _ := payloadReader(samePayload)
-		id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "ns"})
+		id, err := s.Put(context.Background(), a, store.WithNamespace("ns"))
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
@@ -332,7 +332,7 @@ func TestPut_EncryptedBlobsDoNotDedup(t *testing.T) {
 	// (c) Every manifest is independently readable — the property
 	// the bug violated. Each blob decrypts under its own IV.
 	for i, id := range ids {
-		rh, err := s.Get(context.Background(), id, domain.GetOptions{})
+		rh, err := s.Get(context.Background(), id)
 		if err != nil {
 			t.Fatalf("Get id[%d]: %v", i, err)
 		}
@@ -348,7 +348,7 @@ func TestPut_EncryptedBlobsDoNotDedup(t *testing.T) {
 	if err := s.Delete(context.Background(), ids[0]); err != nil {
 		t.Fatalf("Delete[0]: %v", err)
 	}
-	rh, err := s.Get(context.Background(), ids[1], domain.GetOptions{})
+	rh, err := s.Get(context.Background(), ids[1])
 	if err != nil {
 		t.Fatalf("Get id[1] after Delete[0]: %v", err)
 	}
@@ -428,7 +428,7 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	}
 
 	a, _ := payloadReader("payload")
-	id, err := s.Put(context.Background(), a, domain.PutOptions{Namespace: "u"})
+	id, err := s.Put(context.Background(), a, store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -458,7 +458,7 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 
 	// Get must surface ErrCorruptedManifest at VerifyArtifactID,
 	// before the codec ever tries to Open the body.
-	_, err = s.Get(context.Background(), id, domain.GetOptions{})
+	_, err = s.Get(context.Background(), id)
 	if !errors.Is(err, errs.ErrCorruptedManifest) {
 		t.Fatalf("expected ErrCorruptedManifest, got %v", err)
 	}
@@ -516,7 +516,7 @@ func TestWalk_ParanoidStoreWalksWithoutDecryption(t *testing.T) {
 	for i := 0; i < n; i++ {
 		a, _ := payloadReader(fmt.Sprintf("Paranoid payload %d", i))
 		if _, err := s1.Put(context.Background(), a,
-			domain.PutOptions{Namespace: "ns"}); err != nil {
+			store.WithNamespace("ns")); err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
 	}

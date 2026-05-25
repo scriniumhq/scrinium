@@ -121,7 +121,7 @@ func runModelProgram(t *testing.T, program []byte) {
 			content := bytes.Repeat([]byte{fillB}, int(sizeB)) // 0..255 bytes, content == fill*size
 			ns := namespaces[int(nsB)%len(namespaces)]
 
-			id, err := s.Put(ctx, mkArtifact(content), domain.PutOptions{Namespace: ns})
+			id, err := s.Put(ctx, mkArtifact(content), store.WithNamespace(ns))
 			if err != nil {
 				t.Fatalf("step %d Put(ns=%s,len=%d): %v", step, ns, len(content), err)
 			}
@@ -159,7 +159,7 @@ func runModelProgram(t *testing.T, program []byte) {
 			}
 			m.live = append(m.live[:i], m.live[i+1:]...)
 			// Deleted id must now be absent.
-			if _, err := s.Get(ctx, e.id, domain.GetOptions{}); !errors.Is(err, errs.ErrArtifactNotFound) {
+			if _, err := s.Get(ctx, e.id); !errors.Is(err, errs.ErrArtifactNotFound) {
 				t.Fatalf("step %d Get after Delete(%s): got %v, want ErrArtifactNotFound", step, e.id, err)
 			}
 

@@ -23,16 +23,17 @@ import (
 // mechanics — blob materialization, manifest assembly, persistence — to
 // artifactio. The store keeps the policy and the secrets; artifactio
 // keeps the I/O.
-func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts domain.PutOptions) (domain.ArtifactID, error) {
+func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...PutOption) (domain.ArtifactID, error) {
 	if err := d.enterWrite(ctx); err != nil {
 		return "", err
 	}
-	if err := validatePutInputs(a, opts); err != nil {
+	dopts := applyPut(opts).toDomain()
+	if err := validatePutInputs(a, dopts); err != nil {
 		return "", err
 	}
 
 	cfg := d.snapshotConfig()
-	if err := d.checkPutSupported(cfg, opts); err != nil {
+	if err := d.checkPutSupported(cfg, dopts); err != nil {
 		return "", err
 	}
 
@@ -41,11 +42,11 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts domain.PutOp
 	// Resolve the write KeyID once and thread it through both the blob
 	// pipeline and the manifest body, so a blob and its manifest encrypt
 	// under the same key.
-	writeKeyID := d.resolveWriteKeyID(opts.Namespace)
+	writeKeyID := d.resolveWriteKeyID(dopts.Namespace)
 
-	blob, err := aio.Materialize(ctx, cfg, a, opts, writeKeyID)
+	blob, err := aio.Materialize(ctx, cfg, a, dopts, writeKeyID)
 	if err != nil {
-		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "materialize"))
+		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", dopts.Namespace), slog.String("stage", "materialize"))
 	}
 
 	// Borrow the DEK under the crypto lock only for the duration of the
@@ -57,14 +58,14 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts domain.PutOp
 	)
 	if err := d.withWriteDEK(cfg, func(dek []byte) error {
 		var aerr error
-		manifest, manifestBytes, aerr = aio.AssembleManifest(cfg, a, opts, blob, dek, writeKeyID)
+		manifest, manifestBytes, aerr = aio.AssembleManifest(cfg, a, dopts, blob, dek, writeKeyID)
 		return aerr
 	}); err != nil {
-		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "assemble"))
+		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", dopts.Namespace), slog.String("stage", "assemble"))
 	}
 
 	if err := aio.PersistManifest(ctx, manifest, manifestBytes, blob.Addr); err != nil {
-		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", opts.Namespace), slog.String("stage", "persist"))
+		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", dopts.Namespace), slog.String("stage", "persist"))
 	}
 
 	d.publish(event.EventManifestSaved, event.ManifestSavedPayload{Manifest: manifest})
@@ -79,7 +80,7 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts domain.PutOp
 		log.LogAttrs(ctx, slog.LevelDebug, "put committed",
 			storeIDAttr(d.core),
 			slog.String("artifact_id", string(manifest.ArtifactID)),
-			slog.String("namespace", opts.Namespace),
+			slog.String("namespace", dopts.Namespace),
 			manifestCryptoAttr(cfg.ManifestCrypto),
 			keyIDAttr(writeKeyID),
 		)

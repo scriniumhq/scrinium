@@ -29,7 +29,7 @@ func TestPut_BlobTypeOtherThanRegular_Deferred(t *testing.T) {
 	s, _ := storefx.InitWithRoot(t)
 	_, err := s.Put(context.Background(),
 		payload("nope"),
-		domain.PutOptions{BlobType: domain.BlobTypeChunk})
+		store.WithBlobType(domain.BlobTypeChunk))
 	if err == nil {
 		t.Fatal("expected error on Chunk BlobType")
 	}
@@ -46,7 +46,7 @@ func TestPut_LargePayload(t *testing.T) {
 	data := bytes.Repeat([]byte{0xab}, N)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(data)},
-		domain.PutOptions{Namespace: "big"})
+		store.WithNamespace("big"))
 	if err != nil {
 		t.Fatalf("Put 1MiB: %v", err)
 	}
@@ -71,8 +71,7 @@ func TestPut_LargePayload(t *testing.T) {
 func TestPut_DefaultNamespace(t *testing.T) {
 	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
-		payload("default ns"),
-		domain.PutOptions{}) // empty Namespace = default
+		payload("default ns")) // empty Namespace = default
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -124,21 +123,21 @@ func TestPut_Pipeline_ZstdRoundTrip(t *testing.T) {
 
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	store := storefx.InitOn(t, drv,
+	st := storefx.InitOn(t, drv,
 		store.WithStoreIndex(idx),
 		store.WithReadRegistry(reg),
 		store.WithConfig(cfg),
 	)
 
 	original := bytes.Repeat([]byte("scrinium "), 4096)
-	id, err := store.Put(context.Background(),
+	id, err := st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.PutOptions{Namespace: "ns"})
+		store.WithNamespace("ns"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	rh, err := store.Get(context.Background(), id, domain.GetOptions{})
+	rh, err := st.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -185,21 +184,21 @@ func TestPut_Pipeline_AESGCMRoundTrip(t *testing.T) {
 
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	store := storefx.InitOn(t, drv,
+	st := storefx.InitOn(t, drv,
 		store.WithStoreIndex(idx),
 		store.WithReadRegistry(reg),
 		store.WithConfig(cfg),
 	)
 
 	original := []byte("Hello, ciphertext on disk")
-	id, err := store.Put(context.Background(),
+	id, err := st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.PutOptions{Namespace: "ns"})
+		store.WithNamespace("ns"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	rh, err := store.Get(context.Background(), id, domain.GetOptions{})
+	rh, err := st.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -240,21 +239,21 @@ func TestPut_Pipeline_ZstdThenAESGCM(t *testing.T) {
 
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	store := storefx.InitOn(t, drv,
+	st := storefx.InitOn(t, drv,
 		store.WithStoreIndex(idx),
 		store.WithReadRegistry(reg),
 		store.WithConfig(cfg),
 	)
 
 	original := bytes.Repeat([]byte("compress then encrypt "), 1024)
-	id, err := store.Put(context.Background(),
+	id, err := st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.PutOptions{Namespace: "ns"})
+		store.WithNamespace("ns"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	rh, err := store.Get(context.Background(), id, domain.GetOptions{})
+	rh, err := st.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -283,15 +282,15 @@ func TestPut_Pipeline_MissingAlgorithm(t *testing.T) {
 
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	store := storefx.InitOn(t, drv,
+	st := storefx.InitOn(t, drv,
 		store.WithStoreIndex(idx),
 		store.WithReadRegistry(reg),
 		store.WithConfig(cfg),
 	)
 
-	_, err := store.Put(context.Background(),
+	_, err := st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-		domain.PutOptions{Namespace: "ns"})
+		store.WithNamespace("ns"))
 	if !errors.Is(err, errs.ErrUnsupportedAlgorithm) {
 		t.Fatalf("Put: got %v, want ErrUnsupportedAlgorithm", err)
 	}
@@ -309,7 +308,7 @@ func TestPut_Pipeline_RefusedOnInline(t *testing.T) {
 
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	store, _, err := store.InitStore(context.Background(), drv,
+	st, _, err := store.InitStore(context.Background(), drv,
 		store.WithStoreIndex(idx),
 		store.WithHashRegistry(storefx.Hashes()),
 		store.WithReadRegistry(reg),
@@ -324,9 +323,9 @@ func TestPut_Pipeline_RefusedOnInline(t *testing.T) {
 	}
 
 	// Otherwise Put must refuse it explicitly.
-	_, err = store.Put(context.Background(),
+	_, err = st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-		domain.PutOptions{Namespace: "ns"})
+		store.WithNamespace("ns"))
 	if err == nil {
 		t.Fatalf("Put: expected refusal for Inline + Pipeline, got nil")
 	}
