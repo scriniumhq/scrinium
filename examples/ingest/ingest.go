@@ -29,7 +29,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"scrinium.dev/internal/assembly"
+	"scrinium.dev"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/projection/fsmeta"
@@ -61,7 +61,7 @@ func run(srcDir, storeURI, namespace string) error {
 	// chooses one path explicitly (separate "init" and "ingest"
 	// subcommands).
 	config := fmt.Sprintf("store:\n  driver: %s\n", storeURI)
-	asm, err := assembly.LoadOrInitYAML(ctx, []byte(config))
+	asm, err := scrinium.LoadOrInitYAML(ctx, []byte(config))
 	if err != nil {
 		return fmt.Errorf("assemble: %w", err)
 	}
@@ -130,7 +130,7 @@ func run(srcDir, storeURI, namespace string) error {
 			return fmt.Errorf("encode fsmeta: %w", err)
 		}
 
-		id, err := asm.Store().Put(ctx,
+		id, err := asm.Store.Put(ctx,
 			domain.Artifact{Payload: f, Ext: md},
 			domain.PutOptions{
 				SessionID: sessionID,
@@ -152,7 +152,7 @@ func run(srcDir, storeURI, namespace string) error {
 		// the ingest with the same SessionID-prefix scheme would resume
 		// cleanly because RollbackSession is idempotent.
 		fmt.Fprintf(os.Stderr, "walk failed, rolling back: %v\n", walkErr)
-		if rbErr := asm.Store().RollbackSession(ctx, sessionID); rbErr != nil && !errors.Is(rbErr, context.Canceled) {
+		if rbErr := asm.Store.RollbackSession(ctx, sessionID); rbErr != nil && !errors.Is(rbErr, context.Canceled) {
 			fmt.Fprintf(os.Stderr, "rollback: %v\n", rbErr)
 		}
 		return walkErr

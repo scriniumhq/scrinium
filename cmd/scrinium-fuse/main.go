@@ -29,7 +29,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"scrinium.dev/internal/assembly"
+	"scrinium.dev"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/projection"
@@ -83,14 +83,14 @@ func runMount(args []string) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	asm, err := assembly.LoadOrInitYAML(ctx, data)
+	asm, err := scrinium.LoadOrInitYAML(ctx, data)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-fuse: %v\n", err)
 		return 1
 	}
 	defer asm.Close()
 
-	if asm.Projection() == nil {
+	if asm.Projection == nil {
 		fmt.Fprintln(os.Stderr, "scrinium-fuse: config has no projection section; nothing to mount")
 		return 1
 	}
@@ -110,9 +110,9 @@ func runMount(args []string) int {
 		ShowRaw:         true,
 	}
 	root := &rootNode{
-		view:          asm.Projection().View,
-		fsops:         asm.Projection().FSOps,
-		store:         asm.Store(),
+		view:          asm.Projection.View,
+		fsops:         asm.Projection.FSOps,
+		store:         asm.Store,
 		routingCfg:    routingCfg,
 		startedAt:     startedAt,
 		statsProvider: statsProvider(asm, startedAt, 2*time.Second),
@@ -122,7 +122,7 @@ func runMount(args []string) int {
 		MountOptions: fuse.MountOptions{
 			AllowOther: *allowOther,
 			Name:       "scrinium",
-			FsName:     asm.Info().StoreURI,
+			FsName:     asm.Info.StoreURI,
 		},
 	}
 
@@ -136,7 +136,7 @@ func runMount(args []string) int {
 		_ = server.Unmount()
 	}()
 
-	fmt.Fprintf(os.Stderr, "Mount session: %s\n", asm.MountSession())
+	fmt.Fprintf(os.Stderr, "Mount session: %s\n", asm.MountSession)
 	fmt.Fprintf(os.Stderr, "Mounted at %s\n", *mountPoint)
 	server.Wait()
 	return 0
@@ -145,13 +145,13 @@ func runMount(args []string) int {
 // statsProvider renders the assembly's stats snapshot for the
 // _scrinium/stats pseudo-file. capacityTimeout caps Store.Capacity so a
 // slow driver never hangs a stats read; on error capacity is omitted.
-func statsProvider(asm assembly.Assembly, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
+func statsProvider(asm *scrinium.Scrinium, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
 	return func() []byte {
 		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
 		defer cancel()
 
 		var capPtr *domain.StorageInfo
-		if info, err := asm.Store().Capacity(capCtx); err == nil {
+		if info, err := asm.Store.Capacity(capCtx); err == nil {
 			capPtr = &info
 		}
 
@@ -162,10 +162,10 @@ func statsProvider(asm assembly.Assembly, startedAt time.Time, capacityTimeout t
 			}
 		}
 
-		meta := asm.Info()
-		return projection.RenderStats(asm.Projection().View, projection.DaemonInfo{
+		meta := asm.Info
+		return projection.RenderStats(asm.Projection.View, projection.DaemonInfo{
 			StartedAt:    startedAt,
-			MountSession: asm.MountSession(),
+			MountSession: asm.MountSession,
 			StorePath:    meta.StoreURI,
 			ReadOnly:     meta.ReadOnly,
 			Editing:      meta.Editing,

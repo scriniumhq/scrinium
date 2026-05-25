@@ -139,7 +139,9 @@ func pointerPath(name string) (string, error) {
 	return ns + "/pointers/" + name, nil
 }
 
-func (ss *systemStore) Put(ctx context.Context, name string, payload io.Reader, opts ...SystemPutOption) error {
+func (ss *systemStore) Put(ctx context.Context, a SystemArtifact, opts ...SystemPutOption) error {
+	name, payload := a.Name, a.Payload
+
 	o := SystemPutConfig{}
 	for _, opt := range opts {
 		opt.ApplySystemPut(&o)

@@ -28,9 +28,9 @@ import (
 	"syscall"
 	"time"
 
+	"scrinium.dev"
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/assembly"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
 	"scrinium.dev/store/index"
@@ -82,22 +82,22 @@ func runServe(args []string) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	asm, err := assembly.LoadOrInitYAML(ctx, data)
+	asm, err := scrinium.LoadOrInitYAML(ctx, data)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-webview: %v\n", err)
 		return 1
 	}
 	defer asm.Close()
 
-	if asm.Projection() == nil {
+	if asm.Projection == nil {
 		fmt.Fprintln(os.Stderr, "scrinium-webview: config has no projection section; nothing to serve")
 		return 1
 	}
 
-	fmt.Fprintf(os.Stderr, "Mount session: %s\n", asm.MountSession())
+	fmt.Fprintf(os.Stderr, "Mount session: %s\n", asm.MountSession)
 
 	startedAt := time.Now().UTC()
-	meta := asm.Info()
+	meta := asm.Info
 
 	// webview is read-only and opinionated about layout: it lives at the
 	// URL root with every tree shown unprefixed (/by-path/, /by-date/,
@@ -122,7 +122,7 @@ func runServe(args []string) int {
 		capCtx, capCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer capCancel()
 		var capPtr *domain.StorageInfo
-		if c, err := asm.Store().Capacity(capCtx); err == nil {
+		if c, err := asm.Store.Capacity(capCtx); err == nil {
 			capPtr = &c
 		}
 		exts := make([]web.StatsExtension, 0)
@@ -132,12 +132,12 @@ func runServe(args []string) int {
 			}
 		}
 		// webview is always read-only; reflect that on the page.
-		return buildWebStatsData(asm.Projection().View, capPtr, exts, startedAt, asm.MountSession(),
+		return buildWebStatsData(asm.Projection.View, capPtr, exts, startedAt, asm.MountSession,
 			meta.StoreURI, true, "off", meta.Namespace)
 	}
 
-	v := vfs.New(asm.Projection().View, asm.Projection().FSOps, routingCfg, vfs.WithStatsProvider(textStats))
-	backing := newWebBackingFS(v, asm.Store())
+	v := vfs.New(asm.Projection.View, asm.Projection.FSOps, routingCfg, vfs.WithStatsProvider(textStats))
+	backing := newWebBackingFS(v, asm.Store)
 	webHandler := web.NewHandler(backing, vfs.CleanPath, web.Config{
 		StorePath:     meta.StoreURI,
 		ServicePrefix: "",
@@ -185,13 +185,13 @@ func runServe(args []string) int {
 // statsProvider renders the plain-text stats body for vfs-level
 // _scrinium/stats reads. capacityTimeout caps Store.Capacity so a slow
 // driver never hangs a read; on error capacity is omitted.
-func statsProvider(asm assembly.Assembly, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
+func statsProvider(asm *scrinium.Scrinium, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
 	return func() []byte {
 		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
 		defer cancel()
 
 		var capPtr *domain.StorageInfo
-		if info, err := asm.Store().Capacity(capCtx); err == nil {
+		if info, err := asm.Store.Capacity(capCtx); err == nil {
 			capPtr = &info
 		}
 
@@ -202,10 +202,10 @@ func statsProvider(asm assembly.Assembly, startedAt time.Time, capacityTimeout t
 			}
 		}
 
-		meta := asm.Info()
-		return projection.RenderStats(asm.Projection().View, projection.DaemonInfo{
+		meta := asm.Info
+		return projection.RenderStats(asm.Projection.View, projection.DaemonInfo{
 			StartedAt:    startedAt,
-			MountSession: asm.MountSession(),
+			MountSession: asm.MountSession,
 			StorePath:    meta.StoreURI,
 			ReadOnly:     meta.ReadOnly,
 			Editing:      meta.Editing,

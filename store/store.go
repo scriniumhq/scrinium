@@ -174,15 +174,37 @@ type AdminStore interface {
 	System() SystemStore
 }
 
+// SystemArtifact is an engine-internal service artifact, addressed by
+// a slash-separated Name (a stable pointer) rather than by content
+// hash. Unlike a data-plane domain.Artifact it carries no Ext/Usr
+// metadata — system payloads are small, opaque service blobs (config
+// versions, agent cursors, index snapshots). The Name is the address:
+// Put writes the payload and flips the name's pointer to it; Get/Delete
+// take the name directly.
+//
+// Named addressing is a deliberately small facility for the engine's
+// own data — not a general user-facing primitive — which is why it
+// lives behind AdminStore.System() and uses its own type rather than
+// overloading domain.Artifact.
+type SystemArtifact struct {
+	// Name is the slash-separated pointer under which the artifact is
+	// stored and later retrieved (e.g. "scrub/cursor").
+	Name string
+
+	// Payload is the artifact body. System payloads are small enough to
+	// buffer in memory.
+	Payload io.Reader
+}
+
 // SystemStore is the facade for engine-internal service artifacts:
 // versioned configuration, agent cursors, index snapshots, and the
 // like, each addressed by a slash-separated name.
 type SystemStore interface {
-	// Put writes a system artifact under the given name. If the
-	// name already has an artifact, the predecessor is dropped
-	// after the pointer flip. The default is to index the manifest
-	// in StoreIndex; WithoutIndex() skips indexing.
-	Put(ctx context.Context, name string, payload io.Reader, opts ...SystemPutOption) error
+	// Put writes a SystemArtifact under its Name. If the name already
+	// has an artifact, the predecessor is dropped after the pointer
+	// flip. The default is to index the manifest in StoreIndex;
+	// WithoutIndex() skips indexing.
+	Put(ctx context.Context, a SystemArtifact, opts ...SystemPutOption) error
 
 	// Get opens the artifact currently pointed at by name. Returns
 	// errs.ErrArtifactNotFound when no pointer exists.

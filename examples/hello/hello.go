@@ -1,18 +1,18 @@
 // hello is the smallest Scrinium program — store one artifact, read it
-// back — shown three ways. The point is the contrast: putAndGet at the
-// bottom is identical in all three; only how the store is assembled
-// differs.
+// back — shown three ways. Each variant is a single self-contained
+// function: read it top to bottom and you see the whole example, from
+// assembling the store to closing it, with nothing factored out.
 //
 // Usage:
 //
-//	go run ./hello yaml   store.yaml     # assemble from a YAML config file
-//	go run ./hello config [dir]          # assemble from a Config built in code
-//	go run ./hello manual [dir]          # assemble by hand, no composer
+//	go run ./hello open   [dir]          # one-liner: a driver URI, defaults for all else
+//	go run ./hello config [dir]          # a Config built in code
+//	go run ./hello manual [dir]          # by hand, every layer spelled out
 //
-// Pick by reading top to bottom: "yaml" is how a deployed service is
-// usually wired (operators edit a file); "config" is for programs that
-// compute their configuration; "manual" spells out what composer does
-// for you, one layer at a time.
+// The three differ only in how the store comes to be. "open" is the
+// shortest path a program can take; "config" is for programs that
+// compute their configuration; "manual" spells out, layer by layer,
+// what the first two do for you.
 package main
 
 import (
@@ -25,9 +25,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"scrinium.dev"
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/assembly"
 	"scrinium.dev/store"
 	"scrinium.dev/store/driver"
 	"scrinium.dev/store/index"
@@ -35,108 +35,130 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		usage()
+		fmt.Fprintln(os.Stderr, "usage: hello open [dir] | hello config [dir] | hello manual [dir]")
+		os.Exit(2)
 	}
-	ctx := context.Background()
+	dir := "/tmp/scrinium-hello"
+	if len(os.Args) > 2 {
+		dir = os.Args[2]
+	}
 
-	var (
-		st      store.Store
-		cleanup func()
-		err     error
-	)
+	var err error
 	switch os.Args[1] {
-	case "yaml":
-		if len(os.Args) != 3 {
-			usage()
-		}
-		st, cleanup, err = fromYAML(ctx, os.Args[2])
+	case "open":
+		err = runOpen(context.Background(), dir)
 	case "config":
-		st, cleanup, err = fromConfig(ctx, target(2, "/tmp/scrinium-hello"))
+		err = runConfig(context.Background(), dir)
 	case "manual":
-		st, cleanup, err = fromManual(ctx, target(2, "/tmp/scrinium-hello"))
+		err = runManual(context.Background(), dir)
 	default:
-		usage()
+		fmt.Fprintln(os.Stderr, "usage: hello open [dir] | hello config [dir] | hello manual [dir]")
+		os.Exit(2)
 	}
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer cleanup()
-
-	if err := putAndGet(ctx, st); err != nil {
-		log.Fatal(err)
-	}
 }
 
-// fromYAML — assemble from a YAML config document read off disk. This is
-// how a real service is usually wired: operators edit the file, the
-// program just reads it and knows nothing about drivers or policies.
-func fromYAML(ctx context.Context, path string) (store.Store, func(), error) {
-	data, err := os.ReadFile(path)
+// runOpen — the shortest path. Open takes a driver URI and applies a
+// default index, default policy, and creates the store if it is absent.
+// A *Scrinium IS a store, so Put/Get are called on it directly, and a
+// single Close releases everything it assembled.
+func runOpen(ctx context.Context, dir string) error {
+	s, err := scrinium.Open(ctx, "file://"+dir)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
-	asm, err := assembly.LoadOrInitYAML(ctx, data)
+	defer s.Close()
+
+	id, err := s.Put(ctx,
+		domain.Artifact{Payload: bytes.NewReader([]byte("hello, scrinium!\n"))},
+		domain.PutOptions{Namespace: "demo"})
 	if err != nil {
-		return nil, nil, err
+		return fmt.Errorf("put: %w", err)
 	}
-	return asm.Store(), closeFn(asm), nil
+	fmt.Printf("stored: %s\n", id)
+
+	rh, err := s.Get(ctx, id, domain.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get: %w", err)
+	}
+	defer rh.Close()
+
+	got, err := io.ReadAll(rh)
+	if err != nil {
+		return fmt.Errorf("read: %w", err)
+	}
+	fmt.Printf("read back: %s", got)
+	return nil
 }
 
-// fromConfig — assemble from a composer.Config built in code, no YAML
-// text. The path for programs that compute their configuration from
-// flags, env, or a database. Defaults are applied by Build, so a lone
-// Store driver is already a complete, working store.
-func fromConfig(ctx context.Context, dir string) (store.Store, func(), error) {
-	asm, err := assembly.Build(ctx, assembly.Config{
-		Store: &assembly.StoreSpec{Driver: "file://" + dir},
+// runConfig — assemble from a Config built in code, for programs that
+// compute their configuration from flags, env, or a database rather
+// than a file. Defaults are applied by Build, so a lone Store driver is
+// already a complete, working store.
+func runConfig(ctx context.Context, dir string) error {
+	s, err := scrinium.Build(ctx, scrinium.Config{
+		Store: &scrinium.StoreSpec{Driver: "file://" + dir},
 	})
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
-	return asm.Store(), closeFn(asm), nil
+	defer s.Close()
+
+	id, err := s.Put(ctx,
+		domain.Artifact{Payload: bytes.NewReader([]byte("hello, scrinium!\n"))},
+		domain.PutOptions{Namespace: "demo"})
+	if err != nil {
+		return fmt.Errorf("put: %w", err)
+	}
+	fmt.Printf("stored: %s\n", id)
+
+	rh, err := s.Get(ctx, id, domain.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("get: %w", err)
+	}
+	defer rh.Close()
+
+	got, err := io.ReadAll(rh)
+	if err != nil {
+		return fmt.Errorf("read: %w", err)
+	}
+	fmt.Printf("read back: %s", got)
+	return nil
 }
 
-// fromManual — assemble by hand, no composer at all. This is exactly
+// runManual — assemble by hand, no assembler at all. This is exactly
 // what the two paths above do for you, spelled out: dial a driver, dial
-// an index, open-or-init the store wiring them together. Use it when
-// you need control composer does not expose, or to see the layers.
-func fromManual(ctx context.Context, dir string) (store.Store, func(), error) {
+// an index, open-or-init the store wiring them together, and close both
+// in order (the store does NOT close the index — its lifetime belongs
+// to whoever dialed it, here this function). Use it when you need
+// control the higher-level entry points do not expose, or just to see
+// the layers.
+func runManual(ctx context.Context, dir string) error {
 	// Driver — the byte-level backend (here, local filesystem).
 	drv, err := driver.DialDriver("file://" + dir)
 	if err != nil {
-		return nil, nil, fmt.Errorf("dial driver: %w", err)
+		return fmt.Errorf("dial driver: %w", err)
 	}
 
-	// Index — the metadata catalogue. composer defaults this to a
-	// sqlite file under a local store; we do the same by hand.
+	// Index — the metadata catalogue (a sqlite file under the store).
 	idx, err := index.DialIndex(ctx, "sqlite:///"+filepath.Join(dir, "index.db"))
 	if err != nil {
-		return nil, nil, fmt.Errorf("dial index: %w", err)
+		return fmt.Errorf("dial index: %w", err)
 	}
+	defer idx.Close()
 
-	// Store — open if present, init otherwise (composer's OpenOrInit
-	// branches on ErrStoreNotFound; here it is explicit).
+	// Store — open if present, init otherwise.
 	st, err := store.OpenStore(ctx, drv, store.WithStoreIndex(idx))
 	if errors.Is(err, errs.ErrStoreNotFound) {
 		st, _, err = store.InitStore(ctx, drv, store.WithStoreIndex(idx))
 	}
 	if err != nil {
-		idx.Close()
-		return nil, nil, fmt.Errorf("open/init store: %w", err)
+		return fmt.Errorf("open/init store: %w", err)
 	}
-	return st, func() {
-		if err := st.Close(); err != nil {
-			log.Printf("store close: %v", err)
-		}
-		if err := idx.Close(); err != nil {
-			log.Printf("index close: %v", err)
-		}
-	}, nil
-}
+	defer st.Close()
 
-// putAndGet stores one artifact and reads it back. Identical for all
-// three assembly methods — that is the whole point.
-func putAndGet(ctx context.Context, st store.Store) error {
 	id, err := st.Put(ctx,
 		domain.Artifact{Payload: bytes.NewReader([]byte("hello, scrinium!\n"))},
 		domain.PutOptions{Namespace: "demo"})
@@ -157,26 +179,4 @@ func putAndGet(ctx context.Context, st store.Store) error {
 	}
 	fmt.Printf("read back: %s", got)
 	return nil
-}
-
-// closeFn adapts an assembly's Close to the cleanup signature, logging
-// any error (the composer paths own a whole assembly, not just a store).
-func closeFn(asm interface{ Close() error }) func() {
-	return func() {
-		if err := asm.Close(); err != nil {
-			log.Printf("assembly close: %v", err)
-		}
-	}
-}
-
-func target(i int, def string) string {
-	if len(os.Args) > i {
-		return os.Args[i]
-	}
-	return def
-}
-
-func usage() {
-	fmt.Fprintln(os.Stderr, "usage: hello yaml <config.yaml> | hello config [dir] | hello manual [dir]")
-	os.Exit(2)
 }

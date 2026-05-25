@@ -23,8 +23,8 @@ import (
 	"os"
 	"sort"
 
+	"scrinium.dev"
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/assembly"
 	"scrinium.dev/store/index"
 )
 
@@ -49,7 +49,7 @@ func run(storeURI string) error {
 	// initialises); the projection section's readOnly flag means no
 	// writes are possible and no scratch directory is created.
 	config := fmt.Sprintf("store:\n  driver: %s\nprojection:\n  readOnly: true\n", storeURI)
-	asm, err := assembly.LoadYAML(ctx, []byte(config))
+	asm, err := scrinium.LoadYAML(ctx, []byte(config))
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
@@ -66,7 +66,7 @@ func run(storeURI string) error {
 	}
 	byNS := make(map[string]*nsStats)
 
-	if err := asm.Store().Walk(ctx, "*", func(m domain.Manifest) error {
+	if err := asm.Store.Walk(ctx, "*", func(m domain.Manifest) error {
 		st, ok := byNS[m.Namespace]
 		if !ok {
 			st = &nsStats{}
@@ -80,12 +80,12 @@ func run(storeURI string) error {
 	}
 
 	// Capacity is best-effort: a slow driver shouldn't hang `browse`.
-	cap, capErr := asm.Store().Capacity(ctx)
+	cap, capErr := asm.Store.Capacity(ctx)
 
 	// --- Render ---
 
 	fmt.Printf("Store: %s\n", storeURI)
-	fmt.Printf("State: %s\n", asm.Store().State())
+	fmt.Printf("State: %s\n", asm.Store.State())
 	fmt.Println()
 
 	if len(byNS) == 0 {

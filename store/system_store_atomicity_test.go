@@ -76,10 +76,10 @@ func TestSystemStore_PointerFlipIsAtomic(t *testing.T) {
 	ctx := context.Background()
 	ss := s.System()
 
-	if err := ss.Put(ctx, "scrub/cursor", bytes.NewReader([]byte("v1"))); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v1"))}); err != nil {
 		t.Fatalf("Put v1: %v", err)
 	}
-	if err := ss.Put(ctx, "scrub/cursor", bytes.NewReader([]byte("v2-newer"))); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v2-newer"))}); err != nil {
 		t.Fatalf("Put v2: %v", err)
 	}
 
@@ -112,7 +112,7 @@ func TestSystemStore_Atomicity_FailBeforePointerFlip(t *testing.T) {
 
 	// 1. Seed: init Store, write v1, close.
 	s := storefx.InitOn(t, realDrv, store.WithStoreIndex(idx))
-	if err := s.System().Put(ctx, "scrub/cursor", bytes.NewReader([]byte("v1-original"))); err != nil {
+	if err := s.System().Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v1-original"))}); err != nil {
 		t.Fatalf("seed Put: %v", err)
 	}
 	if err := s.Close(); err != nil {
@@ -126,7 +126,7 @@ func TestSystemStore_Atomicity_FailBeforePointerFlip(t *testing.T) {
 	defer s2.Close()
 
 	// 3. Try Put v2 — must return the injected error.
-	err := s2.System().Put(ctx, "scrub/cursor", bytes.NewReader([]byte("v2-failed")))
+	err := s2.System().Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v2-failed"))})
 	if err == nil {
 		t.Fatal("Put v2: expected injected failure, got nil")
 	}
@@ -157,14 +157,14 @@ func TestSystemStore_Atomicity_FailBeforePredecessorDrop(t *testing.T) {
 	s := storefx.InitOn(t, realDrv, store.WithStoreIndex(indexfx.Memory(t)))
 	ctx := context.Background()
 
-	if err := s.System().Put(ctx, "scrub/cursor", bytes.NewReader([]byte("v1"))); err != nil {
+	if err := s.System().Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v1"))}); err != nil {
 		t.Fatalf("Put v1: %v", err)
 	}
 	// Second Put — pointer flip succeeds, predecessor Remove
 	// fails. Per SystemStore.Put contract this is best-effort:
 	// the public operation succeeds, the orphan remains for
 	// Orphan Scan.
-	if err := s.System().Put(ctx, "scrub/cursor", bytes.NewReader([]byte("v2"))); err != nil {
+	if err := s.System().Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v2"))}); err != nil {
 		t.Fatalf("Put v2 (predecessor drop fails but Put must succeed): %v", err)
 	}
 

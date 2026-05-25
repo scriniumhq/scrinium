@@ -47,7 +47,7 @@ func TestSystemStore_PutGetRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	body := []byte("hello cursor 2026-04-01T12:00:00Z")
 
-	if err := ss.Put(ctx, "scrub/cursor", bytes.NewReader(body)); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader(body)}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
@@ -72,10 +72,10 @@ func TestSystemStore_PutUpdateReplacesPredecessor(t *testing.T) {
 	v1 := []byte("version-1")
 	v2 := []byte("version-2-newer")
 
-	if err := ss.Put(ctx, "scrub/cursor", bytes.NewReader(v1)); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader(v1)}); err != nil {
 		t.Fatalf("Put v1: %v", err)
 	}
-	if err := ss.Put(ctx, "scrub/cursor", bytes.NewReader(v2)); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader(v2)}); err != nil {
 		t.Fatalf("Put v2: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestSystemStore_DeleteIdempotent(t *testing.T) {
 	}
 
 	// Put then Delete then Get returns NotFound.
-	if err := ss.Put(ctx, "scrub/cursor", bytes.NewReader([]byte("x"))); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("x"))}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 	if err := ss.Delete(ctx, "scrub/cursor"); err != nil {
@@ -133,7 +133,7 @@ func TestSystemStore_WalkByPrefix(t *testing.T) {
 		"gc/cursor",
 		"snapshot/2026-04-01",
 	} {
-		if err := ss.Put(ctx, name, bytes.NewReader([]byte(name))); err != nil {
+		if err := ss.Put(ctx, store.SystemArtifact{Name: name, Payload: bytes.NewReader([]byte(name))}); err != nil {
 			t.Fatalf("Put %q: %v", name, err)
 		}
 	}
@@ -157,7 +157,7 @@ func TestSystemStore_WalkEmptyPrefixScansAll(t *testing.T) {
 	before := walkNames(t, ss, "")
 
 	for _, n := range []string{"config/v1", "scrub/cursor", "gc/cursor"} {
-		if err := ss.Put(ctx, n, bytes.NewReader([]byte(n))); err != nil {
+		if err := ss.Put(ctx, store.SystemArtifact{Name: n, Payload: bytes.NewReader([]byte(n))}); err != nil {
 			t.Fatalf("Put %q: %v", n, err)
 		}
 	}
@@ -177,7 +177,7 @@ func TestSystemStore_WithoutIndexSkipsIndexing(t *testing.T) {
 
 	before := countNamespace(t, idx, domain.NamespaceSystemState)
 
-	if err := ss.Put(ctx, "index_snapshot/2026-04-01", bytes.NewReader(body), store.WithoutIndex()); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "index_snapshot/2026-04-01", Payload: bytes.NewReader(body)}, store.WithoutIndex()); err != nil {
 		t.Fatalf("Put with WithoutIndex: %v", err)
 	}
 
@@ -206,7 +206,7 @@ func TestSystemStore_ConfigPrefixRoutesToSystemConfig(t *testing.T) {
 	beforeCfg := countNamespace(t, idx, domain.NamespaceSystemConfig)
 	beforeState := countNamespace(t, idx, domain.NamespaceSystemState)
 
-	if err := ss.Put(ctx, "config/v1", bytes.NewReader([]byte(`{"k":"v"}`))); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "config/v1", Payload: bytes.NewReader([]byte(`{"k":"v"}`))}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
@@ -224,7 +224,7 @@ func TestSystemStore_StatePrefixRoutesToSystemState(t *testing.T) {
 
 	before := countNamespace(t, idx, domain.NamespaceSystemState)
 
-	if err := ss.Put(ctx, "scrub/cursor", bytes.NewReader([]byte("timestamp"))); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("timestamp"))}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
@@ -244,7 +244,7 @@ func TestSystemStore_InvalidNamesRejected(t *testing.T) {
 		"a/./b",
 		"a/../b",
 	} {
-		err := ss.Put(ctx, name, bytes.NewReader([]byte("x")))
+		err := ss.Put(ctx, store.SystemArtifact{Name: name, Payload: bytes.NewReader([]byte("x"))})
 		if !errors.Is(err, errs.ErrInvalidSystemName) {
 			t.Errorf("Put(%q): got %v, want errs.ErrInvalidSystemName", name, err)
 		}
