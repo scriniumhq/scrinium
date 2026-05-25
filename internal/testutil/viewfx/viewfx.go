@@ -14,10 +14,10 @@ import (
 	"context"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/projection"
-	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/projectionfx"
+	"scrinium.dev/projection"
+	"scrinium.dev/projection/fsmeta"
 )
 
 // Stack wires an in-memory FakeSource into a View + FSOps with the

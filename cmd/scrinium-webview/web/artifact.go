@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/domain"
 	"scrinium.dev/internal/humanize"
 	"scrinium.dev/internal/pathx"
+	"scrinium.dev/projection/fsmeta"
 )
 
 // SchemaDecoder is the contract for plugging schema-aware

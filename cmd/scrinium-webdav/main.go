@@ -27,12 +27,11 @@ import (
 	"time"
 
 	"golang.org/x/net/webdav"
+	"scrinium.dev"
 
-	"scrinium.dev/composer"
-	"scrinium.dev/engine/assembly"
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/projection"
+	"scrinium.dev/domain"
+	"scrinium.dev/projection"
+	"scrinium.dev/store/index"
 )
 
 func main() {
@@ -76,14 +75,14 @@ func runServe(args []string) int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	asm, err := composer.LoadOrInitYAML(ctx, data)
+	asm, err := scrinium.LoadOrInitYAML(ctx, data)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-webdav: %v\n", err)
 		return 1
 	}
 	defer asm.Close()
 
-	if asm.FSOps() == nil {
+	if asm.Projection == nil {
 		fmt.Fprintln(os.Stderr, "scrinium-webdav: config has no projection section; nothing to serve")
 		return 1
 	}
@@ -97,7 +96,7 @@ func runServe(args []string) int {
 		RootView:      projection.RootByPath,
 	}
 	stats := statsProvider(asm, startedAt, 2*time.Second)
-	wfs := newWebdavFS(asm.View(), asm.FSOps(), routingCfg, !*allowOSJunk, stats)
+	wfs := newWebdavFS(asm.Projection.View, asm.Projection.FSOps, routingCfg, !*allowOSJunk, stats)
 
 	handler := &webdav.Handler{
 		FileSystem: wfs,
@@ -125,7 +124,7 @@ func runServe(args []string) int {
 		_ = srv.Shutdown(shutCtx)
 	}()
 
-	fmt.Fprintf(os.Stderr, "Mount session: %s\n", asm.MountSession())
+	fmt.Fprintf(os.Stderr, "Mount session: %s\n", asm.MountSession)
 	fmt.Fprintf(os.Stderr, "Serving WebDAV on %s\n", *listen)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintf(os.Stderr, "scrinium-webdav: %v\n", err)
@@ -137,13 +136,13 @@ func runServe(args []string) int {
 // statsProvider renders the assembly's stats snapshot for the
 // _scrinium/stats pseudo-file. capacityTimeout caps Store.Capacity so a
 // slow driver never hangs a stats read; on error capacity is omitted.
-func statsProvider(asm assembly.Assembly, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
+func statsProvider(asm *scrinium.Scrinium, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
 	return func() []byte {
 		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
 		defer cancel()
 
 		var capPtr *domain.StorageInfo
-		if info, err := asm.Store().Capacity(capCtx); err == nil {
+		if info, err := asm.Store.Capacity(capCtx); err == nil {
 			capPtr = &info
 		}
 
@@ -154,10 +153,10 @@ func statsProvider(asm assembly.Assembly, startedAt time.Time, capacityTimeout t
 			}
 		}
 
-		meta := asm.Info()
-		return projection.RenderStats(asm.View(), projection.DaemonInfo{
+		meta := asm.Info
+		return projection.RenderStats(asm.Projection.View, projection.DaemonInfo{
 			StartedAt:    startedAt,
-			MountSession: asm.MountSession(),
+			MountSession: asm.MountSession,
 			StorePath:    meta.StoreURI,
 			ReadOnly:     meta.ReadOnly,
 			Editing:      meta.Editing,

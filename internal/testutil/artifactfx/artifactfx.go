@@ -7,10 +7,10 @@ import (
 	"hash"
 	"testing"
 
-	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/hashing"
+	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/manifestfx"
+	"scrinium.dev/store/artifact"
+	"scrinium.dev/store/hashing"
 )
 
 // Hashes returns a HashRegistry with sha256 registered, sufficient for

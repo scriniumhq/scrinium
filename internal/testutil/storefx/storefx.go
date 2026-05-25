@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/hashing"
-	"scrinium.dev/engine/store"
+	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/store"
+	"scrinium.dev/store/driver"
+	"scrinium.dev/store/hashing"
 )
 
 // Hashes returns a HashRegistry suitable for tests. sha256 is real;

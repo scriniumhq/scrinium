@@ -14,8 +14,8 @@ import (
 	"scrinium.dev/internal/testutil/projectionfx"
 	viewfx "scrinium.dev/internal/testutil/viewfx"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // newTestRoot builds a rootNode wired against an in-memory

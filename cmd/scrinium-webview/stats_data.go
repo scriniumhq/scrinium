@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/projection"
+	"scrinium.dev/domain"
 	"scrinium.dev/internal/humanize"
+	"scrinium.dev/projection"
 )
 
 // buildWebStatsData translates the daemon's live state into the
