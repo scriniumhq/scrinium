@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // Version is the kit format version emitted by Encode. Decode

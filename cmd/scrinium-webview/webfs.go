@@ -8,7 +8,7 @@ import (
 	pathpkg "path"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection/fsmeta"
 	"scrinium.dev/engine/projection/vfs"
 	"scrinium.dev/engine/store"

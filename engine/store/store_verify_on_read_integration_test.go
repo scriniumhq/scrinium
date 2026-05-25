@@ -8,10 +8,10 @@ import (
 	"sync"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 	"scrinium.dev/internal/testutil/storefx"
 )
 

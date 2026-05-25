@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/artifactfx"
 )
 

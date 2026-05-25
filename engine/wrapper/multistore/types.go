@@ -1,10 +1,10 @@
 package multistore
 
 import (
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
+	"scrinium.dev/event"
 )
 
 // --- Policy enums ---

@@ -7,8 +7,8 @@ import (
 	"hash"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/hashing"
 	"scrinium.dev/internal/testutil/manifestfx"
 )

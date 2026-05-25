@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/manifestfx"
 	"scrinium.dev/internal/testutil/projectionfx"
 )

@@ -24,7 +24,7 @@ import (
 	"sort"
 
 	"scrinium.dev/composer"
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
 )
 

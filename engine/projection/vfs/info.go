@@ -4,7 +4,7 @@ import (
 	"os"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
 )

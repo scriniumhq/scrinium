@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // registry implements domain.HashRegistry with an RWMutex so

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/internal/humanize"
 )
 

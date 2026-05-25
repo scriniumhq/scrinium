@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // StoreIndex is the index of a single Store. Every mutating method

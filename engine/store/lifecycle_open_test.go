@@ -6,11 +6,11 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/reconcile"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/storefx"
 )

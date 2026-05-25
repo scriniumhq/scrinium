@@ -14,8 +14,8 @@ import (
 	"os"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/errs"
 )
 
 // maxDescriptorSize bounds a replica read: a descriptor is a few

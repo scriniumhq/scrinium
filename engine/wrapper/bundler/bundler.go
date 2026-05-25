@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/multistore"
+	"scrinium.dev/errs"
 )
 
 // BundlerConfig holds the batch-sealing parameters. Triggers are

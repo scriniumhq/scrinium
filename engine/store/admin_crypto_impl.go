@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
+	"scrinium.dev/errs"
 )
 
 // Unlock transitions an encrypted Store from Locked to Unlocked.

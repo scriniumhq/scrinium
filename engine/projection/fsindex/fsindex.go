@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection/fsmeta"
 )

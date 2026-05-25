@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/errs"
 )
 
 // --- Test scaffolding ---

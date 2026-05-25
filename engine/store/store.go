@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 )
 

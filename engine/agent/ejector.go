@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // --- Sync Agent (Reserved, D-05) ---

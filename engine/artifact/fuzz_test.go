@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/internal/testutil/artifactfx"
 )
 

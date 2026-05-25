@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // Capacity returns aggregated storage info. Best-effort:

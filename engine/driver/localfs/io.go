@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // Put writes a file atomically. The pattern is:

@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/faulty"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
 )

@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"testing"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // TestBridgedSentinels_IdentityStillMatches verifies that adding

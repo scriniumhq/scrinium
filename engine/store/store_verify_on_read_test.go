@@ -3,7 +3,7 @@ package store
 import (
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/pipeline"
 )

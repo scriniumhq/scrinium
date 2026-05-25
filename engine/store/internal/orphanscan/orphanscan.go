@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // OrphanReport is the result of a RecoverOrphans pass. Counts are

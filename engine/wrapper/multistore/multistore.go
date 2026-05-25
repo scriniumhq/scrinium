@@ -3,7 +3,7 @@ package multistore
 import (
 	"context"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // MultistoreIndex is the aggregating index at the multistore

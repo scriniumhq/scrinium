@@ -4,10 +4,10 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/errs"
 )
 
 // GenerateDEK returns a fresh DEK from crypto/rand. A failure means a

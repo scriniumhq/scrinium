@@ -7,9 +7,9 @@ import (
 	"slices"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/store/internal/storeconfig"
+	"scrinium.dev/errs"
 )
 
 // Config returns a snapshot of the active StoreConfig. A pure

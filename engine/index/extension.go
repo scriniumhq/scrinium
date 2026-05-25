@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // IndexExtension is the contract host-side index extensions

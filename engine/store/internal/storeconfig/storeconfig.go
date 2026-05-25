@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // ApplyDefaults fills in zero-valued StoreConfig fields with sensible

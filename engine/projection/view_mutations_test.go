@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/eventfx"
 	"scrinium.dev/internal/testutil/projectionfx"
 )

@@ -8,7 +8,7 @@ package pipelinefx
 import (
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
 	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"

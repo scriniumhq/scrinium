@@ -4,10 +4,10 @@ import (
 	"context"
 	"log/slog"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/event"
 )
 
 // PassphraseHint is the call context for a PassphraseProvider.

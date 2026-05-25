@@ -12,9 +12,9 @@ import (
 
 	"crypto/sha256"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // These are white-box unit tests of the system.config pointer/format

@@ -5,11 +5,11 @@ import (
 
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
 	"scrinium.dev/engine/wrapper/multistore"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // CuratorOption is an option for the Curator constructor (New).

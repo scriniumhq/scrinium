@@ -7,10 +7,10 @@ import (
 	"io"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
+	"scrinium.dev/errs"
 )
 
 func mustKey(t *testing.T) []byte {

@@ -6,8 +6,8 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/errs"
 )
 
 func freshDEK(t *testing.T) []byte {

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsindex"
 	"scrinium.dev/engine/projection/fsmeta"

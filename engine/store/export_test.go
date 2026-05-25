@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"io"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"

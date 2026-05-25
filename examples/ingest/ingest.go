@@ -31,7 +31,7 @@ import (
 	"github.com/google/uuid"
 
 	"scrinium.dev/composer"
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection/fsmeta"
 )
 

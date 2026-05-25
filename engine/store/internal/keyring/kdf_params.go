@@ -4,8 +4,8 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // saltLen is the KDF salt length (RFC 9106 §4); not configurable.

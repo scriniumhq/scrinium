@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"hash"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // contenthash.go — parsing a ContentHash string into the pieces a verifier

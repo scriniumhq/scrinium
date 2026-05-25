@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/errs"
 )
 
 // wrapKEK encrypts dek with kek using AES-256-GCM and a fresh nonce.

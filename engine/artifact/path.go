@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // path.go — the driver-side path layout for blobs and manifests.

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 )

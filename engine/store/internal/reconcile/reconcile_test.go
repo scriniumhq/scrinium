@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/errs"
 )
 
 func d(t *testing.T, seq uint64) *descriptor.Descriptor {

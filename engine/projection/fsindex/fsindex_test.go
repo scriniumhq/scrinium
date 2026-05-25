@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/index/sqlite"
 	"scrinium.dev/engine/projection/fsindex"

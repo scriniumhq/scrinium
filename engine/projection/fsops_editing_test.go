@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/projectionfx"
 )
 

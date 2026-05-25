@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 

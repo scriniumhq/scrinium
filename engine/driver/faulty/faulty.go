@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // Method names used by the configuration. They match the Driver

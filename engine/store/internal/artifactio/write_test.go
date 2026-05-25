@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/artifactio"
 	"scrinium.dev/engine/store/internal/storeconfig"

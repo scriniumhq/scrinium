@@ -24,8 +24,8 @@ import (
 	"iter"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/domain"
+	"scrinium.dev/event"
 )
 
 // --- Source ---

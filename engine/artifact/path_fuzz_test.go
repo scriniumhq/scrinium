@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 )
 
 // FuzzPathParsers hardens the on-disk path parsers against arbitrary

@@ -15,9 +15,9 @@ import (
 	"io"
 	"os"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // Load reads, verifies, and decodes the manifest file for id. It reads the

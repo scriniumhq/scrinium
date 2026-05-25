@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // gatherNames lists pointer paths under namespace/pointers/<prefix>

@@ -8,10 +8,10 @@ import (
 	"os"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // Delete logically removes an artifact from the Store. It does not free

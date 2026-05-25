@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // --- Surfaces ---

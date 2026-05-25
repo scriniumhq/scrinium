@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/artifactio"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // artifactIO builds an artifactio.IO bound to this store's driver, index,

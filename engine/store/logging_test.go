@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // --- capturing handler ---------------------------------------------------

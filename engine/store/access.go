@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // checkWritable extends checkOperational with the ReadOnly check.

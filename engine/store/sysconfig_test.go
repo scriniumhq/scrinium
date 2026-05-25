@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/indexfx"

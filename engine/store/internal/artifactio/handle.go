@@ -25,11 +25,11 @@ import (
 	"os"
 	"sync"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/errs"
 )
 
 // --- inlineReadHandle: bytes live in the manifest itself ---

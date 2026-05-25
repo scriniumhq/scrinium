@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // IngestMode is the operating mode of the Ingester.

@@ -4,8 +4,8 @@ import (
 	"crypto/sha256"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/internal/testutil/artifactfx"
 )
 

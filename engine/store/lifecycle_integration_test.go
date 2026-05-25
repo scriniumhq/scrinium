@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
-	"scrinium.dev/engine/errs"
 	sqliteindex "scrinium.dev/engine/index/sqlite"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/storefx"
 )
 

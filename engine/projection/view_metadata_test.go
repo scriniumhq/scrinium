@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
 	"scrinium.dev/internal/testutil/projectionfx"

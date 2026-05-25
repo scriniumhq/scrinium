@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // --- ApplyDefaults ---

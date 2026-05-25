@@ -21,9 +21,9 @@ package chunker
 import (
 	"fmt"
 
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/multistore"
+	"scrinium.dev/errs"
 )
 
 // ChunkerConfig holds the slicing parameters. The algorithm

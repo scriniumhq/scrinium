@@ -14,9 +14,9 @@ import (
 	"errors"
 	"fmt"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/timefmt"
+	"scrinium.dev/errs"
 )
 
 // jsonBody is the on-disk top-level shape of a manifest body (ADR-54:

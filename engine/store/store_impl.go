@@ -4,11 +4,11 @@ import (
 	"log/slog"
 	"sync"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/event"
 )
 
 // store is the engine's internal Store implementation. Clients

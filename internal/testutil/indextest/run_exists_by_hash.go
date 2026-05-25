@@ -3,7 +3,7 @@ package indextest
 import (
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 

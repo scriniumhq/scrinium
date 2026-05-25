@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"sync"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/errs"
 )
 
 // crypto_state.go — the Store's mutable crypto material grouped with

@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"os"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // State returns the current state of the Store. Cheap and

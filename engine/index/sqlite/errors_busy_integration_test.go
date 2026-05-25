@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // TestClassifyError_BusyMaps in errors_test.go covers the unit

@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/projectionfx"
 	viewfx "scrinium.dev/internal/testutil/viewfx"
 )

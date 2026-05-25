@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 func TestDefault_PassesValidate(t *testing.T) {

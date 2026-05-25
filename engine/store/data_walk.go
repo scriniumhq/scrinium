@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // Walk iterates over user manifests. It enforces the namespace-syntax

@@ -26,11 +26,11 @@ import (
 	"path/filepath"
 
 	"scrinium.dev/composer"
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/errs"
 )
 
 func main() {

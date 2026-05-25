@@ -7,7 +7,7 @@ package pipeline
 import (
 	"sync"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // NewTransformerRegistry creates an empty transformer registry. The

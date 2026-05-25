@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
 	"scrinium.dev/internal/testutil/storefx"

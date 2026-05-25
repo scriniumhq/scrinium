@@ -4,9 +4,9 @@ import (
 	"errors"
 	"io"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline/internal/segaead"
+	"scrinium.dev/errs"
 )
 
 // shared.go — small helpers common to the pinned-DEK and

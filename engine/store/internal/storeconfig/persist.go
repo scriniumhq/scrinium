@@ -10,10 +10,10 @@ import (
 	"os"
 	"strings"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 const (

@@ -3,7 +3,7 @@ package event
 import (
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // store_payloads.go — event-type name constants and their payload

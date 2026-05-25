@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/errs"
 )
 
 // IO is the artifact I/O engine bound to a store's Driver, StoreIndex,

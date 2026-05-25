@@ -13,9 +13,9 @@ package artifact
 import (
 	"fmt"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/errs"
 )
 
 // KeyProvider is the minimal slice of a key resolver that DecodeEncrypted

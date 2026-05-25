@@ -3,7 +3,7 @@ package pipeline
 import (
 	"io"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // transformer.go — Pipeline transformation contracts: the

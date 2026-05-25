@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // store_meta keys for the descriptor L2 cache.

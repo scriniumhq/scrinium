@@ -7,7 +7,7 @@ import (
 	"scrinium.dev/engine/internal/aead"
 	"testing"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // freshKEK returns 32 random bytes. Tests use it instead of

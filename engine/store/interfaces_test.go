@@ -3,10 +3,10 @@ package store_test
 import (
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/event"
 )
 
 // This file is interface conformance smoke for the core package —

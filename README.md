@@ -63,7 +63,7 @@ import (
   "log"
 
   scrinium "scrinium.dev"
-  "scrinium.dev/engine/domain"
+  "scrinium.dev/domain"
 )
 
 func main() {

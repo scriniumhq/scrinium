@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/internal/humanize"
 )

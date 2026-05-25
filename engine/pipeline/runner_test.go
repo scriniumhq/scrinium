@@ -8,7 +8,7 @@ import (
 	"io"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // --- stub hash registry ---

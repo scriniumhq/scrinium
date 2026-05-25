@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // GCConfig configures the GC Agent.

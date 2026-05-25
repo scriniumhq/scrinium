@@ -4,7 +4,7 @@ import (
 	"crypto/cipher"
 	"errors"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 )
 

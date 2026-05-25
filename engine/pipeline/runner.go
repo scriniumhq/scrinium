@@ -31,7 +31,7 @@ import (
 	"hash"
 	"io"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // Runner builds and drives Encoder/Decoder chains over streaming

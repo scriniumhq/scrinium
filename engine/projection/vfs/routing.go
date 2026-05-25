@@ -5,9 +5,9 @@ import (
 	"errors"
 	"os"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection"
+	"scrinium.dev/errs"
 )
 
 // openRoot is the FSOps-backed side of OpenFile.

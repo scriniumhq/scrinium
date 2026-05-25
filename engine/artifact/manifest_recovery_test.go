@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/hashing"
 )
 

@@ -8,14 +8,14 @@ import (
 	"os"
 
 	"github.com/google/uuid"
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/storeconfig"
+	"scrinium.dev/errs"
 )
 
 // InitStore creates a new Store at the Location served by drv.

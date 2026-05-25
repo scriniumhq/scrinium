@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/pathx"
 )
 

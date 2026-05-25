@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // File-format magic bytes (§7.1).

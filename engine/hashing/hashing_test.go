@@ -7,7 +7,7 @@ import (
 	"hash/crc32"
 	"testing"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 func TestHashRegistry_RegisterAndUse(t *testing.T) {

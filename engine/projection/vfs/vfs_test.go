@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
 	"scrinium.dev/engine/projection/vfs"

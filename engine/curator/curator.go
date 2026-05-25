@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
 	"scrinium.dev/engine/wrapper/multistore"

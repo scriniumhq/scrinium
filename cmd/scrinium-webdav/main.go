@@ -29,8 +29,8 @@ import (
 	"golang.org/x/net/webdav"
 
 	"scrinium.dev/composer"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/assembly"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
 )

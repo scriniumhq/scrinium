@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // TestEventKind_String covers the human-readable rendering. The

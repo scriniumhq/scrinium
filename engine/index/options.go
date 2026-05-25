@@ -1,7 +1,7 @@
 package index
 
 import (
-	"scrinium.dev/engine/event"
+	"scrinium.dev/event"
 )
 
 // IndexOption is an option for the constructor of a StoreIndex

@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // logging.go — the engine's logging foundation (ADR-60).

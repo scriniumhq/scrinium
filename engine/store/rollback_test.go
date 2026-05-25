@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/storefx"
 )
 

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/internal/timefmt"
+	"scrinium.dev/errs"
 )
 
 // readSchemaVersion returns the highest version recorded in

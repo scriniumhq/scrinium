@@ -8,7 +8,7 @@ import (
 	"io/fs"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/timefmt"
 )
 

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // --- writeHeader: byte layout (the on-disk contract) ---

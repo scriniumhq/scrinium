@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 func TestCallProvider_NilProvider(t *testing.T) {

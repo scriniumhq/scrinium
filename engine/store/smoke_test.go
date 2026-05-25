@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/humanize"
 	"scrinium.dev/internal/testutil/driverfx"

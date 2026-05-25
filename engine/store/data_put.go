@@ -8,12 +8,12 @@ import (
 	"log/slog"
 	"strings"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/artifactio"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // Put records an artifact and returns its ArtifactID. It is the

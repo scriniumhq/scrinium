@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"
 )

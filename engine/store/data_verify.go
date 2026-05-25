@@ -4,11 +4,11 @@ import (
 	"context"
 	"log/slog"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // Verify performs a full integrity check of an artifact:

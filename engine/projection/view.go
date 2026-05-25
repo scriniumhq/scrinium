@@ -12,10 +12,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 	"scrinium.dev/internal/pathx"
 )
 

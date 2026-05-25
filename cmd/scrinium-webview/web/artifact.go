@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection/fsmeta"
 	"scrinium.dev/internal/humanize"
 	"scrinium.dev/internal/pathx"

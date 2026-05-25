@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/internal/testutil/projectionfx"
 )

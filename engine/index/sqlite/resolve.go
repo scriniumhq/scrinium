@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/timefmt"
+	"scrinium.dev/errs"
 )
 
 // Resolve returns the physical address of a blob. It is the

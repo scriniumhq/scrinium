@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 

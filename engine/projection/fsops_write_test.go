@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/fsmeta"
+	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/projectionfx"
 )
 

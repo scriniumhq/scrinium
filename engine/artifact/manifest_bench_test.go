@@ -3,8 +3,8 @@ package artifact_test
 import (
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 

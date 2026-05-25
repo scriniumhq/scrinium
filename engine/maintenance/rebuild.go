@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
-	"scrinium.dev/engine/event"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper/host"
+	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // RebuildSource is the strategy for picking a source when

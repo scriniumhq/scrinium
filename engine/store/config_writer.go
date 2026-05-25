@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store/internal/storeconfig"

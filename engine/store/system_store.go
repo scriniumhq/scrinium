@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/errs"
 )
 
 // maxSystemPointerSize caps how many bytes are read from a pointer

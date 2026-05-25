@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // RunMaintenance is the AdminStore entry point for one-shot

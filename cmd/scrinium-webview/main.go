@@ -30,8 +30,8 @@ import (
 
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/composer"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/assembly"
-	"scrinium.dev/engine/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/projection"
 	"scrinium.dev/engine/projection/vfs"

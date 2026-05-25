@@ -6,8 +6,8 @@ import (
 	"scrinium.dev/engine/internal/aead"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 func TestGenerateDEK_LengthAndUniqueness(t *testing.T) {

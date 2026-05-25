@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/pipeline"
 )

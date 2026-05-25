@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/domain"
 )
 
 // A well-formed 64-hex-char sha256 ref used across the table.

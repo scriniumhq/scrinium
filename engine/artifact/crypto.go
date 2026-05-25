@@ -23,9 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/errs"
 )
 
 // minCiphertext is the smallest valid body ciphertext: a nonce prefix and

@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/errs"
 )
 
 // helper: spin up a fresh driver in a t.TempDir() with fsync off

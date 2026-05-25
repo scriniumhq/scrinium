@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 )
 
 // --- Current names ---

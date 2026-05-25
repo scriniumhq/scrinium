@@ -6,10 +6,10 @@ import (
 	"io"
 	"testing"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	aesgcm2 "scrinium.dev/engine/pipeline/stage/aesgcm"
+	"scrinium.dev/errs"
 )
 
 // fixedKeyResolver returns a single DEK under a single KeyID.

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 

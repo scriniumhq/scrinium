@@ -7,15 +7,15 @@ import (
 	"log/slog"
 	"os"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/errs"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/reconcile"
 	"scrinium.dev/engine/store/internal/storeconfig"
+	"scrinium.dev/errs"
 )
 
 // OpenStore opens an existing Store at the Location served by drv.

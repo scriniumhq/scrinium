@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"time"
 
-	"scrinium.dev/engine/domain"
-	"scrinium.dev/engine/errs"
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // RollbackSession is a group rollback of every artifact carrying the

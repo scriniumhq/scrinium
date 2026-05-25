@@ -9,14 +9,14 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/engine/domain"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/event"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store/internal/artifactio"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/orphanscan"
 	"scrinium.dev/engine/store/internal/reconcile"
+	"scrinium.dev/event"
 )
 
 // buildStore constructs the *store value and wires the systemStore
