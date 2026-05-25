@@ -28,11 +28,18 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...PutOption
 		return "", err
 	}
 	dopts := applyPut(opts).toDomain()
+
+	cfg := d.snapshotConfig()
+	// Fall back to the store's default namespace when the caller left it
+	// empty. Resolved before validation so the effective namespace (the
+	// default included) is what gets checked and recorded.
+	if dopts.Namespace == "" {
+		dopts.Namespace = cfg.DefaultPutNamespace
+	}
+
 	if err := validatePutInputs(a, dopts); err != nil {
 		return "", err
 	}
-
-	cfg := d.snapshotConfig()
 	if err := d.checkPutSupported(cfg, dopts); err != nil {
 		return "", err
 	}

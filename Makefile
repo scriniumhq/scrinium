@@ -2,7 +2,7 @@
 #
 # Single Go module (scrinium.dev). Source layout:
 #   /            — high-level wrapper API (scrinium.Open / scrinium.Init)
-#   /engine/...  — engine internals (core, domain, driver, index, ...)
+#   /store/...   — engine internals (store, domain, driver, index, ...)
 #   /cmd/...     — reference binaries (scrinium-fuse, scrinium-webdav, scrinium-webview)
 #   /examples/...— small runnable programs (hello, ingest, browse)
 #
@@ -44,7 +44,7 @@ FUZZTIME ?= 30s
 
 # Benchmark knobs (see the Benchmarks section for details).
 BENCH      ?= .
-BENCHPKG   ?= ./engine/artifact/ ./engine/store/
+BENCHPKG   ?= ./store/artifact/ ./store/
 BENCHCOUNT ?= 10
 
 # Default target.
@@ -110,7 +110,7 @@ else
 endif
 
 # Single-package test. Usage: make test-pkg P=core
-# (or P=engine/internal/manifestcodec, P=engine/index/sqlite, etc.)
+# (or P=store/internal/artifactio, P=store/index/sqlite, etc.)
 .PHONY: test-pkg
 test-pkg:
 ifndef P
@@ -162,9 +162,9 @@ endif
 .PHONY: smoke
 smoke:
 ifdef N
-	SCRINIUM_SMOKE=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./engine/store/
+	SCRINIUM_SMOKE=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./store/
 else
-	SCRINIUM_SMOKE=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./engine/store/
+	SCRINIUM_SMOKE=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./store/
 endif
 
 # Encrypted smoke: round-trip on a Store with Paranoid manifests.
@@ -176,9 +176,9 @@ endif
 .PHONY: smoke-encrypted
 smoke-encrypted:
 ifdef N
-	SCRINIUM_SMOKE_ENCRYPTED=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./engine/store/
+	SCRINIUM_SMOKE_ENCRYPTED=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./store/
 else
-	SCRINIUM_SMOKE_ENCRYPTED=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./engine/store/
+	SCRINIUM_SMOKE_ENCRYPTED=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./store/
 endif
 
 # --- Fuzzing ---
@@ -208,8 +208,8 @@ else
 endif
 
 # Active fuzz. Usage:
-#   make fuzz P=engine/core/internal/descriptor F=FuzzUnmarshal
-#   make fuzz P=engine/internal/manifestcodec F=FuzzDecodeFile T=2m
+#   make fuzz P=store/internal/descriptor F=FuzzUnmarshal
+#   make fuzz P=store/internal/artifactio F=FuzzDecodeFile T=2m
 .PHONY: fuzz
 fuzz:
 ifndef P
@@ -298,7 +298,7 @@ fuzz-clean:
 # Usage:
 #   make bench                  # run -> bench-new.txt (+ full log)
 #   make bench BENCH=Manifest   # restrict to matching benchmark names
-#   make bench BENCHPKG=./engine/artifact/   # one package
+#   make bench BENCHPKG=./store/artifact/   # one package
 #   make bench-cmp              # run + benchstat diff vs bench-baseline.txt
 #   make bench-baseline         # seed/refresh bench-baseline.txt from a run
 #
