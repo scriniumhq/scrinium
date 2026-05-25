@@ -89,7 +89,7 @@ func runServe(args []string) int {
 	}
 	defer asm.Close()
 
-	if asm.FSOps() == nil {
+	if asm.Projection() == nil {
 		fmt.Fprintln(os.Stderr, "scrinium-webview: config has no projection section; nothing to serve")
 		return 1
 	}
@@ -132,11 +132,11 @@ func runServe(args []string) int {
 			}
 		}
 		// webview is always read-only; reflect that on the page.
-		return buildWebStatsData(asm.View(), capPtr, exts, startedAt, asm.MountSession(),
+		return buildWebStatsData(asm.Projection().View, capPtr, exts, startedAt, asm.MountSession(),
 			meta.StoreURI, true, "off", meta.Namespace)
 	}
 
-	v := vfs.New(asm.View(), asm.FSOps(), routingCfg, vfs.WithStatsProvider(textStats))
+	v := vfs.New(asm.Projection().View, asm.Projection().FSOps, routingCfg, vfs.WithStatsProvider(textStats))
 	backing := newWebBackingFS(v, asm.Store())
 	webHandler := web.NewHandler(backing, vfs.CleanPath, web.Config{
 		StorePath:     meta.StoreURI,
@@ -203,7 +203,7 @@ func statsProvider(asm assembly.Assembly, startedAt time.Time, capacityTimeout t
 		}
 
 		meta := asm.Info()
-		return projection.RenderStats(asm.View(), projection.DaemonInfo{
+		return projection.RenderStats(asm.Projection().View, projection.DaemonInfo{
 			StartedAt:    startedAt,
 			MountSession: asm.MountSession(),
 			StorePath:    meta.StoreURI,

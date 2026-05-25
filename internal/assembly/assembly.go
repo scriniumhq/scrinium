@@ -28,12 +28,10 @@ type Assembly interface {
 	// diagnostics; most callers go through Store.
 	Index() index.StoreIndex
 
-	// View is the read-side projection (trees by path/date/…).
-	View() *projection.View
-
-	// FSOps is the read/write filesystem facade. Nil when the
-	// assembly was built without a projection section.
-	FSOps() *projection.FSOps
+	// Projection is the read-side View plus the optional read/write
+	// FSOps facade, bundled. Nil when the assembly was built without a
+	// projection section.
+	Projection() *projection.Projection
 
 	// MountSession is the boot-unique identifier for this assembly.
 	MountSession() domain.SessionID
@@ -61,8 +59,7 @@ type Info struct {
 type asm struct {
 	store        store.Store
 	index        index.StoreIndex
-	view         *projection.View
-	fsops        *projection.FSOps
+	proj         *projection.Projection
 	mountSession domain.SessionID
 	info         Info
 	closeFn      func() error
@@ -76,8 +73,7 @@ var _ Assembly = (*asm)(nil)
 func New(
 	st store.Store,
 	idx index.StoreIndex,
-	view *projection.View,
-	fsops *projection.FSOps,
+	proj *projection.Projection,
 	mountSession domain.SessionID,
 	info Info,
 	closeFn func() error,
@@ -85,20 +81,18 @@ func New(
 	return &asm{
 		store:        st,
 		index:        idx,
-		view:         view,
-		fsops:        fsops,
+		proj:         proj,
 		mountSession: mountSession,
 		info:         info,
 		closeFn:      closeFn,
 	}
 }
 
-func (a *asm) Store() store.Store             { return a.store }
-func (a *asm) Index() index.StoreIndex        { return a.index }
-func (a *asm) View() *projection.View         { return a.view }
-func (a *asm) FSOps() *projection.FSOps       { return a.fsops }
-func (a *asm) MountSession() domain.SessionID { return a.mountSession }
-func (a *asm) Info() Info                     { return a.info }
+func (a *asm) Store() store.Store                 { return a.store }
+func (a *asm) Index() index.StoreIndex            { return a.index }
+func (a *asm) Projection() *projection.Projection { return a.proj }
+func (a *asm) MountSession() domain.SessionID     { return a.mountSession }
+func (a *asm) Info() Info                         { return a.info }
 
 func (a *asm) Close() error {
 	if a.closeFn == nil {

@@ -90,7 +90,7 @@ func runMount(args []string) int {
 	}
 	defer asm.Close()
 
-	if asm.FSOps() == nil {
+	if asm.Projection() == nil {
 		fmt.Fprintln(os.Stderr, "scrinium-fuse: config has no projection section; nothing to mount")
 		return 1
 	}
@@ -110,8 +110,8 @@ func runMount(args []string) int {
 		ShowRaw:         true,
 	}
 	root := &rootNode{
-		view:          asm.View(),
-		fsops:         asm.FSOps(),
+		view:          asm.Projection().View,
+		fsops:         asm.Projection().FSOps,
 		store:         asm.Store(),
 		routingCfg:    routingCfg,
 		startedAt:     startedAt,
@@ -163,7 +163,7 @@ func statsProvider(asm assembly.Assembly, startedAt time.Time, capacityTimeout t
 		}
 
 		meta := asm.Info()
-		return projection.RenderStats(asm.View(), projection.DaemonInfo{
+		return projection.RenderStats(asm.Projection().View, projection.DaemonInfo{
 			StartedAt:    startedAt,
 			MountSession: asm.MountSession(),
 			StorePath:    meta.StoreURI,

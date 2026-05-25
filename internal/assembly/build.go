@@ -156,6 +156,14 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 		}
 	}
 
+	// Bundle the read/write ends into one Projection. nil when the
+	// config had no projection section — consumers (apps) that only
+	// need the store never touch it.
+	var proj *projection.Projection
+	if effProj != nil {
+		proj = &projection.Projection{View: view, FSOps: fsops}
+	}
+
 	// closeFn unwinds in LIFO order; idempotency is the assembly's job.
 	closeFn := func() error {
 		var firstErr error
@@ -178,7 +186,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 		info.ReadOnly = effProj.ReadOnly
 	}
 
-	return New(st, idx, view, fsops, mountSession, info, closeFn), nil
+	return New(st, idx, proj, mountSession, info, closeFn), nil
 }
 
 // guardUnsupportedPolicy rejects policy features whose components are

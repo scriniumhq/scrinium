@@ -82,7 +82,7 @@ func runServe(args []string) int {
 	}
 	defer asm.Close()
 
-	if asm.FSOps() == nil {
+	if asm.Projection() == nil {
 		fmt.Fprintln(os.Stderr, "scrinium-webdav: config has no projection section; nothing to serve")
 		return 1
 	}
@@ -96,7 +96,7 @@ func runServe(args []string) int {
 		RootView:      projection.RootByPath,
 	}
 	stats := statsProvider(asm, startedAt, 2*time.Second)
-	wfs := newWebdavFS(asm.View(), asm.FSOps(), routingCfg, !*allowOSJunk, stats)
+	wfs := newWebdavFS(asm.Projection().View, asm.Projection().FSOps, routingCfg, !*allowOSJunk, stats)
 
 	handler := &webdav.Handler{
 		FileSystem: wfs,
@@ -154,7 +154,7 @@ func statsProvider(asm assembly.Assembly, startedAt time.Time, capacityTimeout t
 		}
 
 		meta := asm.Info()
-		return projection.RenderStats(asm.View(), projection.DaemonInfo{
+		return projection.RenderStats(asm.Projection().View, projection.DaemonInfo{
 			StartedAt:    startedAt,
 			MountSession: asm.MountSession(),
 			StorePath:    meta.StoreURI,
