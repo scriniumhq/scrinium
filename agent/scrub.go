@@ -7,7 +7,7 @@ import (
 
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
-	"scrinium.dev/store/store"
+	"scrinium.dev/store"
 )
 
 // --- Scrub Agent ---

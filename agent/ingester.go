@@ -7,8 +7,8 @@ import (
 
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
+	"scrinium.dev/store"
 	"scrinium.dev/store/driver"
-	"scrinium.dev/store/store"
 )
 
 // IngestMode is the operating mode of the Ingester.

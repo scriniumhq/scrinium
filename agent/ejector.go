@@ -7,7 +7,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
-	"scrinium.dev/store/store"
+	"scrinium.dev/store"
 )
 
 // --- Sync Agent (Reserved, D-05) ---

@@ -11,9 +11,9 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/store"
 	"scrinium.dev/store/driver"
 	"scrinium.dev/store/hashing"
-	"scrinium.dev/store/store"
 )
 
 // Hashes returns a HashRegistry suitable for tests. sha256 is real;

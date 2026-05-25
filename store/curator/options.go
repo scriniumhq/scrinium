@@ -6,8 +6,8 @@ import (
 	"scrinium.dev/agent"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
+	"scrinium.dev/store"
 	"scrinium.dev/store/driver"
-	"scrinium.dev/store/store"
 	"scrinium.dev/store/wrapper/host"
 	"scrinium.dev/store/wrapper/multistore"
 )

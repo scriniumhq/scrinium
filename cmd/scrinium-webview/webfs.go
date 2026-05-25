@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/vfs"
-	"scrinium.dev/store/store"
+	"scrinium.dev/store"
 )
 
 // webBackingFS adapts vfs.VFS to web.BackingFS.

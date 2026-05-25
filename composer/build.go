@@ -15,11 +15,11 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsindex"
+	"scrinium.dev/store"
 	"scrinium.dev/store/assembly"
 	"scrinium.dev/store/driver"
 	"scrinium.dev/store/hashing"
 	"scrinium.dev/store/index"
-	"scrinium.dev/store/store"
 
 	// Built-in URI dialers, registered by import side effect — the
 	// same set the assembler relies on. Hosts that want to constrain

@@ -3,7 +3,7 @@ package multistore
 import (
 	"scrinium.dev/domain"
 	"scrinium.dev/event"
-	"scrinium.dev/store/store"
+	"scrinium.dev/store"
 	"scrinium.dev/store/wrapper/host"
 )
 

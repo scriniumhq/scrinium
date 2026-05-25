@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/store/store"
+	"scrinium.dev/store"
 	"scrinium.dev/store/wrapper/host"
 	"scrinium.dev/store/wrapper/multistore"
 )

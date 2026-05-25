@@ -14,8 +14,8 @@ package assembly
 import (
 	"scrinium.dev/domain"
 	"scrinium.dev/projection"
+	"scrinium.dev/store"
 	"scrinium.dev/store/index"
-	"scrinium.dev/store/store"
 )
 
 // Assembly is an assembled Scrinium stack. Obtain one from

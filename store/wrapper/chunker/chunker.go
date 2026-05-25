@@ -22,7 +22,7 @@ import (
 	"fmt"
 
 	"scrinium.dev/errs"
-	"scrinium.dev/store/store"
+	"scrinium.dev/store"
 	"scrinium.dev/store/wrapper/multistore"
 )
 
