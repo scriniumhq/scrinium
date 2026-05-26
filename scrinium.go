@@ -21,10 +21,10 @@ import (
 	"context"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/assembly"
 	"scrinium.dev/projection"
-	"scrinium.dev/store"
-	"scrinium.dev/store/index"
 )
 
 // Scrinium is a live, assembled store. Obtain one from Open / Build /

@@ -31,9 +31,9 @@ import (
 	"scrinium.dev"
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
-	"scrinium.dev/store/index"
 )
 
 func main() {

@@ -32,8 +32,8 @@ import (
 	"scrinium.dev"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/projection/fsmeta"
-	"scrinium.dev/store"
 )
 
 func main() {

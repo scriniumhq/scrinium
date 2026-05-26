@@ -32,8 +32,8 @@ import (
 	"scrinium.dev"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/projection"
-	"scrinium.dev/store/index"
 )
 
 func main() {
