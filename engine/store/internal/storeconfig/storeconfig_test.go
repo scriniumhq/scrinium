@@ -129,20 +129,6 @@ func TestValidateImmutable_RejectsBinaryEncoding(t *testing.T) {
 	}
 }
 
-func TestValidateImmutable_NativeRequiresExternalRef(t *testing.T) {
-	cfg := ApplyDefaults(domain.StoreConfig{})
-	cfg.PathTopology = domain.PathTopologyNative
-	cfg.BlobStorage = domain.BlobStorageTarget // not ExternalRef
-	if err := ValidateImmutable(cfg); !errors.Is(err, errs.ErrInvalidConfig) {
-		t.Errorf("Native without ExternalRef must fail; got %v", err)
-	}
-
-	cfg.BlobStorage = domain.BlobStorageExternalRef
-	if err := ValidateImmutable(cfg); err != nil {
-		t.Errorf("Native + ExternalRef must pass; got %v", err)
-	}
-}
-
 func TestValidateImmutable_SegmentSizeBounds(t *testing.T) {
 	cfg := ApplyDefaults(domain.StoreConfig{})
 

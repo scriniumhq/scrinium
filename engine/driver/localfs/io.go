@@ -186,14 +186,15 @@ type limitedFile struct {
 func (lf *limitedFile) Read(p []byte) (int, error) { return lf.r.Read(p) }
 func (lf *limitedFile) Close() error               { return lf.c.Close() }
 
-// Open implements ExternalRef reads. The localfs driver supports
-// only the "file://" scheme. Other schemes return
-// errs.ErrUnsupportedURIScheme so higher layers can fall through
-// to a different driver or fail with a clear cause.
+// Open implements direct-URI reads for Native locations.
+// The localfs driver supports  only the "file://" scheme.
+// Other schemes return errs.ErrUnsupportedURIScheme so
+// higher layers can fall through to a different driver or
+// fail with a clear cause.
 //
 // The "file://" path is opened directly by absolute filesystem
 // path, NOT resolved against the driver root. This is intentional:
-// ExternalRef points outside the Store by design.
+// a Native location points outside the managed Store by design.
 func (d *Driver) Open(ctx context.Context, uri string) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

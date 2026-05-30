@@ -90,7 +90,7 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 // milestones add the full matrix.
 func ValidateImmutable(cfg domain.StoreConfig) error {
 	switch cfg.PathTopology {
-	case domain.PathTopologyFlat, domain.PathTopologySharded, domain.PathTopologyNative:
+	case domain.PathTopologyFlat, domain.PathTopologySharded:
 	default:
 		return errs.ErrInvalidConfig
 	}
@@ -140,13 +140,6 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 		(cfg.SegmentSize < domain.MinSegmentSize || cfg.SegmentSize > domain.MaxSegmentSize) {
 		return fmt.Errorf("%w: SegmentSize=%d out of range [%d, %d]",
 			errs.ErrInvalidConfig, cfg.SegmentSize, domain.MinSegmentSize, domain.MaxSegmentSize)
-	}
-
-	// PathTopology: Native is a read-only marker; allowed only with
-	// BlobStorage: ExternalRef.
-	if cfg.PathTopology == domain.PathTopologyNative &&
-		cfg.BlobStorage != domain.BlobStorageExternalRef {
-		return errs.ErrInvalidConfig
 	}
 
 	// TombstoneGracePeriod has its own dedicated sentinel because a

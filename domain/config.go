@@ -8,7 +8,6 @@ type PathTopology string
 const (
 	PathTopologyFlat    PathTopology = "Flat"
 	PathTopologySharded PathTopology = "Sharded"
-	PathTopologyNative  PathTopology = "Native"
 )
 
 // ManifestStorage controls where the manifest file lives. Immutable.
@@ -24,9 +23,8 @@ const (
 type BlobStorage string
 
 const (
-	BlobStorageTarget      BlobStorage = "Target"
-	BlobStorageInline      BlobStorage = "Inline"
-	BlobStorageExternalRef BlobStorage = "ExternalRef"
+	BlobStorageTarget BlobStorage = "Target"
+	BlobStorageInline BlobStorage = "Inline"
 )
 
 // ManifestEncoding is the on-disk serialisation format of a manifest.

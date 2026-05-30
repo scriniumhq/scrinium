@@ -637,11 +637,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		{Label: "Layout", Value: orDash(m.LayoutHeader.BlobStorage)},
 		{Label: "KeyID", Value: orDash(m.KeyID), Mono: m.KeyID != ""},
 	}
-	if m.ExternalURI != "" {
-		data.Storage = append(data.Storage, labelValue{
-			Label: "ExternalURI", Value: m.ExternalURI, Mono: true,
-		})
-	}
 	if len(m.InlineBlob) > 0 {
 		data.Storage = append(data.Storage, labelValue{
 			Label: "InlineBlob",
@@ -714,7 +709,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		BlobRef        domain.BlobRef         `json:"blob_ref,omitempty"`
 		LayoutHeader   domain.LayoutHeader    `json:"layout_header"`
 		Pipeline       []domain.PipelineStage `json:"pipeline,omitempty"`
-		ExternalURI    string                 `json:"external_uri,omitempty"`
 		RetentionUntil time.Time              `json:"retention_until,omitempty"`
 		KeyID          string                 `json:"key_id,omitempty"`
 		Ext            json.RawMessage        `json:"ext,omitempty"`
@@ -729,7 +723,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		BlobRef:        m.BlobRef,
 		LayoutHeader:   m.LayoutHeader,
 		Pipeline:       m.Pipeline,
-		ExternalURI:    m.ExternalURI,
 		RetentionUntil: m.RetentionUntil,
 		KeyID:          m.KeyID,
 		Ext:            m.Ext,

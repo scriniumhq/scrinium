@@ -177,7 +177,6 @@ func (h *targetReadHandle) Manifest() domain.Manifest { return h.manifest }
 // OpenHandle builds the layout-appropriate read handle for a manifest:
 // an inline handle for LayoutInline, or a lazily-opening target handle for
 // LayoutTarget. The returned handle composes the inverse Pipeline on read.
-// ExternalRef is not yet supported.
 //
 // ctx is captured for the deferred open of a Target blob (the io contracts
 // give Read/ReadAt no context of their own); ReadAtCtx still uses its own.
@@ -198,9 +197,6 @@ func (x *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHand
 			blobPath: addr.Path,
 			ctx:      ctx,
 		}, nil
-
-	case domain.LayoutExternalRef:
-		return nil, fmt.Errorf("%w: Get on BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
 
 	default:
 		return nil, fmt.Errorf("artifactio.OpenHandle: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)

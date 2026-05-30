@@ -117,12 +117,6 @@ func TestBlobPath_RejectsTooShortHex(t *testing.T) {
 	}
 }
 
-func TestBlobPath_RejectsNative(t *testing.T) {
-	if _, err := artifact.BlobPath(domain.PathTopologyNative, domain.BlobTypeRegular, ref("aabbccdd")); err == nil {
-		t.Fatal("Native topology must be rejected (use ExternalRef)")
-	}
-}
-
 func TestBlobPath_RejectsUnknownTopology(t *testing.T) {
 	if _, err := artifact.BlobPath(domain.PathTopology("Quantum"), domain.BlobTypeRegular, ref("aabbccdd")); err == nil {
 		t.Fatal("expected error on unknown topology")

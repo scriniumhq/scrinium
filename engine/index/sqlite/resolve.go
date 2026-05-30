@@ -170,7 +170,7 @@ func (i *Index) LookupPacked(ctx context.Context, artifactID domain.ArtifactID) 
 // scanManifestRow scans one row produced by the JOIN
 // `manifests m LEFT JOIN blobs b USING (blob_ref)`. The blobs side
 // supplies content_hash and original_size; nullable here because
-// future ExternalRef manifests have no blobs row.
+// Inline manifests have no blobs row (bytes live in the manifest).
 func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	var (
 		artifactID, mtype, namespace string

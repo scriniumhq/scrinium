@@ -33,7 +33,7 @@ import (
 // EventScrubFailed (ADR-60: errors return, events publish, logs explain).
 //
 // Currently supports BlobManifest with Inline and Target layouts. TOC,
-// Pack, ExternalRef return explicit "not yet implemented" errors via the
+// Pack return explicit "not yet implemented" errors via the
 // dispatchManifestType / layout switch paths.
 func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
 	if err := d.enterRead(ctx); err != nil {

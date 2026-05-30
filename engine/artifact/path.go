@@ -14,8 +14,6 @@ import (
 //
 //	Sharded:   blobs/<aa>/<bb>/<full-ref>   (aa,bb = hex chars 1..4 of the ref hex)
 //	Flat:      blobs/<full-ref>
-//	Native:    rejected — Native means BlobStorage: ExternalRef and skips
-//	           the blob-path machinery entirely.
 //
 // Chunk and pack blobs use the same topology with roots "chunks/" and
 // "packs/"; the BlobType argument selects the root. Manifests live under
@@ -58,8 +56,6 @@ func shardOf(ref string) (string, string, error) {
 // under the given topology and type. The result is forward-slash
 // separated and root-relative — exactly what driver.Driver expects.
 //
-// PathTopologyNative is rejected: a "native" blob is referenced by
-// ExternalRef URI and handled through driver.Open, not the path machinery.
 // An empty topology is treated as Sharded (the InitStore default), and an
 // empty BlobType as Regular.
 func BlobPath(topology domain.PathTopology, blobType domain.BlobType, ref string) (string, error) {
@@ -79,8 +75,6 @@ func BlobPath(topology domain.PathTopology, blobType domain.BlobType, ref string
 			return "", err
 		}
 		return root + "/" + s1 + "/" + s2 + "/" + ref, nil
-	case domain.PathTopologyNative:
-		return "", fmt.Errorf("artifact: Native topology has no managed path; use ExternalRef")
 	}
 	return "", fmt.Errorf("artifact: unknown topology %q", topology)
 }

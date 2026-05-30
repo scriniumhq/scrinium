@@ -136,9 +136,6 @@ func (c *core) checkPutSupported(cfg domain.StoreConfig, opts domain.PutOptions)
 	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
 		return fmt.Errorf("store.Put: BlobType %q not supported (TODO M3)", opts.BlobType)
 	}
-	if cfg.BlobStorage == domain.BlobStorageExternalRef {
-		return errors.New("store.Put: BlobStorage: ExternalRef not yet supported")
-	}
 	if cfg.ManifestStorage != domain.ManifestStorageRemote && cfg.ManifestStorage != "" {
 		// Local and Replicated need HostStorage as the transit buffer,
 		// not yet wired (TODO M4.2); only Remote (the default) works.
@@ -155,8 +152,8 @@ func (c *core) checkPutSupported(cfg domain.StoreConfig, opts domain.PutOptions)
 // validatePutInputs covers the cheap, side-effect-free checks that
 // reject before any I/O.
 func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
-	if a.Payload == nil && opts.ExternalURI == "" {
-		return errors.New("store.Put: nil Payload and no ExternalURI")
+	if a.Payload == nil {
+		return errors.New("store.Put: nil Payload")
 	}
 	if len(opts.Namespace) > domain.MaxNamespaceLen {
 		return errs.ErrNamespaceTooLong

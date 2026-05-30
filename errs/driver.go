@@ -9,8 +9,7 @@ import (
 // layer (driver/) or describe contracts at that layer.
 
 // ErrUnsupportedURIScheme — the driver does not support the URI
-// scheme passed to Open. Used with BlobStorage: ExternalRef for
-// schemes unknown to the driver.
+// scheme passed to Open (Native locations / driver.Open dispatch).
 var ErrUnsupportedURIScheme = errors.New("scrinium: unsupported URI scheme")
 
 // ErrAlreadyExists — an exclusive Put (WithExclusive) found the path

@@ -47,9 +47,8 @@ type LayoutHeader struct {
 // Production code must compare against these constants, not the
 // equivalent string literals.
 const (
-	LayoutInline      = "Inline"
-	LayoutTarget      = "Target"
-	LayoutExternalRef = "ExternalRef"
+	LayoutInline = "Inline"
+	LayoutTarget = "Target"
 )
 
 // PipelineStage is a single transformation stage in the Pipeline.
@@ -101,7 +100,6 @@ type Manifest struct {
 	LayoutHeader LayoutHeader
 	Pipeline     []PipelineStage
 	InlineBlob   []byte
-	ExternalURI  string
 
 	RetentionUntil time.Time
 	KeyID          string
