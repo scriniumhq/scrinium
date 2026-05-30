@@ -29,7 +29,7 @@ import (
 
 	"scrinium.dev"
 	"scrinium.dev/domain"
-	"scrinium.dev/store"
+	"scrinium.dev/engine/store"
 )
 
 func main() {

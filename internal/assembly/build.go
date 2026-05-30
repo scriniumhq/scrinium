@@ -12,19 +12,19 @@ import (
 	"strings"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/hashing"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsindex"
-	"scrinium.dev/store"
-	"scrinium.dev/store/driver"
-	"scrinium.dev/store/hashing"
-	"scrinium.dev/store/index"
 
 	// Built-in URI dialers, registered by import side effect — the
 	// same set the assembler relies on. Hosts that want to constrain
 	// the available schemes import composer with these trimmed.
-	_ "scrinium.dev/store/driver/localfs"
-	_ "scrinium.dev/store/index/sqlite"
+	_ "scrinium.dev/engine/driver/localfs"
+	_ "scrinium.dev/engine/index/sqlite"
 )
 
 type buildMode int

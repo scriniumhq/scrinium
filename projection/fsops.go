@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/pathx"
 	"scrinium.dev/projection/fsmeta"
-	"scrinium.dev/store"
 )
 
 // FSOps is the filesystem-shaped operations layer over a View.

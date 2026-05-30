@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"scrinium.dev/store"
+	"scrinium.dev/engine/store"
 )
 
 // StaticPP is a one-line PassphraseProvider for tests: returns the

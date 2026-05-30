@@ -21,10 +21,10 @@ import (
 	"strings"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/store"
-	"scrinium.dev/store/driver"
-	"scrinium.dev/store/index"
 )
 
 func main() {

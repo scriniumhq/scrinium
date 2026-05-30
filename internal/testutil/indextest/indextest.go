@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/store/index"
+	"scrinium.dev/engine/index"
 )
 
 // Factory describes one StoreIndex implementation under test.
