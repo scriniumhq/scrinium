@@ -144,7 +144,7 @@ func (c *core) checkPutSupported(cfg domain.StoreConfig, opts domain.PutOptions)
 		// not yet wired (TODO M4.2); only Remote (the default) works.
 		return fmt.Errorf("store.Put: ManifestStorage %q requires HostStorage (TODO M4.2)", cfg.ManifestStorage)
 	}
-	if cfg.BlobStorage == domain.BlobStorageInlineFallback && cfg.InlineBlobLimit > 0 && len(cfg.Pipeline) > 0 {
+	if cfg.BlobStorage == domain.BlobStorageInline && cfg.InlineBlobLimit > 0 && len(cfg.Pipeline) > 0 {
 		// Inline + Pipeline is reserved (M2-extra); refuse early so a
 		// user never gets untransformed bytes inside the manifest.
 		return errPipelineWithInline

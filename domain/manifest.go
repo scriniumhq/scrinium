@@ -40,7 +40,7 @@ type LayoutHeader struct {
 
 // Layout* are the canonical values for LayoutHeader.BlobStorage.
 // Distinct from BlobStorage* (which is the StoreConfig-time policy):
-// the configuration says "InlineFallback", but the resolved layout
+// the configuration says "Inline", but the resolved layout
 // for any specific manifest is either LayoutInline (the payload fit
 // the inline limit) or LayoutTarget (it overflowed).
 //

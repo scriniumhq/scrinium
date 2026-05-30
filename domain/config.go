@@ -24,9 +24,9 @@ const (
 type BlobStorage string
 
 const (
-	BlobStorageTarget         BlobStorage = "Target"
-	BlobStorageInlineFallback BlobStorage = "InlineFallback"
-	BlobStorageExternalRef    BlobStorage = "ExternalRef"
+	BlobStorageTarget      BlobStorage = "Target"
+	BlobStorageInline      BlobStorage = "Inline"
+	BlobStorageExternalRef BlobStorage = "ExternalRef"
 )
 
 // ManifestEncoding is the on-disk serialisation format of a manifest.

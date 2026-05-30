@@ -135,7 +135,7 @@ func TestOpenBlob_TargetReadsBackContent(t *testing.T) {
 
 func TestOpenBlob_Inline(t *testing.T) {
 	w, r, _, _, cfg := rwHarness(t)
-	cfg.BlobStorage = domain.BlobStorageInlineFallback
+	cfg.BlobStorage = domain.BlobStorageInline
 	cfg.InlineBlobLimit = 1024
 	id := write(t, w, cfg, "inline content")
 
