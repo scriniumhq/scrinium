@@ -590,10 +590,6 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 // The body-encryption path itself is exercised by Put/Get
 // integration tests; this test only checks that OpenStore no
 // longer refuses such configurations.
-//
-// Note: ManifestStorage Local/Replicated lands in M4.2 alongside
-// HostStorage; here we use Remote (the default) so the test
-// stays scoped to ManifestCrypto.
 func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
 	for _, crypto := range []domain.ManifestCrypto{
 		domain.ManifestCryptoSealed,

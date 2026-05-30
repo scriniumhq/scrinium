@@ -25,9 +25,6 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 	if cfg.PathTopology == "" {
 		cfg.PathTopology = domain.PathTopologySharded
 	}
-	if cfg.ManifestStorage == "" {
-		cfg.ManifestStorage = domain.ManifestStorageRemote
-	}
 	if cfg.BlobStorage == "" {
 		cfg.BlobStorage = domain.BlobStorageTarget
 	}
@@ -91,11 +88,6 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 func ValidateImmutable(cfg domain.StoreConfig) error {
 	switch cfg.PathTopology {
 	case domain.PathTopologyFlat, domain.PathTopologySharded:
-	default:
-		return errs.ErrInvalidConfig
-	}
-	switch cfg.ManifestStorage {
-	case domain.ManifestStorageRemote, domain.ManifestStorageLocal, domain.ManifestStorageReplicated:
 	default:
 		return errs.ErrInvalidConfig
 	}
@@ -189,11 +181,6 @@ func ValidateAgainstActive(req, active domain.StoreConfig) error {
 		mismatches = append(mismatches,
 			fmt.Sprintf("PathTopology: requested %q, active %q",
 				req.PathTopology, active.PathTopology))
-	}
-	if req.ManifestStorage != "" && req.ManifestStorage != active.ManifestStorage {
-		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestStorage: requested %q, active %q",
-				req.ManifestStorage, active.ManifestStorage))
 	}
 	if req.ManifestEncoding != "" && req.ManifestEncoding != active.ManifestEncoding {
 		mismatches = append(mismatches,

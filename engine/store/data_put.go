@@ -136,11 +136,6 @@ func (c *core) checkPutSupported(cfg domain.StoreConfig, opts domain.PutOptions)
 	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
 		return fmt.Errorf("store.Put: BlobType %q not supported (TODO M3)", opts.BlobType)
 	}
-	if cfg.ManifestStorage != domain.ManifestStorageRemote && cfg.ManifestStorage != "" {
-		// Local and Replicated need HostStorage as the transit buffer,
-		// not yet wired (TODO M4.2); only Remote (the default) works.
-		return fmt.Errorf("store.Put: ManifestStorage %q requires HostStorage (TODO M4.2)", cfg.ManifestStorage)
-	}
 	if cfg.BlobStorage == domain.BlobStorageInline && cfg.InlineBlobLimit > 0 && len(cfg.Pipeline) > 0 {
 		// Inline + Pipeline is reserved (M2-extra); refuse early so a
 		// user never gets untransformed bytes inside the manifest.

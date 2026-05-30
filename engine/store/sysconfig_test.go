@@ -31,7 +31,6 @@ func mustWriteSysConfig(t *testing.T) (string, domain.StoreConfig, domain.Artifa
 		PathTopology:     domain.PathTopologyFlat,
 		ContentHasher:    domain.HashSHA256,
 		ManifestEncoding: domain.ManifestEncodingJSON,
-		ManifestStorage:  domain.ManifestStorageLocal,
 		ManifestCrypto:   domain.ManifestCryptoPlain,
 	}
 

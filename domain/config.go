@@ -10,15 +10,6 @@ const (
 	PathTopologySharded PathTopology = "Sharded"
 )
 
-// ManifestStorage controls where the manifest file lives. Immutable.
-type ManifestStorage string
-
-const (
-	ManifestStorageRemote     ManifestStorage = "Remote"
-	ManifestStorageLocal      ManifestStorage = "Local"
-	ManifestStorageReplicated ManifestStorage = "Replicated"
-)
-
 // BlobStorage is the blob placement strategy.
 type BlobStorage string
 
@@ -121,7 +112,6 @@ type KDFParams struct {
 // StoreConfig is the full Store configuration.
 type StoreConfig struct {
 	PathTopology     PathTopology
-	ManifestStorage  ManifestStorage
 	BlobStorage      BlobStorage
 	ManifestEncoding ManifestEncoding
 	ManifestCrypto   ManifestCrypto
