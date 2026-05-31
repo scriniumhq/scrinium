@@ -68,6 +68,29 @@ func (i *Index) DeletePacked(ctx context.Context, packBlobRef string) error {
 	})
 }
 
+// DeleteOrphanBlob removes the blobs row for blobRef only while it is
+// still an orphan (ref_count = 0). The guard lives in the WHERE clause
+// so the check and the delete are one atomic statement: a concurrent
+// Revive that bumps ref_count between the GC Sweep and this call leaves
+// the row in place. removed reports whether a row was actually deleted.
+func (i *Index) DeleteOrphanBlob(ctx context.Context, blobRef string) (bool, error) {
+	var removed bool
+	err := i.observe("DeleteOrphanBlob", func() error {
+		const stmt = `DELETE FROM blobs WHERE blob_ref = ? AND ref_count = 0`
+		res, err := i.db.ExecContext(ctx, stmt, blobRef)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		removed = n > 0
+		return nil
+	})
+	return removed, err
+}
+
 // VacuumInto creates a snapshot copy of the database at destPath.
 // Used by the Snapshot Agent: a snapshot is a full self-contained
 // SQLite file that RebuildIndexAgent can later open and replay.

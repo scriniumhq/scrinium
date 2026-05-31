@@ -49,7 +49,8 @@ func Run(t *testing.T, f Factory) {
 	t.Run(f.Name+"/ListByNamespace", func(t *testing.T) { runListByNamespace(t, f) })
 	t.Run(f.Name+"/GetBySession", func(t *testing.T) { runGetBySession(t, f) })
 	t.Run(f.Name+"/ListOrphanBlobs", func(t *testing.T) { runListOrphanBlobs(t, f) })
-	t.Run(f.Name+"/ListUnverifiedBlobs", func(t *testing.T) { runListUnverified_Blobs(t, f) })
+	t.Run(f.Name+"/DeleteOrphanBlob", func(t *testing.T) { runDeleteOrphanBlob(t, f) })
+	t.Run(f.Name+"/ListUnverifiedBlobs", func(t *testing.T) { runListUnverifiedBlobs(t, f) })
 }
 
 // collectByNamespace is a small helper that turns a streaming

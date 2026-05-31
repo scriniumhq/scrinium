@@ -63,4 +63,18 @@ type Driver interface {
 	// Tombstone mechanics.
 	MarkTombstone(ctx context.Context, path string) error
 	IsTombstone(ctx context.Context, path string) (bool, error)
+
+	// TombstoneInfo reports whether path carries a tombstone marker
+	// and, if so, when it was marked. The GC Agent's Sweep phase uses
+	// `since` to decide whether the TombstoneGracePeriod has elapsed:
+	// a marker is only physically removed once now - since exceeds the
+	// grace period. When marked is false, since is the zero Time.
+	//
+	// Keyed by the original path (not the marker path): the marker
+	// suffix is a driver-internal detail callers cannot construct.
+	// For object stores where the marker is a tag rather than a file
+	// (§5.3.3), `since` is the tag's set-time; drivers without a
+	// retrievable mark-time may return the object's last-modified as a
+	// conservative upper bound.
+	TombstoneInfo(ctx context.Context, path string) (marked bool, since time.Time, err error)
 }

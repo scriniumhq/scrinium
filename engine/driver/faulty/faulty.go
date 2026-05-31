@@ -30,6 +30,7 @@ const (
 	MethodPruneEmptyDirs         = "PruneEmptyDirs"
 	MethodMarkTombstone          = "MarkTombstone"
 	MethodIsTombstone            = "IsTombstone"
+	MethodTombstoneInfo          = "TombstoneInfo"
 )
 
 // The sentinel returned by injected faults (errs.ErrInjected) lives
@@ -273,6 +274,13 @@ func (d *Driver) IsTombstone(ctx context.Context, path string) (bool, error) {
 		return false, err
 	}
 	return d.inner.IsTombstone(ctx, path)
+}
+
+func (d *Driver) TombstoneInfo(ctx context.Context, path string) (bool, time.Time, error) {
+	if err := d.gate(ctx, MethodTombstoneInfo); err != nil {
+		return false, time.Time{}, err
+	}
+	return d.inner.TombstoneInfo(ctx, path)
 }
 
 // WithFailOnCall makes the n-th invocation of method (1-based,
