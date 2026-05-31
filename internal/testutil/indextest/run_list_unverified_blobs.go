@@ -10,7 +10,7 @@ import (
 
 // --- ListUnverifiedBlobs ---
 
-func runListUnverified_Blobs(t *testing.T, f Factory) {
+func runListUnverifiedBlobs(t *testing.T, f Factory) {
 	// IndexManifest creates blobs with no verification timestamp;
 	// MarkVerified sets it. The iterator surfaces blobs whose
 	// last verification (or absence thereof) places them before

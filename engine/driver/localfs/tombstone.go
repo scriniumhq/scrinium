@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // MarkTombstone marks a path as logically deleted while preserving
@@ -84,6 +85,45 @@ func (d *Driver) IsTombstone(ctx context.Context, path string) (bool, error) {
 		return false, err
 	}
 	return fileExists(full + tombstoneSuffix)
+}
+
+// TombstoneInfo reports whether path has a tombstone marker and, if
+// so, the marker's modification time — the moment MarkTombstone last
+// touched it, which the GC Sweep uses as the start of the grace
+// period. A missing marker returns (false, zero, nil).
+func (d *Driver) TombstoneInfo(ctx context.Context, path string) (bool, time.Time, error) {
+	if err := ctx.Err(); err != nil {
+		return false, time.Time{}, err
+	}
+	full, err := d.resolve(path)
+	if err != nil {
+		return false, time.Time{}, err
+	}
+	info, err := os.Lstat(full + tombstoneSuffix)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, time.Time{}, nil
+		}
+		return false, time.Time{}, err
+	}
+	return true, info.ModTime(), nil
+}
+
+// RemoveTombstone deletes the "<path>.tombstone" marker. Keyed by the
+// original path so the GC Sweep need not know the suffix. A missing
+// marker is a no-op (a Revive may have renamed it back to the original).
+func (d *Driver) RemoveTombstone(ctx context.Context, path string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	full, err := d.resolve(path)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(full + tombstoneSuffix); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // PruneEmptyDirs walks the subtree under root and removes empty

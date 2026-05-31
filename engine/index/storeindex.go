@@ -102,6 +102,16 @@ type StoreIndex interface {
 	// by the GC Agent.
 	ListOrphanBlobs(ctx context.Context, cb func(blobRef string) error) error
 
+	// DeleteOrphanBlob removes a blob's index row, but ONLY if its
+	// ref_count is still 0. The GC Agent calls it after the physical
+	// file has been swept (Driver.Remove past the grace period); the
+	// ref_count = 0 guard makes it race-safe against a concurrent
+	// Revive — if another host re-referenced the blob between Sweep
+	// and this call, ref_count is no longer 0 and the row is kept.
+	// A blob_ref that is absent or no longer orphaned is a no-op (the
+	// returned removed flag reports whether a row was deleted).
+	DeleteOrphanBlob(ctx context.Context, blobRef string) (removed bool, err error)
+
 	// ListUnverifiedBlobs iterates over blobs whose last_verified_at
 	// is older than `before`. Used by the Scrub Agent's blob pass.
 	// Named symmetrically with ListUnverifiedManifests below: blobs
