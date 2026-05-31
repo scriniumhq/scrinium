@@ -10,6 +10,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // Config returns a snapshot of the active StoreConfig. A pure
@@ -81,6 +82,11 @@ func (a adminFacet) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) er
 	// and in memory. Info — a config change is operator-relevant.
 	a.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "config updated",
 		storeIDAttr(a.core), manifestCryptoAttr(requested.ManifestCrypto))
+
+	// Outcome event, emitted outside cfgMu: the active config now
+	// equals `requested`. Subscribers that need the prior value
+	// cache the snapshot from an earlier EventConfigUpdated.
+	a.publish(event.EventConfigUpdated, event.ConfigUpdatedPayload{Config: requested})
 	return nil
 }
 

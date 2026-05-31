@@ -321,7 +321,7 @@ func TestInitStore_AcceptsRetentionPeriodZero(t *testing.T) {
 
 // TestInitStore_DiskBackedIndex demonstrates the on-disk wiring
 // pattern documented in DI Example: the caller chooses where the
-// index lives (here, under HostStorage at a fixed path); core has
+// index lives (here, in a host-side directory at a fixed path); core has
 // no opinion on the location.
 func TestInitStore_DiskBackedIndex(t *testing.T) {
 	drv := driverfx.LocalFS(t)

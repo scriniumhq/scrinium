@@ -25,6 +25,8 @@ const (
 	EventKEKRotated            = "store.kek_rotated"
 	EventStaleLeaseTakeover    = "store.stale_lease_takeover"
 	EventOrphanScanCompleted   = "store.orphan_scan_completed"
+	EventRollbackCompleted     = "store.rollback_completed"
+	EventConfigUpdated         = "store.config_updated"
 )
 
 // --- Payload structs ---
@@ -58,6 +60,26 @@ type ArtifactMigratedPayload struct {
 // emitted.
 type ArtifactDeletedPayload struct {
 	ArtifactID domain.ArtifactID
+}
+
+// RollbackCompletedPayload is the payload of EventRollbackCompleted.
+// Emitted after Store.RollbackSession successfully removes the
+// artifacts written under a session. Not emitted when the session
+// had nothing to roll back (zero artifacts). SessionID is the
+// client-chosen correlation tag; RolledBack is the number of
+// artifacts removed.
+type RollbackCompletedPayload struct {
+	SessionID  string
+	RolledBack int
+}
+
+// ConfigUpdatedPayload is the payload of EventConfigUpdated. Emitted
+// after Store.UpdateConfig swaps the active StoreConfig (mutable
+// fields only). Config is a snapshot of the new active config; a
+// subscriber that needs the previous value caches the prior
+// snapshot from an earlier event.
+type ConfigUpdatedPayload struct {
+	Config domain.StoreConfig
 }
 
 // OrphanScanCompletedPayload is the payload of
