@@ -23,20 +23,18 @@ import (
 // either knows where to find a blob or it does not.
 func (i *Index) Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error) {
 	const stmt = `
-		SELECT physical_workspace, physical_path,
+		SELECT physical_path,
 		       pack_ref, pack_offset, pack_size
 		FROM blobs WHERE blob_ref = ?`
 	var addr domain.PhysicalAddress
-	var ws int
 	err := i.db.QueryRowContext(ctx, stmt, blobRef).
-		Scan(&ws, &addr.Path, &addr.PackRef, &addr.Offset, &addr.Size)
+		Scan(&addr.Path, &addr.PackRef, &addr.Offset, &addr.Size)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return domain.PhysicalAddress{}, errs.ErrArtifactNotFound
 	case err != nil:
 		return domain.PhysicalAddress{}, classifyError(err)
 	}
-	addr.Workspace = domain.Workspace(ws)
 	return addr, nil
 }
 

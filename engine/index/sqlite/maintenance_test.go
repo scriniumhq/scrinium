@@ -28,7 +28,7 @@ func TestVacuumInto_CreatesSnapshot(t *testing.T) {
 	idx, _ := newDiskIndex(t)
 	// Seed some data so the snapshot is a meaningful copy.
 	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
-		domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "p"}, 1)
+		domain.PhysicalAddress{Path: "p"}, 1)
 	insertManifest(t, idx, domain.Manifest{
 		ArtifactID: "art-1", Type: domain.ManifestTypeBlob, Namespace: "ns",
 		BlobRef: "blob-1", CreatedAt: time.Now(),

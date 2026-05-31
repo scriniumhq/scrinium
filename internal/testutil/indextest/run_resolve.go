@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/manifestfx"
 )
@@ -24,9 +23,6 @@ func runResolve(t *testing.T, f Factory) {
 		got, err := idx.Resolve(ctx, "blob-1")
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
-		}
-		if got.Workspace != domain.WorkspaceLocation {
-			t.Errorf("Workspace: got %d, want %d", got.Workspace, domain.WorkspaceLocation)
 		}
 		if got.Path != "blobs/aa/bb/blob-1" {
 			t.Errorf("Path: got %q, want %q", got.Path, "blobs/aa/bb/blob-1")

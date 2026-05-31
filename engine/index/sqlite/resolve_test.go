@@ -28,11 +28,10 @@ func TestResolve_PackedBlob_FromBlobRow(t *testing.T) {
 	insertBlob(t, idx, "blob-in-pack",
 		"sha256-"+strings.Repeat("p", 64), 4096,
 		domain.PhysicalAddress{
-			Workspace: domain.WorkspaceLocation,
-			Path:      "packs/pack-1",
-			PackRef:   "pack-blob-1",
-			Offset:    8192,
-			Size:      4096,
+			Path:    "packs/pack-1",
+			PackRef: "pack-blob-1",
+			Offset:  8192,
+			Size:    4096,
 		}, 1)
 
 	addr, err := idx.Resolve(ctx, "blob-in-pack")

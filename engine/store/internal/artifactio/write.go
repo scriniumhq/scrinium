@@ -179,7 +179,7 @@ func (x *IO) commitBlob(
 		_ = x.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: commit blob: %w", err)
 	}
-	return blobRef, domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: finalPath}, nil
+	return blobRef, domain.PhysicalAddress{Path: finalPath}, nil
 }
 
 // dedupProbe decides whether a staged blob duplicates an indexed one

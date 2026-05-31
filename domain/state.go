@@ -38,22 +38,12 @@ const (
 	MaintenanceModeOffline
 )
 
-// Workspace is the physical placement of a file in the StoreIndex
-// schema. The numeric values are part of the schema format.
-type Workspace uint8
-
-const (
-	WorkspaceLocation Workspace = 0
-	WorkspaceHost     Workspace = 1
-)
-
 // PhysicalAddress is the physical address of a blob inside a Store.
 type PhysicalAddress struct {
-	Workspace Workspace
-	Path      string
-	PackRef   string
-	Offset    int64
-	Size      int64
+	Path    string
+	PackRef string
+	Offset  int64
+	Size    int64
 }
 
 // StorageInfo holds aggregated storage metrics. -1 means unavailable.

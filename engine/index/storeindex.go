@@ -43,11 +43,6 @@ type StoreIndex interface {
 	// blobRef.
 	DeleteManifest(ctx context.Context, artifactID domain.ArtifactID, blobRefs []string) error
 
-	// RebindBlob moves a blob from Workspace: Host to
-	// Workspace: Location after a successful Drain. ref_count is
-	// not changed. Idempotent: a no-op when the record is missing.
-	RebindBlob(ctx context.Context, blobRef string, newAddr domain.PhysicalAddress) error
-
 	// Resolution and existence checks.
 
 	// Resolve returns the physical address for a BlobRef.

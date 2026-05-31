@@ -118,7 +118,6 @@ type ArtifactFacet struct {
 // Populated only when SourceKind == Curator.
 type StorageFacet struct {
 	StoreID   domain.StoreID
-	Workspace domain.Workspace
 	IsTransit bool
 	RefCount  int
 }

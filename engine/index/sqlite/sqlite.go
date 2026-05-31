@@ -38,8 +38,8 @@ type Index struct {
 	closeErr  error
 
 	// extMu guards the extension dispatcher. Acquired in write
-	// mode by Register and by every IndexManifest/DeleteManifest/
-	// RebindBlob call (so a concurrent Register cannot insert a
+	// mode by Register and by every IndexManifest/DeleteManifest
+	// call (so a concurrent Register cannot insert a
 	// new subscriber midway through a dispatch). Held briefly —
 	// the in-memory work is map lookups; the SQL transaction it
 	// guards may be long, but the lock is released right after.

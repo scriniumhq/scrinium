@@ -84,11 +84,6 @@ const (
 	// EventArgs.BlobRefs lists the blobs the deletion decremented;
 	// EventArgs.Manifest is zero.
 	EventKindManifestDeleted
-
-	// EventKindBlobRebound corresponds to StoreIndex.RebindBlob.
-	// EventArgs.BlobRefs[0] is the rebound blob ref; the rest of
-	// EventArgs is zero.
-	EventKindBlobRebound
 )
 
 // String returns a human-readable name for the kind. Used in
@@ -99,8 +94,6 @@ func (k EventKind) String() string {
 		return "ManifestIndexed"
 	case EventKindManifestDeleted:
 		return "ManifestDeleted"
-	case EventKindBlobRebound:
-		return "BlobRebound"
 	default:
 		return "EventKind(?)"
 	}

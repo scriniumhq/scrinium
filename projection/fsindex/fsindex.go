@@ -58,7 +58,6 @@ func (e *Extension) SchemaVersion() int { return schemaVersion }
 
 // Subscribe declares the index events fsindex reacts to.
 // ManifestIndexed: stash fsmeta; ManifestDeleted: drop it.
-// BlobRebound is irrelevant — the path doesn't change.
 func (e *Extension) Subscribe() []index.EventKind {
 	return []index.EventKind{
 		index.EventKindManifestIndexed,
