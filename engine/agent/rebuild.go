@@ -119,5 +119,5 @@ func NewRebuildIndexAgent(
 	bus event.EventBus,
 	cfg RebuildConfig,
 ) (RebuildIndexAgent, error) {
-	return nil, fmt.Errorf("%w: maintenance.NewRebuildIndexAgent", errs.ErrNotImplemented)
+	return nil, fmt.Errorf("%w: agent.NewRebuildIndexAgent", errs.ErrNotImplemented)
 }

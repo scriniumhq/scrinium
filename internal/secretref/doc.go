@@ -1,6 +1,6 @@
 // Package secretref resolves the SecretRef strings that appear in a
-// composer config — passphrases, S3 credentials, TLS material — from
-// their "<scheme>:<value>" form into raw bytes at load time.
+// Scrinium configuration — passphrases, S3 credentials, TLS material —
+// from their "<scheme>:<value>" form into raw bytes at load time.
 //
 // Built-in schemes:
 //

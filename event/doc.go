@@ -19,14 +19,14 @@
 // live. User code must not emit under these prefixes; pick a
 // project-specific namespace ("acme.quota_monitor.tripped") instead.
 //
-//	"store.*"    — core/events.go (Store-level: manifest_saved,
-//	              artifact_deleted, store_degraded, ...)
-//	"agent.*"   — agent/events.go (background-agent lifecycle:
-//	              started, progress, cycle, failed, ...)
-//	"curator.*" — curator/multistore.go (orchestration: drain_completed,
-//	              host_storage_pressure, replication_lag, ...)
-//	"index.*"   — index/events.go (StoreIndex metrics: write_latency,
-//	              contention_error, size)
+//	"store.*"      — event/store_payloads.go (Store-level: manifest_saved,
+//	                 artifact_deleted, store_degraded, ...)
+//	"agent.*"      — engine/agent/events.go (background-agent lifecycle:
+//	                 started, progress, cycle, failed, ...)
+//	"multistore.*" — engine/wrapper/multistore (orchestration:
+//	                 backup_unavailable, replication_lag, ...; wired in M4)
+//	"index.*"      — engine/index/events.go (StoreIndex metrics:
+//	                 write_latency, contention_error, size)
 //
 // Reservations are by convention — the bus does not enforce them at
 // runtime. Treat unknown user prefixes as opaque and forward.

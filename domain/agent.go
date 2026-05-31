@@ -11,9 +11,9 @@ import (
 // It lives in domain — the leaf package every layer imports — because
 // it is shared vocabulary between the layer that *runs* an agent
 // (store.AdminStore.RunMaintenance names it in its signature) and the
-// layers that *implement* one (engine/agent and engine/maintenance,
-// both of which import store and so could not host a type store must
-// name without forming an import cycle). domain already carries the
+// layer that *implements* them (engine/agent, which imports store and
+// so could not host a type store must name without forming an import
+// cycle). domain already carries the
 // other cross-cutting contracts (ReadHandle, HashRegistry) and the
 // MaintenanceMode this contract pairs with, so it is the natural home.
 // See ADR-42.
