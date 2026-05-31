@@ -17,7 +17,6 @@ type PutOption func(*putConfig)
 type putConfig struct {
 	namespace      string
 	sessionID      domain.SessionID
-	externalURI    string
 	blobType       domain.BlobType
 	retentionUntil time.Time
 	routing        domain.RoutingHints
@@ -32,11 +31,6 @@ func WithNamespace(ns string) PutOption {
 // WithSession ties the Put to a session for RollbackSession.
 func WithSession(id domain.SessionID) PutOption {
 	return func(c *putConfig) { c.sessionID = id }
-}
-
-// WithExternalURI records an external location for the payload.
-func WithExternalURI(uri string) PutOption {
-	return func(c *putConfig) { c.externalURI = uri }
 }
 
 // WithBlobType sets the blob type (default: regular).
@@ -70,7 +64,6 @@ func (c putConfig) toDomain() domain.PutOptions {
 	return domain.PutOptions{
 		SessionID:      c.sessionID,
 		Namespace:      c.namespace,
-		ExternalURI:    c.externalURI,
 		BlobType:       c.blobType,
 		RetentionUntil: c.retentionUntil,
 		Routing:        c.routing,

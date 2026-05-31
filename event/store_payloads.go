@@ -17,6 +17,8 @@ const (
 	EventArtifactDeleted       = "store.artifact_deleted"
 	EventBlobPhysicallyDeleted = "store.blob_physically_deleted"
 	EventPackCompacted         = "store.pack_compacted"
+	EventPackSealed            = "store.pack_sealed"
+	EventArtifactMigrated      = "store.artifact_migrated"
 	EventCapacityWarning       = "store.capacity_warning"
 	EventScrubFailed           = "store.scrub_failed"
 	EventStoreDegraded         = "store.store_degraded"
@@ -28,13 +30,26 @@ const (
 // --- Payload structs ---
 
 // ManifestSavedPayload is the payload of EventManifestSaved.
-// IsTransit is true when the file was placed into
-// HostStorage.system.transit and has not yet been drained to a
-// Target. After Drain (at the Curator level) EventDrainCompleted
-// is emitted.
 type ManifestSavedPayload struct {
-	Manifest  domain.Manifest
-	IsTransit bool
+	Manifest domain.Manifest
+}
+
+// PackSealedPayload is the payload of EventPackSealed. Emitted by
+// the bundler when an open batch is sealed into a .pack volume in
+// the transit store, before it is delivered to its destination.
+type PackSealedPayload struct {
+	PackRef    string
+	BlobCount  int
+	TotalBytes int64
+}
+
+// ArtifactMigratedPayload is the payload of EventArtifactMigrated.
+// Emitted by the MigrationAgent when an artifact accumulated in the
+// transit store has been packed and delivered to its destination
+// store, reaching its permanent placement.
+type ArtifactMigratedPayload struct {
+	ArtifactID  domain.ArtifactID
+	DestStoreID string
 }
 
 // ArtifactDeletedPayload is the payload of EventArtifactDeleted.

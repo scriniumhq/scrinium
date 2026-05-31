@@ -76,7 +76,7 @@ func (i *Index) VacuumInto(ctx context.Context, destPath string) error {
 	}
 
 	// Ensure the parent directory exists. Snapshot Agents usually
-	// pass paths under HostStorage that already exist, but the
+	// pass paths that already exist, but the
 	// guarantee is cheap to provide.
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
 		return fmt.Errorf("sqlite: VacuumInto: prepare dest dir: %w", err)

@@ -20,7 +20,7 @@ import (
 // cancellation and deadlines.
 type MultistoreIndex interface {
 	// ResolveArtifact returns the list of Stores in which the
-	// artifact is registered. Used when reading through Curator.
+	// artifact is registered. Used when reading through the multistore.
 	ResolveArtifact(ctx context.Context, id domain.ArtifactID) ([]domain.StoreID, error)
 
 	// ExistsAny is a batch presence check across every Store, keyed
@@ -35,8 +35,7 @@ type MultistoreIndex interface {
 
 	// RegisterArtifact records that an artifact is present in a
 	// given Store, together with its blob dedup key so cross-store
-	// resolution carries the crypto-identity (ADR-58). Called by
-	// Curator after a successful write or Drain.
+	// resolution carries the crypto-identity (ADR-58).
 	RegisterArtifact(ctx context.Context, id domain.ArtifactID, storeID domain.StoreID, key domain.BlobDedupKey) error
 
 	// MarkStale marks a record as stale (Read-Repair on a cache

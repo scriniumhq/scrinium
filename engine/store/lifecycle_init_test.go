@@ -211,22 +211,6 @@ func TestInitStore_RejectsInvalidConfig(t *testing.T) {
 	}
 }
 
-func TestInitStore_NativeTopologyRequiresExternalRef(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	cfg := domain.StoreConfig{
-		PathTopology: domain.PathTopologyNative,
-		BlobStorage:  domain.BlobStorageTarget,
-	}
-	_, _, err := store.InitStore(context.Background(), drv,
-		store.WithConfig(cfg),
-		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx.Hashes()),
-	)
-	if !errors.Is(err, errs.ErrInvalidConfig) {
-		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
-	}
-}
-
 // TestInitStore_RejectsBinaryManifestEncoding closes the gap between
 // the validate side (used to accept Binary) and the codec side (which
 // has always rejected it with ErrUnsupportedEncoding). Until the
@@ -606,10 +590,6 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 // The body-encryption path itself is exercised by Put/Get
 // integration tests; this test only checks that OpenStore no
 // longer refuses such configurations.
-//
-// Note: ManifestStorage Local/Replicated lands in M4.2 alongside
-// HostStorage; here we use Remote (the default) so the test
-// stays scoped to ManifestCrypto.
 func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
 	for _, crypto := range []domain.ManifestCrypto{
 		domain.ManifestCryptoSealed,

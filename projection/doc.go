@@ -5,9 +5,9 @@
 //
 // A View is a snapshot of the state at the moment it was created.
 // Live updates are on the backlog. The data source can be either a
-// single store.DataStore or a curator.Curator: in the first case
+// single store.DataStore or a multistore: in the first case
 // StorageFacet remains nil; in the second it is filled from
-// MultistoreIndex and HostStorage.
+// MultistoreIndex.
 //
 // Mounting (FUSE, WebDAV) ships as separate integrations gated by
 // the build tags `fuse` and `webdav`. Without the tags the API is

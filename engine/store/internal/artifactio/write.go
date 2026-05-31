@@ -59,7 +59,7 @@ func (x *IO) runner() *pipeline.Runner {
 	return pipeline.NewRunner(x.hashes, x.transformers)
 }
 
-// Materialize hashes the payload and places it. For InlineFallback it
+// Materialize hashes the payload and places it. For Inline mode it
 // speculatively reads up to InlineBlobLimit+1 bytes: at or under the limit
 // the bytes are embedded in the manifest; over it, the consumed head is
 // spliced back and the payload streams to a Target blob. Plain stores
@@ -70,9 +70,9 @@ func (x *IO) runner() *pipeline.Runner {
 // so a blob and its manifest encrypt under the same key.
 func (x *IO) Materialize(ctx context.Context, cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions, writeKeyID string) (Result, error) {
 	hashAlgo := string(cfg.ContentHasher)
-	inlineFallback := cfg.BlobStorage == domain.BlobStorageInlineFallback && cfg.InlineBlobLimit > 0
+	inlineMode := cfg.BlobStorage == domain.BlobStorageInline && cfg.InlineBlobLimit > 0
 
-	if inlineFallback {
+	if inlineMode {
 		head, err := io.ReadAll(io.LimitReader(a.Payload, cfg.InlineBlobLimit+1))
 		if err != nil {
 			return Result{}, fmt.Errorf("artifactio: read payload head: %w", err)
@@ -179,7 +179,7 @@ func (x *IO) commitBlob(
 		_ = x.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: commit blob: %w", err)
 	}
-	return blobRef, domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: finalPath}, nil
+	return blobRef, domain.PhysicalAddress{Path: finalPath}, nil
 }
 
 // dedupProbe decides whether a staged blob duplicates an indexed one

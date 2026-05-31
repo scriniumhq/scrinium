@@ -1,7 +1,7 @@
 // Package faulty wraps another driver.Driver and injects
 // configurable faults: errors and latency on a per-method basis.
 // Used in chaos tests across higher layers (StoreIndex, Pipeline
-// runner, Curator) to verify error-path correctness without
+// runner) to verify error-path correctness without
 // physically corrupting a real filesystem.
 //
 // Faults are deterministic given a seed: re-running a test with

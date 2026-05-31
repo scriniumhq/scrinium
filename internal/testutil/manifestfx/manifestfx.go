@@ -101,8 +101,7 @@ func SyntheticHash(fillChar byte) domain.ContentHash {
 // PhysAddr is a Location-workspace address at path.
 func PhysAddr(path string) domain.PhysicalAddress {
 	return domain.PhysicalAddress{
-		Workspace: domain.WorkspaceLocation,
-		Path:      path,
+		Path: path,
 	}
 }
 
@@ -111,10 +110,9 @@ func PhysAddr(path string) domain.PhysicalAddress {
 // describe the byte range of the embedded blob.
 func PackedAddr(packPath, packRef string, offset, size int64) domain.PhysicalAddress {
 	return domain.PhysicalAddress{
-		Workspace: domain.WorkspaceLocation,
-		Path:      packPath,
-		PackRef:   packRef,
-		Offset:    offset,
-		Size:      size,
+		Path:    packPath,
+		PackRef: packRef,
+		Offset:  offset,
+		Size:    size,
 	}
 }

@@ -146,7 +146,7 @@ func TestPut_InputValidation(t *testing.T) {
 	}
 }
 
-// TestPut_InlinePolicy collapses the InlineFallback boundary tests:
+// TestPut_InlinePolicy collapses the Inline mode boundary tests:
 // content at or below the limit stays inline (no blob file); over the
 // limit it falls back to a Target blob; a zero limit disables inlining
 // entirely. The final sub-test pins that inline manifests do not dedup

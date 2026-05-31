@@ -41,13 +41,12 @@ func insertBlob(t *testing.T, idx *Index, ref, contentHash string, size int64, a
 	t.Helper()
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO blobs (
-			blob_ref, content_hash, original_size, crypto_identity,
-			physical_workspace, physical_path,
+			blob_ref, content_hash, original_size, 
+            crypto_identity, physical_path,
 			pack_ref, pack_offset, pack_size,
 			ref_count, last_verified_at, created_at
-		) VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?, NULL, ?)`,
-		ref, contentHash, size,
-		int(addr.Workspace), addr.Path,
+		) VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, NULL, ?)`,
+		ref, contentHash, size, addr.Path,
 		addr.PackRef, addr.Offset, addr.Size,
 		refCount, timefmt.Format(time.Now()),
 	)

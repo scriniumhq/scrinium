@@ -11,10 +11,6 @@
 // ArtifactID (the TOC manifest), Get returns the reassembled stream,
 // and Walk presents TOC manifests like ordinary artifacts.
 //
-// Moved from engine/curator/chunker per ADR-53: wrappers are a
-// peer concept to Curator (a multi-store orchestrator) and live
-// under engine/wrapper/.
-//
 // TODO(M5.2): CDC-based chunker wrapper.
 package chunker
 
@@ -41,7 +37,7 @@ type ChunkerConfig struct {
 	HashWindow int
 }
 
-// New returns a WrapperFactory for registration in Curator through
+// New returns a WrapperFactory for registration as a Target decorator through
 // WithStore. Using chunker.Wrapper on a Backup is forbidden (the
 // Rules Engine rejects the configuration) — slicing on a Backup
 // produces a different ArtifactID and breaks cross-store

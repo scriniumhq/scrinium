@@ -23,7 +23,6 @@ func TestApplyDefaults_FillsEmptyConfig(t *testing.T) {
 		val  string
 	}{
 		{"PathTopology", string(got.PathTopology)},
-		{"ManifestStorage", string(got.ManifestStorage)},
 		{"BlobStorage", string(got.BlobStorage)},
 		{"ManifestEncoding", string(got.ManifestEncoding)},
 		{"ManifestCrypto", string(got.ManifestCrypto)},
@@ -104,7 +103,6 @@ func TestValidateImmutable_RejectsUnknownEnums(t *testing.T) {
 	base := ApplyDefaults(domain.StoreConfig{})
 	cases := map[string]func(*domain.StoreConfig){
 		"PathTopology":     func(c *domain.StoreConfig) { c.PathTopology = "bogus" },
-		"ManifestStorage":  func(c *domain.StoreConfig) { c.ManifestStorage = "bogus" },
 		"ManifestCrypto":   func(c *domain.StoreConfig) { c.ManifestCrypto = "bogus" },
 		"ContentHasher":    func(c *domain.StoreConfig) { c.ContentHasher = "bogus" },
 		"ManifestEncoding": func(c *domain.StoreConfig) { c.ManifestEncoding = "bogus" },
@@ -126,20 +124,6 @@ func TestValidateImmutable_RejectsBinaryEncoding(t *testing.T) {
 	cfg.ManifestEncoding = domain.ManifestEncodingBinary
 	if err := ValidateImmutable(cfg); !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Errorf("Binary encoding is deferred; want ErrInvalidConfig, got %v", err)
-	}
-}
-
-func TestValidateImmutable_NativeRequiresExternalRef(t *testing.T) {
-	cfg := ApplyDefaults(domain.StoreConfig{})
-	cfg.PathTopology = domain.PathTopologyNative
-	cfg.BlobStorage = domain.BlobStorageTarget // not ExternalRef
-	if err := ValidateImmutable(cfg); !errors.Is(err, errs.ErrInvalidConfig) {
-		t.Errorf("Native without ExternalRef must fail; got %v", err)
-	}
-
-	cfg.BlobStorage = domain.BlobStorageExternalRef
-	if err := ValidateImmutable(cfg); err != nil {
-		t.Errorf("Native + ExternalRef must pass; got %v", err)
 	}
 }
 

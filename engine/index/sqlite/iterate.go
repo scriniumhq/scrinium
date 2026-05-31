@@ -36,9 +36,9 @@ func (i *Index) ListByNamespace(
 		// We LEFT JOIN blobs to recover original_size and
 		// content_hash, which live on the blobs row (the dedup
 		// key) rather than on the manifest row. LEFT (not INNER)
-		// because future ExternalRef manifests will not have a
-		// matching blobs row — for them the JOIN yields NULLs and
-		// scanManifestRow leaves OriginalSize at zero.
+		// because Inline manifests have no matching blobs row
+		// (the bytes live inside the manifest) — for them the JOIN
+		// yields NULLs and scanManifestRow leaves OriginalSize at zero.
 		queryDefault = `
 			SELECT m.artifact_id, m.type, m.namespace, m.session_id,
 			       m.blob_ref, m.created_at, m.retention_until,

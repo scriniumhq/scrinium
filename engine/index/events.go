@@ -14,7 +14,7 @@ import "time"
 // in-memory) — payload shapes are backend-agnostic.
 const (
 	// EventIndexWriteLatency — latency of one mutating method
-	// (IndexManifest, DeleteManifest, RebindBlob, ...). Emitted on
+	// (IndexManifest, DeleteManifest, ...). Emitted on
 	// every successful and failing call so dashboards can compare
 	// success/failure latency distributions.
 	EventIndexWriteLatency = "index.write_latency"

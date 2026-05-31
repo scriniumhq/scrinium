@@ -18,7 +18,6 @@ func TestEventKind_String(t *testing.T) {
 	}{
 		{EventKindManifestIndexed, "ManifestIndexed"},
 		{EventKindManifestDeleted, "ManifestDeleted"},
-		{EventKindBlobRebound, "BlobRebound"},
 		{EventKind(99), "EventKind(?)"},
 	}
 	for _, tc := range cases {
@@ -164,11 +163,5 @@ func TestEventArgs_PopulatedShape(t *testing.T) {
 	}
 	if len(deletedArgs.BlobRefs) != 2 {
 		t.Errorf("ManifestDeleted: expected 2 blob refs, got %d", len(deletedArgs.BlobRefs))
-	}
-
-	// BlobRebound: only BlobRefs[0] set.
-	reboundArgs := EventArgs{BlobRefs: []string{"sha256:xxx"}}
-	if reboundArgs.Manifest.ArtifactID != "" || reboundArgs.ArtifactID != "" {
-		t.Error("BlobRebound: Manifest and ArtifactID must be zero")
 	}
 }

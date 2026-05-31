@@ -65,10 +65,7 @@ func (d dataFacet) Delete(ctx context.Context, id domain.ArtifactID) error {
 	}
 
 	// Collect blobRefs to decrement. Inline = empty list (no row
-	// in `blobs`). Target = the one BlobRef. ExternalRef would
-	// also be empty, but Put rejects it today, so a manifest of
-	// that layout cannot exist on disk yet — treat it as the
-	// future-compatible empty list rather than special-casing.
+	// in `blobs`). Target = the one BlobRef.
 	var blobRefs []string
 	switch manifest.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
@@ -78,8 +75,6 @@ func (d dataFacet) Delete(ctx context.Context, id domain.ArtifactID) error {
 			return fmt.Errorf("store.Delete: Target manifest %q has empty BlobRef", id)
 		}
 		blobRefs = []string{string(manifest.BlobRef)}
-	case domain.LayoutExternalRef:
-		// no blobs row by design
 	default:
 		return fmt.Errorf("store.Delete: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
 	}

@@ -138,8 +138,7 @@ func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 
 	// --- Phase 3: write some index content directly, then close ---
 	addr := domain.PhysicalAddress{
-		Workspace: domain.WorkspaceLocation,
-		Path:      "blobs/aa/bb/blob-test",
+		Path: "blobs/aa/bb/blob-test",
 	}
 	manifest := domain.Manifest{
 		ArtifactID:   "art-test",

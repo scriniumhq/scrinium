@@ -54,10 +54,4 @@ var ErrStoreOffline = errors.New("scrinium: store offline")
 var ErrSharedIndexRequired = errors.New("scrinium: shared index required")
 
 // ErrManifestsLost — RebuildIndexAgent did not find any manifests:
-// ManifestStorage: Local with the local disk lost and no
-// HostStorage available.
 var ErrManifestsLost = errors.New("scrinium: manifests lost")
-
-// ErrHostStorageLocked — Curator startup aborted: the WorkspaceDir
-// of the transit buffer is held by another process (OS-level lock).
-var ErrHostStorageLocked = errors.New("scrinium: host storage locked by another process")

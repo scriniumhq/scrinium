@@ -23,7 +23,6 @@ type RoutingHints struct {
 type PutOptions struct {
 	SessionID      SessionID
 	Namespace      string
-	ExternalURI    string
 	BlobType       BlobType
 	RetentionUntil time.Time
 	Routing        RoutingHints

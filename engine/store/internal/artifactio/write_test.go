@@ -75,11 +75,11 @@ func TestWritePath_TargetRoundTrip(t *testing.T) {
 	}
 }
 
-// --- Inline path: small payload under InlineFallback limit ---
+// --- Inline path: small payload under Inline mode limit ---
 
 func TestWritePath_InlineUnderLimit(t *testing.T) {
 	w, cfg := harness(t)
-	cfg.BlobStorage = domain.BlobStorageInlineFallback
+	cfg.BlobStorage = domain.BlobStorageInline
 	cfg.InlineBlobLimit = 1024
 
 	blob, err := w.Materialize(context.Background(), cfg, payload("tiny"), domain.PutOptions{}, "")
@@ -106,7 +106,7 @@ func TestWritePath_InlineUnderLimit(t *testing.T) {
 
 func TestWritePath_InlineOverflowStreamsToTarget(t *testing.T) {
 	w, cfg := harness(t)
-	cfg.BlobStorage = domain.BlobStorageInlineFallback
+	cfg.BlobStorage = domain.BlobStorageInline
 	cfg.InlineBlobLimit = 8
 
 	big := strings.Repeat("x", 64) // > limit

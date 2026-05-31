@@ -6,7 +6,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/wrapper/host"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
@@ -40,12 +39,6 @@ type RebuildConfig struct {
 	// replica was lost (store.json missing or invalid). Otherwise
 	// nil.
 	RecoveryKit []byte
-
-	// HostStorage is passed when StoreConfig.ManifestStorage is
-	// Local or Replicated. When omitted in those modes:
-	//   - Local → ErrHostStorageRequired during Validate;
-	//   - Replicated → fallback to Remote.
-	HostStorage host.TransitStore
 
 	// BatchSize is the number of manifests per IndexManifest
 	// transaction. Default 1000. A larger value is faster but

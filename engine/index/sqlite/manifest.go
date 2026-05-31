@@ -105,18 +105,17 @@ func upsertBlob(
 	// encrypted ones.
 	const stmt = `
 		INSERT INTO blobs (
-			blob_ref, content_hash, original_size, crypto_identity,
-			physical_workspace, physical_path,
+			blob_ref, content_hash, original_size, 
+		    crypto_identity, physical_path,
 			pack_ref, pack_offset, pack_size,
 			ref_count, last_verified_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
 		ON CONFLICT(blob_ref) DO NOTHING`
 	_, err := tx.ExecContext(ctx, stmt,
 		blobRef,
 		string(contentHash),
 		originalSize,
 		string(crypto),
-		int(addr.Workspace),
 		addr.Path,
 		addr.PackRef,
 		addr.Offset,
@@ -506,52 +505,4 @@ func (i *Index) ManifestExists(ctx context.Context, id domain.ArtifactID) (bool,
 		return false, classifyError(err)
 	}
 	return true, nil
-}
-
-// RebindBlob updates a blob's physical address after a successful
-// Drain (HostStorage transit -> Location). ref_count and other
-// counters are untouched. Idempotent: a missing blob_ref is a
-// no-op (returns nil) — the same Drain may be retried after a crash
-// once the rebind has already committed.
-//
-// Wrapped in a tx so subscribed extensions can react atomically
-// with the main update. A missing blob_ref still completes
-// successfully (no rows affected → no event dispatched, since
-// extensions saw nothing change).
-func (i *Index) RebindBlob(ctx context.Context, blobRef string, newAddr domain.PhysicalAddress) error {
-	return i.observe("RebindBlob", func() error {
-		return i.inTx(ctx, func(tx *sql.Tx) error {
-			const stmt = `
-				UPDATE blobs SET
-					physical_workspace = ?,
-					physical_path      = ?,
-					pack_ref           = ?,
-					pack_offset        = ?,
-					pack_size          = ?
-				WHERE blob_ref = ?`
-			res, err := tx.ExecContext(ctx, stmt,
-				int(newAddr.Workspace),
-				newAddr.Path,
-				newAddr.PackRef,
-				newAddr.Offset,
-				newAddr.Size,
-				blobRef,
-			)
-			if err != nil {
-				return err
-			}
-			rowsAffected, _ := res.RowsAffected()
-
-			// Only dispatch if a row was actually rebound. A no-op
-			// (idempotent retry on already-rebound blob) doesn't
-			// surface an event — extensions saw the rebind once already.
-			if rowsAffected > 0 {
-				args := index.EventArgs{BlobRefs: []string{blobRef}}
-				if err := i.dispatchExtensions(ctx, tx, index.EventKindBlobRebound, args); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
 }

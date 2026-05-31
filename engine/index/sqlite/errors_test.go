@@ -7,7 +7,7 @@ import (
 	"scrinium.dev/errs"
 )
 
-// IndexManifest / DeleteManifest / RebindBlob / ManifestExists
+// IndexManifest / DeleteManifest / ManifestExists
 // behaviour lives in the conformance suite at
 // internal/testutil/indextest. This file is for sqlite-specific
 // behaviour only — currently the classifyError mapping from

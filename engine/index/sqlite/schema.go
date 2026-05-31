@@ -90,7 +90,6 @@ CREATE TABLE blobs (
     blob_ref          TEXT    PRIMARY KEY,
     content_hash      TEXT    NOT NULL,
     original_size     INTEGER NOT NULL,
-    physical_workspace INTEGER NOT NULL,
     physical_path     TEXT    NOT NULL,
     pack_ref          TEXT    NOT NULL DEFAULT '',
     pack_offset       INTEGER NOT NULL DEFAULT 0,

@@ -76,8 +76,7 @@ func makeForeignManifest(t *testing.T, id domain.ArtifactID) domain.Manifest {
 
 func physAddr() domain.PhysicalAddress {
 	return domain.PhysicalAddress{
-		Workspace: domain.WorkspaceLocation,
-		Path:      "/blobs/x",
+		Path: "/blobs/x",
 	}
 }
 
@@ -371,8 +370,5 @@ func TestSubscribe_OnlyManifestEvents(t *testing.T) {
 	}
 	if !have[index.EventKindManifestDeleted] {
 		t.Error("missing EventKindManifestDeleted")
-	}
-	if have[index.EventKindBlobRebound] {
-		t.Error("unexpected subscription to EventKindBlobRebound")
 	}
 }

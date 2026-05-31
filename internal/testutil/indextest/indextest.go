@@ -40,7 +40,6 @@ func Run(t *testing.T, f Factory) {
 	t.Run(f.Name+"/GetRefCount", func(t *testing.T) { runGetRefCount(t, f) })
 	t.Run(f.Name+"/IndexManifest", func(t *testing.T) { runIndexManifest(t, f) })
 	t.Run(f.Name+"/DeleteManifest", func(t *testing.T) { runDeleteManifest(t, f) })
-	t.Run(f.Name+"/RebindBlob", func(t *testing.T) { runRebindBlob(t, f) })
 	t.Run(f.Name+"/ManifestExists", func(t *testing.T) { runManifestExists(t, f) })
 	t.Run(f.Name+"/LookupPacked", func(t *testing.T) { runLookupPacked(t, f) })
 	t.Run(f.Name+"/MarkVerified", func(t *testing.T) { runMarkVerified(t, f) })

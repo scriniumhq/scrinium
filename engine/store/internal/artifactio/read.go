@@ -68,7 +68,7 @@ func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 // Inline blobs are served from the manifest; Target blobs are resolved
 // through the index (the read path follows where the blob was actually
 // written, not what the current topology would compute) and opened
-// through the Driver. LayoutExternalRef is not yet supported.
+// through the Driver.
 func (x *IO) OpenBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser, error) {
 	raw, err := x.openRawBlob(ctx, m)
 	if err != nil {
@@ -103,9 +103,6 @@ func (x *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser,
 			return nil, fmt.Errorf("artifactio: get blob: %w", err)
 		}
 		return rc, nil
-
-	case domain.LayoutExternalRef:
-		return nil, fmt.Errorf("%w: BlobStorage=ExternalRef awaits driver.Open URI dispatch", errs.ErrNotImplemented)
 
 	default:
 		return nil, fmt.Errorf("artifactio: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)

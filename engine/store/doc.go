@@ -13,7 +13,7 @@
 // — read it first; it is the package's "header":
 //
 //   - DataStore  — operations on artifacts (Put, Get, Delete, Walk, …),
-//     the surface seen by client code, decorators, and Curator.
+//     the surface seen by client code and decorators.
 //   - AdminStore — administrative API (Unlock, RotateKEK, UpdateConfig,
 //     Close, System), the surface seen by the Store's owner.
 //   - Store      — the union of the two, returned by InitStore and OpenStore.

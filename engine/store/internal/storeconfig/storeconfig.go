@@ -25,9 +25,6 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 	if cfg.PathTopology == "" {
 		cfg.PathTopology = domain.PathTopologySharded
 	}
-	if cfg.ManifestStorage == "" {
-		cfg.ManifestStorage = domain.ManifestStorageRemote
-	}
 	if cfg.BlobStorage == "" {
 		cfg.BlobStorage = domain.BlobStorageTarget
 	}
@@ -90,12 +87,7 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 // milestones add the full matrix.
 func ValidateImmutable(cfg domain.StoreConfig) error {
 	switch cfg.PathTopology {
-	case domain.PathTopologyFlat, domain.PathTopologySharded, domain.PathTopologyNative:
-	default:
-		return errs.ErrInvalidConfig
-	}
-	switch cfg.ManifestStorage {
-	case domain.ManifestStorageRemote, domain.ManifestStorageLocal, domain.ManifestStorageReplicated:
+	case domain.PathTopologyFlat, domain.PathTopologySharded:
 	default:
 		return errs.ErrInvalidConfig
 	}
@@ -140,13 +132,6 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 		(cfg.SegmentSize < domain.MinSegmentSize || cfg.SegmentSize > domain.MaxSegmentSize) {
 		return fmt.Errorf("%w: SegmentSize=%d out of range [%d, %d]",
 			errs.ErrInvalidConfig, cfg.SegmentSize, domain.MinSegmentSize, domain.MaxSegmentSize)
-	}
-
-	// PathTopology: Native is a read-only marker; allowed only with
-	// BlobStorage: ExternalRef.
-	if cfg.PathTopology == domain.PathTopologyNative &&
-		cfg.BlobStorage != domain.BlobStorageExternalRef {
-		return errs.ErrInvalidConfig
 	}
 
 	// TombstoneGracePeriod has its own dedicated sentinel because a
@@ -196,11 +181,6 @@ func ValidateAgainstActive(req, active domain.StoreConfig) error {
 		mismatches = append(mismatches,
 			fmt.Sprintf("PathTopology: requested %q, active %q",
 				req.PathTopology, active.PathTopology))
-	}
-	if req.ManifestStorage != "" && req.ManifestStorage != active.ManifestStorage {
-		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestStorage: requested %q, active %q",
-				req.ManifestStorage, active.ManifestStorage))
 	}
 	if req.ManifestEncoding != "" && req.ManifestEncoding != active.ManifestEncoding {
 		mismatches = append(mismatches,

@@ -79,10 +79,6 @@ func newSystemStore(
 //	"config/*" → system.config (versioned configuration history)
 //	everything else (cursors, snapshots, scrub/, gc/, ingester/,
 //	snapshot/, maintenance/, index_snapshot/) → system.state
-//
-// Pack manifests (system.manifests) and HostStorage transit
-// (system.transit) are not addressable through SystemStore — they
-// have specialised access paths.
 func namespaceForName(name string) (string, error) {
 	if err := validateSystemName(name); err != nil {
 		return "", err

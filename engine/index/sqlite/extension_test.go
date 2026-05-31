@@ -442,7 +442,7 @@ func TestDispatch_ManifestIndexed(t *testing.T) {
 	}
 
 	m := makeBlobManifest("art-1")
-	addr := domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "/blobs/x"}
+	addr := domain.PhysicalAddress{Path: "/blobs/x"}
 	if err := idx.IndexManifest(ctx, m, addr, nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
@@ -481,7 +481,7 @@ func TestDispatch_NotSubscribed_NoApply(t *testing.T) {
 	idx.Extensions().Register(context.Background(), ext)
 
 	m := makeBlobManifest("art-2")
-	idx.IndexManifest(ctx, m, domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "/blobs/y"}, nil, nil)
+	idx.IndexManifest(ctx, m, domain.PhysicalAddress{Path: "/blobs/y"}, nil, nil)
 
 	if len(ext.applyCalls) != 0 {
 		t.Errorf("non-subscribed extension's Apply called %d times", len(ext.applyCalls))
@@ -503,7 +503,7 @@ func TestDispatch_ApplyError_RollsBack(t *testing.T) {
 	idx.Extensions().Register(context.Background(), ext)
 
 	m := makeBlobManifest("art-rollback")
-	addr := domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "/blobs/z"}
+	addr := domain.PhysicalAddress{Path: "/blobs/z"}
 	err := idx.IndexManifest(ctx, m, addr, nil, nil)
 	if !errors.Is(err, failure) {
 		t.Errorf("expected apply error to propagate, got %v", err)
@@ -536,7 +536,7 @@ func TestDispatch_ManifestDeleted(t *testing.T) {
 
 	// Insert a manifest, then delete.
 	m := makeBlobManifest("art-del")
-	addr := domain.PhysicalAddress{Workspace: domain.WorkspaceLocation, Path: "/blobs/d"}
+	addr := domain.PhysicalAddress{Path: "/blobs/d"}
 	if err := idx.IndexManifest(ctx, m, addr, nil, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}

@@ -180,7 +180,7 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 			Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
 		cfg := domain.StoreConfig{
 			Pipeline:        []string{"zstd"},
-			BlobStorage:     domain.BlobStorageInlineFallback,
+			BlobStorage:     domain.BlobStorageInline,
 			InlineBlobLimit: 1024,
 		}
 		s, _, err := store.InitStore(context.Background(), driverfx.LocalFS(t),

@@ -1,18 +1,14 @@
 // Package bundler implements the decorator that transparently packs
-// small blobs into .pack volumes through HostStorage.
+// small blobs into .pack volumes via a transit store.
 //
 // It intercepts blobs with size below DirectWriteThreshold, buffers
-// them in HostStorage.system.transit, asynchronously assembles a
+// them in a durable transit store, asynchronously assembles a
 // .pack volume when a trigger fires (MaxBundleSize, MaxBlobCount,
-// FlushInterval), and ships it to the Target as a single stream.
-// Packing is transparent to the client: Put returns a regular
+// FlushInterval), and the MigrationAgent ships it to the destination
+// store. Packing is transparent to the client: Put returns a regular
 // ArtifactID, and Get knows how to range-read out of the pack.
 //
-// Moved from engine/curator/bundler per ADR-53: wrappers are a
-// peer concept to Curator (a multi-store orchestrator) and live
-// under engine/wrapper/.
-//
-// TODO(M4.4): blob bundling for many-small-files workloads.
+// TODO(M3): blob bundling for many-small-files workloads.
 package bundler
 
 import (
@@ -28,6 +24,11 @@ import (
 // BundlerConfig holds the batch-sealing parameters. Triggers are
 // disjunctive: the first satisfied condition starts Sealing.
 type BundlerConfig struct {
+	// TransitStore is the StoreID of the durable transit store that
+	// accumulates small blobs before they are packed. When empty,
+	// the wrapped Target plays the transit role (pack-in-place).
+	TransitStore string
+
 	// MaxBundleSize is the maximum cumulative size of blobs in a
 	// single .pack volume in bytes. The default is implementation
 	// defined.
@@ -58,11 +59,10 @@ type Wrapper interface {
 	Flush(ctx context.Context) error
 }
 
-// New returns a WrapperFactory for registration in Curator through
-// WithStore/WithBackup. It requires HostStorage in Curator: the
-// factory's Wrap returns an error if deps.HostStorage == nil.
+// New returns a WrapperFactory for registration as a Target decorator
+// through WithStore/WithBackup.
 //
-// TODO(M4.4): bundling read path.
+// TODO(M3): bundling read path.
 func New(cfg BundlerConfig) multistore.WrapperFactory {
 	return &factory{cfg: cfg}
 }
