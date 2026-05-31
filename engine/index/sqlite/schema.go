@@ -3,7 +3,7 @@ package sqlite
 // CurrentSchemaVersion is the schema version this build of the
 // package writes and expects to read. Bumped whenever a migration
 // is added to migrations[].
-const CurrentSchemaVersion = 4
+const CurrentSchemaVersion = 5
 
 // migrations is the ordered list of forward-only schema migrations.
 // Each migration is applied inside its own transaction; if any step
@@ -33,6 +33,11 @@ var migrations = []migration{
 		Version:     4,
 		Description: "ADR-58: packed_blobs.crypto_identity (pack-layer dedup key)",
 		Statements:  schemaV4,
+	},
+	{
+		Version:     5,
+		Description: "Scrub: manifests.last_verified_at (manifest-level scrub stamp)",
+		Statements:  schemaV5,
 	},
 }
 
@@ -223,4 +228,29 @@ var schemaV3 = []string{
 // Append-only: never edit this once shipped.
 var schemaV4 = []string{
 	`ALTER TABLE packed_blobs ADD COLUMN crypto_identity TEXT NOT NULL DEFAULT ''`,
+}
+
+// schemaV5 adds a manifest-level scrub stamp. Until v5 last_verified_at
+// lived only on blobs, so the Scrub Agent could record that a physical
+// blob had been re-hashed but had nowhere to record that an artifact's
+// manifest had been checked. Two cases need the manifest-level stamp:
+//
+//   - Inline artifacts carry their payload inside the manifest file and
+//     have no blobs row at all (blob_ref is NULL, §9.1.2). Without a
+//     manifest stamp they never appear in any scrub work list and a
+//     cold inline artifact is never re-verified against bit rot.
+//   - Multi-blob (TOC) artifacts are only fully verified once every
+//     referenced blob is fresh; the stamp records that the whole
+//     artifact reached that state, distinct from any single blob.
+//
+// The Scrub Agent's blob pass cascades into manifests via
+// manifest_blobs and stamps the consumers it fully covers; a separate
+// manifest pass (ListUnverifiedManifests) covers the inline artifacts
+// the blob pass cannot reach. NULL = never scrubbed, matching
+// blobs.last_verified_at semantics.
+//
+// Append-only: never edit this once shipped.
+var schemaV5 = []string{
+	`ALTER TABLE manifests ADD COLUMN last_verified_at TEXT`,
+	`CREATE INDEX manifests_scrub ON manifests(last_verified_at)`,
 }

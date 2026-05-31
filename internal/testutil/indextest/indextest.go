@@ -43,11 +43,13 @@ func Run(t *testing.T, f Factory) {
 	t.Run(f.Name+"/ManifestExists", func(t *testing.T) { runManifestExists(t, f) })
 	t.Run(f.Name+"/LookupPacked", func(t *testing.T) { runLookupPacked(t, f) })
 	t.Run(f.Name+"/MarkVerified", func(t *testing.T) { runMarkVerified(t, f) })
+	t.Run(f.Name+"/MarkManifestVerified", func(t *testing.T) { runListUnverifiedManifests(t, f) })
+	t.Run(f.Name+"/ManifestsByBlobRef", func(t *testing.T) { runManifestsByBlobRef(t, f) })
 	t.Run(f.Name+"/DeletePacked", func(t *testing.T) { runDeletePacked(t, f) })
 	t.Run(f.Name+"/ListByNamespace", func(t *testing.T) { runListByNamespace(t, f) })
 	t.Run(f.Name+"/GetBySession", func(t *testing.T) { runGetBySession(t, f) })
 	t.Run(f.Name+"/ListOrphanBlobs", func(t *testing.T) { runListOrphanBlobs(t, f) })
-	t.Run(f.Name+"/ListUnverified", func(t *testing.T) { runListUnverified(t, f) })
+	t.Run(f.Name+"/ListUnverifiedBlobs", func(t *testing.T) { runListUnverified_Blobs(t, f) })
 }
 
 // collectByNamespace is a small helper that turns a streaming

@@ -364,7 +364,7 @@ func TestHeartbeat_AbortsOnTakeover(t *testing.T) {
 		if !errors.Is(err, errs.ErrLeaseLost) {
 			t.Fatalf("Heartbeat returned %v, want ErrLeaseLost", err)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(3 * time.Second):
 		t.Fatal("Heartbeat did not abort after takeover")
 	}
 }

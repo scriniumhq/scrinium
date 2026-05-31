@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"io/fs"
 	"log/slog"
 
 	"scrinium.dev/domain"
@@ -62,6 +63,71 @@ func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
 		// Lock-free: Verify holds no mutex.
 		d.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "verify failed: blob integrity mismatch",
 			storeIDAttr(d.core), artifactIDAttr(id))
+		return err
+	}
+	return nil
+}
+
+// VerifyBlobRef performs the same plaintext integrity check as Verify
+// but keyed by a physical blob_ref rather than an artifact id. It is
+// the Scrub Agent's expensive per-blob step: ListUnverified yields
+// blob_refs, and this re-hashes the blob through the inverse pipeline
+// and compares against the expected ContentHash.
+//
+// Resolving the pipeline requires a full manifest (the index row has no
+// Pipeline/LayoutHeader — those live in the manifest file), so this
+// loads the file manifest of any one consuming artifact. For a blob
+// shared by several artifacts (dedup) every consumer carries the same
+// content-derived pipeline and ContentHash, so any one is a valid
+// source — VerifyBlobRef uses the first the index yields.
+//
+// On a hash mismatch it publishes EventScrubFailed (tagging the
+// consumer whose manifest was used) and returns errs.ErrCorruptedBlob.
+// A blob_ref with no consuming manifest (a race against Delete/GC, or
+// an orphan blob) returns errs.ErrArtifactNotFound, which the Scrub
+// Agent treats as "skip, not a corruption".
+func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
+	if err := d.enterRead(ctx); err != nil {
+		return err
+	}
+	if blobRef == "" {
+		return errs.ErrArtifactNotFound
+	}
+
+	// First consuming manifest wins. ManifestsByBlobRef yields the
+	// index-resident shape; we only need its ArtifactID to load the
+	// full file manifest (with Pipeline) below. fs.SkipAll stops the
+	// scan after the first row (iterateManifestRows treats it as a
+	// clean stop, returning nil).
+	var consumerID domain.ArtifactID
+	found := false
+	err := d.index.ManifestsByBlobRef(ctx, blobRef, func(m domain.Manifest) error {
+		consumerID = m.ArtifactID
+		found = true
+		return fs.SkipAll
+	})
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errs.ErrArtifactNotFound
+	}
+
+	manifest, err := d.loadManifest(ctx, consumerID)
+	if err != nil {
+		return err
+	}
+	if err := dispatchManifestType(manifest, "store.VerifyBlobRef"); err != nil {
+		return err
+	}
+
+	if err := d.artifactIO().VerifyBlob(ctx, manifest); err != nil {
+		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
+			ArtifactID: consumerID,
+			Err:        err,
+		})
+		d.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "scrub: blob integrity mismatch",
+			storeIDAttr(d.core), artifactIDAttr(consumerID))
 		return err
 	}
 	return nil
