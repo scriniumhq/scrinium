@@ -6,7 +6,7 @@ import (
 )
 
 // ReadHandle is the read primitive returned by Get. It hides the
-// physical source of the bytes (a single file, a HostStorage record,
+// physical source of the bytes (a single file,
 // a range read from a .pack volume, or an inline blob). Support for
 // ReadAt/ReadAtCtx is reported by SupportsRandomAccess; outside of
 // those conditions the calls return ErrRandomAccessNotSupported.

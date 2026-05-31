@@ -10,5 +10,5 @@
 //
 // Hosts register custom schemes (vault:, gsm:, …) through Register in
 // an init(), after which the scheme works in YAML/JSON like the
-// built-ins. See 3. Reference/10 Composer.md §10.3.
+// built-ins. See 3. Reference/10 Declarative Configuration.md §10.3.
 package secretref

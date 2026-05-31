@@ -11,7 +11,7 @@
 // The config describes user intent — which stores, which policies, how
 // to link them — not the engine's internal structure (wrappers,
 // agents, pipeline stages), which composer derives from the policies.
-// Full schema: 3. Reference/10 Composer.md.
+// Full schema: 3. Reference/10 Declarative Configuration.md.
 //
 // Secrets (passphrases, credentials, TLS material) are SecretRefs of
 // the form "<scheme>:<value>", resolved at load time by the

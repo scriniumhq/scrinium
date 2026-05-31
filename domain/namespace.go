@@ -2,7 +2,7 @@ package domain
 
 // Namespace tokens with engine-wide meaning. Production code must
 // reference these constants — never the equivalent literals — so a
-// future spelling change (e.g. "system.transit" → "system.transit/")
+// future spelling change (e.g. "system.state" → "system.state/")
 // is one edit, and the compiler catches every missed call site.
 
 // NamespaceWildcard is the special token meaning "every user

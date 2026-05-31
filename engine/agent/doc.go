@@ -11,8 +11,8 @@
 //     maintenance/.
 //
 // Two ownership modalities:
-//   - Curator-managed (Scrub, Snapshot) — automatically launched by
-//     Curator for every registered Target.
+//   - Engine-managed (Scrub, Snapshot) — automatically launched
+//     for every registered Target.
 //   - User-managed (Ingester, GC, Ejector) — created and started by
 //     the host application explicitly through the package
 //     constructors.

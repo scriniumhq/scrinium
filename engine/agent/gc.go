@@ -52,7 +52,7 @@ type GCStats struct {
 }
 
 // GCAgent is the background reaper of orphan blobs governed by
-// Two-Phase Deletion. User-managed: Curator does not start the GC
+// Two-Phase Deletion. User-managed: the engine does not start the GC
 // automatically — the deletion policy is a deployment-specific
 // decision.
 type GCAgent interface {

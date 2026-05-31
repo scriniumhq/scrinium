@@ -7,8 +7,8 @@ type CapabilityMask uint16
 
 const (
 	// CapSlowRead indicates high latency or monetary cost of reads
-	// (S3, Glacier, network shares over WAN). Curator uses this flag
-	// to choose WriteStrategy: Auto becomes HostBuffered.
+	// (S3, Glacier, network shares over WAN). Used to recommend
+	// wrapping the Target with a bundler over a transit store.
 	CapSlowRead CapabilityMask = 1 << iota
 
 	// CapBlockAlign512 indicates an optimal alignment of 512 bytes

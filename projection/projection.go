@@ -32,10 +32,10 @@ import (
 // --- Source ---
 
 // ProjectionSource is the minimal contract for an artifact source
-// supplying a View. Satisfied by store.DataStore and curator.Curator
+// supplying a View. Satisfied by store.DataStore and the multistore
 // without additional code. Extended abilities (StorageFacet
 // population) are detected on the View side via a type assertion
-// when needed — keeps curator out of projection's import graph.
+// when needed — keeps the multistore out of projection's import graph.
 type ProjectionSource interface {
 	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
 	Get(ctx context.Context, id domain.ArtifactID, opts ...store.GetOption) (domain.ReadHandle, error)
@@ -50,9 +50,9 @@ const (
 	// always nil.
 	SourceKindStore SourceKind = "store"
 
-	// SourceKindCurator — a Curator with MultistoreIndex.
+	// SourceKindMultistore — a multistore with MultistoreIndex.
 	// StorageFacet is populated.
-	SourceKindCurator SourceKind = "curator"
+	SourceKindMultistore SourceKind = "multistore"
 )
 
 // --- PathResolver ---
@@ -114,15 +114,15 @@ type ArtifactFacet struct {
 	Ext json.RawMessage
 }
 
-// StorageFacet carries placement data within a Curator stack.
-// Populated only when SourceKind == Curator.
+// StorageFacet carries placement data within a multistore stack.
+// Populated only when SourceKind == SourceKindMultistore.
 type StorageFacet struct {
 	StoreID  domain.StoreID
 	RefCount int
 }
 
 // Node is one entry in the View. FS is always populated; Artifact
-// for files; Storage only on a Curator source.
+// for files; Storage only on a multistore source.
 type Node struct {
 	FS       FilesystemFacet
 	Artifact *ArtifactFacet

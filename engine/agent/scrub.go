@@ -14,7 +14,7 @@ import (
 
 // ScrubConfig configures the Scrub Agent. The same type is also
 // re-exported through curator.ScrubConfig for passing into
-// curator.WithScrubConfig (Curator-managed launch).
+// engine-managed scrub launch.
 type ScrubConfig struct {
 	// Enabled toggles background verification.
 	Enabled bool
@@ -44,7 +44,7 @@ type ScrubStats struct {
 }
 
 // ScrubAgent is the background blob-integrity verifier.
-// Curator-managed: Curator automatically launches a single Scrub
+// Engine-managed: a single Scrub Agent is launched automatically
 // Agent for every registered Target Store.
 type ScrubAgent interface {
 	BackgroundAgent
@@ -58,7 +58,7 @@ type ScrubAgent interface {
 // NewScrubAgent creates a Scrub Agent instance. The constructor is
 // public — the host application can create a ScrubAgent manually
 // for a one-shot run or a custom integration. It is not required
-// for normal operation under Curator: Curator creates instances on
+// for normal operation: instances are created on
 // its own.
 //
 // TODO(M3.3): blob verification with high-water-mark cursor.
@@ -105,7 +105,7 @@ type SnapshotStats struct {
 }
 
 // SnapshotAgent is the background creator of StoreIndex snapshots
-// via VacuumInto + packing into the CAS. Curator-managed: launched
+// via VacuumInto + packing into the CAS. Engine-managed: launched
 // for every Target Store with an available StoreIndex.
 //
 // Snapshot Agent is creation only. StoreIndex recovery from a

@@ -10,7 +10,7 @@ import (
 
 // Store is the union of DataStore and AdminStore. Returned by
 // InitStore and OpenStore. By passing only DataStore (and not Store)
-// to a decorator or Curator, the host application guarantees at the
+// to a decorator, the host application guarantees at the
 // type level that the administrative methods are unreachable from
 // that code.
 type Store interface {
@@ -20,7 +20,7 @@ type Store interface {
 
 // DataStore is the artifact-facing API. This interface is sufficient
 // for client code, decorators (bundler.Wrapper, chunker.Wrapper),
-// and Curator. It does not expose administrative operations.
+// It does not expose administrative operations.
 type DataStore interface {
 	// I/O.
 
@@ -72,7 +72,7 @@ type DataStore interface {
 
 // AdminStore is the administrative API. It is required by the Store
 // owner: the code that called InitStore / OpenStore. It is not
-// passed to decorators or Curator.
+// passed to decorators.
 type AdminStore interface {
 	// State returns the current state of the Store.
 	State() domain.StoreState

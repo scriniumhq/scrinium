@@ -15,7 +15,7 @@ import (
 // SyncAgent is the background replicator of artifacts between a
 // Target and a Backup Store.
 //
-// Status: Reserved. The interface is fixed for Curator API
+// Status: Reserved. The interface is fixed for the agent API
 // stability; the implementation is deferred until a separate
 // decision on the Reconciliation mechanism (event-driven,
 // pull/push, quarantine) is made.

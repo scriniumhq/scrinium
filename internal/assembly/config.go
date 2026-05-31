@@ -18,7 +18,7 @@ import (
 // engine primitives). Its shape may change between minor versions.
 //
 // Exactly one of Store (single) or Stores (multi) must be set. With
-// Stores, Multistore is required. See 3. Reference/10 Composer.md.
+// Stores, Multistore is required. See 3. Reference/10 Declarative Configuration.md.
 type Config struct {
 	Store      *StoreSpec            `yaml:"store,omitempty" json:"store,omitempty"`
 	Stores     map[string]*StoreSpec `yaml:"stores,omitempty" json:"stores,omitempty"`
