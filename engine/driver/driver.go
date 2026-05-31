@@ -77,4 +77,13 @@ type Driver interface {
 	// retrievable mark-time may return the object's last-modified as a
 	// conservative upper bound.
 	TombstoneInfo(ctx context.Context, path string) (marked bool, since time.Time, err error)
+
+	// RemoveTombstone physically removes the tombstone marker for path
+	// (the file the original was renamed to by MarkTombstone). It is
+	// the GC Agent's Sweep step, paired with MarkTombstone: GC works in
+	// terms of the original path and cannot construct the driver-
+	// internal marker path itself, so removal must go through the
+	// driver. A missing marker is a no-op (returns nil) — by Sweep time
+	// the blob may have been Revived, which renames the marker away.
+	RemoveTombstone(ctx context.Context, path string) error
 }
