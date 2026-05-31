@@ -31,8 +31,6 @@ func harness(t *testing.T) (*artifactio.IO, domain.StoreConfig) {
 	return w, cfg
 }
 
-func payload(s string) domain.Artifact { return domain.Artifact{Payload: strings.NewReader(s)} }
-
 // nsOpts is the writer-level DTO the artifactio layer consumes directly
 // (the public store.PutOption surface is resolved before reaching here).
 func nsOpts() domain.PutOptions { return domain.PutOptions{Namespace: "ns"} }
@@ -43,7 +41,7 @@ func TestWritePath_TargetRoundTrip(t *testing.T) {
 	w, cfg := harness(t)
 	ctx := context.Background()
 
-	blob, err := w.Materialize(ctx, cfg, payload("hello target"), nsOpts(), "")
+	blob, err := w.Materialize(ctx, cfg, artifactfx.Payload("hello target"), nsOpts(), "")
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
@@ -54,7 +52,7 @@ func TestWritePath_TargetRoundTrip(t *testing.T) {
 		t.Fatal("Materialize produced empty addressing")
 	}
 
-	m, mb, err := w.AssembleManifest(cfg, payload(""), nsOpts(), blob, nil, "")
+	m, mb, err := w.AssembleManifest(cfg, artifactfx.Payload(""), nsOpts(), blob, nil, "")
 	if err != nil {
 		t.Fatalf("AssembleManifest: %v", err)
 	}
@@ -82,7 +80,7 @@ func TestWritePath_InlineUnderLimit(t *testing.T) {
 	cfg.BlobStorage = domain.BlobStorageInline
 	cfg.InlineBlobLimit = 1024
 
-	blob, err := w.Materialize(context.Background(), cfg, payload("tiny"), domain.PutOptions{}, "")
+	blob, err := w.Materialize(context.Background(), cfg, artifactfx.Payload("tiny"), domain.PutOptions{}, "")
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
@@ -93,7 +91,7 @@ func TestWritePath_InlineUnderLimit(t *testing.T) {
 		t.Errorf("inline bytes: got %q", blob.InlineBytes)
 	}
 	// Inline layout assembles to a LayoutInline manifest.
-	m, _, err := w.AssembleManifest(cfg, payload(""), domain.PutOptions{}, blob, nil, "")
+	m, _, err := w.AssembleManifest(cfg, artifactfx.Payload(""), domain.PutOptions{}, blob, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +108,7 @@ func TestWritePath_InlineOverflowStreamsToTarget(t *testing.T) {
 	cfg.InlineBlobLimit = 8
 
 	big := strings.Repeat("x", 64) // > limit
-	blob, err := w.Materialize(context.Background(), cfg, payload(big), domain.PutOptions{}, "")
+	blob, err := w.Materialize(context.Background(), cfg, artifactfx.Payload(big), domain.PutOptions{}, "")
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}
@@ -127,18 +125,18 @@ func TestWritePath_DedupHitSharesBlob(t *testing.T) {
 	const content = "dedup me"
 
 	// First write commits a new blob and indexes it.
-	b1, err := w.Materialize(ctx, cfg, payload(content), nsOpts(), "")
+	b1, err := w.Materialize(ctx, cfg, artifactfx.Payload(content), nsOpts(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	m1, mb1, _ := w.AssembleManifest(cfg, payload(""), nsOpts(), b1, nil, "")
+	m1, mb1, _ := w.AssembleManifest(cfg, artifactfx.Payload(""), nsOpts(), b1, nil, "")
 	if err := w.PersistManifest(ctx, m1, mb1, b1.Addr); err != nil {
 		t.Fatal(err)
 	}
 
 	// Second write of identical content should dedup-hit: same BlobRef and
 	// the same committed address as the first.
-	b2, err := w.Materialize(ctx, cfg, payload(content), nsOpts(), "")
+	b2, err := w.Materialize(ctx, cfg, artifactfx.Payload(content), nsOpts(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +152,7 @@ func TestWritePath_DedupHitSharesBlob(t *testing.T) {
 
 func TestWritePath_AddrMatchesBlobPath(t *testing.T) {
 	w, cfg := harness(t)
-	b, err := w.Materialize(context.Background(), cfg, payload("addr check"), domain.PutOptions{}, "")
+	b, err := w.Materialize(context.Background(), cfg, artifactfx.Payload("addr check"), domain.PutOptions{}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

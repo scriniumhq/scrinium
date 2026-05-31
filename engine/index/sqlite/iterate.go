@@ -135,7 +135,7 @@ func (i *Index) ListOrphanBlobs(
 	return iterateBlobRefRows(ctx, rows, cb)
 }
 
-// ListUnverified iterates over blobs whose last_verified_at is
+// ListUnverifiedBlobs iterates over blobs whose last_verified_at is
 // strictly older than `before`, plus blobs that have never been
 // scrubbed (last_verified_at IS NULL). Used by the Scrub Agent;
 // the `before` cutoff is computed by the agent as
@@ -149,7 +149,7 @@ func (i *Index) ListOrphanBlobs(
 // Order is by last_verified_at ascending: oldest first, which is
 // what the scrub schedule wants. RFC 3339 second-precision strings
 // (UTC) sort lexicographically the same as chronologically.
-func (i *Index) ListUnverified(ctx context.Context, before time.Time, cb func(blobRef string) error) error {
+func (i *Index) ListUnverifiedBlobs(ctx context.Context, before time.Time, cb func(blobRef string) error) error {
 	cutoff := timefmt.Format(before)
 	const stmt = `
 		SELECT blob_ref FROM blobs
@@ -190,8 +190,65 @@ func iterateManifestRows(
 	return classifyError(rows.Err())
 }
 
+// ManifestsByBlobRef iterates over every manifest that references
+// blobRef, joining through the manifest_blobs edge table. The Scrub
+// Agent uses it to cascade from a verified physical blob to its
+// consuming artifacts. The same nine-column projection as
+// ListByNamespace feeds scanManifestRow; the join to blobs recovers
+// content_hash/original_size, and manifest_blobs supplies the edge.
+func (i *Index) ManifestsByBlobRef(
+	ctx context.Context,
+	blobRef string,
+	cb func(domain.Manifest) error,
+) error {
+	const query = `
+		SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+		       m.blob_ref, m.created_at, m.retention_until,
+		       b.content_hash, b.original_size
+		FROM manifest_blobs mb
+		JOIN manifests m ON m.artifact_id = mb.artifact_id
+		LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
+		WHERE mb.blob_ref = ?
+		ORDER BY m.artifact_id`
+	rows, err := i.db.QueryContext(ctx, query, blobRef)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer rows.Close()
+	return iterateManifestRows(ctx, rows, cb)
+}
+
+// ListUnverifiedManifests iterates over manifests whose
+// last_verified_at is older than `before` (NULL = never verified,
+// always eligible), oldest first. The Scrub Agent's manifest pass uses
+// it to reach Inline artifacts, which have no blobs row and so never
+// surface through ListUnverifiedBlobs. Pack manifests are excluded —
+// engine-internal, verified through their own pack blob.
+func (i *Index) ListUnverifiedManifests(
+	ctx context.Context,
+	before time.Time,
+	cb func(domain.Manifest) error,
+) error {
+	cutoff := timefmt.Format(before)
+	const query = `
+		SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+		       m.blob_ref, m.created_at, m.retention_until,
+		       b.content_hash, b.original_size
+		FROM manifests m
+		LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
+		WHERE m.type != ?
+		  AND (m.last_verified_at IS NULL OR m.last_verified_at < ?)
+		ORDER BY m.last_verified_at`
+	rows, err := i.db.QueryContext(ctx, query, string(domain.ManifestTypePack), cutoff)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer rows.Close()
+	return iterateManifestRows(ctx, rows, cb)
+}
+
 // iterateBlobRefRows is the shared cursor loop for callbacks that
-// take a single blob_ref string. ListOrphanBlobs and ListUnverified
+// take a single blob_ref string. ListOrphanBlobs and ListUnverifiedBlobs
 // share this; M3.4 (RebuildIndexAgent) and any future "list blobs
 // by predicate" method drop in here too — the differentiation is
 // in the SELECT, not in the iteration.

@@ -1,37 +1,17 @@
-// Package assembly turns a declarative YAML/JSON description of a
-// Scrinium deployment into an Assembly. It sits behind the public
-// scrinium facade (scrinium.Open / scrinium.Build / scrinium.LoadYAML),
-// which is the recommended path for most users; the alternative is
-// assembling the engine primitives by hand (see engine/store,
-// projection, …).
+// Package assembly is the engine-internal assembler behind the public
+// scrinium facade. It turns a Config — parsed from a YAML/JSON document
+// or built in code — into a live, fully assembled Scrinium stack: store,
+// index, projection view, and the read/write FSOps facade, ready to use.
 //
-// The config describes user intent — which stores, which policies, how
-// to link them — not the engine's internal structure (wrappers,
-// agents, pipeline stages), which the assembler derives from the
-// policies. Full schema: 3. Reference/10 Declarative Configuration.md.
+// It deliberately has no Serve/Run loop: the assembler's job ends at
+// assembling the stack; how it is exposed (mounted via FUSE, served over
+// WebDAV, browsed over HTTP) is the concern of the adapter program that
+// holds the Assembly. An adapter reads the accessors it needs and drives
+// its own server or mount with its own lifecycle. This keeps the
+// assembler focused on "what is stored and how it is projected" and
+// leaves "how it is served" to the adapter.
 //
-// Secrets (passphrases, credentials, TLS material) are SecretRefs of
-// the form "<scheme>:<value>", resolved at load time by the
-// internal/secretref subpackage (file:/env:/plain: built in, custom
-// schemes registerable).
-//
-// Extensions — drivers, indexes, pipeline stages, agents — register
-// through the Register* functions, typically from an init() in a
-// side-effect import. Built-in backends (file://, sqlite://) are
-// registered by the consumer's own blank import (ADR-63), not by this
-// package.
-//
-// # Status
-//
-// The assembler lands the declarative path: the typed Config tree,
-// SecretRef resolution, the four extension registries, defaulting,
-// validation, Explain, and assembly of the single-store path the engine
-// fully supports today (open/init/open-or-init, optional passphrase
-// encryption in sealed/paranoid mode, recovery-kit handoff via
-// Info.Created + RecoveryKit).
-//
-// Features whose components are not wired yet are parsed, defaulted, and
-// validated, but rejected at build with errs.ErrNotImplemented and a
-// pointer to the landing chunk: multistore (M4/S1), bundling (M4/S4),
-// chunking (M5/C3), explicit pipelines, and user agents (M3).
+// The package is internal: applications go through the scrinium facade
+// (scrinium.Open / scrinium.Build / scrinium.LoadYAML), which wraps an
+// Assembly in a *scrinium.ScriniumClient.
 package assembly

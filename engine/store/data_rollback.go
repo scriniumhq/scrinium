@@ -9,6 +9,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // RollbackSession is a group rollback of every artifact carrying the
@@ -57,7 +58,8 @@ func (d dataFacet) RollbackSession(ctx context.Context, sessionID domain.Session
 	if len(ids) == 0 {
 		// No-op: session does not exist, or was already rolled
 		// back. The "second call after success" idempotency
-		// branch lands here.
+		// branch lands here. Nothing was rolled back, so no
+		// EventRollbackCompleted is emitted.
 		return nil
 	}
 
@@ -109,5 +111,13 @@ func (d dataFacet) RollbackSession(ctx context.Context, sessionID domain.Session
 	d.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "session rolled back",
 		storeIDAttr(d.core), slog.String("session_id", string(sessionID)),
 		slog.Int("artifacts", len(ids)))
+
+	// Group-level outcome event: one EventRollbackCompleted per
+	// successful rollback, distinct from the per-artifact
+	// EventArtifactDeleted stream. Emitted outside any lock.
+	d.publish(event.EventRollbackCompleted, event.RollbackCompletedPayload{
+		SessionID:  string(sessionID),
+		RolledBack: len(ids),
+	})
 	return nil
 }

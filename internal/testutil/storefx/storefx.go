@@ -5,12 +5,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"hash"
-	"strings"
 	"testing"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/hashing"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
@@ -42,6 +43,21 @@ func InitWithRoot(t testing.TB, opts ...store.StoreOption) (store.Store, string)
 	all := append([]store.StoreOption{store.WithStoreIndex(indexfx.Memory(t))}, opts...)
 	s, _ := initStore(t, drv, all...)
 	return s, drv.Root()
+}
+
+// InitShared bootstraps a fresh Plain Store and returns the pieces an
+// agent test needs to drive maintenance against the SAME backend the
+// Store uses: the Store, the concrete localfs driver (for its Root and
+// to hand to an agent), and the shared in-memory index. A maintenance
+// agent must observe the very rows the Store wrote, so it has to share
+// this index handle rather than open its own.
+func InitShared(t testing.TB, opts ...store.StoreOption) (store.Store, *localfs.Driver, index.StoreIndex) {
+	t.Helper()
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+	all := append([]store.StoreOption{store.WithStoreIndex(idx)}, opts...)
+	s, _ := initStore(t, drv, all...)
+	return s, drv, idx
 }
 
 // InitOn wires Init around a caller-provided driver. Caller also
@@ -161,9 +177,4 @@ func InitEncryptedLocked(t testing.TB, pass string, extra ...store.StoreOption) 
 		store.WithPassphrase(StaticPP(pass)),
 	)
 	return s, r
-}
-
-// Payload wraps a string as a domain.Artifact body.
-func Payload(content string) domain.Artifact {
-	return domain.Artifact{Payload: strings.NewReader(content)}
 }

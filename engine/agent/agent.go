@@ -4,13 +4,13 @@ import (
 	"context"
 )
 
-// AgentState is the state of a background agent reported by Status.
-type AgentState uint8
+// State is the state of a background agent reported by Status.
+type State uint8
 
 const (
 	// StateIdle — Run has not been started yet, or it has finished
 	// cleanly.
-	StateIdle AgentState = iota
+	StateIdle State = iota
 
 	// StateRunning — Run is active; the current unit of work is in
 	// flight.
@@ -36,8 +36,8 @@ const (
 //     "scrub", "snapshot", "ingester", "ejector", "sync").
 //   - User agents: <namespace>.<n> ("acme.quota_monitor").
 //
-// The event.Event.Type prefixes "store.", "agent.", "curator.", and
-// "index." are reserved. User agents must emit their own events
+// The event.Event.Type prefixes "store.", "agent.", "index.", and
+// "projection." are reserved. User agents must emit their own events
 // under their own namespace.
 type BackgroundAgent interface {
 	// Run starts the main loop. Blocks until ctx is cancelled or a
@@ -48,5 +48,5 @@ type BackgroundAgent interface {
 
 	// Status returns the current state and the last error. Must be
 	// safe for concurrent calls with Run.
-	Status() (AgentState, error)
+	Status() (State, error)
 }

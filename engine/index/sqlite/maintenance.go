@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/timefmt"
 	"scrinium.dev/errs"
 )
@@ -26,6 +27,24 @@ func (i *Index) MarkVerified(ctx context.Context, blobRef string, timestamp time
 	return i.observe("MarkVerified", func() error {
 		const stmt = `UPDATE blobs SET last_verified_at = ? WHERE blob_ref = ?`
 		_, err := i.db.ExecContext(ctx, stmt, timefmt.Format(timestamp), blobRef)
+		return err
+	})
+}
+
+// MarkManifestVerified records that the Scrub Agent has fully verified
+// the artifact: its manifest re-hashed and (for blob-backed artifacts)
+// its blobs confirmed fresh. The manifest-level stamp (schema v5)
+// complements MarkVerified, which stamps physical blobs — it is the
+// only place an Inline artifact's verification can be recorded, since
+// Inline carries no blobs row.
+//
+// A missing artifact is a no-op rather than an error, mirroring
+// MarkVerified: a parallel Delete may have removed the manifest between
+// the scrub list and the stamp, and failing here would only add noise.
+func (i *Index) MarkManifestVerified(ctx context.Context, artifactID domain.ArtifactID, timestamp time.Time) error {
+	return i.observe("MarkManifestVerified", func() error {
+		const stmt = `UPDATE manifests SET last_verified_at = ? WHERE artifact_id = ?`
+		_, err := i.db.ExecContext(ctx, stmt, timefmt.Format(timestamp), string(artifactID))
 		return err
 	})
 }

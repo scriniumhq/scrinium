@@ -1,18 +1,3 @@
-// browse opens an existing Scrinium store read-only and prints a
-// summary: total artifact count, total bytes referenced, per-namespace
-// breakdown, and capacity from the underlying driver.
-//
-// Demonstrates:
-//
-//   - Assembling a store read-only from a configuration
-//     (projection.readOnly: true — no writes, no scratch dir needed).
-//   - Iterating manifests via Store.Walk.
-//   - Pulling capacity figures via Store.Capacity.
-//   - Listing index extensions via the ExtensionLister capability.
-//
-// Usage:
-//
-//	go run ./browse --store=/tmp/my-store
 package main
 
 import (
@@ -27,7 +12,6 @@ import (
 
 	"scrinium.dev/domain"
 	_ "scrinium.dev/engine/driver/localfs"
-	"scrinium.dev/engine/index"
 	_ "scrinium.dev/engine/index/sqlite"
 )
 
@@ -129,15 +113,12 @@ func run(storeURI string) error {
 		fmt.Printf("Capacity: unavailable (%v)\n", capErr)
 	}
 
-	// Index extensions are an optional capability — present only if the
-	// index backend implements ExtensionLister.
-	if lister, ok := asm.Index().(index.ExtensionLister); ok {
-		exts := lister.ListExtensions()
-		if len(exts) > 0 {
-			fmt.Println("\nIndex extensions:")
-			for _, e := range exts {
-				fmt.Printf("  %s (schema v%d)\n", e.Name, e.SchemaVersion)
-			}
+	// Index extensions are an optional capability — Extensions() returns
+	// nil when the index backend exposes none.
+	if exts := asm.Extensions(); len(exts) > 0 {
+		fmt.Println("\nIndex extensions:")
+		for _, e := range exts {
+			fmt.Printf("  %s (schema v%d)\n", e.Name, e.SchemaVersion)
 		}
 	}
 

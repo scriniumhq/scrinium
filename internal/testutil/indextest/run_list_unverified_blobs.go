@@ -8,9 +8,9 @@ import (
 	"scrinium.dev/internal/testutil/manifestfx"
 )
 
-// --- ListUnverified ---
+// --- ListUnverifiedBlobs ---
 
-func runListUnverified(t *testing.T, f Factory) {
+func runListUnverified_Blobs(t *testing.T, f Factory) {
 	// IndexManifest creates blobs with no verification timestamp;
 	// MarkVerified sets it. The iterator surfaces blobs whose
 	// last verification (or absence thereof) places them before
@@ -46,12 +46,12 @@ func runListUnverified(t *testing.T, f Factory) {
 
 		cutoff := now.Add(-5 * time.Minute)
 		var got []string
-		err := idx.ListUnverified(context.Background(), cutoff, func(ref string) error {
+		err := idx.ListUnverifiedBlobs(context.Background(), cutoff, func(ref string) error {
 			got = append(got, ref)
 			return nil
 		})
 		if err != nil {
-			t.Fatalf("ListUnverified: %v", err)
+			t.Fatalf("ListUnverifiedBlobs: %v", err)
 		}
 		if len(got) != 2 {
 			t.Fatalf("got %d, want 2 (never+stale)", len(got))
@@ -103,12 +103,12 @@ func runListUnverified(t *testing.T, f Factory) {
 
 		cutoff := now
 		var got []string
-		err := idx.ListUnverified(context.Background(), cutoff, func(ref string) error {
+		err := idx.ListUnverifiedBlobs(context.Background(), cutoff, func(ref string) error {
 			got = append(got, ref)
 			return nil
 		})
 		if err != nil {
-			t.Fatalf("ListUnverified: %v", err)
+			t.Fatalf("ListUnverifiedBlobs: %v", err)
 		}
 		want := []string{"blob-o", "blob-m", "blob-n"}
 		if len(got) != len(want) {

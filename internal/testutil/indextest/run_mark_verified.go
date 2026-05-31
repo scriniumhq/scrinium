@@ -15,9 +15,9 @@ func runMarkVerified(t *testing.T, f Factory) {
 		ctx := t.Context()
 		// MarkVerified updates last_verified_at on a blob.
 		// Without poking the storage, we observe it through
-		// ListUnverified: a blob freshly indexed has NULL
+		// ListUnverifiedBlobs: a blob freshly indexed has NULL
 		// last_verified_at and is reported by every
-		// ListUnverified call; after MarkVerified with a recent
+		// ListUnverifiedBlobs call; after MarkVerified with a recent
 		// timestamp, the same call with `before` set to a moment
 		// before the verification stops reporting it.
 		idx := f.New(t)
@@ -35,12 +35,12 @@ func runMarkVerified(t *testing.T, f Factory) {
 		// `before` strictly older than verifiedAt — blob must
 		// NOT appear (it has been verified more recently).
 		var seen []string
-		err := idx.ListUnverified(context.Background(), verifiedAt.Add(-time.Minute), func(ref string) error {
+		err := idx.ListUnverifiedBlobs(context.Background(), verifiedAt.Add(-time.Minute), func(ref string) error {
 			seen = append(seen, ref)
 			return nil
 		})
 		if err != nil {
-			t.Fatalf("ListUnverified: %v", err)
+			t.Fatalf("ListUnverifiedBlobs: %v", err)
 		}
 		for _, r := range seen {
 			if r == "blob-1" {

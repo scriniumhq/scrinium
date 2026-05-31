@@ -102,9 +102,31 @@ type StoreIndex interface {
 	// by the GC Agent.
 	ListOrphanBlobs(ctx context.Context, cb func(blobRef string) error) error
 
-	// ListUnverified iterates over blobs whose last_verified_at is
-	// older than `before`. Used by the Scrub Agent.
-	ListUnverified(ctx context.Context, before time.Time, cb func(blobRef string) error) error
+	// ListUnverifiedBlobs iterates over blobs whose last_verified_at
+	// is older than `before`. Used by the Scrub Agent's blob pass.
+	// Named symmetrically with ListUnverifiedManifests below: blobs
+	// carry the expensive plaintext check, manifests the cheap
+	// metadata re-hash.
+	ListUnverifiedBlobs(ctx context.Context, before time.Time, cb func(blobRef string) error) error
+
+	// ManifestsByBlobRef iterates over every manifest that references
+	// the given blobRef, via the manifest_blobs edge table. Used by
+	// the Scrub Agent's cascade: after a physical blob is re-hashed,
+	// each consuming manifest is cheaply re-verified and stamped. A
+	// blob shared by N artifacts (dedup) yields N manifests; all share
+	// the same ContentHash and pipeline (both are content-derived), so
+	// any one is a valid source for the blob's expected hash.
+	//
+	// The yielded Manifest carries the index-resident fields only
+	// (no Pipeline/LayoutHeader — those live in the manifest file);
+	// callers that need them read the file.
+	ManifestsByBlobRef(ctx context.Context, blobRef string, cb func(domain.Manifest) error) error
+
+	// ListUnverifiedManifests iterates over manifests whose
+	// last_verified_at is older than `before`. Used by the Scrub
+	// Agent's manifest pass, which covers Inline artifacts: they have
+	// no blobs row and so never surface through ListUnverifiedBlobs.
+	ListUnverifiedManifests(ctx context.Context, before time.Time, cb func(domain.Manifest) error) error
 
 	// GetBySession returns every ArtifactID with the given
 	// SessionID. Used by RollbackSession.
@@ -114,6 +136,14 @@ type StoreIndex interface {
 
 	// MarkVerified updates last_verified_at for a blob.
 	MarkVerified(ctx context.Context, blobRef string, timestamp time.Time) error
+
+	// MarkManifestVerified updates last_verified_at for a manifest
+	// (the manifest-level scrub stamp, schema v5). Set by the Scrub
+	// Agent once an artifact is fully verified: for a single-blob
+	// artifact after its blob and manifest pass; for Inline artifacts
+	// after the manifest re-hash; for multi-blob (TOC) artifacts once
+	// every referenced blob is fresh.
+	MarkManifestVerified(ctx context.Context, artifactID domain.ArtifactID, timestamp time.Time) error
 
 	// DeletePacked removes every packed_blobs record of a given
 	// pack volume. Called by the GC Agent before tombstoning the

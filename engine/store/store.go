@@ -54,6 +54,24 @@ type DataStore interface {
 	// CapNativeChecksum and VerifyOnRead.
 	Verify(ctx context.Context, id domain.ArtifactID) error
 
+	// VerifyBlobRef is the same plaintext integrity check as Verify
+	// but keyed by a physical blob_ref. It is the Scrub Agent's
+	// per-blob step (ListUnverifiedBlobs yields blob_refs); it loads
+	// any one consuming manifest to recover the pipeline, re-hashes,
+	// and on mismatch publishes EventScrubFailed and returns
+	// errs.ErrCorruptedBlob. A blob_ref with no consuming manifest
+	// returns errs.ErrArtifactNotFound (skip, not corruption).
+	VerifyBlobRef(ctx context.Context, blobRef string) error
+
+	// VerifyManifest checks a manifest's integrity only (its file
+	// still hashes to its ArtifactID), without touching the blob —
+	// the cheap half of verification. It is the Scrub Agent's cascade
+	// step over a verified blob's consumers, and the whole check for
+	// Inline artifacts. On corruption it publishes EventScrubFailed
+	// and returns the error; a missing manifest returns
+	// errs.ErrArtifactNotFound.
+	VerifyManifest(ctx context.Context, id domain.ArtifactID) error
+
 	// RollbackSession is a group rollback of every artifact carrying
 	// the given SessionID. It is idempotent: when interrupted, a
 	// repeat call resumes the cleanup.
