@@ -1,20 +1,3 @@
-// Command scrinium-webview serves a read-only HTML browser over a
-// Scrinium store — listings, artifact detail pages, previews, search
-// and a stats dashboard. Cross-platform; mutations belong on
-// scrinium-webdav / scrinium-fuse.
-//
-// The store/projection is described by a Scrinium configuration document; the
-// listen address and URL shaping are flags.
-//
-//	scrinium-webview serve --config store.yaml --listen :8081
-//
-// This file is a reference implementation, and webview is the most
-// likely of the three to be customised: the rendering lives in the
-// sibling web/ package (templates, listing, artifact, preview pages),
-// the data adapter in webfs.go/stats_data.go/decoders.go. To restyle
-// or reshape the UI, copy this command and edit web/ — the data side
-// (the BackingFS adapter) stays as is. The store assembly itself
-// (scrinium) is never touched.
 package main
 
 import (
@@ -33,7 +16,6 @@ import (
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
 	_ "scrinium.dev/engine/driver/localfs"
-	"scrinium.dev/engine/index"
 	_ "scrinium.dev/engine/index/sqlite"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
@@ -129,10 +111,8 @@ func runServe(args []string) int {
 			capPtr = &c
 		}
 		exts := make([]web.StatsExtension, 0)
-		if lister, ok := asm.Index().(index.ExtensionLister); ok {
-			for _, e := range lister.ListExtensions() {
-				exts = append(exts, web.StatsExtension{Name: e.Name, SchemaVersion: e.SchemaVersion})
-			}
+		for _, e := range asm.Extensions() {
+			exts = append(exts, web.StatsExtension{Name: e.Name, SchemaVersion: e.SchemaVersion})
 		}
 		// webview is always read-only; reflect that on the page.
 		return buildWebStatsData(asm.Projection.View, capPtr, exts, startedAt, asm.MountSession,
@@ -199,10 +179,8 @@ func statsProvider(asm *scrinium.ScriniumClient, startedAt time.Time, capacityTi
 		}
 
 		exts := make([]projection.ExtensionInfo, 0)
-		if lister, ok := asm.Index().(index.ExtensionLister); ok {
-			for _, e := range lister.ListExtensions() {
-				exts = append(exts, projection.ExtensionInfo{Name: e.Name, SchemaVersion: e.SchemaVersion})
-			}
+		for _, e := range asm.Extensions() {
+			exts = append(exts, projection.ExtensionInfo{Name: e.Name, SchemaVersion: e.SchemaVersion})
 		}
 
 		meta := asm.Info

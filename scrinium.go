@@ -114,10 +114,11 @@ func (c *ScriniumClient) Close() error {
 	return c.asm.Close()
 }
 
-// Index returns the metadata index backing the store. Exposed for
-// diagnostics (e.g. listing index extensions on a stats page); most
-// callers go through the store.
-func (c *ScriniumClient) Index() index.StoreIndex { return c.asm.Index() }
+// Extensions lists the index extensions registered on the backing
+// store index, for diagnostics (e.g. listing them on a stats page).
+// Empty when the index backend exposes none. The raw StoreIndex is
+// intentionally not surfaced — it carries mutating methods.
+func (c *ScriniumClient) Extensions() []index.ExtensionInfo { return c.asm.Extensions() }
 
 // RecoveryKit returns the recovery-kit bytes produced when this client
 // freshly initialised an encrypted store, and true. For a store that
