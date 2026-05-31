@@ -10,9 +10,9 @@
 // With -c the configuration comes from a file (how a deployed service
 // is usually wired: operators edit the file). Without it, the same
 // configuration is built in code — the path for programs that compute
-// their setup from flags, env, or a database. Either way a *Scrinium
-// is a store: Put/Get are called on it directly, and one Close releases
-// everything it assembled.
+// their setup from flags, env, or a database. Either way a
+// *ScriniumClient is a store: Put/Get are called on it directly, and
+// one Close releases everything it assembled.
 //
 // To see what scrinium does under the hood, read ../hello-manual, which
 // assembles the same store from primitives with no front door at all.
@@ -28,8 +28,11 @@ import (
 	"strings"
 
 	"scrinium.dev"
-	"scrinium.dev/domain"
-	"scrinium.dev/engine/store"
+
+	// Built-in backends register by blank import (ADR-63): the file://
+	// driver and the sqlite index this program defaults to.
+	_ "scrinium.dev/engine/driver/localfs"
+	_ "scrinium.dev/engine/index/sqlite"
 )
 
 func main() {
@@ -40,9 +43,9 @@ func main() {
 	ctx := context.Background()
 
 	// Assemble the store: from a YAML file when -c is given, otherwise
-	// from a Config built in code. Both yield the same *Scrinium.
+	// from a Config built in code. Both yield the same *ScriniumClient.
 	var (
-		s   *scrinium.Scrinium
+		s   *scrinium.ScriniumClient
 		err error
 	)
 	if *configPath != "" {
@@ -63,8 +66,8 @@ func main() {
 
 	// Store an artifact.
 	id, err := s.Put(ctx,
-		domain.Artifact{Payload: strings.NewReader("hello, scrinium!\n")},
-		store.WithNamespace("demo"))
+		scrinium.Artifact{Payload: strings.NewReader("hello, scrinium!\n")},
+		scrinium.WithNamespace("demo"))
 	if err != nil {
 		log.Fatalf("put: %v", err)
 	}

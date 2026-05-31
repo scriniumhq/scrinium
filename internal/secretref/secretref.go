@@ -23,10 +23,12 @@ var (
 	}
 )
 
-// Register installs a Resolver for scheme. It panics if scheme is
-// empty or already registered, so a typo or a double import surfaces
-// at startup rather than silently shadowing a built-in. Call from an
-// init().
+// Register installs a Resolver for scheme. An empty scheme or a nil
+// resolver panics — both are programming errors. Re-registering a
+// scheme that is already present (including a built-in) is an
+// idempotent no-op: the first registration wins and later ones are
+// ignored (ADR-63), so a preset bundle and a host can register the
+// same custom scheme without a startup panic. Call from an init().
 func Register(scheme string, r Resolver) {
 	if scheme == "" {
 		panic("secretref: empty scheme")
@@ -37,7 +39,7 @@ func Register(scheme string, r Resolver) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, dup := resolvers[scheme]; dup {
-		panic("secretref: scheme already registered: " + scheme)
+		return // already registered — keep the first, ignore the rest.
 	}
 	resolvers[scheme] = r
 }
@@ -62,7 +64,7 @@ func (r Ref) String() string {
 }
 
 // MarshalYAML masks the secret when a config is serialised back out
-// (composer.Explain). A round-tripped config therefore cannot leak a
+// (Explain). A round-tripped config therefore cannot leak a
 // passphrase or credential; Explain is for inspection, not re-loading.
 func (r Ref) MarshalYAML() (any, error) { return r.String(), nil }
 

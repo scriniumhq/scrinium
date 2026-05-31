@@ -64,7 +64,7 @@ func validate(c *Config) error {
 	validateProjection(c.Projection, add)
 
 	if len(errs) > 0 {
-		return fmt.Errorf("composer config: %s", strings.Join(errs, "; "))
+		return fmt.Errorf("scrinium config: %s", strings.Join(errs, "; "))
 	}
 	return nil
 }

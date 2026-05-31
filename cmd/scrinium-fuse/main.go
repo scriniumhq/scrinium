@@ -4,7 +4,7 @@
 // filesystem via FUSE (Linux/macOS only; Windows users run
 // scrinium-webdav).
 //
-// The store/projection is described by a composer config document; the
+// The store/projection is described by a Scrinium configuration document; the
 // mount point and FUSE options are flags. The config says WHAT is
 // stored and how it is projected; the daemon decides WHERE and HOW to
 // mount it.
@@ -13,7 +13,7 @@
 //	scrinium-fuse unmount --mount-point /mnt/scrinium
 //
 // This file is a reference implementation: small and self-contained,
-// meant to be copied and adapted. The reusable parts live in composer
+// meant to be copied and adapted. The reusable parts live in scrinium
 // (assembly) and engine/projection; the FUSE node tree (node.go) and
 // this glue are yours to own.
 package main
@@ -30,6 +30,10 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"scrinium.dev"
+
+	// Built-in backends register by blank import (ADR-63).
+	_ "scrinium.dev/engine/driver/localfs"
+	_ "scrinium.dev/engine/index/sqlite"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
@@ -59,7 +63,7 @@ func main() {
 func runMount(args []string) int {
 	fset := flag.NewFlagSet("mount", flag.ContinueOnError)
 	fset.SetOutput(os.Stderr)
-	configPath := fset.String("config", "", "Path to a composer YAML config file (required).")
+	configPath := fset.String("config", "", "Path to a Scrinium YAML configuration file (required).")
 	mountPoint := fset.String("mount-point", "", "Directory to mount onto (required).")
 	allowOther := fset.Bool("allow-other", false, "Allow other users to access the mount (needs user_allow_other).")
 	if err := fset.Parse(args); err != nil {
@@ -145,7 +149,7 @@ func runMount(args []string) int {
 // statsProvider renders the assembly's stats snapshot for the
 // _scrinium/stats pseudo-file. capacityTimeout caps Store.Capacity so a
 // slow driver never hangs a stats read; on error capacity is omitted.
-func statsProvider(asm *scrinium.Scrinium, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
+func statsProvider(asm *scrinium.ScriniumClient, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
 	return func() []byte {
 		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
 		defer cancel()
@@ -182,10 +186,8 @@ Usage:
   scrinium-fuse mount   --config <file> --mount-point <path> [--allow-other]
   scrinium-fuse unmount --mount-point <path>
 
-The config describes the store and projection (a composer document).
+The config describes the store and projection.
 Mount options are flags.
-
-Specification: docs/4 §14 FUSE Mount.
 `
 
 func printUsage(w *os.File) {

@@ -62,13 +62,20 @@ func TestRegisterAndResolve(t *testing.T) {
 	}
 }
 
-func TestRegisterDuplicatePanics(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic on duplicate scheme registration")
-		}
-	}()
-	Register("file", func(context.Context, string) ([]byte, error) { return nil, nil })
+func TestRegisterDuplicateNoOp(t *testing.T) {
+	const scheme = "secretref-test-dup"
+	Register(scheme, func(context.Context, string) ([]byte, error) { return []byte("first"), nil })
+	// A second registration of the same scheme is an idempotent no-op
+	// (ADR-63): it must not panic and must not replace the first
+	// resolver — the first registration wins.
+	Register(scheme, func(context.Context, string) ([]byte, error) { return []byte("second"), nil })
+	got, err := Ref(scheme + ":x").Resolve(context.Background())
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if string(got) != "first" {
+		t.Fatalf("duplicate Register replaced the first resolver: got %q, want %q", got, "first")
+	}
 }
 
 func TestRegisterEmptyOrNilPanics(t *testing.T) {

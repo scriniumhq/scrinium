@@ -90,10 +90,10 @@ func RegisterAgent(kind string, f AgentFactory) {
 
 func mustRegister(key string, nilFactory bool, what string, set func()) {
 	if key == "" {
-		panic("composer: empty " + what + " key")
+		panic("scrinium: empty " + what + " key")
 	}
 	if nilFactory {
-		panic("composer: nil " + what + " factory for " + key)
+		panic("scrinium: nil " + what + " factory for " + key)
 	}
 	reg.mu.Lock()
 	defer reg.mu.Unlock()
