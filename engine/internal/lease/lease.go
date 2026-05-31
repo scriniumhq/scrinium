@@ -13,16 +13,67 @@ import (
 	"time"
 
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/internal/timefmt"
 	"scrinium.dev/errs"
 )
 
-// Record is the on-disk lease body — one line of JSON (§11.2).
+// Record is the in-memory lease body. On disk it is one line of JSON
+// (§11.2); the AcquiredAt/ExpiresAt timestamps are encoded through
+// timefmt — the canonical RFC3339-second-UTC format the durable layer
+// (index/sqlite, manifestcodec) shares — so a lease written by one
+// subsystem parses byte-identically in another. Custom JSON methods
+// keep callers working with time.Time while the wire form stays
+// canonical.
 type Record struct {
-	HostID     string    `json:"host_id"`
-	AcquiredAt time.Time `json:"acquired_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	AgentType  string    `json:"agent_type"`
-	Nonce      string    `json:"nonce"`
+	HostID     string
+	AcquiredAt time.Time
+	ExpiresAt  time.Time
+	AgentType  string
+	Nonce      string
+}
+
+// recordWire is the on-disk JSON shape: timestamps as canonical
+// timefmt strings rather than Go's default RFC3339Nano-with-offset.
+type recordWire struct {
+	HostID     string `json:"host_id"`
+	AcquiredAt string `json:"acquired_at"`
+	ExpiresAt  string `json:"expires_at"`
+	AgentType  string `json:"agent_type"`
+	Nonce      string `json:"nonce"`
+}
+
+// MarshalJSON encodes the record with timefmt-formatted timestamps.
+func (r Record) MarshalJSON() ([]byte, error) {
+	return json.Marshal(recordWire{
+		HostID:     r.HostID,
+		AcquiredAt: timefmt.Format(r.AcquiredAt),
+		ExpiresAt:  timefmt.Format(r.ExpiresAt),
+		AgentType:  r.AgentType,
+		Nonce:      r.Nonce,
+	})
+}
+
+// UnmarshalJSON parses a record written by MarshalJSON, reading the
+// timestamps through timefmt.Parse.
+func (r *Record) UnmarshalJSON(b []byte) error {
+	var w recordWire
+	if err := json.Unmarshal(b, &w); err != nil {
+		return err
+	}
+	acquired, err := timefmt.Parse(w.AcquiredAt)
+	if err != nil {
+		return fmt.Errorf("lease: parse acquired_at: %w", err)
+	}
+	expires, err := timefmt.Parse(w.ExpiresAt)
+	if err != nil {
+		return fmt.Errorf("lease: parse expires_at: %w", err)
+	}
+	r.HostID = w.HostID
+	r.AcquiredAt = acquired
+	r.ExpiresAt = expires
+	r.AgentType = w.AgentType
+	r.Nonce = w.Nonce
+	return nil
 }
 
 // expired reports whether the lease is past its TTL relative to now.

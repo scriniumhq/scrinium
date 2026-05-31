@@ -213,7 +213,10 @@ func TestRenew_ExtendsExpiry(t *testing.T) {
 		t.Fatalf("Acquire: %v", err)
 	}
 	rec0, _ := readRecord(t, drv)
-	time.Sleep(10 * time.Millisecond)
+	// Lease timestamps are persisted via timefmt at second precision,
+	// so the gap before Renew must cross a whole second for ExpiresAt
+	// to advance observably.
+	time.Sleep(1100 * time.Millisecond)
 	if err := l.Renew(context.Background()); err != nil {
 		t.Fatalf("Renew: %v", err)
 	}
@@ -308,7 +311,9 @@ func TestRelease_AbsentIsNoOp(t *testing.T) {
 
 func TestHeartbeat_RenewsThenStopsOnCancel(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, _, err := lease.Acquire(context.Background(), drv, cfgA(60*time.Millisecond))
+	// TTL 2s → renew interval 1s, which crosses a whole second so the
+	// timefmt-persisted ExpiresAt advances observably between ticks.
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(2*time.Second))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
@@ -318,8 +323,8 @@ func TestHeartbeat_RenewsThenStopsOnCancel(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- l.Heartbeat(ctx) }()
 
-	// Let at least one renew tick (interval = TTL/2 = 30ms) fire.
-	time.Sleep(80 * time.Millisecond)
+	// Let at least one renew tick (interval = TTL/2 = 1s) fire.
+	time.Sleep(2300 * time.Millisecond)
 	rec1, ok := readRecord(t, drv)
 	if !ok {
 		t.Fatal("lease gone during heartbeat")
@@ -341,7 +346,7 @@ func TestHeartbeat_RenewsThenStopsOnCancel(t *testing.T) {
 
 func TestHeartbeat_AbortsOnTakeover(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, _, err := lease.Acquire(context.Background(), drv, cfgA(60*time.Millisecond))
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(2*time.Second))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
