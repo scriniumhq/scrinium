@@ -3,31 +3,10 @@ package multistore
 import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/wrapper/host"
 	"scrinium.dev/event"
 )
 
 // --- Policy enums ---
-
-// WriteStrategy is the strategy for writing into a Target Store
-// through Curator.
-type WriteStrategy string
-
-const (
-	// WriteStrategyAuto — the engine decides based on the target
-	// Store's capabilities. CapSlowRead becomes HostBuffered;
-	// otherwise DirectStream.
-	WriteStrategyAuto WriteStrategy = "Auto"
-
-	// WriteStrategyHostBuffered — write into HostStorage with an
-	// asynchronous Drain. The artifact is visible through Get
-	// immediately, before the Drain completes.
-	WriteStrategyHostBuffered WriteStrategy = "HostBuffered"
-
-	// WriteStrategyDirectStream — write directly through the target
-	// Store's Driver.
-	WriteStrategyDirectStream WriteStrategy = "DirectStream"
-)
 
 // ReadCost labels the cost of a read. Used to keep cold Stores out
 // of the regular Get flow.
@@ -48,7 +27,7 @@ const (
 
 	// ReadPolicyNever — Compliance & Isolation. Fully excluded from
 	// normal routing; reachable only through an explicit
-	// Curator.Store(backupID).Get.
+	// multistore.Store(backupID).Get.
 	ReadPolicyNever ReadPolicy = "Never"
 
 	// ReadPolicyAuto — Storage Tiering. Excluded from regular Get,
@@ -78,11 +57,10 @@ const (
 // --- Configurations ---
 
 // StoreRegistrationConfig are the parameters of registering a
-// Target Store with Curator via WithStore.
+// Target Store with the multistore via WithStore.
 type StoreRegistrationConfig struct {
 	Priority             int
 	ReadCost             ReadCost
-	WriteStrategy        WriteStrategy
 	AllowCrossStoreDedup bool
 }
 
@@ -106,7 +84,7 @@ type StoreTarget struct {
 }
 
 // RoutingMetadata is the input to RoutingFunc on the write path.
-// Curator builds it from PutOptions.
+// The multistore builds it from PutOptions.
 type RoutingMetadata struct {
 	Namespace   string
 	Size        int64
@@ -115,35 +93,30 @@ type RoutingMetadata struct {
 	Attributes  map[string]string
 }
 
-// RoutingFunc selects Target Stores for a write through Curator.
-// It can be compiled from declarative configuration rules or
-// supplied directly by the developer.
+// RoutingFunc selects Target Stores for a write through the
+// multistore. It can be compiled from declarative configuration
+// rules or supplied directly by the developer.
 type RoutingFunc func(meta RoutingMetadata) []StoreTarget
 
 // MetadataRouter reconstructs RoutingHints from the manifest
-// (Namespace, Ext, Usr). Used at deferred-Drain time (DL-01)
-// when the original hints from PutOptions are no longer
-// available.
+// (Namespace, Ext, Usr). Used when re-routing already-written
+// artifacts as a separate operation, when the original hints from
+// PutOptions are no longer available.
 type MetadataRouter func(m domain.Manifest) domain.RoutingHints
 
 // --- Decorators and WrapperFactory ---
 
 // WrapperFactory creates a decorator on top of a Store while
-// receiving its dependencies from Curator. It is applied during
-// Target/Backup registration through WithStore/WithBackup. This
-// resolves the dependency cycle: decorators get access to
-// HostStorage and Publisher through a standard contract, not via
-// public objects.
+// receiving its dependencies from the multistore. It is applied
+// during Target/Backup registration through WithStore/WithBackup,
+// giving decorators access to their dependencies through a standard
+// contract rather than via public objects.
 type WrapperFactory interface {
 	Wrap(store store.DataStore, deps WrapperDeps) (store.DataStore, error)
 }
 
-// WrapperDeps are the dependencies provided by Curator to a
-// decorator at registration time. HostStorage may be nil if no
-// transit buffer has been registered with Curator; the decorator
-// is responsible for checking this and returning an error if it
-// requires HostStorage.
+// WrapperDeps are the dependencies provided by the multistore to a
+// decorator at registration time.
 type WrapperDeps struct {
-	HostStorage host.TransitStore
-	Publisher   event.Publisher
+	Publisher event.Publisher
 }

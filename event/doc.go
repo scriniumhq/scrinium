@@ -23,7 +23,7 @@
 //	              artifact_deleted, store_degraded, ...)
 //	"agent.*"   — agent/events.go (background-agent lifecycle:
 //	              started, progress, cycle, failed, ...)
-//	"curator.*" — curator/curator.go (orchestration: drain_completed,
+//	"curator.*" — curator/multistore.go (orchestration: drain_completed,
 //	              host_storage_pressure, replication_lag, ...)
 //	"index.*"   — index/events.go (StoreIndex metrics: write_latency,
 //	              contention_error, size)

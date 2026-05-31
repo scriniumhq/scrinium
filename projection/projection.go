@@ -117,9 +117,8 @@ type ArtifactFacet struct {
 // StorageFacet carries placement data within a Curator stack.
 // Populated only when SourceKind == Curator.
 type StorageFacet struct {
-	StoreID   domain.StoreID
-	IsTransit bool
-	RefCount  int
+	StoreID  domain.StoreID
+	RefCount int
 }
 
 // Node is one entry in the View. FS is always populated; Artifact
