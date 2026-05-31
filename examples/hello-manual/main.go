@@ -25,6 +25,10 @@ import (
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
+
+	// Built-in backends register by blank import (ADR-63).
+	_ "scrinium.dev/engine/driver/localfs"
+	_ "scrinium.dev/engine/index/sqlite"
 )
 
 func main() {

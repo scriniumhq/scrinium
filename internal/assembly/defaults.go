@@ -27,7 +27,7 @@ func applyDefaults(c *Config) {
 // applyProjectionDefaults fills the shared projection defaults when the
 // section is present. Absence leaves the whole thing to engine
 // defaults at build time. Kept deterministic (no os.Getuid here) so
-// the result is reproducible and testable; the runtime fills
+// the result is reproducible and testable; the assembler fills
 // uid/gid/scratch-path defaults that depend on the environment.
 func applyProjectionDefaults(p *Projection) {
 	if p == nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"sync"
 )
 
@@ -32,14 +33,20 @@ var (
 //	// index/sqlite/register.go
 //	func init() { index.RegisterDialer("sqlite", openSQLiteURI) }
 //
-// Re-registering the same scheme panics — collisions are
-// programming errors that should fail at startup, not produce
-// silent overrides.
+// Re-registering a scheme that is already present is an
+// idempotent no-op: the first registration wins and later
+// ones are ignored (ADR-63), so a preset bundle and a host
+// can both import index/sqlite without a startup panic on the
+// duplicate side effect. A nil dialer is a programming error
+// and still panics.
 func RegisterDialer(scheme string, d Dialer) {
+	if d == nil {
+		panic(fmt.Sprintf("index: nil dialer for scheme %q", scheme))
+	}
 	dialersMu.Lock()
 	defer dialersMu.Unlock()
 	if _, exists := dialers[scheme]; exists {
-		panic(fmt.Sprintf("index: dialer for scheme %q already registered", scheme))
+		return // already registered — keep the first, ignore the rest.
 	}
 	dialers[scheme] = d
 }
@@ -53,7 +60,7 @@ func RegisteredSchemes() []string {
 	for s := range dialers {
 		out = append(out, s)
 	}
-	sortStrings(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -87,15 +94,4 @@ func DialIndex(ctx context.Context, uri string, opts ...IndexOption) (StoreIndex
 			u.Scheme, u.Scheme, RegisteredSchemes())
 	}
 	return d(ctx, u, opts...)
-}
-
-// sortStrings is an in-place ascending sort. Insertion sort
-// because the slice has <10 elements typically; avoids
-// pulling "sort" into this file.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j-1] > s[j]; j-- {
-			s[j-1], s[j] = s[j], s[j-1]
-		}
-	}
 }

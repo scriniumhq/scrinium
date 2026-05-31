@@ -40,8 +40,8 @@ func (m Mode) internal() buildMode {
 // defaulted store. The mode defaults to ModeOpenOrInit; pass
 // WithMode to change it.
 //
-//	asm, err := composer.Build(ctx, composer.Config{
-//	    Store: &composer.StoreSpec{Driver: "file:///data/app"},
+//	asm, err := Build(ctx, Config{
+//	    Store: &StoreSpec{Driver: "file:///data/app"},
 //	})
 //
 // The Config is treated as owned by Build for the duration of the call

@@ -3,7 +3,7 @@
 // and a stats dashboard. Cross-platform; mutations belong on
 // scrinium-webdav / scrinium-fuse.
 //
-// The store/projection is described by a composer config document; the
+// The store/projection is described by a Scrinium configuration document; the
 // listen address and URL shaping are flags.
 //
 //	scrinium-webview serve --config store.yaml --listen :8081
@@ -14,7 +14,7 @@
 // the data adapter in webfs.go/stats_data.go/decoders.go. To restyle
 // or reshape the UI, copy this command and edit web/ — the data side
 // (the BackingFS adapter) stays as is. The store assembly itself
-// (composer) is never touched.
+// (scrinium) is never touched.
 package main
 
 import (
@@ -29,9 +29,12 @@ import (
 	"time"
 
 	"scrinium.dev"
+
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
+	_ "scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
+	_ "scrinium.dev/engine/index/sqlite"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
 )
@@ -57,7 +60,7 @@ func main() {
 func runServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	configPath := fs.String("config", "", "Path to a composer YAML config file (required).")
+	configPath := fs.String("config", "", "Path to a Scrinium YAML configuration file (required).")
 	listen := fs.String("listen", ":8081", "HTTP listen address.")
 	browsePrefix := fs.String("browse-prefix", "/", "URL prefix to serve the browser under (\"/\" for root).")
 	defaultTree := fs.String("default-tree", "by-path", "Tree the bare browse prefix redirects to.")
@@ -185,7 +188,7 @@ func runServe(args []string) int {
 // statsProvider renders the plain-text stats body for vfs-level
 // _scrinium/stats reads. capacityTimeout caps Store.Capacity so a slow
 // driver never hangs a read; on error capacity is omitted.
-func statsProvider(asm *scrinium.Scrinium, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
+func statsProvider(asm *scrinium.ScriniumClient, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
 	return func() []byte {
 		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
 		defer cancel()
@@ -221,7 +224,7 @@ const usageText = `scrinium-webview — read-only HTML browser for a Scrinium st
 Usage:
   scrinium-webview serve --config <file> [--listen :8081] [--browse-prefix /] [--default-tree by-path]
 
-The config describes the store and projection (a composer document).
+The config describes the store and projection.
 Serving options are flags.
 
 Specification: docs/4 §16 WebView.

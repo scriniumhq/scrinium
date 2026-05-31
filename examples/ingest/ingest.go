@@ -4,7 +4,7 @@
 //
 // Demonstrates:
 //
-//   - composer.LoadOrInitYAML to assemble (creating on first run) a
+//   - scrinium.LoadOrInitYAML to assemble (creating on first run) a
 //     store from an inline config.
 //   - filepath.WalkDir for batch traversal.
 //   - Attaching fsmeta metadata so artifacts have a virtual path.
@@ -30,6 +30,10 @@ import (
 
 	"github.com/google/uuid"
 	"scrinium.dev"
+
+	// Built-in backends register by blank import (ADR-63).
+	_ "scrinium.dev/engine/driver/localfs"
+	_ "scrinium.dev/engine/index/sqlite"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"

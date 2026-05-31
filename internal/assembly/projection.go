@@ -113,7 +113,7 @@ func resolveScratchDir(configured, storeURI string) (string, error) {
 	if err != nil {
 		// Non-local store: no sensible default. Leave empty rather
 		// than failing — an explicit scratchDir is required only when
-		// the surface actually performs writes.
+		// the adapter actually performs writes.
 		return "", nil
 	}
 	return filepath.Join(p, ".scratch"), nil

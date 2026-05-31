@@ -2,7 +2,7 @@
 // cross-platform access (Finder, Windows Explorer, rclone) without a
 // kernel extension or root.
 //
-// The store/projection is described by a composer config document; how
+// The store/projection is described by a Scrinium configuration document; how
 // it is served (listen address, OS-junk filtering) is given by flags.
 // This split is deliberate: the config says WHAT is stored and how it
 // is projected, the daemon decides HOW to expose it.
@@ -11,7 +11,7 @@
 //
 // This file is a reference implementation. It is intentionally small
 // and self-contained: copy the package and adapt it to wrap a Scrinium
-// store in your own service. The reusable parts live in composer
+// store in your own service. The reusable parts live in scrinium
 // (assembly) and engine/projection; everything here is glue you are
 // meant to own.
 package main
@@ -28,6 +28,10 @@ import (
 
 	"golang.org/x/net/webdav"
 	"scrinium.dev"
+
+	// Built-in backends register by blank import (ADR-63).
+	_ "scrinium.dev/engine/driver/localfs"
+	_ "scrinium.dev/engine/index/sqlite"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
@@ -55,7 +59,7 @@ func main() {
 func runServe(args []string) int {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	configPath := fs.String("config", "", "Path to a composer YAML config file (required).")
+	configPath := fs.String("config", "", "Path to a Scrinium YAML configuration file (required).")
 	listen := fs.String("listen", ":8080", "HTTP listen address.")
 	allowOSJunk := fs.Bool("allow-os-junk", false, "Permit .DS_Store / Thumbs.db writes instead of filtering them.")
 	if err := fs.Parse(args); err != nil {
@@ -136,7 +140,7 @@ func runServe(args []string) int {
 // statsProvider renders the assembly's stats snapshot for the
 // _scrinium/stats pseudo-file. capacityTimeout caps Store.Capacity so a
 // slow driver never hangs a stats read; on error capacity is omitted.
-func statsProvider(asm *scrinium.Scrinium, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
+func statsProvider(asm *scrinium.ScriniumClient, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
 	return func() []byte {
 		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
 		defer cancel()
@@ -172,7 +176,7 @@ const usageText = `scrinium-webdav — expose a Scrinium store over WebDAV.
 Usage:
   scrinium-webdav serve --config <file> [--listen :8080] [--allow-os-junk]
 
-The config describes the store and projection (a composer document).
+The config describes the store and projection.
 Serving options are flags.
 
 Specification: docs/4 §15 WebDAV Mount.

@@ -4,7 +4,7 @@
 //
 // Demonstrates:
 //
-//   - Assembling a store read-only from a composer config
+//   - Assembling a store read-only from a configuration
 //     (projection.readOnly: true — no writes, no scratch dir needed).
 //   - Iterating manifests via Store.Walk.
 //   - Pulling capacity figures via Store.Capacity.
@@ -24,8 +24,11 @@ import (
 	"sort"
 
 	"scrinium.dev"
+
 	"scrinium.dev/domain"
+	_ "scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
+	_ "scrinium.dev/engine/index/sqlite"
 )
 
 func main() {

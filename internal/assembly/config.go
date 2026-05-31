@@ -11,11 +11,11 @@ import (
 	"scrinium.dev/internal/secretref"
 )
 
-// Config is the typed in-memory form a composer YAML/JSON document
-// parses into, before defaults and validation. It is exported for
-// parsers, tests, and Explain, but is NOT the recommended programmatic
-// assembly path (ADR-52: declarative via YAML/JSON, programmatic via
-// engine primitives). Its shape may change between minor versions.
+// Config is the typed in-memory form a YAML/JSON configuration document
+// parses into, before defaults and validation. The scrinium facade
+// re-exports it (scrinium.Config) so callers can build one in code; it
+// is also used by parsers, tests, and Explain. Its shape may change
+// between minor versions.
 //
 // Exactly one of Store (single) or Stores (multi) must be set. With
 // Stores, Multistore is required. See 3. Reference/10 Declarative Configuration.md.
@@ -26,13 +26,32 @@ type Config struct {
 	Policies   map[string]*Policy    `yaml:"policies,omitempty" json:"policies,omitempty"`
 	Projection *Projection           `yaml:"projection,omitempty" json:"projection,omitempty"`
 	Agents     []ComponentSpec       `yaml:"agents,omitempty" json:"agents,omitempty"`
+	// Defaults supplies the fallback index (and, in future, driver)
+	// scheme for stores that omit their own — the middle rung of the
+	// default ladder (ADR-63): an explicit store.index wins, then
+	// Config.Defaults.Index, then the built-in fallback (a sqlite index
+	// next to a local store).
+	Defaults *Defaults `yaml:"defaults,omitempty" json:"defaults,omitempty"`
 }
 
-// Projection holds the read/write-surface defaults the runtime applies
-// when assembling its FSOps/View. Hybrid model (ADR-52 follow-up):
-// these are the shared defaults; an individual surface may override
-// any field in its own config block. Omitting the whole section
-// leaves engine defaults in place (editing off, root view by path).
+// Defaults holds the fallback schemes applied to stores that do not
+// name their own. Empty fields fall through to the built-in defaults.
+type Defaults struct {
+	// Index is the index URI used when a StoreSpec leaves index empty
+	// (e.g. "sqlite:///var/lib/app/index.db"). Empty → the built-in
+	// "sqlite next to the store" default.
+	Index string `yaml:"index,omitempty" json:"index,omitempty"`
+	// Driver is reserved for a future zero-store default. Every store
+	// currently names its own driver, so this is accepted but unused;
+	// it is kept so configs can declare intent ahead of the feature.
+	Driver string `yaml:"driver,omitempty" json:"driver,omitempty"`
+}
+
+// Projection holds the read/write defaults the assembler applies when
+// building its FSOps/View. These are the shared defaults; an adapter
+// program may override any field in its own config block. Omitting the
+// whole section leaves engine defaults in place (editing off, root view
+// by path).
 type Projection struct {
 	// RootView selects the default tree presented at the root
 	// (byPath, byDate, bySession, byNamespace, byArtifact, byOrphaned).

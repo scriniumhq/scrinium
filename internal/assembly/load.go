@@ -54,7 +54,7 @@ func Explain(ctx context.Context, data []byte) ([]byte, error) {
 	}
 	out, err := yaml.Marshal(c)
 	if err != nil {
-		return nil, fmt.Errorf("composer.Explain: marshal: %w", err)
+		return nil, fmt.Errorf("scrinium: explain: marshal: %w", err)
 	}
 	return out, nil
 }
@@ -106,7 +106,7 @@ func modeToPublic(m buildMode) Mode {
 func parse(data []byte, um unmarshalFunc) (*Config, error) {
 	var c Config
 	if err := um(data, &c); err != nil {
-		return nil, fmt.Errorf("composer: parse config: %w", err)
+		return nil, fmt.Errorf("scrinium: parse config: %w", err)
 	}
 	return &c, nil
 }
@@ -115,7 +115,7 @@ func parse(data []byte, um unmarshalFunc) (*Config, error) {
 // — the shared pre-build pipeline used by both Load* and Explain.
 func prepare(c *Config) error {
 	if err := resolvePolicyRefs(c); err != nil {
-		return fmt.Errorf("composer: %w", err)
+		return fmt.Errorf("scrinium: %w", err)
 	}
 	applyDefaults(c)
 	if err := validate(c); err != nil {

@@ -19,12 +19,6 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsindex"
-
-	// Built-in URI dialers, registered by import side effect — the
-	// same set the assembler relies on. Hosts that want to constrain
-	// the available schemes import composer with these trimmed.
-	_ "scrinium.dev/engine/driver/localfs"
-	_ "scrinium.dev/engine/index/sqlite"
 )
 
 type buildMode int
@@ -35,20 +29,20 @@ const (
 	modeOpenOrInit
 )
 
-// build turns a validated, defaulted Config into an assembled stack.
-// For R10 it assembles the single-store path (the one the engine fully
-// supports today); everything that depends on not-yet-wired components
-// returns errs.ErrNotImplemented with a pointer to the chunk that
+// build turns a validated, defaulted Config into an assembled stack. It
+// assembles the single-store path (the one the engine fully supports
+// today); everything that depends on not-yet-wired components returns
+// errs.ErrNotImplemented with a pointer to the milestone chunk that
 // lands it.
 func build(ctx context.Context, c *Config, mode buildMode) (Assembly, error) {
 	if len(c.Stores) > 0 {
-		return nil, fmt.Errorf("composer: multistore assembly is not wired yet (M4/S1): %w", errs.ErrNotImplemented)
+		return nil, fmt.Errorf("scrinium: multistore assembly is not wired yet (M4/S1): %w", errs.ErrNotImplemented)
 	}
 	if len(c.Agents) > 0 {
-		return nil, fmt.Errorf("composer: user agents are wired in M3: %w", errs.ErrNotImplemented)
+		return nil, fmt.Errorf("scrinium: user agents are wired in M3: %w", errs.ErrNotImplemented)
 	}
 	if c.Store == nil {
-		return nil, fmt.Errorf("composer: no store to build")
+		return nil, fmt.Errorf("scrinium: no store to build")
 	}
 	return buildSingle(ctx, c, mode)
 }
@@ -72,26 +66,27 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 	// 1. Driver.
 	drv, err := dialDriver(ctx, spec)
 	if err != nil {
-		return nil, fmt.Errorf("composer: driver: %w", err)
+		return nil, fmt.Errorf("scrinium: driver: %w", err)
 	}
 
 	// 2. For an Init/OpenOrInit on a local store, ensure the directory.
 	if mode != modeOpen {
 		if p, perr := localStorePath(spec.Driver); perr == nil {
 			if err := os.MkdirAll(p, 0o755); err != nil {
-				return nil, fmt.Errorf("composer: mkdir store: %w", err)
+				return nil, fmt.Errorf("scrinium: mkdir store: %w", err)
 			}
 		}
 	}
 
-	// 3. Index.
-	idx, err := dialIndex(ctx, spec)
+	// 3. Index (default ladder: explicit spec.Index, then Config.Defaults,
+	//    then a built-in sqlite next to a local store).
+	idx, err := dialIndex(ctx, spec, c.Defaults)
 	if err != nil {
-		return nil, fmt.Errorf("composer: index: %w", err)
+		return nil, fmt.Errorf("scrinium: index: %w", err)
 	}
 	cleanups = append(cleanups, func() {
 		if err := idx.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "composer: index close on rollback: %v\n", err)
+			fmt.Fprintf(os.Stderr, "scrinium: index close on rollback: %v\n", err)
 		}
 	})
 
@@ -100,15 +95,15 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 	fsidx := fsindex.New()
 	if extIdx, ok := idx.(index.ExtensionHost); ok {
 		if err := extIdx.Extensions().Register(ctx, fsidx); err != nil {
-			return nil, fmt.Errorf("composer: register fsindex: %w", err)
+			return nil, fmt.Errorf("scrinium: register fsindex: %w", err)
 		}
 	}
 
 	// 5. StoreConfig + passphrase from the policy.
-	cfg, encrypted := storeConfigFromPolicy(spec.Policy)
+	cfg, _ := storeConfigFromPolicy(spec.Policy)
 	pp, err := passphraseProvider(ctx, spec.Policy)
 	if err != nil {
-		return nil, fmt.Errorf("composer: passphrase: %w", err)
+		return nil, fmt.Errorf("scrinium: passphrase: %w", err)
 	}
 
 	storeOpts := []store.StoreOption{
@@ -120,17 +115,17 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 		storeOpts = append(storeOpts, store.WithPassphrase(pp), store.WithAutoUnlock())
 	}
 
-	st, err := openOrInitStore(ctx, drv, mode, encrypted, storeOpts)
+	st, created, kit, err := openOrInitStore(ctx, drv, mode, storeOpts)
 	if err != nil {
 		return nil, err
 	}
 	cleanups = append(cleanups, func() {
 		if err := st.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "composer: store close on rollback: %v\n", err)
+			fmt.Fprintf(os.Stderr, "scrinium: store close on rollback: %v\n", err)
 		}
 	})
 	if st.State() == domain.StateLocked {
-		return nil, fmt.Errorf("composer: store is locked; check the encryption passphrase")
+		return nil, fmt.Errorf("scrinium: store is locked; check the encryption passphrase")
 	}
 
 	// 6. Read-side View + read/write FSOps from the projection section.
@@ -138,11 +133,11 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 
 	view, err := buildView(ctx, st, fsidx, effProj)
 	if err != nil {
-		return nil, fmt.Errorf("composer: %w", err)
+		return nil, fmt.Errorf("scrinium: %w", err)
 	}
 	cleanups = append(cleanups, func() {
 		if err := view.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "composer: view close on rollback: %v\n", err)
+			fmt.Fprintf(os.Stderr, "scrinium: view close on rollback: %v\n", err)
 		}
 	})
 
@@ -152,7 +147,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 	if effProj != nil {
 		fsops, err = buildFSOps(view, st, effProj, mountSession, spec.Driver)
 		if err != nil {
-			return nil, fmt.Errorf("composer: %w", err)
+			return nil, fmt.Errorf("scrinium: %w", err)
 		}
 	}
 
@@ -179,14 +174,14 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 		return firstErr
 	}
 
-	info := Info{StoreURI: spec.Driver}
+	info := Info{StoreURI: spec.Driver, Created: created}
 	if effProj != nil {
 		info.Namespace = effProj.Namespace
 		info.Editing = effProj.Editing
 		info.ReadOnly = effProj.ReadOnly
 	}
 
-	return New(st, idx, proj, mountSession, info, closeFn), nil
+	return New(st, idx, proj, mountSession, info, kit, closeFn), nil
 }
 
 // guardUnsupportedPolicy rejects policy features whose components are
@@ -197,62 +192,58 @@ func guardUnsupportedPolicy(p *Policy) error {
 	}
 	switch {
 	case p.Chunking != nil:
-		return fmt.Errorf("composer: chunking is not wired yet (M5/C3): %w", errs.ErrNotImplemented)
+		return fmt.Errorf("scrinium: chunking is not wired yet (M5/C3): %w", errs.ErrNotImplemented)
 	case p.Bundling != nil:
-		return fmt.Errorf("composer: bundling is not wired yet (M4/S4): %w", errs.ErrNotImplemented)
+		return fmt.Errorf("scrinium: bundling is not wired yet (M4/S4): %w", errs.ErrNotImplemented)
 	case len(p.Pipeline) > 0 || len(p.PipelineExtra) > 0:
-		return fmt.Errorf("composer: explicit pipeline assembly is not wired yet: %w", errs.ErrNotImplemented)
+		return fmt.Errorf("scrinium: explicit pipeline assembly is not wired yet: %w", errs.ErrNotImplemented)
 	}
 	return nil
 }
 
+// openOrInitStore opens or initialises the store per mode. It reports
+// whether the store was freshly created and, for a fresh encrypted
+// store, the recovery-kit bytes the host must persist (nil otherwise).
 func openOrInitStore(
 	ctx context.Context,
 	drv driver.Driver,
 	mode buildMode,
-	encrypted bool,
 	opts []store.StoreOption,
-) (store.Store, error) {
+) (st store.Store, created bool, kit []byte, err error) {
 	switch mode {
 	case modeOpen:
 		st, err := store.OpenStore(ctx, drv, opts...)
 		if err != nil {
-			return nil, fmt.Errorf("composer: open store: %w", err)
+			return nil, false, nil, fmt.Errorf("scrinium: open store: %w", err)
 		}
-		return st, nil
+		return st, false, nil, nil
 	case modeInit:
-		return initStore(ctx, drv, encrypted, opts)
+		return initStore(ctx, drv, opts)
 	case modeOpenOrInit:
 		st, err := store.OpenStore(ctx, drv, opts...)
 		if err == nil {
-			return st, nil
+			return st, false, nil, nil
 		}
 		if !isNotFound(err) {
-			return nil, fmt.Errorf("composer: open store: %w", err)
+			return nil, false, nil, fmt.Errorf("scrinium: open store: %w", err)
 		}
-		return initStore(ctx, drv, encrypted, opts)
+		return initStore(ctx, drv, opts)
 	default:
-		return nil, fmt.Errorf("composer: unknown build mode %d", mode)
+		return nil, false, nil, fmt.Errorf("scrinium: unknown build mode %d", mode)
 	}
 }
 
-func initStore(ctx context.Context, drv driver.Driver, encrypted bool, opts []store.StoreOption) (store.Store, error) {
+// initStore creates a fresh store and surfaces the recovery kit. For an
+// unencrypted store InitStore returns no kit (empty slice); for an
+// encrypted one it returns the kit the host must persist out of band —
+// the assembler hands it up through the Assembly (Info.Created +
+// RecoveryKit), no longer refusing encrypted initialisation.
+func initStore(ctx context.Context, drv driver.Driver, opts []store.StoreOption) (store.Store, bool, []byte, error) {
 	st, kit, err := store.InitStore(ctx, drv, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("composer: init store: %w", err)
+		return nil, false, nil, fmt.Errorf("scrinium: init store: %w", err)
 	}
-	if encrypted && len(kit) > 0 {
-		// An encrypted Init produces a recovery kit the host MUST
-		// persist out of band, but assembly.Assembly has no channel to
-		// hand it back. Rather than silently drop the only path back
-		// into an encrypted store, refuse: encrypted initialisation
-		// goes through the engine Init for now (kit handling lands
-		// with the runtime in R11).
-		_ = st.Close()
-		return nil, fmt.Errorf("composer: encrypted store initialisation via composer is not supported yet "+
-			"(recovery-kit handoff pending, R11); use the engine Init path: %w", errs.ErrNotImplemented)
-	}
-	return st, nil
+	return st, true, kit, nil
 }
 
 func isNotFound(err error) bool {
@@ -261,7 +252,8 @@ func isNotFound(err error) bool {
 
 // dialDriver resolves the store's driver: an extension factory if one
 // is registered for the scheme, otherwise the engine's built-in
-// DialDriver (file://, s3:// when present, bare paths).
+// DialDriver (file://, s3:// when present, bare paths). The built-in
+// schemes are registered by the consumer's blank import (ADR-63).
 func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
 	scheme := schemeOf(spec.Driver)
 	if f, ok := reg.driver(scheme); ok {
@@ -274,10 +266,16 @@ func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
 	return driver.DialDriver(spec.Driver)
 }
 
-// dialIndex resolves the index: an explicit URI (extension factory or
-// built-in DialIndex), or a default sqlite under a local store dir.
-func dialIndex(ctx context.Context, spec *StoreSpec) (index.StoreIndex, error) {
+// dialIndex resolves the index along the default ladder (ADR-63): an
+// explicit spec.Index wins; else Config.Defaults.Index; else a built-in
+// sqlite under a local store dir. The resolved URI is dialled through an
+// extension factory if one is registered for its scheme, otherwise the
+// engine's built-in DialIndex.
+func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.StoreIndex, error) {
 	uri := spec.Index
+	if uri == "" && defaults != nil {
+		uri = defaults.Index
+	}
 	if uri == "" {
 		p, err := localStorePath(spec.Driver)
 		if err != nil {
@@ -310,7 +308,7 @@ func resolveCredentials(ctx context.Context, creds Credentials) (map[string][]by
 	return out, nil
 }
 
-// storeConfigFromPolicy maps a composer policy onto a domain.StoreConfig.
+// storeConfigFromPolicy maps a config policy onto a domain.StoreConfig.
 // Returns whether the store is encrypted. A nil policy → zero config
 // (engine defaults: Plain, no dedup).
 func storeConfigFromPolicy(p *Policy) (domain.StoreConfig, bool) {
@@ -382,8 +380,8 @@ func hashRegistry() domain.HashRegistry {
 		Register("sha256", func() hash.Hash { return sha256.New() })
 }
 
-// --- URI helpers (a trimmed local copy of scrinium's; composer cannot
-// import the root package without a layering inversion). ---
+// --- URI helpers (a trimmed local copy of scrinium's; the assembler
+// cannot import the root package without a layering inversion). ---
 
 func schemeOf(uri string) string {
 	if i := strings.Index(uri, "://"); i > 0 {
