@@ -14,13 +14,14 @@ import (
 	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
+	"scrinium.dev/internal/testutil/artifactfx"
 	"scrinium.dev/internal/testutil/driverfx"
 	"scrinium.dev/internal/testutil/indexfx"
 	"scrinium.dev/internal/testutil/storefx"
 )
 
 var (
-	payload = storefx.Payload
+	payload = artifactfx.Payload
 )
 
 // --- Deferred surfaces ---
@@ -372,7 +373,7 @@ func TestPut_DefaultPutNamespace_Fallback(t *testing.T) {
 		DefaultPutNamespace: "inbox",
 	}))
 
-	id, err := s.Put(context.Background(), storefx.Payload("no namespace given"))
+	id, err := s.Put(context.Background(), artifactfx.Payload("no namespace given"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -398,7 +399,7 @@ func TestPut_DefaultPutNamespace_ExplicitOverrides(t *testing.T) {
 	}))
 
 	id, err := s.Put(context.Background(),
-		storefx.Payload("explicit"),
+		artifactfx.Payload("explicit"),
 		store.WithNamespace("archive"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
@@ -421,7 +422,7 @@ func TestPut_DefaultPutNamespace_ExplicitOverrides(t *testing.T) {
 func TestPut_DefaultPutNamespace_EmptyMeansEmpty(t *testing.T) {
 	s := storefx.Init(t) // no DefaultPutNamespace
 
-	id, err := s.Put(context.Background(), storefx.Payload("stays empty"))
+	id, err := s.Put(context.Background(), artifactfx.Payload("stays empty"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -445,7 +446,7 @@ func TestPut_DefaultPutNamespace_Reassign(t *testing.T) {
 	}))
 
 	// First unnamespaced Put → "first".
-	id1, err := s.Put(ctx, storefx.Payload("under first"))
+	id1, err := s.Put(ctx, artifactfx.Payload("under first"))
 	if err != nil {
 		t.Fatalf("Put #1: %v", err)
 	}
@@ -461,7 +462,7 @@ func TestPut_DefaultPutNamespace_Reassign(t *testing.T) {
 	}
 
 	// Second unnamespaced Put → "second".
-	id2, err := s.Put(ctx, storefx.Payload("under second"))
+	id2, err := s.Put(ctx, artifactfx.Payload("under second"))
 	if err != nil {
 		t.Fatalf("Put #2: %v", err)
 	}

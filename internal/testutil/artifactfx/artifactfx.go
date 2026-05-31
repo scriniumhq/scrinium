@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"hash"
+	"strings"
 	"testing"
 
 	"scrinium.dev/domain"
@@ -27,6 +28,40 @@ func Hashes() domain.HashRegistry {
 // outside tests.
 func DEK() []byte {
 	return bytes.Repeat([]byte{0x42}, 32)
+}
+
+// Payload wraps a string as a domain.Artifact body. The single most
+// common test shape: a literal payload to Put. Lives here (not in
+// domain) on purpose — production feeds Artifact.Payload a streaming
+// io.Reader from a file/socket/HTTP body; wrapping an in-memory literal
+// is a test convenience, and putting it in the domain leaf would invite
+// buffering whole blobs in memory against the streaming design.
+func Payload(s string) domain.Artifact {
+	return domain.Artifact{Payload: strings.NewReader(s)}
+}
+
+// PayloadBytes wraps a byte slice as a domain.Artifact body — for binary
+// fixtures and table tests that build []byte directly.
+func PayloadBytes(b []byte) domain.Artifact {
+	return domain.Artifact{Payload: bytes.NewReader(b)}
+}
+
+// PayloadSized returns an Artifact whose body is n deterministic bytes,
+// for tests of inline limits, segmentation, and dedup boundaries. The
+// content is a fixed repeating pattern, not random: a failing size test
+// must reproduce byte-for-byte across runs.
+func PayloadSized(n int) domain.Artifact {
+	return PayloadBytes(SizedBytes(n))
+}
+
+// SizedBytes returns n deterministic bytes (a repeating 0..255 ramp).
+// Exposed for callers that need the raw slice rather than an Artifact.
+func SizedBytes(n int) []byte {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(i % 256)
+	}
+	return b
 }
 
 // Keys returns a KeyProvider that hands out the given candidate DEKs for

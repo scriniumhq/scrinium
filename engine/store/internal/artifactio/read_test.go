@@ -40,7 +40,7 @@ func write(t *testing.T, w *artifactio.IO, cfg domain.StoreConfig, content strin
 	t.Helper()
 	ctx := context.Background()
 	opts := domain.PutOptions{Namespace: "ns"}
-	blob, err := w.Materialize(ctx, cfg, domain.Artifact{Payload: strings.NewReader(content)}, opts, "")
+	blob, err := w.Materialize(ctx, cfg, artifactfx.Payload(content), opts, "")
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)
 	}

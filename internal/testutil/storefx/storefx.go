@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"hash"
-	"strings"
 	"testing"
 
 	"scrinium.dev/domain"
@@ -178,9 +177,4 @@ func InitEncryptedLocked(t testing.TB, pass string, extra ...store.StoreOption) 
 		store.WithPassphrase(StaticPP(pass)),
 	)
 	return s, r
-}
-
-// Payload wraps a string as a domain.Artifact body.
-func Payload(content string) domain.Artifact {
-	return domain.Artifact{Payload: strings.NewReader(content)}
 }

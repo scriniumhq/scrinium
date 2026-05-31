@@ -16,6 +16,7 @@ import (
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/internal/testutil/artifactfx"
 	"scrinium.dev/internal/testutil/eventfx"
 	"scrinium.dev/internal/testutil/storefx"
 )
@@ -63,7 +64,7 @@ func newScrubFixtureCfg(t *testing.T, opts ...store.StoreOption) scrubFixture {
 func (f scrubFixture) put(t *testing.T, ns, data string) domain.ArtifactID {
 	t.Helper()
 	id, err := f.store.Put(context.Background(),
-		storefx.Payload(data),
+		artifactfx.Payload(data),
 		store.WithNamespace(ns))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
