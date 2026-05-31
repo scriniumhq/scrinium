@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"log/slog"
 
@@ -128,6 +129,47 @@ func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
 		})
 		d.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "scrub: blob integrity mismatch",
 			storeIDAttr(d.core), artifactIDAttr(consumerID))
+		return err
+	}
+	return nil
+}
+
+// VerifyManifest checks a manifest's integrity only — that the manifest
+// file still hashes to its ArtifactID — without touching the blob. It
+// is the cheap half of verification: loadManifest already re-hashes the
+// file via VerifyArtifactID (and decrypts Sealed/Paranoid bodies), so a
+// successful load IS a successful manifest verification.
+//
+// It is the Scrub Agent's cascade step: after the expensive
+// VerifyBlobRef confirms a physical blob, every consuming artifact's
+// manifest is cheaply re-verified here and stamped. It is also the only
+// check Inline artifacts need — their payload lives inside the manifest,
+// so manifest integrity is the whole of their integrity.
+//
+// On a corrupt manifest it publishes EventScrubFailed and returns the
+// underlying error (errs.ErrCorruptedManifest from VerifyArtifactID, or
+// a decrypt failure). A missing manifest returns errs.ErrArtifactNotFound.
+func (d dataFacet) VerifyManifest(ctx context.Context, id domain.ArtifactID) error {
+	if err := d.enterRead(ctx); err != nil {
+		return err
+	}
+	if id == "" {
+		return errs.ErrArtifactNotFound
+	}
+	if _, err := d.loadManifest(ctx, id); err != nil {
+		// loadManifest returns ErrArtifactNotFound for an absent
+		// manifest (a race against Delete) — propagate it untouched so
+		// the agent skips rather than alarms. Any other error is an
+		// integrity failure worth an event.
+		if errors.Is(err, errs.ErrArtifactNotFound) {
+			return err
+		}
+		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
+			ArtifactID: id,
+			Err:        err,
+		})
+		d.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "scrub: manifest integrity mismatch",
+			storeIDAttr(d.core), artifactIDAttr(id))
 		return err
 	}
 	return nil
