@@ -57,6 +57,7 @@ type File interface {
 // satisfy io.Reader/io.Seeker since store.ReadHandle is
 // offset-addressable via ReadAt only.
 type readHandleFile struct {
+	nonDirStub
 	rh    domain.ReadHandle
 	name  string
 	path  string
@@ -113,10 +114,6 @@ func (f *readHandleFile) Seek(offset int64, whence int) (int64, error) {
 	return f.off, nil
 }
 
-func (f *readHandleFile) Readdir(count int) ([]os.FileInfo, error) {
-	return nil, fs.ErrInvalid // not a directory
-}
-
 func (f *readHandleFile) Stat() (os.FileInfo, error) {
 	return synthInfo{
 		name:    f.name,
@@ -129,6 +126,7 @@ func (f *readHandleFile) Stat() (os.FileInfo, error) {
 // bytesFile is a fully-buffered read-only file backed by a
 // byte slice. Used for the stats virtual file.
 type bytesFile struct {
+	nonDirStub
 	name string
 	body []byte
 	t    time.Time
@@ -169,7 +167,6 @@ func (f *bytesFile) Seek(offset int64, whence int) (int64, error) {
 	return f.off, nil
 }
 
-func (f *bytesFile) Readdir(count int) ([]os.FileInfo, error) { return nil, fs.ErrInvalid }
 func (f *bytesFile) Stat() (os.FileInfo, error) {
 	return synthFileInfo(f.name, int64(len(f.body)), f.t), nil
 }
@@ -178,6 +175,7 @@ func (f *bytesFile) Stat() (os.FileInfo, error) {
 // manual offset to satisfy io.Reader/io.Writer/io.Seeker on
 // top of the fso.File's WriteAt/ReadAt.
 type rwFile struct {
+	nonDirStub
 	f      fso.File
 	path   string
 	size   int64
@@ -254,7 +252,6 @@ func (f *rwFile) Seek(offset int64, whence int) (int64, error) {
 	return f.off, nil
 }
 
-func (f *rwFile) Readdir(count int) ([]os.FileInfo, error) { return nil, fs.ErrInvalid }
 func (f *rwFile) Stat() (os.FileInfo, error) {
 	return synthInfo{
 		name:    pathx.LastSegment(f.path),
@@ -274,6 +271,7 @@ func (f *rwFile) Stat() (os.FileInfo, error) {
 // surfaces wrap VFS and substitute one when their own policy
 // demands.
 type blackHoleFile struct {
+	nonDirStub
 	name    string
 	written int64
 	closed  bool
@@ -309,10 +307,6 @@ func (f *blackHoleFile) Seek(offset int64, whence int) (int64, error) {
 		return f.written + offset, nil
 	}
 	return 0, fs.ErrInvalid
-}
-
-func (f *blackHoleFile) Readdir(count int) ([]os.FileInfo, error) {
-	return nil, fs.ErrInvalid
 }
 
 func (f *blackHoleFile) Stat() (os.FileInfo, error) {

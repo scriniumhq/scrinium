@@ -2,7 +2,6 @@ package vfs
 
 import (
 	"io"
-	"io/fs"
 	"os"
 	"time"
 
@@ -12,18 +11,14 @@ import (
 // rootDirFile listings come from FSOps.Listdir(""). The
 // service prefix entry is appended (when configured).
 type rootDirFile struct {
+	dirFileStub
 	v        *VFS
 	consumed bool
 }
 
 func newRootDirFile(v *VFS) *rootDirFile { return &rootDirFile{v: v} }
 
-func (d *rootDirFile) Read(p []byte) (int, error)  { return 0, fs.ErrInvalid }
-func (d *rootDirFile) Write(p []byte) (int, error) { return 0, fs.ErrPermission }
-func (d *rootDirFile) Close() error                { return nil }
-func (d *rootDirFile) Seek(int64, int) (int64, error) {
-	return 0, fs.ErrInvalid
-}
+func (d *rootDirFile) Close() error { return nil }
 
 func (d *rootDirFile) Readdir(count int) ([]os.FileInfo, error) {
 	if d.consumed {
@@ -53,6 +48,7 @@ func (d *rootDirFile) Stat() (os.FileInfo, error) {
 // pathDirFile is a directory inside the root view. Delegates
 // listing to FSOps.
 type pathDirFile struct {
+	dirFileStub
 	v        *VFS
 	subPath  string
 	consumed bool
@@ -62,10 +58,7 @@ func newPathDirFile(v *VFS, subPath string) *pathDirFile {
 	return &pathDirFile{v: v, subPath: subPath}
 }
 
-func (d *pathDirFile) Read(p []byte) (int, error)     { return 0, fs.ErrInvalid }
-func (d *pathDirFile) Write(p []byte) (int, error)    { return 0, fs.ErrPermission }
-func (d *pathDirFile) Close() error                   { return nil }
-func (d *pathDirFile) Seek(int64, int) (int64, error) { return 0, fs.ErrInvalid }
+func (d *pathDirFile) Close() error { return nil }
 
 func (d *pathDirFile) Readdir(count int) ([]os.FileInfo, error) {
 	if d.consumed {
@@ -102,6 +95,7 @@ func (d *pathDirFile) Stat() (os.FileInfo, error) {
 // Service-tree listings ignore the nameFilter — these are
 // diagnostic surfaces; full visibility is the contract.
 type serviceDirFile struct {
+	dirFileStub
 	v        *VFS
 	tree     view.RootView
 	subPath  string
@@ -123,10 +117,7 @@ func newServiceDirFile(v *VFS, treeOrPrefix any, subPath string, isPrefix bool) 
 	return d
 }
 
-func (d *serviceDirFile) Read(p []byte) (int, error)     { return 0, fs.ErrInvalid }
-func (d *serviceDirFile) Write(p []byte) (int, error)    { return 0, fs.ErrPermission }
-func (d *serviceDirFile) Close() error                   { return nil }
-func (d *serviceDirFile) Seek(int64, int) (int64, error) { return 0, fs.ErrInvalid }
+func (d *serviceDirFile) Close() error { return nil }
 
 func (d *serviceDirFile) Readdir(count int) ([]os.FileInfo, error) {
 	if d.consumed {
