@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"scrinium.dev/internal/testutil/projectionfx"
+	"scrinium.dev/internal/testutil/manifestfx"
 	"scrinium.dev/projection/vfs"
 	"scrinium.dev/projection/viewfx"
 
@@ -24,11 +24,11 @@ import (
 // manifests through `manifests` because the View backfills
 // synchronously at construction — adding to the source after
 // NewView has no effect on the View's trees.
-func newTestRoot(t *testing.T, manifests ...domain.Manifest) (*node, *projectionfx.FakeSource) {
+func newTestRoot(t *testing.T, manifests ...domain.Manifest) *node {
 	t.Helper()
-	v, o, src := viewfx.Stack(t, manifests...)
-	fsys := vfs.New(v, o, viewfx.RoutingAll())
-	return newRoot(fsys, time.Now()), src
+	proj, _ := viewfx.Stack(t, manifests...)
+	fsys := vfs.New(proj, viewfx.RoutingAll())
+	return newRoot(fsys, time.Now())
 }
 
 // --- errnoFromError (FUSE-specific error translation) ---
@@ -101,7 +101,7 @@ func TestInodeForPath_AvoidsReservedRange(t *testing.T) {
 // --- node: mount-root attributes ---
 
 func TestNode_RootGetattr(t *testing.T) {
-	root, _ := newTestRoot(t)
+	root := newTestRoot(t)
 	out := &fuse.AttrOut{}
 	if errno := root.Getattr(context.Background(), nil, out); errno != 0 {
 		t.Fatalf("Getattr: %v", errno)
@@ -114,7 +114,7 @@ func TestNode_RootGetattr(t *testing.T) {
 // --- node.Lookup: negative path returns without NewInode ---
 
 func TestNode_Lookup_Missing(t *testing.T) {
-	root, _ := newTestRoot(t)
+	root := newTestRoot(t)
 	out := &fuse.EntryOut{}
 	_, errno := root.Lookup(context.Background(), "nope", out)
 	if errno != syscall.ENOENT {
@@ -130,8 +130,8 @@ func TestNode_Lookup_Missing(t *testing.T) {
 // prefix entry must both reach the DirStream.
 
 func TestNode_Readdir_SurfacesEntries(t *testing.T) {
-	root, _ := newTestRoot(t,
-		projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
+	root := newTestRoot(t,
+		manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
 
 	stream, errno := root.Readdir(context.Background())
 	if errno != 0 {

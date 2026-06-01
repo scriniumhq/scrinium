@@ -119,7 +119,7 @@ func runServe(args []string) int {
 			meta.StoreURI, true, "off", meta.Namespace)
 	}
 
-	v := vfs.New(asm.Projection.View, asm.Projection.FSOps, routingCfg, vfs.WithStatsProvider(textStats))
+	v := vfs.New(asm.Projection, routingCfg, vfs.WithStatsProvider(textStats))
 	backing := newWebBackingFS(v, asm.Projection.Queries(), asm.Store)
 	webHandler := web.NewHandler(backing, vfs.CleanPath, web.Config{
 		StorePath:     meta.StoreURI,

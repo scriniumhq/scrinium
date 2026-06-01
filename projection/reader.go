@@ -2,7 +2,6 @@ package projection
 
 import (
 	"scrinium.dev/domain"
-	"scrinium.dev/projection/view"
 )
 
 // Re-exported read-result types. External consumers depend on these
@@ -18,17 +17,17 @@ import (
 // Obtain one via Projection.Queries.
 type Reader interface {
 	// Search returns up to limit hits for the query.
-	Search(query string, limit int) []view.SearchResult
+	Search(query string, limit int) []SearchResult
 
 	// RelatedByBlobRef returns artifacts sharing the given blob,
 	// excluding the artifact named by exclude.
-	RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactID) []view.RelatedArtifact
+	RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactID) []RelatedArtifact
 
 	// LookupLocations returns every tree-placement of an artifact.
-	LookupLocations(id domain.ArtifactID) (view.Locations, bool)
+	LookupLocations(id domain.ArtifactID) (Locations, bool)
 
 	// StatsSnapshot returns a copy of the current counters.
-	StatsSnapshot() view.Stats
+	StatsSnapshot() Stats
 
 	// SourceName returns the source kind (e.g. "store").
 	SourceName() string

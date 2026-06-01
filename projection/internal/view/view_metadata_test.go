@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	vw "scrinium.dev/projection/view"
+	vw "scrinium.dev/projection/internal/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"

@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	fso "scrinium.dev/projection/internal/fsops"
-	vw "scrinium.dev/projection/view"
+	vw "scrinium.dev/projection/internal/view"
 
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/errs"
+	"scrinium.dev/internal/testutil/manifestfx"
 	"scrinium.dev/internal/testutil/projectionfx"
 )
 
@@ -41,7 +42,7 @@ func TestNewFSOps_DefaultsApplied(t *testing.T) {
 
 func TestStat_FileInRootView(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"photos/img.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
@@ -64,7 +65,7 @@ func TestStat_FileInRootView(t *testing.T) {
 
 func TestStat_VirtualDirectory(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"photos/2024/img.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
@@ -101,7 +102,7 @@ func TestStat_NotFound(t *testing.T) {
 func TestStat_AppliesDefaultMode(t *testing.T) {
 	// Artifact with fsmeta.Mode = 0 should get the FSOps default.
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
@@ -122,7 +123,7 @@ func TestStat_AppliesDefaultMode(t *testing.T) {
 
 func TestStat_AppliesDefaultUIDGID(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
@@ -145,7 +146,7 @@ func TestStat_RoutesViaRootView_ByArtifact(t *testing.T) {
 	// When RootView is by-artifact, Stat takes paths in the
 	// by-artifact tree shape directly.
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"photos/img.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
@@ -170,9 +171,9 @@ func TestStat_RoutesViaRootView_ByArtifact(t *testing.T) {
 
 func TestListdir_ListsFiles(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aaaa1111",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aaaa1111",
 		"photos/a.jpg"), nil)
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-bbbb2222",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-bbbb2222",
 		"photos/b.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
@@ -198,7 +199,7 @@ func TestListdir_ListsFiles(t *testing.T) {
 
 func TestListdir_OnFile(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
@@ -237,7 +238,7 @@ func TestListdir_NotFound(t *testing.T) {
 
 func TestOpen_ReadOnly(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"hello.txt"), []byte("hello"))
 
 	v, _ := vw.New(context.Background(), src,
@@ -266,7 +267,7 @@ func TestOpen_WriteModesRejectedWithoutPolicy(t *testing.T) {
 	// refused with ErrEditingDisabled. AllowAppend, AllowSetattr,
 	// AllowTruncate are all required by their own paths.
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("x"))
 
 	v, _ := vw.New(context.Background(), src,
@@ -289,7 +290,7 @@ func TestOpen_WriteModesRejectedWithoutPolicy(t *testing.T) {
 
 func TestOpen_OnDirectory(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"d/file.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
@@ -322,7 +323,7 @@ func TestOpen_NotFound(t *testing.T) {
 
 func TestReadOnlyFile_WriteAtRefused(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("hello"))
 
 	v, _ := vw.New(context.Background(), src,
@@ -342,7 +343,7 @@ func TestReadOnlyFile_WriteAtRefused(t *testing.T) {
 
 func TestReadOnlyFile_TruncateRefused(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("hello"))
 
 	v, _ := vw.New(context.Background(), src,
@@ -361,7 +362,7 @@ func TestReadOnlyFile_TruncateRefused(t *testing.T) {
 
 func TestReadOnlyFile_ReadAtRandomAccess(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("0123456789"))
 
 	v, _ := vw.New(context.Background(), src,

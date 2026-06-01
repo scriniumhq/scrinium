@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 )
 
 // Synthetic hashes used in fixtures. Cannot be const because
@@ -115,4 +116,26 @@ func PackedAddr(packPath, packRef string, offset, size int64) domain.PhysicalAdd
 		Offset:  offset,
 		Size:    size,
 	}
+}
+
+// ManifestWithFsmetaPath builds a Blob manifest tagged with an fsmeta
+// virtual path — the common fixture for projection and surface tests
+// that need an artifact placed at a known path in the by-path tree.
+func ManifestWithFsmetaPath(id, path string) domain.Manifest {
+	m := Blob(id, "sha256-"+strings.Repeat("b", 64))
+	if err := AddFsmetaPath(&m, path); err != nil {
+		panic("manifestfx.ManifestWithFsmetaPath: " + err.Error())
+	}
+	return m
+}
+
+// AddFsmetaPath sets the manifest's Ext block to an fsmeta record
+// carrying path. Overwrites any existing Ext.
+func AddFsmetaPath(m *domain.Manifest, path string) error {
+	raw, err := fsmeta.Encode(fsmeta.FileSystem{Path: path})
+	if err != nil {
+		return err
+	}
+	m.Ext = raw
+	return nil
 }

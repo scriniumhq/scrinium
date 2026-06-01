@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/projection/view"
+	"scrinium.dev/projection/internal/view"
 )
 
 func defaultRoutingConfig() Config {

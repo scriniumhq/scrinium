@@ -44,7 +44,7 @@ func newWebdavFS(
 		opts = append(opts, vfs.WithNameFilter(isOSJunk))
 	}
 	return &webdavFS{
-		v:          vfs.New(proj.View, proj.FSOps, cfg, opts...),
+		v:          vfs.New(proj, cfg, opts...),
 		rejectJunk: rejectJunk,
 	}
 }

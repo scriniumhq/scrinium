@@ -7,7 +7,6 @@ import (
 	"os"
 	pathpkg "path"
 	"scrinium.dev/projection"
-	"scrinium.dev/projection/view"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
@@ -132,11 +131,11 @@ func (a *readHandleAdapter) Stat() (os.FileInfo, error)         { return nil, ni
 
 // LookupRelated walks the View for artifacts pointing at
 // the same blob.
-func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]view.RelatedArtifact, error) {
+func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]projection.RelatedArtifact, error) {
 	siblings := b.reader.RelatedByBlobRef(blobRef, exclude)
-	out := make([]view.RelatedArtifact, 0, len(siblings))
+	out := make([]projection.RelatedArtifact, 0, len(siblings))
 	for _, s := range siblings {
-		out = append(out, view.RelatedArtifact{
+		out = append(out, projection.RelatedArtifact{
 			ArtifactID: s.ArtifactID,
 			Path:       s.Path,
 			Namespace:  s.Namespace,
@@ -148,11 +147,11 @@ func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef
 }
 
 // Search proxies to the View's text search.
-func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]view.SearchResult, error) {
+func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]projection.SearchResult, error) {
 	hits := b.reader.Search(query, limit)
-	out := make([]view.SearchResult, 0, len(hits))
+	out := make([]projection.SearchResult, 0, len(hits))
 	for _, h := range hits {
-		out = append(out, view.SearchResult{
+		out = append(out, projection.SearchResult{
 			ArtifactID:  h.ArtifactID,
 			Path:        h.Path,
 			Namespace:   h.Namespace,
@@ -167,12 +166,12 @@ func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]v
 
 // LookupLocations returns the per-tree placement of an
 // artifact for the Locations panel.
-func (b *webBackingFS) LookupLocations(ctx context.Context, id domain.ArtifactID) (view.Locations, bool, error) {
+func (b *webBackingFS) LookupLocations(ctx context.Context, id domain.ArtifactID) (projection.Locations, bool, error) {
 	locs, ok := b.reader.LookupLocations(id)
 	if !ok {
-		return view.Locations{}, false, nil
+		return projection.Locations{}, false, nil
 	}
-	return view.Locations{
+	return projection.Locations{
 		ByArtifact:  locs.ByArtifact,
 		BySession:   locs.BySession,
 		ByNamespace: locs.ByNamespace,

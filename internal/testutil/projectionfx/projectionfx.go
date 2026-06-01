@@ -10,10 +10,8 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/manifestfx"
 )
 
 // --- FakeSource ---
@@ -337,43 +335,3 @@ func (h *FakeReadHandle) Close() error {
 var _ domain.ReadHandle = (*FakeReadHandle)(nil)
 
 // --- Manifest builders ---
-
-// ManifestWithFsmetaPath returns a manifest produced by
-// manifestfx.Blob, augmented with fsmeta-encoded metadata for
-// the given virtual path. Use this whenever a test needs an
-// artifact that should land in by-path/.
-//
-// id is the ArtifactID; blobRef defaults to "sha256-bbbb..."
-// (manifestfx convention) — tests that need a specific blobRef
-// pass it explicitly through manifestfx.Blob and then call
-// AddFsmetaPath on the result.
-func ManifestWithFsmetaPath(id, path string) domain.Manifest {
-	m := manifestfx.Blob(id, "sha256-"+repeat('b', 64))
-	if err := AddFsmetaPath(&m, path); err != nil {
-		panic("projectionfx.ManifestWithFsmetaPath: " + err.Error())
-	}
-	return m
-}
-
-// AddFsmetaPath sets m.Metadata to an fsmeta.FileSystem-encoded
-// payload with the given path. Returns the underlying
-// fsmeta.Encode error so callers writing negative-path tests
-// (deliberately invalid paths) can assert against it.
-func AddFsmetaPath(m *domain.Manifest, path string) error {
-	raw, err := fsmeta.Encode(fsmeta.FileSystem{Path: path})
-	if err != nil {
-		return err
-	}
-	m.Ext = raw
-	return nil
-}
-
-// repeat is a tiny helper to avoid pulling in strings.Repeat for
-// a single use. Mirrors the synthetic-hash pattern of manifestfx.
-func repeat(b byte, n int) string {
-	out := make([]byte, n)
-	for i := range out {
-		out[i] = b
-	}
-	return string(out)
-}

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	fso "scrinium.dev/projection/internal/fsops"
-	vw "scrinium.dev/projection/view"
+	vw "scrinium.dev/projection/internal/view"
 
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/errs"

@@ -9,9 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"scrinium.dev/projection"
 	fso "scrinium.dev/projection/internal/fsops"
+	vw "scrinium.dev/projection/internal/view"
 	"scrinium.dev/projection/pathx"
-	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/errs"
 )
@@ -93,12 +94,17 @@ func WithNameFilter(fn func(name string) bool) Option {
 // New constructs a VFS over view/fsops with the given namespace
 // configuration. The tree backing the mount root is taken from
 // view.RootView().
-func New(view *vw.View, fsops *fso.Ops, cfg Config, opts ...Option) *VFS {
+// New constructs a VFS over a built projection with the given
+// namespace configuration. The tree backing the mount root is taken
+// from the projection's View. Taking the bundle (rather than the bare
+// View and Ops) keeps the projection's internal types out of caller
+// code: daemons name only *projection.Projection.
+func New(proj *projection.Projection, cfg Config, opts ...Option) *VFS {
 	v := &VFS{
-		view:       view,
-		fsops:      fsops,
+		view:       proj.View,
+		fsops:      proj.FSOps,
 		routingCfg: cfg,
-		rootView:   view.RootView(),
+		rootView:   proj.View.RootView(),
 		startedAt:  time.Now().UTC(),
 	}
 	for _, o := range opts {

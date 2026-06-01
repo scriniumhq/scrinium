@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"scrinium.dev/projection/view"
+	"scrinium.dev/projection/internal/view"
 )
 
 // rootDirFile listings come from FSOps.Listdir(""). The

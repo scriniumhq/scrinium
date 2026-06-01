@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
-	vw "scrinium.dev/projection/view"
+	vw "scrinium.dev/projection/internal/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/eventfx"
+	"scrinium.dev/internal/testutil/manifestfx"
 	"scrinium.dev/internal/testutil/projectionfx"
 )
 
@@ -145,7 +146,7 @@ func TestAdd_AppearsInAllTrees(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	m := projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/img.jpg")
+	m := manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/img.jpg")
 	m.Namespace = "files"
 	m.SessionID = "sess1"
 	m.OriginalSize = 100
@@ -177,7 +178,7 @@ func TestAdd_Idempotent(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	m := projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "a")
+	m := manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "a")
 	if err := v.Add(m); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +205,7 @@ func TestAdd_OnClosedView(t *testing.T) {
 
 func TestRemove_DropsFromAllTrees(t *testing.T) {
 	src := projectionfx.New()
-	m := projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/img.jpg")
+	m := manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/img.jpg")
 	m.Namespace = "files"
 	m.SessionID = "sess1"
 	m.OriginalSize = 100
@@ -234,9 +235,9 @@ func TestRemove_PromotesLoserOnOwnerRemove(t *testing.T) {
 	older := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	newer := older.Add(time.Hour)
 
-	a := projectionfx.ManifestWithFsmetaPath("sha256-aaaa1111", "shared")
+	a := manifestfx.ManifestWithFsmetaPath("sha256-aaaa1111", "shared")
 	a.CreatedAt = older
-	b := projectionfx.ManifestWithFsmetaPath("sha256-bbbb2222", "shared")
+	b := manifestfx.ManifestWithFsmetaPath("sha256-bbbb2222", "shared")
 	b.CreatedAt = newer
 	src.Add(a, nil)
 	src.Add(b, nil)
@@ -262,9 +263,9 @@ func TestRemove_LoserDoesNotAffectOwner(t *testing.T) {
 	older := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	newer := older.Add(time.Hour)
 
-	a := projectionfx.ManifestWithFsmetaPath("sha256-aaaa1111", "shared")
+	a := manifestfx.ManifestWithFsmetaPath("sha256-aaaa1111", "shared")
 	a.CreatedAt = older
-	b := projectionfx.ManifestWithFsmetaPath("sha256-bbbb2222", "shared")
+	b := manifestfx.ManifestWithFsmetaPath("sha256-bbbb2222", "shared")
 	b.CreatedAt = newer
 	src.Add(a, nil)
 	src.Add(b, nil)
@@ -299,12 +300,12 @@ func TestRemove_Idempotent(t *testing.T) {
 
 func TestMove_RenameFile(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aaaa1111", "old/path.txt"), nil)
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aaaa1111", "old/path.txt"), nil)
 	v, _ := vw.New(context.Background(), src,
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	newM := projectionfx.ManifestWithFsmetaPath("sha256-bbbb2222", "new/path.txt")
+	newM := manifestfx.ManifestWithFsmetaPath("sha256-bbbb2222", "new/path.txt")
 	if err := v.Move("old/path.txt", "new/path.txt", newM); err != nil {
 		t.Fatalf("Move: %v", err)
 	}
@@ -325,8 +326,8 @@ func TestMove_RenameFile(t *testing.T) {
 
 func TestNewView_FilterPrefix(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aaaa1111", "photos/a.jpg"), nil)
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-bbbb2222", "docs/b.txt"), nil)
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aaaa1111", "photos/a.jpg"), nil)
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-bbbb2222", "docs/b.txt"), nil)
 
 	v, _ := vw.New(
 		context.Background(), src,

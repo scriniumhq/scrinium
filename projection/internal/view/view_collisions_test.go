@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
-	vw "scrinium.dev/projection/view"
+	vw "scrinium.dev/projection/internal/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/internal/testutil/eventfx"
+	"scrinium.dev/internal/testutil/manifestfx"
 	"scrinium.dev/internal/testutil/projectionfx"
 )
 
@@ -18,7 +19,7 @@ import (
 // only needed in collision tests; TestByPath_HappyPath calls it
 // without overriding time.
 func withCreatedAt(id, path string, createdAt time.Time) domain.Manifest {
-	m := projectionfx.ManifestWithFsmetaPath(id, path)
+	m := manifestfx.ManifestWithFsmetaPath(id, path)
 	m.CreatedAt = createdAt
 	return m
 }
@@ -28,7 +29,7 @@ func withCreatedAt(id, path string, createdAt time.Time) domain.Manifest {
 func TestByPath_HappyPath(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(
-		projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/2024/sunrise.jpg"),
+		manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/2024/sunrise.jpg"),
 		nil,
 	)
 
@@ -58,7 +59,7 @@ func TestByPath_HappyPath(t *testing.T) {
 
 func TestByPath_VirtualDirsExist(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/2024/img.jpg"), nil)
+	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/2024/img.jpg"), nil)
 	v, _ := vw.New(context.Background(), src,
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()

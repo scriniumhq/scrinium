@@ -3,8 +3,8 @@ package vfs
 import (
 	"errors"
 
+	"scrinium.dev/projection/internal/view"
 	"scrinium.dev/projection/pathx"
-	"scrinium.dev/projection/view"
 )
 
 // kind tags the destination of a routed path. The dispatcher

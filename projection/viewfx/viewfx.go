@@ -11,52 +11,46 @@
 package viewfx
 
 import (
-	"context"
 	"testing"
 
-	fso "scrinium.dev/projection/internal/fsops"
+	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
-	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/internal/testutil/projectionfx"
 )
 
-// Stack wires an in-memory FakeSource into a View + FSOps with the
-// fsmeta path resolver and editing enabled. Manifests are added to
-// the source BEFORE NewView so they survive the synchronous backfill
-// the View performs at construction; adding to the returned source
+// Stack wires an in-memory FakeSource into a built Projection (View +
+// FSOps) with editing enabled and the "files" namespace — the
+// configuration fuse and webdav share. Manifests are added to the
+// source BEFORE Build so they survive the synchronous backfill the
+// View performs at construction; adding to the returned source
 // afterwards affects only Get/Put paths, not the built View trees.
 //
-// The View is closed via t.Cleanup and the scratch dir is a fresh
-// t.TempDir(). Editing is on and the namespace is "files" — the
-// configuration fuse and webdav share. A surface that needs a
-// read-only or different-namespace FSOps builds it directly.
-func Stack(t testing.TB, manifests ...domain.Manifest) (*vw.View, *fso.Ops, *projectionfx.FakeSource) {
+// The Projection is closed via t.Cleanup. A surface that needs a
+// read-only or different-namespace projection builds it directly.
+//
+// Stack returns the bundle, not its parts: callers (surface tests)
+// hand it straight to vfs.New and never touch the projection's
+// internal View/Ops types.
+func Stack(t testing.TB, manifests ...domain.Manifest) (*projection.Projection, *projectionfx.FakeSource) {
 	t.Helper()
 	src := projectionfx.New()
 	for _, m := range manifests {
 		src.Add(m, nil)
 	}
 
-	v, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+	proj, err := projection.Build(t.Context(), src, nil, projection.Config{
+		Namespace:  "files",
+		Editing:    "on",
+		ScratchDir: t.TempDir(),
+	})
 	if err != nil {
-		t.Fatalf("viewfx.Stack: NewView: %v", err)
+		t.Fatalf("viewfx.Stack: Build: %v", err)
 	}
-	t.Cleanup(func() { v.Close() })
+	t.Cleanup(func() { proj.Close() })
 
-	o, err := fso.New(v,
-		fso.WithStore(src),
-		fso.WithNamespace("files"),
-		fso.WithScratchDir(t.TempDir()),
-		fso.WithEditingPolicy(fso.EditingOn()),
-	)
-	if err != nil {
-		t.Fatalf("viewfx.Stack: NewFSOps: %v", err)
-	}
-	return v, o, src
+	return proj, src
 }
 
 // RoutingAll returns a RoutingConfig with every service tree enabled

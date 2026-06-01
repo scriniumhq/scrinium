@@ -6,10 +6,9 @@ import (
 	"os"
 
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/projection/internal/fsops"
 	"scrinium.dev/projection/internal/source"
-	"scrinium.dev/projection/view"
+	"scrinium.dev/projection/internal/view"
 )
 
 // ExtIndex is the read-side contract the View consults for fast
@@ -19,16 +18,27 @@ import (
 // opens) and then hands the same handle to Build.
 type ExtIndex = source.Ext
 
+// Backend is the store surface a projection needs: the read side the
+// View walks and fetches from, plus the write side FSOps uses. It is
+// the union of the internal source.Provider and fsops.StoreClient
+// contracts. A *store.Store (or any value with these methods, e.g. a
+// test fake) satisfies it structurally, so Build's public signature
+// names no concrete store type.
+type Backend interface {
+	source.Provider
+	fsops.StoreClient
+}
+
 // Build wires the read-side View and the read/write FSOps facade over
-// an already-open store, per cfg. The store must already have the
-// fsindex extension registered and fsidx must be that extension's
-// handle. The returned Projection owns the View; Close releases it.
-func Build(ctx context.Context, st store.Store, fsidx ExtIndex, cfg Config) (*Projection, error) {
-	v, err := buildView(ctx, st, fsidx, cfg)
+// a store backend, per cfg. The backend must already have the fsindex
+// extension registered and fsidx must be that extension's handle. The
+// returned Projection owns the View; Close releases it.
+func Build(ctx context.Context, backend Backend, fsidx ExtIndex, cfg Config) (*Projection, error) {
+	v, err := buildView(ctx, backend, fsidx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	ops, err := buildFSOps(v, st, cfg)
+	ops, err := buildFSOps(v, backend, cfg)
 	if err != nil {
 		_ = v.Close()
 		return nil, err
@@ -38,7 +48,7 @@ func Build(ctx context.Context, st store.Store, fsidx ExtIndex, cfg Config) (*Pr
 
 // buildView constructs the read-side projection. cfg selects the root
 // tree and the by-path fallback; zero values leave engine defaults.
-func buildView(ctx context.Context, st store.Store, fsidx ExtIndex, cfg Config) (*view.View, error) {
+func buildView(ctx context.Context, backend Backend, fsidx ExtIndex, cfg Config) (*view.View, error) {
 	opts := []view.Option{
 		view.WithPathResolver(fsmeta.Resolver),
 		view.WithFSIndex(fsidx),
@@ -49,7 +59,7 @@ func buildView(ctx context.Context, st store.Store, fsidx ExtIndex, cfg Config) 
 	if cfg.ByPathFallback != "" {
 		opts = append(opts, view.WithFallback(view.Fallback(cfg.ByPathFallback)))
 	}
-	v, err := view.New(ctx, st, opts...)
+	v, err := view.New(ctx, backend, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("build view: %w", err)
 	}
@@ -58,9 +68,9 @@ func buildView(ctx context.Context, st store.Store, fsidx ExtIndex, cfg Config) 
 
 // buildFSOps constructs the read/write facade from cfg. uid/gid
 // default to the running process when left at zero.
-func buildFSOps(v *view.View, st store.Store, cfg Config) (*fsops.Ops, error) {
+func buildFSOps(v *view.View, backend Backend, cfg Config) (*fsops.Ops, error) {
 	opts := []fsops.Option{
-		fsops.WithStore(st),
+		fsops.WithStore(backend),
 		fsops.WithMountSession(cfg.MountSession),
 		fsops.WithScratchQuota(cfg.ScratchQuota),
 		fsops.WithDefaultMode(cfg.DefaultMode),

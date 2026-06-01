@@ -96,8 +96,7 @@ func runMount(args []string) int {
 		ShowRaw:         true,
 	}
 	fsys := vfs.New(
-		asm.Projection.View,
-		asm.Projection.FSOps,
+		asm.Projection,
 		routingCfg,
 		vfs.WithStatsProvider(daemon.StatsProvider(asm, startedAt, 2*time.Second)),
 	)

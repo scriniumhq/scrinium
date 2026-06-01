@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"scrinium.dev/projection/internal/source"
-	vw "scrinium.dev/projection/view"
+	vw "scrinium.dev/projection/internal/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
