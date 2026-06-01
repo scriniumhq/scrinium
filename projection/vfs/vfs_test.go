@@ -12,7 +12,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/projection/vfs"
-	"scrinium.dev/projection/viewfx"
+	"scrinium.dev/testutil/viewfx"
 )
 
 // newTestVFS builds a VFS over an in-memory stack via viewfx. The

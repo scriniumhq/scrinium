@@ -15,9 +15,9 @@ import (
 
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
+	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // Stack wires an in-memory FakeSource into a built Projection (View +

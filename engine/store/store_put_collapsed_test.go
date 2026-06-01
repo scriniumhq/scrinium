@@ -20,7 +20,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // TestPut_OnDiskLayout is the single physical-layout sanity check: a
@@ -29,7 +29,7 @@ import (
 // covered by the seeded round-trip and the model test; this pins the
 // on-disk shape and the Capacity surface, which nothing else asserts.)
 func TestPut_OnDiskLayout(t *testing.T) {
-	s, root := storefx.InitWithRoot(t)
+	s, root := storefx2.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("hello scrinium"),
 		store.WithNamespace("users"))
@@ -40,7 +40,7 @@ func TestPut_OnDiskLayout(t *testing.T) {
 		t.Errorf("ArtifactID prefix: got %q", id)
 	}
 
-	disk := storefx.OnDiskAt(root)
+	disk := storefx2.OnDiskAt(root)
 	if !disk.ManifestExists(id) {
 		t.Errorf("manifest not on disk at %s", disk.ManifestPath(id))
 	}
@@ -66,7 +66,7 @@ func TestPut_OnDiskLayout(t *testing.T) {
 // property does not cover (that one puts the same content under the
 // same identity and expects the same ID).
 func TestPut_SharedBlobAcrossArtifacts(t *testing.T) {
-	s, root := storefx.InitWithRoot(t)
+	s, root := storefx2.InitWithRoot(t)
 	const text = "shared content"
 
 	id1, err := s.Put(context.Background(), payload(text),
@@ -83,7 +83,7 @@ func TestPut_SharedBlobAcrossArtifacts(t *testing.T) {
 		t.Fatalf("different SessionID must produce different ArtifactIDs, got %q", id1)
 	}
 
-	disk := storefx.OnDiskAt(root)
+	disk := storefx2.OnDiskAt(root)
 	if n := disk.BlobCount(); n != 1 {
 		t.Errorf("shared content should leave 1 blob, got %d", n)
 	}
@@ -131,7 +131,7 @@ func TestPut_InputValidation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _ := storefx.InitWithRoot(t)
+			s, _ := storefx2.InitWithRoot(t)
 			_, err := s.Put(context.Background(), tc.art, tc.opts...)
 			if tc.wantErr == nil {
 				if err == nil {
@@ -177,7 +177,7 @@ func TestPut_InlinePolicy(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}
-			disk := storefx.OnDiskAt(root)
+			disk := storefx2.OnDiskAt(root)
 			if n := disk.BlobCount(); n != tc.wantBlobs {
 				t.Errorf("blob files: got %d, want %d", n, tc.wantBlobs)
 			}
@@ -200,7 +200,7 @@ func TestPut_InlinePolicy(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if n := storefx.OnDiskAt(root).BlobCount(); n != 0 {
+		if n := storefx2.OnDiskAt(root).BlobCount(); n != 0 {
 			t.Errorf("blob files after 2 inline Puts: got %d, want 0", n)
 		}
 		var manifests int

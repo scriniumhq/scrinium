@@ -15,9 +15,9 @@ import (
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // --- shared test fixtures and helpers ---------------------------

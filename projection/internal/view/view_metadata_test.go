@@ -9,10 +9,10 @@ import (
 	"time"
 
 	vw "scrinium.dev/projection/internal/view"
+	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // --- helpers ---

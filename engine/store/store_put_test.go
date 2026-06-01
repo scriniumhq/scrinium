@@ -14,10 +14,10 @@ import (
 	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/artifactfx"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 var (

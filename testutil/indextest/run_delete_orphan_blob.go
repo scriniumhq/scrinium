@@ -6,7 +6,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/internal/testutil/manifestfx"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // --- DeleteOrphanBlob ---

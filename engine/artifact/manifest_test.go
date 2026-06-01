@@ -8,7 +8,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/artifactfx"
+	"scrinium.dev/testutil/artifactfx"
 )
 
 // --- Plain: encode/decode round-trip ---

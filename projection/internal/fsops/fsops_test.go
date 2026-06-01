@@ -8,11 +8,11 @@ import (
 
 	fso "scrinium.dev/projection/internal/fsops"
 	vw "scrinium.dev/projection/internal/view"
+	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/manifestfx"
-	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // --- Construction ---

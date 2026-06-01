@@ -9,10 +9,10 @@ import (
 
 	fso "scrinium.dev/projection/internal/fsops"
 	vw "scrinium.dev/projection/internal/view"
+	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // --- helpers ---

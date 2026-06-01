@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/internal/testutil/manifestfx"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // --- ListUnverifiedBlobs ---

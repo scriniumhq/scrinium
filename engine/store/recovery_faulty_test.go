@@ -11,8 +11,8 @@ import (
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
 )
 
 // faultyIndex wraps a real store.StoreIndex and injects errors into

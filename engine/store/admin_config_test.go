@@ -9,7 +9,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // --- UpdateConfig ---

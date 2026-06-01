@@ -11,9 +11,9 @@ import (
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/artifactio"
 	"scrinium.dev/engine/store/internal/storeconfig"
-	"scrinium.dev/internal/testutil/artifactfx"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
 )
 
 // harness wires a Writer over a localfs driver, in-memory index, the

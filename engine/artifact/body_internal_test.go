@@ -9,7 +9,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/manifestfx"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // localManifest creates test manifest breaking import cycle

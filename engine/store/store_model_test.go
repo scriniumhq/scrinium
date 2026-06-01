@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // Model-based stateful test. A reference model (content the store
@@ -90,7 +90,7 @@ func runModelProgram(t *testing.T, program []byte) {
 	ctx := context.Background()
 	namespaces := []string{"alpha", "beta"}
 
-	s, r := storefx.InitPlain(t)
+	s, r := storefx2.InitPlain(t)
 	root := r.Root()
 	var m model
 
@@ -212,9 +212,9 @@ func reconcileModel(t *testing.T, s store.Store, root string, m *model, step int
 	// the *reachable* set, not the physical file count — assert the
 	// distinct-content lower bound is present and that we never have
 	// fewer blobs than distinct contents.
-	if want := m.distinctContents(); storefx.OnDiskAt(root).BlobCount() < want {
+	if want := m.distinctContents(); storefx2.OnDiskAt(root).BlobCount() < want {
 		t.Fatalf("step %d reconcile: blob count %d < distinct live contents %d",
-			step, storefx.OnDiskAt(root).BlobCount(), want)
+			step, storefx2.OnDiskAt(root).BlobCount(), want)
 	}
 }
 

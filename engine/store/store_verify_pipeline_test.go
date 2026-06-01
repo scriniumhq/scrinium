@@ -16,9 +16,9 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // --- Helpers ---

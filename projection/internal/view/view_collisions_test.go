@@ -6,12 +6,12 @@ import (
 	"time"
 
 	vw "scrinium.dev/projection/internal/view"
+	"scrinium.dev/testutil/eventfx"
+	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/internal/testutil/eventfx"
-	"scrinium.dev/internal/testutil/manifestfx"
-	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // withCreatedAt builds a manifest at a specific time. fsmeta path

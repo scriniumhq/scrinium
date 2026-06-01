@@ -8,8 +8,8 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // mustWriteSysConfig writes a known StoreConfig through

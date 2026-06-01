@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"io"
+
 	fso "scrinium.dev/projection/internal/fsops"
+	"scrinium.dev/testutil/projectionfx"
+
 	"testing"
 	"time"
 
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // All editing tests need an FSOps with the relevant policy bit

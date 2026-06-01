@@ -10,11 +10,11 @@ import (
 
 	"scrinium.dev/projection/internal/source"
 	vw "scrinium.dev/projection/internal/view"
+	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/manifestfx"
-	"scrinium.dev/internal/testutil/projectionfx"
 )
 
 // makeManifest is a thin wrapper around manifestfx.Blob that

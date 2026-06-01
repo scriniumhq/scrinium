@@ -10,9 +10,9 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/artifactfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/indexfx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // --- public capturing handler (black-box) --------------------------------
@@ -99,7 +99,7 @@ func debugLogger() (*slog.Logger, *[]logRecord) {
 
 func TestLog_InitEmitsInitialised(t *testing.T) {
 	l, recs := debugLogger()
-	storefx.Init(t, store.WithLogger(l))
+	storefx2.Init(t, store.WithLogger(l))
 
 	rec := find(recs, "store initialised")
 	if rec == nil {
@@ -118,7 +118,7 @@ func TestLog_InitEmitsInitialised(t *testing.T) {
 
 func TestLog_PutGetDeleteEmissions(t *testing.T) {
 	l, recs := debugLogger()
-	s := storefx.Init(t, store.WithLogger(l))
+	s := storefx2.Init(t, store.WithLogger(l))
 	ctx := context.Background()
 
 	id, err := s.Put(ctx, artifactfx.Payload("hello logs"), store.WithNamespace("ns"))
@@ -148,7 +148,7 @@ func TestLog_PutGetDeleteEmissions(t *testing.T) {
 
 func TestLog_UpdateConfigEmitsInfo(t *testing.T) {
 	l, recs := debugLogger()
-	s := storefx.Init(t, store.WithLogger(l))
+	s := storefx2.Init(t, store.WithLogger(l))
 
 	// UpdateConfig with the current config is a valid no-immutable-change
 	// swap; it still exercises the write+swap+log path.
@@ -165,7 +165,7 @@ func TestLog_UpdateConfigEmitsInfo(t *testing.T) {
 
 func TestLog_MaintenanceModeEmitsDebug(t *testing.T) {
 	l, recs := debugLogger()
-	s := storefx.Init(t, store.WithLogger(l))
+	s := storefx2.Init(t, store.WithLogger(l))
 
 	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
 		t.Fatalf("SetMaintenanceMode: %v", err)
@@ -186,8 +186,8 @@ func TestLog_EncryptedOpenUnlockRotate(t *testing.T) {
 
 	// Init encrypted (Unlocked after init), then reopen LOCKED and unlock,
 	// exercising "store opened"(encrypted) and "store unlocked".
-	_, r := storefx.InitEncrypted(t, "pw-correct", store.WithLogger(l))
-	locked := r.Open(t, store.WithLogger(l), store.WithPassphrase(storefx.StaticPP("pw-correct")))
+	_, r := storefx2.InitEncrypted(t, "pw-correct", store.WithLogger(l))
+	locked := r.Open(t, store.WithLogger(l), store.WithPassphrase(storefx2.StaticPP("pw-correct")))
 
 	if rec := find(recs, "store opened"); rec == nil {
 		t.Error(`no "store opened" record on encrypted reopen`)
@@ -221,8 +221,8 @@ func TestLog_NoSecretLeak(t *testing.T) {
 	l, recs := debugLogger()
 	const pass = "super-secret-passphrase-zzz"
 
-	_, r := storefx.InitEncrypted(t, pass, store.WithLogger(l))
-	s := r.Open(t, store.WithLogger(l), store.WithPassphrase(storefx.StaticPP(pass)))
+	_, r := storefx2.InitEncrypted(t, pass, store.WithLogger(l))
+	s := r.Open(t, store.WithLogger(l), store.WithPassphrase(storefx2.StaticPP(pass)))
 	ctx := context.Background()
 	if err := s.Unlock(ctx); err != nil {
 		t.Fatalf("Unlock: %v", err)
@@ -260,7 +260,7 @@ func TestLog_NoSecretLeak(t *testing.T) {
 
 func TestLog_SilentByDefault_FullLifecycle(t *testing.T) {
 	// No WithLogger: the engine must run the whole lifecycle silently.
-	s := storefx.Init(t)
+	s := storefx2.Init(t)
 	ctx := context.Background()
 	id, err := s.Put(ctx, artifactfx.Payload("quiet"), store.WithNamespace("ns"))
 	if err != nil {
@@ -282,7 +282,7 @@ func TestLog_SilentByDefault_FullLifecycle(t *testing.T) {
 // caller (no swallowing).
 func TestLog_ErrorReturnTracedAtDebug(t *testing.T) {
 	l, recs := debugLogger()
-	s := storefx.Init(t, store.WithLogger(l))
+	s := storefx2.Init(t, store.WithLogger(l))
 
 	// Delete a nonexistent artifact: loadManifest → ErrArtifactNotFound
 	// is returned by the entry path before traceErr, so to hit a traced
@@ -336,7 +336,7 @@ func TestLog_ForceReinitWarns(t *testing.T) {
 	// First init creates a descriptor at root.
 	if _, _, err := store.InitStore(context.Background(), mkDriver(),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx.Hashes()),
+		store.WithHashRegistry(storefx2.Hashes()),
 	); err != nil {
 		t.Fatalf("InitStore (first): %v", err)
 	}
@@ -345,7 +345,7 @@ func TestLog_ForceReinitWarns(t *testing.T) {
 	// must Warn about it.
 	if _, _, err := store.InitStore(context.Background(), mkDriver(),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx.Hashes()),
+		store.WithHashRegistry(storefx2.Hashes()),
 		store.WithForceReinit(),
 		store.WithLogger(l),
 	); err != nil {

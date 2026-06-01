@@ -18,7 +18,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // TestDelete_RemovesManifest: a logical delete removes the manifest
@@ -44,7 +44,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 			if tc.inline {
 				s, root = newInlineStore(t, 100)
 			} else {
-				s, root = storefx.InitWithRoot(t)
+				s, root = storefx2.InitWithRoot(t)
 			}
 			id, err := s.Put(context.Background(), payload("delete me"), store.WithNamespace("d"))
 			if err != nil {
@@ -54,7 +54,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 				t.Fatalf("Delete: %v", err)
 			}
 
-			disk := storefx.OnDiskAt(root)
+			disk := storefx2.OnDiskAt(root)
 			if disk.ManifestExists(id) {
 				t.Errorf("manifest file should be gone")
 			}
@@ -93,7 +93,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 // the public API, so this is the store-level contract the model test
 // (which checks content/Walk/blob-count, not refcounts) does not cover.
 func TestStore_RefCountLifecycle(t *testing.T) {
-	s, root := storefx.InitWithRoot(t)
+	s, root := storefx2.InitWithRoot(t)
 	const text = "shared content for delete"
 
 	idA, err := s.Put(context.Background(), payload(text),
@@ -109,7 +109,7 @@ func TestStore_RefCountLifecycle(t *testing.T) {
 	if idA == idB {
 		t.Fatalf("shared-blob setup broken: ids equal")
 	}
-	if n := storefx.OnDiskAt(root).BlobCount(); n != 1 {
+	if n := storefx2.OnDiskAt(root).BlobCount(); n != 1 {
 		t.Fatalf("two artifacts should share 1 blob, got %d", n)
 	}
 
@@ -130,7 +130,7 @@ func TestStore_RefCountLifecycle(t *testing.T) {
 		t.Errorf("B payload after deleting A: got %q, want %q", got, text)
 	}
 
-	if n := storefx.OnDiskAt(root).BlobCount(); n != 1 {
+	if n := storefx2.OnDiskAt(root).BlobCount(); n != 1 {
 		t.Errorf("shared blob should remain after deleting one referrer: got %d, want 1", n)
 	}
 }

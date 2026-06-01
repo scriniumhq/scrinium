@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/testutil/manifestfx"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // --- GetBySession ---

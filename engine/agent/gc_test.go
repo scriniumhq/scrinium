@@ -15,9 +15,9 @@ import (
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/artifactfx"
-	"scrinium.dev/internal/testutil/eventfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/eventfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 const gcHostID = "gc-host-0001"

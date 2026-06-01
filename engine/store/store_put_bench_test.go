@@ -9,9 +9,9 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // BenchmarkPut measures the Put pipeline's per-call cost across

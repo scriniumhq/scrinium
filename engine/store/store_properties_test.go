@@ -13,7 +13,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // Store invariants — the laws that hold for ALL inputs. These subsume
@@ -84,7 +84,7 @@ func randBytes(rng *rand.Rand, n int) []byte {
 // target and the seeded driver: for any payload, Get(Put(x)) == x.
 func checkRoundTrip(t *testing.T, payload []byte) {
 	t.Helper()
-	s := storefx.Init(t)
+	s := storefx2.Init(t)
 	id, err := s.Put(context.Background(), mkArtifact(payload), store.WithNamespace("u"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
@@ -121,7 +121,7 @@ func TestStore_RoundTrip_Seeded(t *testing.T) {
 // lives at the blob layer, which is what we assert.
 func checkContentAddressing(t *testing.T, a, b []byte) {
 	t.Helper()
-	s, root := storefx.InitWithRoot(t)
+	s, root := storefx2.InitWithRoot(t)
 	ctx := context.Background()
 
 	id1, err := s.Put(ctx, mkArtifact(a), store.WithNamespace("u"))
@@ -151,7 +151,7 @@ func checkContentAddressing(t *testing.T, a, b []byte) {
 	if !bytes.Equal(a, b) {
 		wantBlobs = 2
 	}
-	if n := storefx.OnDiskAt(root).BlobCount(); n != wantBlobs {
+	if n := storefx2.OnDiskAt(root).BlobCount(); n != wantBlobs {
 		t.Fatalf("blob count: got %d, want %d (a==b: %v)", n, wantBlobs, bytes.Equal(a, b))
 	}
 
@@ -185,7 +185,7 @@ func TestStore_ContentAddressing_Seeded(t *testing.T) {
 // and reopening preserves every artifact's content and the Walk set.
 func checkReopenStable(t *testing.T, payload []byte) {
 	t.Helper()
-	s, r := storefx.InitPlain(t)
+	s, r := storefx2.InitPlain(t)
 	ctx := context.Background()
 
 	id, err := s.Put(ctx, mkArtifact(payload), store.WithNamespace("u"))
@@ -251,9 +251,9 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 		tc := tc
 		t.Run(string(tc.mode), func(t *testing.T) {
 			cfg := domain.StoreConfig{ManifestCrypto: tc.mode}
-			_, r := storefx.InitEncrypted(t, "correct-horse", store.WithConfig(cfg))
+			_, r := storefx2.InitEncrypted(t, "correct-horse", store.WithConfig(cfg))
 			s := r.Open(t,
-				store.WithPassphrase(storefx.StaticPP("correct-horse")),
+				store.WithPassphrase(storefx2.StaticPP("correct-horse")),
 				store.WithAutoUnlock(),
 				store.WithConfig(cfg),
 			)
@@ -275,7 +275,7 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 			}
 
 			// Inspect the raw manifest file on disk.
-			mp := storefx.OnDiskAt(r.Root()).ManifestPath(id)
+			mp := storefx2.OnDiskAt(r.Root()).ManifestPath(id)
 			if mp == "" {
 				t.Fatalf("ManifestPath returned empty for %s", id)
 			}
@@ -298,7 +298,7 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 
 			// Wrong passphrase must fail closed.
 			_, err = r.TryOpen(t,
-				store.WithPassphrase(storefx.StaticPP("wrong")),
+				store.WithPassphrase(storefx2.StaticPP("wrong")),
 				store.WithAutoUnlock(),
 				store.WithConfig(cfg),
 			)

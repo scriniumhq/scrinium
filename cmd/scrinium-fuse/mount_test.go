@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"scrinium.dev/internal/testutil/manifestfx"
 	"scrinium.dev/projection/vfs"
-	"scrinium.dev/projection/viewfx"
+	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/testutil/viewfx"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"

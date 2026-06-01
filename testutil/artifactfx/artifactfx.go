@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/hashing"
-	"scrinium.dev/internal/testutil/manifestfx"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // Hashes returns a HashRegistry with sha256 registered, sufficient for
