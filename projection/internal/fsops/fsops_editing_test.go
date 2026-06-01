@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
-	fso "scrinium.dev/projection/fsops"
+	fso "scrinium.dev/projection/internal/fsops"
 	"testing"
 	"time"
 

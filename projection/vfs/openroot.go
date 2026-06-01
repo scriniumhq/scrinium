@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
-	fso "scrinium.dev/projection/fsops"
+	fso "scrinium.dev/projection/internal/fsops"
 
 	"scrinium.dev/errs"
 )

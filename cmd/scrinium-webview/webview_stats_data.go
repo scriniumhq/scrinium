@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	vw "scrinium.dev/projection/view"
+	"scrinium.dev/projection"
 	"time"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
@@ -20,7 +20,7 @@ import (
 // schema-agnostic; this helper knows about projection-level
 // types (View, ExtensionInfo) which web cannot import.
 func buildWebStatsData(
-	view *vw.View,
+	reader projection.Reader,
 	cap *domain.StorageInfo,
 	exts []web.StatsExtension,
 	startedAt time.Time,
@@ -30,11 +30,11 @@ func buildWebStatsData(
 	editing string,
 	namespace string,
 ) web.StatsData {
-	stats := view.Stats
+	stats := reader.StatsSnapshot()
 
 	d := web.StatsData{
 		Daemon: web.StatsDaemon{
-			Source:       string(view.Source),
+			Source:       reader.SourceName(),
 			StartedAt:    startedAt,
 			Uptime:       formatStatsUptime(time.Since(startedAt)),
 			MountSession: string(mountSession),

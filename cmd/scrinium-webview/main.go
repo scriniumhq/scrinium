@@ -115,12 +115,12 @@ func runServe(args []string) int {
 			exts = append(exts, web.StatsExtension{Name: e.Name, SchemaVersion: e.SchemaVersion})
 		}
 		// webview is always read-only; reflect that on the page.
-		return buildWebStatsData(asm.Projection.View, capPtr, exts, startedAt, asm.MountSession,
+		return buildWebStatsData(asm.Projection.Queries(), capPtr, exts, startedAt, asm.MountSession,
 			meta.StoreURI, true, "off", meta.Namespace)
 	}
 
 	v := vfs.New(asm.Projection.View, asm.Projection.FSOps, routingCfg, vfs.WithStatsProvider(textStats))
-	backing := newWebBackingFS(v, asm.Projection.View, asm.Store)
+	backing := newWebBackingFS(v, asm.Projection.Queries(), asm.Store)
 	webHandler := web.NewHandler(backing, vfs.CleanPath, web.Config{
 		StorePath:     meta.StoreURI,
 		ServicePrefix: "",

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/internal/node"
 )
 
 func TestRootViewFlag_Set(t *testing.T) {

@@ -5,7 +5,7 @@
 // projection package (routing, view, fsops, vfs) and external
 // consumers speak this vocabulary without dragging in the read model
 // or the filesystem operations.
-package node
+package view
 
 import (
 	"encoding/json"

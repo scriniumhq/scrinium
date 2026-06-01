@@ -12,10 +12,11 @@ package viewfx
 
 import (
 	"context"
-	fso "scrinium.dev/projection/fsops"
-	"scrinium.dev/projection/vfs"
-	vw "scrinium.dev/projection/view"
 	"testing"
+
+	fso "scrinium.dev/projection/internal/fsops"
+	vw "scrinium.dev/projection/internal/view"
+	"scrinium.dev/projection/vfs"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"

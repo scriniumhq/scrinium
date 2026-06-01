@@ -5,12 +5,12 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	fso "scrinium.dev/projection/fsops"
-	"scrinium.dev/projection/node"
-	vw "scrinium.dev/projection/view"
 	"strings"
 	"syscall"
 	"time"
+
+	fso "scrinium.dev/projection/internal/fsops"
+	vw "scrinium.dev/projection/internal/view"
 
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/pathx"
@@ -43,7 +43,7 @@ type VFS struct {
 	// rootView is the tree that backs the mount root. Derived
 	// once from view.RootView() so routing agrees with FSOps,
 	// which resolves the root tree the same way.
-	rootView  node.RootView
+	rootView  vw.RootView
 	startedAt time.Time
 
 	// statsProvider, if non-nil, returns the bytes served at
@@ -350,7 +350,7 @@ func isAtServiceRoot(clean string, cfg Config) bool {
 
 // nodeModTime returns the View node's modification time, or
 // fallback when the node has no time recorded.
-func nodeModTime(n node.Node, fallback time.Time) time.Time {
+func nodeModTime(n vw.Node, fallback time.Time) time.Time {
 	if !n.FS.ModTime.IsZero() {
 		return n.FS.ModTime
 	}

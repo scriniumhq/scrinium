@@ -5,7 +5,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	fso "scrinium.dev/projection/fsops"
+	fso "scrinium.dev/projection/internal/fsops"
 	"time"
 
 	"scrinium.dev/domain"

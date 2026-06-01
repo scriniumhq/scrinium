@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"scrinium.dev/internal/pathx"
-	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/internal/view"
 )
 
 // kind tags the destination of a routed path. The dispatcher
@@ -50,7 +50,7 @@ type target struct {
 
 	// Tree is the View tree to query when Kind == kindRoot or
 	// kindServiceTree. Unused otherwise.
-	Tree node.RootView
+	Tree view.RootView
 
 	// SubPath is the path *inside* Tree. For kindRoot it's the
 	// input path verbatim; for kindServiceTree it's the input
@@ -135,7 +135,7 @@ var errRejected = errors.New("scrinium-vfs: path rejected by routing")
 //
 // The function does no I/O and does not consult the View; it is
 // pure with respect to its inputs.
-func route(path string, cfg Config, rootView node.RootView) (target, error) {
+func route(path string, cfg Config, rootView view.RootView) (target, error) {
 	// Mount root.
 	if path == "" {
 		return target{
@@ -188,7 +188,7 @@ func route(path string, cfg Config, rootView node.RootView) (target, error) {
 // Used both by the prefixed flow (after stripping
 // ServicePrefix) and the unprefixed flow (as the top-level
 // dispatcher when ServicePrefix is empty).
-func dispatchServiceTree(path string, cfg Config, rootView node.RootView) (target, error) {
+func dispatchServiceTree(path string, cfg Config, rootView view.RootView) (target, error) {
 	tree, treeRest := pathx.SplitFirst(path)
 	switch tree {
 	case "stats":
@@ -207,7 +207,7 @@ func dispatchServiceTree(path string, cfg Config, rootView node.RootView) (targe
 		}
 		return target{
 			Kind:    kindServiceTree,
-			Tree:    node.RootByArtifact,
+			Tree:    view.RootByArtifact,
 			SubPath: treeRest,
 		}, nil
 
@@ -218,10 +218,10 @@ func dispatchServiceTree(path string, cfg Config, rootView node.RootView) (targe
 		// orphaned has its own tree (RootByOrphaned), populated
 		// only with artifacts whose path could not be resolved.
 		// Distinct from by-artifact (which contains every
-		// artifact). See projection/view indexArtifact.
+		// artifact). See projection/internal/view indexArtifact.
 		return target{
 			Kind:    kindServiceTree,
-			Tree:    node.RootByOrphaned,
+			Tree:    view.RootByOrphaned,
 			SubPath: treeRest,
 		}, nil
 
@@ -231,7 +231,7 @@ func dispatchServiceTree(path string, cfg Config, rootView node.RootView) (targe
 		}
 		return target{
 			Kind:    kindServiceTree,
-			Tree:    node.RootByDate,
+			Tree:    view.RootByDate,
 			SubPath: treeRest,
 		}, nil
 
@@ -241,7 +241,7 @@ func dispatchServiceTree(path string, cfg Config, rootView node.RootView) (targe
 		}
 		return target{
 			Kind:    kindServiceTree,
-			Tree:    node.RootBySession,
+			Tree:    view.RootBySession,
 			SubPath: treeRest,
 		}, nil
 
@@ -251,7 +251,7 @@ func dispatchServiceTree(path string, cfg Config, rootView node.RootView) (targe
 		}
 		return target{
 			Kind:    kindServiceTree,
-			Tree:    node.RootByNamespace,
+			Tree:    view.RootByNamespace,
 			SubPath: treeRest,
 		}, nil
 
@@ -261,7 +261,7 @@ func dispatchServiceTree(path string, cfg Config, rootView node.RootView) (targe
 		// RootView and wants the path tree as a service view.
 		return target{
 			Kind:    kindServiceTree,
-			Tree:    node.RootByPath,
+			Tree:    view.RootByPath,
 			SubPath: treeRest,
 		}, nil
 

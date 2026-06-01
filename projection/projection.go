@@ -19,8 +19,8 @@
 package projection
 
 import (
-	"scrinium.dev/projection/fsops"
-	"scrinium.dev/projection/view"
+	"scrinium.dev/projection/internal/fsops"
+	"scrinium.dev/projection/internal/view"
 )
 
 // Projection bundles the read-side View with the optional read/write

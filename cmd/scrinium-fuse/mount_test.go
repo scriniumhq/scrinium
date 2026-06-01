@@ -12,8 +12,8 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/internal/testutil/viewfx"
 	"scrinium.dev/projection/vfs"
+	"scrinium.dev/projection/viewfx"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
-	fso "scrinium.dev/projection/fsops"
-	vw "scrinium.dev/projection/view"
+	fso "scrinium.dev/projection/internal/fsops"
+	vw "scrinium.dev/projection/internal/view"
 	"strings"
 	"testing"
 

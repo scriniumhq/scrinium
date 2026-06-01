@@ -12,7 +12,8 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/projectionfx"
-	viewfx "scrinium.dev/internal/testutil/viewfx"
+	"scrinium.dev/projection"
+	"scrinium.dev/projection/viewfx"
 )
 
 // newTestFS builds a webdavFS wired against an in-memory
@@ -21,7 +22,7 @@ import (
 func newTestFS(t *testing.T, manifests ...domain.Manifest) (*webdavFS, *projectionfx.FakeSource) {
 	t.Helper()
 	v, o, src := viewfx.Stack(t, manifests...)
-	return newWebdavFS(v, o, viewfx.RoutingAll(), true /* rejectJunk */, nil /* statsProvider */), src
+	return newWebdavFS(&projection.Projection{View: v, FSOps: o}, viewfx.RoutingAll(), true /* rejectJunk */, nil /* statsProvider */), src
 }
 
 // --- cleanWebDAVPath ---

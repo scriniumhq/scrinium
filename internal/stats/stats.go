@@ -2,7 +2,7 @@ package stats
 
 import (
 	"fmt"
-	vw "scrinium.dev/projection/view"
+	"scrinium.dev/projection"
 	"slices"
 	"strings"
 	"time"
@@ -63,7 +63,7 @@ type DaemonInfo struct {
 // labelled; empty groups are omitted; unavailable numbers render
 // "n/a" rather than "-1". Format is plain "key: value" lines, stable
 // across versions as long as field names don't move.
-func Render(vs vw.Stats, info DaemonInfo) []byte {
+func Render(vs projection.Stats, info DaemonInfo) []byte {
 	var b strings.Builder
 	b.WriteString("Scrinium projection stats\n\n")
 
@@ -97,7 +97,7 @@ func writeDaemonSection(b *strings.Builder, info DaemonInfo) {
 	b.WriteString("\n")
 }
 
-func writeViewSection(b *strings.Builder, stats vw.Stats) {
+func writeViewSection(b *strings.Builder, stats projection.Stats) {
 	fmt.Fprintln(b, "[view]")
 	fmt.Fprintf(b, "TotalNodes:       %d\n", stats.TotalNodes)
 	fmt.Fprintf(b, "TotalBytes:       %d (%s)\n", stats.TotalBytes, humanize.Bytes(stats.TotalBytes))

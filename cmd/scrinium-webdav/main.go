@@ -84,7 +84,7 @@ func runServe(args []string) int {
 		ServicePrefix: "_scrinium",
 	}
 	stats := daemon.StatsProvider(asm, startedAt, 2*time.Second)
-	wfs := newWebdavFS(asm.Projection.View, asm.Projection.FSOps, routingCfg, !*allowOSJunk, stats)
+	wfs := newWebdavFS(asm.Projection, routingCfg, !*allowOSJunk, stats)
 
 	handler := &webdav.Handler{
 		FileSystem: wfs,

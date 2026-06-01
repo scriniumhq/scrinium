@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/internal/view"
 )
 
 // rootDirFile listings come from FSOps.Listdir(""). The
@@ -103,7 +103,7 @@ func (d *pathDirFile) Stat() (os.FileInfo, error) {
 // diagnostic surfaces; full visibility is the contract.
 type serviceDirFile struct {
 	v        *VFS
-	tree     node.RootView
+	tree     view.RootView
 	subPath  string
 	isPrefix bool
 	consumed bool
@@ -116,7 +116,7 @@ func newServiceDirFile(v *VFS, treeOrPrefix any, subPath string, isPrefix bool) 
 		isPrefix: isPrefix,
 	}
 	if !isPrefix {
-		if t, ok := treeOrPrefix.(node.RootView); ok {
+		if t, ok := treeOrPrefix.(view.RootView); ok {
 			d.tree = t
 		}
 	}

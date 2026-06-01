@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	fso "scrinium.dev/projection/fsops"
 	"strings"
 
 	"scrinium.dev/domain"
@@ -131,40 +130,36 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 
 	// 6. Read-side View + read/write FSOps from the projection section.
 	effProj := c.Projection
-
-	view, err := buildView(ctx, st, fsidx, effProj)
-	if err != nil {
-		return nil, fmt.Errorf("scrinium: %w", err)
-	}
-	cleanups = append(cleanups, func() {
-		if err := view.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "scrinium: view close on rollback: %v\n", err)
-		}
-	})
-
 	mountSession := domain.NewMountSessionID()
-
-	var fsops *fso.Ops
-	if effProj != nil {
-		fsops, err = buildFSOps(view, st, effProj, mountSession, spec.Driver)
-		if err != nil {
-			return nil, fmt.Errorf("scrinium: %w", err)
-		}
-	}
 
 	// Bundle the read/write ends into one Projection. nil when the
 	// config had no projection section — consumers (apps) that only
 	// need the store never touch it.
 	var proj *projection.Projection
 	if effProj != nil {
-		proj = &projection.Projection{View: view, FSOps: fsops}
+		pcfg, cfgErr := projectionConfig(effProj, mountSession, spec.Driver)
+		if cfgErr != nil {
+			return nil, fmt.Errorf("scrinium: %w", cfgErr)
+		}
+		p, buildErr := projection.Build(ctx, st, fsidx, pcfg)
+		if buildErr != nil {
+			return nil, fmt.Errorf("scrinium: %w", buildErr)
+		}
+		proj = p
+		cleanups = append(cleanups, func() {
+			if err := proj.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "scrinium: projection close on rollback: %v\n", err)
+			}
+		})
 	}
 
 	// closeFn unwinds in LIFO order; idempotency is the assembly's job.
 	closeFn := func() error {
 		var firstErr error
-		if err := view.Close(); err != nil && firstErr == nil {
-			firstErr = err
+		if proj != nil {
+			if err := proj.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
 		}
 		if err := st.Close(); err != nil && firstErr == nil {
 			firstErr = err

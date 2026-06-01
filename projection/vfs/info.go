@@ -4,11 +4,10 @@ import (
 	"os"
 	"time"
 
-	fso "scrinium.dev/projection/fsops"
-	"scrinium.dev/projection/node"
-
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
+	fso "scrinium.dev/projection/internal/fsops"
+	"scrinium.dev/projection/internal/view"
 )
 
 // --- os.FileInfo adapters ---
@@ -40,7 +39,7 @@ func (p projectionFileInfo) MIME() string { return p.fi.MIME }
 // the service trees do not run through FSOps so fsmeta is not
 // decoded — we surface 0o555 for dirs and 0o444 for files.
 type projectionNodeInfo struct {
-	node         node.Node
+	node         view.Node
 	fallbackTime time.Time
 }
 

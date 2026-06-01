@@ -12,14 +12,13 @@ import (
 	"sync"
 	"time"
 
-	vw "scrinium.dev/projection/view"
+	vw "scrinium.dev/projection/internal/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/pathx"
-	"scrinium.dev/projection/node"
 )
 
 // Ops is the filesystem-shaped operations layer over a View.
@@ -465,11 +464,11 @@ func (o *Ops) openForRead(ctx context.Context, path string) (File, error) {
 // --- Read-side helpers (router into View per RootView) ---
 
 // lookupInRoot routes Get to the tree configured as the root.
-func (o *Ops) lookupInRoot(path string) (node.Node, error) {
+func (o *Ops) lookupInRoot(path string) (vw.Node, error) {
 	return o.view.GetIn(o.view.RootView(), path)
 }
 
-func (o *Ops) listInRoot(path string) node.Seq {
+func (o *Ops) listInRoot(path string) vw.Seq {
 	return o.view.ListIn(o.view.RootView(), path)
 }
 
@@ -490,7 +489,7 @@ func (o *Ops) openInRoot(ctx context.Context, path string) (domain.ReadHandle, e
 // Decode errors are silently swallowed: the same hot-path policy
 // as fsmeta.Resolver inside View. A single bad ext payload must
 // not poison Stat/Listdir for the whole tree.
-func (o *Ops) fileInfoFromNode(n node.Node) FileInfo {
+func (o *Ops) fileInfoFromNode(n vw.Node) FileInfo {
 	fi := FileInfo{
 		Name:    n.FS.Name,
 		Path:    n.FS.Path,
