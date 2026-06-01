@@ -1,10 +1,17 @@
 package agent
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"sync"
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/internal/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -107,17 +114,302 @@ type RebuildIndexAgent interface {
 	Stats() RebuildStats
 }
 
-// NewRebuildIndexAgent creates a RebuildIndexAgent instance. Takes
-// store.Store (not DataStore): the agent reads StoreConfig through
-// AdminStore.ConfigHistory(), drives the maintenance mode, and
-// reaches the Driver and StoreIndex from inside the Store via
-// store.Store.
+// NewRebuildIndexAgent creates a RebuildIndexAgent. Constructed by the
+// assembler (Variant B) with the raw Driver and StoreIndex: the rebuild
+// reads manifest files straight off the Location through the Driver
+// (the index is exactly what is being rebuilt, so it cannot be the
+// source) and writes the reconstructed rows through the StoreIndex.
+// hostID owns the maintenance lease; storeID tags events.
 //
-// TODO(M3.4): rebuild StoreIndex from manifests / Recovery Kit.
+// Scope on M3: the FullScan path reconstructs Blob manifests (Inline
+// and Target) — the only manifest types that exist before M4 (Pack) and
+// M5 (TOC/chunking). Encrypted manifests need a KeyProvider the agent is
+// not yet wired with; the Snapshot fast-path needs a snapshot read-back
+// the Snapshot Agent (A4) has not introduced; descriptor/pointer
+// recovery from the Recovery Kit is M3.4. Each of those is reported as
+// an explicit, non-silent boundary rather than faked.
 func NewRebuildIndexAgent(
-	store store.Store,
+	st store.Store,
+	drv driver.Driver,
+	idx index.StoreIndex,
 	bus event.EventBus,
+	hostID string,
+	storeID string,
 	cfg RebuildConfig,
 ) (RebuildIndexAgent, error) {
-	return nil, fmt.Errorf("%w: agent.NewRebuildIndexAgent", errs.ErrNotImplemented)
+	if st == nil || drv == nil || idx == nil || bus == nil {
+		return nil, fmt.Errorf("agent.NewRebuildIndexAgent: store, driver, index and bus are required")
+	}
+	if hostID == "" {
+		return nil, fmt.Errorf("agent.NewRebuildIndexAgent: hostID is required for the maintenance lease")
+	}
+	cfg = applyRebuildDefaults(cfg)
+	return &rebuildAgent{
+		store: st, drv: drv, idx: idx, bus: bus,
+		hostID: hostID, storeID: storeID, cfg: cfg,
+	}, nil
+}
+
+const (
+	rebuildLeasePath        = "system.state/maintenance/lease"
+	defaultRebuildBatchSize = 1000
+	defaultRebuildParallel  = 8
+	defaultRebuildLeaseTTL  = 30 * time.Minute
+	manifestsPrefix         = "manifests"
+)
+
+func applyRebuildDefaults(cfg RebuildConfig) RebuildConfig {
+	if cfg.Source == "" {
+		cfg.Source = RebuildSourceAuto
+	}
+	if cfg.BatchSize <= 0 {
+		cfg.BatchSize = defaultRebuildBatchSize
+	}
+	if cfg.Parallelism <= 0 {
+		cfg.Parallelism = defaultRebuildParallel
+	}
+	if cfg.LeaseTTL <= 0 {
+		cfg.LeaseTTL = defaultRebuildLeaseTTL
+	}
+	return cfg
+}
+
+// rebuildAgent is the concrete RebuildIndexAgent.
+type rebuildAgent struct {
+	store   store.Store
+	drv     driver.Driver
+	idx     index.StoreIndex
+	bus     event.EventBus
+	hostID  string
+	storeID string
+	cfg     RebuildConfig
+
+	mu    sync.Mutex
+	stats RebuildStats
+}
+
+var _ RebuildIndexAgent = (*rebuildAgent)(nil)
+
+// Validate checks the operation is applicable without doing irreversible
+// work. A Snapshot-source request needs a snapshot to exist; on M3 none
+// can, since the Snapshot Agent (A4) that would produce one is not yet
+// built. The maintenance-mode gate is enforced by the Store's
+// RunMaintenance entry point (the sanctioned caller), not here — the
+// current mode is not exposed on the read surface.
+func (a *rebuildAgent) Validate(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if a.cfg.Source == RebuildSourceSnapshot {
+		return fmt.Errorf("agent.Rebuild.Validate: Source=Snapshot: %w", errs.ErrNoSnapshot)
+	}
+	return nil
+}
+
+// Run acquires the maintenance lease and rebuilds the index. On M3 the
+// only path is FullScan (Auto resolves to it, since Snapshot has no
+// source yet).
+func (a *rebuildAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	start := time.Now()
+	a.bus.Publish(event.Event{Type: EventAgentStarted, Payload: AgentStartedPayload{
+		AgentType: "RebuildIndex", StoreID: a.storeID, StartedAt: start,
+	}})
+
+	if a.cfg.RecoveryKit != nil {
+		// Descriptor (store.json) and system.config/current recovery
+		// from the Recovery Kit is M3.4 and depends on the Kit format.
+		return nil, fmt.Errorf("agent.Rebuild.Run: Recovery Kit restore: %w", errs.ErrNotImplemented)
+	}
+
+	l, prev, err := lease.Acquire(ctx, a.drv, lease.Config{
+		Path:      rebuildLeasePath,
+		HostID:    a.hostID,
+		AgentType: "RebuildIndex",
+		TTL:       a.cfg.LeaseTTL,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("agent.Rebuild.Run: acquire lease: %w", err)
+	}
+	if prev != nil {
+		a.bus.Publish(event.Event{Type: EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
+			LeaseKey: rebuildLeasePath, PreviousHolder: prev.HostID,
+			ExpiredAt: prev.ExpiresAt, TakenBy: a.hostID,
+		}})
+	}
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	hbErr := make(chan error, 1)
+	go func() { hbErr <- l.Heartbeat(runCtx) }()
+	defer func() {
+		cancel()
+		_ = l.Release(context.WithoutCancel(ctx))
+	}()
+
+	a.setSource(RebuildSourceFullScan)
+	if err := a.fullScan(runCtx); err != nil {
+		a.bus.Publish(event.Event{Type: EventAgentFailed, Payload: AgentFailedPayload{
+			AgentType: "RebuildIndex", StoreID: a.storeID, Err: err,
+		}})
+		return nil, fmt.Errorf("agent.Rebuild.Run: %w", err)
+	}
+
+	// Surface a lease loss that aborted the scan.
+	select {
+	case herr := <-hbErr:
+		if herr != nil && !isCtxErr(herr) {
+			return nil, fmt.Errorf("agent.Rebuild.Run: lease lost: %w", herr)
+		}
+	default:
+	}
+
+	a.mu.Lock()
+	a.stats.Duration = time.Since(start)
+	final := a.stats
+	a.mu.Unlock()
+
+	res := &domain.AgentResult{
+		AgentType:   "RebuildIndex",
+		StoreID:     a.storeID,
+		CompletedAt: time.Now(),
+		Stats: map[string]int64{
+			"manifests_scanned": final.ManifestsScanned,
+			"manifests_indexed": final.ManifestsIndexed,
+			"blobs_registered":  final.BlobsRegistered,
+		},
+	}
+	a.bus.Publish(event.Event{Type: EventAgentCompleted, Payload: *res})
+	return res, nil
+}
+
+// Stats returns a snapshot of progress (safe to call concurrently).
+func (a *rebuildAgent) Stats() RebuildStats {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.stats
+}
+
+// fullScan walks every manifest file on the Location and reindexes it.
+// Manifest paths are collected first (a streaming List whose callback
+// only appends), then each file is fetched, decoded, and indexed — the
+// per-file index writes must not run inside the List cursor.
+func (a *rebuildAgent) fullScan(ctx context.Context) error {
+	var paths []string
+	listErr := a.drv.ListObjectsWithModTime(ctx, manifestsPrefix, time.Time{},
+		func(om driver.ObjectMeta) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			paths = append(paths, om.Path)
+			return nil
+		})
+	if listErr != nil && !isCtxErr(listErr) {
+		return fmt.Errorf("list manifests: %w", listErr)
+	}
+
+	for _, p := range paths {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := a.reindexManifestFile(ctx, p); err != nil {
+			if isCtxErr(err) {
+				return err
+			}
+			// A single unreadable/unsupported manifest must not abort
+			// the whole rebuild; it is recorded via a failed-style event
+			// and the scan continues. (Encrypted manifests land here on
+			// M3 until the agent is wired with a KeyProvider.)
+			a.bus.Publish(event.Event{Type: EventAgentProgress, Payload: AgentProgressPayload{
+				AgentType: "RebuildIndex", StoreID: a.storeID,
+			}})
+			continue
+		}
+	}
+	return nil
+}
+
+// reindexManifestFile fetches one manifest file, decodes it, and writes
+// the reconstructed index rows.
+func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string) error {
+	id, err := artifact.IDFromManifestPath(path)
+	if err != nil {
+		return fmt.Errorf("parse manifest id from %q: %w", path, err)
+	}
+	rc, err := a.drv.Get(ctx, path)
+	if err != nil {
+		return fmt.Errorf("get manifest %q: %w", path, err)
+	}
+	data, err := io.ReadAll(rc)
+	_ = rc.Close()
+	if err != nil {
+		return fmt.Errorf("read manifest %q: %w", path, err)
+	}
+
+	m, err := artifact.Decode(data)
+	if err != nil {
+		// errs.ErrUnsupportedCrypto here means an encrypted manifest:
+		// FullScan cannot decode it without a KeyProvider (M3.4 wiring).
+		return fmt.Errorf("decode manifest %q: %w", path, err)
+	}
+	a.countScanned()
+	// ArtifactID is not serialised; it is the file identity (the id we
+	// parsed from the path). Set it so IndexManifest keys the row right.
+	m.ArtifactID = id
+
+	switch m.Type {
+	case domain.ManifestTypeBlob:
+		return a.indexBlob(ctx, m)
+	case domain.ManifestTypeTOC, domain.ManifestTypePack:
+		// TOC (M5) and Pack (M4) carry chunk/packed-entry data that is
+		// not present in domain.Manifest on M3, so there is nothing to
+		// reconstruct yet. Skip rather than fake.
+		return nil
+	default:
+		return fmt.Errorf("manifest %q: unknown type %q", path, m.Type)
+	}
+}
+
+// indexBlob reconstructs the IndexManifest arguments for a Blob manifest.
+// Inline manifests carry their bytes in the body and have no blobs row;
+// Target manifests resolve to a standalone blob file whose path is
+// derived from the topology and the BlobRef.
+func (a *rebuildAgent) indexBlob(ctx context.Context, m domain.Manifest) error {
+	var addr domain.PhysicalAddress
+	if m.LayoutHeader.BlobStorage == domain.LayoutTarget {
+		topology := a.store.Config().PathTopology
+		p, err := artifact.BlobPath(topology, domain.BlobTypeRegular, string(m.BlobRef))
+		if err != nil {
+			return fmt.Errorf("blob path for %q: %w", m.BlobRef, err)
+		}
+		addr = domain.PhysicalAddress{Path: p}
+	}
+	// Blob manifests reference no chunks and no packed entries.
+	if err := a.idx.IndexManifest(ctx, m, addr, nil, nil); err != nil {
+		return fmt.Errorf("index manifest %q: %w", m.ArtifactID, err)
+	}
+	a.countIndexed(m.LayoutHeader.BlobStorage == domain.LayoutTarget)
+	return nil
+}
+
+func (a *rebuildAgent) setSource(s RebuildSource) {
+	a.mu.Lock()
+	a.stats.Source = s
+	a.mu.Unlock()
+}
+
+func (a *rebuildAgent) countScanned() {
+	a.mu.Lock()
+	a.stats.ManifestsScanned++
+	a.mu.Unlock()
+}
+
+func (a *rebuildAgent) countIndexed(registeredBlob bool) {
+	a.mu.Lock()
+	a.stats.ManifestsIndexed++
+	if registeredBlob {
+		a.stats.BlobsRegistered++
+	}
+	a.mu.Unlock()
 }

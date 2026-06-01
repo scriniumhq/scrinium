@@ -62,7 +62,17 @@ type Ejector interface {
 }
 
 // NewEjector creates an Ejector instance.
-// TODO(M6.3): host-driven artifact ejection.
+//
+// Deferred to M6.3, and gated on an unresolved design point: ejection
+// materialises a blob to a host-side targetPath OUTSIDE the Location,
+// but the Driver contract is sealed to the Location root (localfs
+// resolve rejects absolute paths and "../" escapes), so Driver.Clone
+// cannot write the destination. A real Ejector needs an OS-level export
+// path — reading the blob through the Driver and writing targetPath via
+// os/io.Copy, with a CoW reflink fast-path when both sides share a
+// filesystem — which is a separate mechanism from the in-Location
+// Driver abstraction, not just an agent body. Left as an explicit stub
+// rather than faked against Clone.
 func NewEjector(
 	source store.DataStore,
 	bus event.EventBus,
