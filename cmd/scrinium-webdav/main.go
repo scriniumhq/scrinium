@@ -17,7 +17,7 @@ import (
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/cmd/internal/daemon"
 	"scrinium.dev/projection"
 )
 
@@ -82,7 +82,7 @@ func runServe(args []string) int {
 		ServicePrefix: "_scrinium",
 		RootView:      projection.RootByPath,
 	}
-	stats := statsProvider(asm, startedAt, 2*time.Second)
+	stats := daemon.StatsProvider(asm, startedAt, 2*time.Second)
 	wfs := newWebdavFS(asm.Projection.View, asm.Projection.FSOps, routingCfg, !*allowOSJunk, stats)
 
 	handler := &webdav.Handler{
@@ -118,38 +118,6 @@ func runServe(args []string) int {
 		return 1
 	}
 	return 0
-}
-
-// statsProvider renders the assembly's stats snapshot for the
-// _scrinium/stats pseudo-file. capacityTimeout caps Store.Capacity so a
-// slow driver never hangs a stats read; on error capacity is omitted.
-func statsProvider(asm *scrinium.ScriniumClient, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
-	return func() []byte {
-		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
-		defer cancel()
-
-		var capPtr *domain.StorageInfo
-		if info, err := asm.Store.Capacity(capCtx); err == nil {
-			capPtr = &info
-		}
-
-		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range asm.Extensions() {
-			exts = append(exts, projection.ExtensionInfo{Name: e.Name, SchemaVersion: e.SchemaVersion})
-		}
-
-		meta := asm.Info
-		return projection.RenderStats(asm.Projection.View, projection.DaemonInfo{
-			StartedAt:    startedAt,
-			MountSession: asm.MountSession,
-			StorePath:    meta.StoreURI,
-			ReadOnly:     meta.ReadOnly,
-			Editing:      meta.Editing,
-			Namespace:    meta.Namespace,
-			Capacity:     capPtr,
-			Extensions:   exts,
-		})
-	}
 }
 
 const usageText = `scrinium-webdav — expose a Scrinium store over WebDAV.

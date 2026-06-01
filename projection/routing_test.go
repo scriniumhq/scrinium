@@ -175,8 +175,8 @@ func TestIsServicePath(t *testing.T) {
 		{"photos/_scrinium/img.jpg", false},
 	}
 	for _, tc := range cases {
-		if got := IsServicePath(tc.path, cfg); got != tc.want {
-			t.Errorf("IsServicePath(%q): got %v, want %v", tc.path, got, tc.want)
+		if got := isServicePath(tc.path, cfg); got != tc.want {
+			t.Errorf("isServicePath(%q): got %v, want %v", tc.path, got, tc.want)
 		}
 	}
 }
@@ -184,7 +184,7 @@ func TestIsServicePath(t *testing.T) {
 func TestIsServicePath_PrefixDisabled(t *testing.T) {
 	cfg := defaultRoutingConfig()
 	cfg.ServicePrefix = ""
-	if IsServicePath("_scrinium", cfg) {
-		t.Error("with empty prefix, IsServicePath must always be false")
+	if isServicePath("_scrinium", cfg) {
+		t.Error("with empty prefix, isServicePath must always be false")
 	}
 }

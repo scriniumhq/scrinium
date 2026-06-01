@@ -19,7 +19,7 @@ import (
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/cmd/internal/daemon"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
 )
@@ -101,7 +101,7 @@ func runMount(args []string) int {
 		asm.Projection.View,
 		asm.Projection.FSOps,
 		routingCfg,
-		vfs.WithStatsProvider(statsProvider(asm, startedAt, 2*time.Second)),
+		vfs.WithStatsProvider(daemon.StatsProvider(asm, startedAt, 2*time.Second)),
 	)
 	root := newRoot(fsys, startedAt)
 
@@ -127,38 +127,6 @@ func runMount(args []string) int {
 	fmt.Fprintf(os.Stderr, "Mounted at %s\n", *mountPoint)
 	server.Wait()
 	return 0
-}
-
-// statsProvider renders the assembly's stats snapshot for the
-// _scrinium/stats pseudo-file. capacityTimeout caps Store.Capacity so a
-// slow driver never hangs a stats read; on error capacity is omitted.
-func statsProvider(asm *scrinium.ScriniumClient, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
-	return func() []byte {
-		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
-		defer cancel()
-
-		var capPtr *domain.StorageInfo
-		if info, err := asm.Store.Capacity(capCtx); err == nil {
-			capPtr = &info
-		}
-
-		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range asm.Extensions() {
-			exts = append(exts, projection.ExtensionInfo{Name: e.Name, SchemaVersion: e.SchemaVersion})
-		}
-
-		meta := asm.Info
-		return projection.RenderStats(asm.Projection.View, projection.DaemonInfo{
-			StartedAt:    startedAt,
-			MountSession: asm.MountSession,
-			StorePath:    meta.StoreURI,
-			ReadOnly:     meta.ReadOnly,
-			Editing:      meta.Editing,
-			Namespace:    meta.Namespace,
-			Capacity:     capPtr,
-			Extensions:   exts,
-		})
-	}
 }
 
 const usageText = `scrinium-fuse — mount a Scrinium store as a filesystem.

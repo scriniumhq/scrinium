@@ -166,7 +166,7 @@ func (d *serviceDirFile) Readdir(count int) ([]os.FileInfo, error) {
 	}
 	// Service-tree listing.
 	var out []os.FileInfo
-	for n, err := range serviceList(d.v.view, d.tree, d.subPath) {
+	for n, err := range d.v.view.ListIn(d.tree, d.subPath) {
 		if err != nil {
 			return nil, err
 		}
@@ -179,7 +179,7 @@ func (d *serviceDirFile) Stat() (os.FileInfo, error) {
 	if d.isPrefix {
 		return synthDirInfo(d.v.routingCfg.ServicePrefix, d.v.startedAt), nil
 	}
-	node, err := serviceLookup(d.v.view, d.tree, d.subPath)
+	node, err := d.v.view.GetIn(d.tree, d.subPath)
 	if err != nil {
 		return nil, err
 	}

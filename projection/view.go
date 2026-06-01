@@ -645,13 +645,6 @@ func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) 
 	return r
 }
 
-func (v *View) GetByPath(path string) (Node, error)      { return v.getInTree(v.byPath, path) }
-func (v *View) GetBySession(path string) (Node, error)   { return v.getInTree(v.bySession, path) }
-func (v *View) GetByNamespace(path string) (Node, error) { return v.getInTree(v.byNamespace, path) }
-func (v *View) GetByDate(path string) (Node, error)      { return v.getInTree(v.byDate, path) }
-func (v *View) GetByArtifact(path string) (Node, error)  { return v.getInTree(v.byArtifact, path) }
-func (v *View) GetByOrphaned(path string) (Node, error)  { return v.getInTree(v.byOrphaned, path) }
-
 // RelatedArtifact is the small descriptor returned by
 // RelatedByBlobRef. Carries enough fields for a UI to render
 // "where else this blob lives" without forcing the caller to
@@ -705,52 +698,19 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 	return out
 }
 
-func (v *View) ListByPath(path string) NodeSeq      { return v.listInTree(v.byPath, path) }
-func (v *View) ListBySession(path string) NodeSeq   { return v.listInTree(v.bySession, path) }
-func (v *View) ListByNamespace(path string) NodeSeq { return v.listInTree(v.byNamespace, path) }
-func (v *View) ListByDate(path string) NodeSeq      { return v.listInTree(v.byDate, path) }
-func (v *View) ListByArtifact(path string) NodeSeq  { return v.listInTree(v.byArtifact, path) }
-func (v *View) ListByOrphaned(path string) NodeSeq  { return v.listInTree(v.byOrphaned, path) }
-
-func (v *View) WalkByPath(prefix string) NodeSeq      { return v.walkInTree(v.byPath, prefix) }
-func (v *View) WalkBySession(prefix string) NodeSeq   { return v.walkInTree(v.bySession, prefix) }
-func (v *View) WalkByNamespace(prefix string) NodeSeq { return v.walkInTree(v.byNamespace, prefix) }
-func (v *View) WalkByDate(prefix string) NodeSeq      { return v.walkInTree(v.byDate, prefix) }
-func (v *View) WalkByArtifact(prefix string) NodeSeq  { return v.walkInTree(v.byArtifact, prefix) }
-func (v *View) WalkByOrphaned(prefix string) NodeSeq  { return v.walkInTree(v.byOrphaned, prefix) }
-
-func (v *View) OpenByPath(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byPath, path, opts...)
-}
-func (v *View) OpenBySession(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.bySession, path, opts...)
-}
-func (v *View) OpenByNamespace(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byNamespace, path, opts...)
-}
-func (v *View) OpenByDate(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byDate, path, opts...)
-}
-func (v *View) OpenByArtifact(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byArtifact, path, opts...)
-}
-func (v *View) OpenByOrphaned(ctx context.Context, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
-	return v.openInTree(ctx, v.byOrphaned, path, opts...)
-}
-
 // --- Root-view dispatchers ---
 //
-// GetIn, ListIn and OpenIn select the appropriate per-tree
-// method based on a RootView enum. Used by callers that already
-// hold a RootView value (FSOps when routing through the
-// configured root, scrinium-fuse when serving _scrinium/<tree>/
-// service paths) instead of branching on the enum themselves.
+// GetIn, ListIn, OpenIn and WalkIn select a tree by RootView
+// enum and operate within it. This is the only read access into
+// the per-tree maps: callers that hold a RootView (the vfs facade
+// routing a path, service-tree listing) go through these instead
+// of reaching for a per-tree method.
 //
 // An unknown RootView returns ErrPathNotFound for Get/Open and
 // a single-shot error sequence for List, matching the behaviour
 // service callers expect when a configuration drifts.
 
-// GetIn dispatches GetByX based on rv.
+// GetIn returns the node at path within the rv tree.
 func (v *View) GetIn(rv RootView, path string) (Node, error) {
 	tree := v.treeFor(rv)
 	if tree == nil {
@@ -759,7 +719,7 @@ func (v *View) GetIn(rv RootView, path string) (Node, error) {
 	return v.getInTree(tree, path)
 }
 
-// ListIn dispatches ListByX based on rv.
+// ListIn lists the immediate children at path within the rv tree.
 func (v *View) ListIn(rv RootView, path string) NodeSeq {
 	tree := v.treeFor(rv)
 	if tree == nil {
@@ -770,13 +730,26 @@ func (v *View) ListIn(rv RootView, path string) NodeSeq {
 	return v.listInTree(tree, path)
 }
 
-// OpenIn dispatches OpenByX based on rv.
+// OpenIn opens an artifact at path within the rv tree.
 func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
 	tree := v.treeFor(rv)
 	if tree == nil {
 		return nil, errs.ErrPathNotFound
 	}
 	return v.openInTree(ctx, tree, path, opts...)
+}
+
+// WalkIn iterates every node at or under prefix within the rv
+// tree. An unknown RootView yields a single-shot error sequence,
+// matching ListIn.
+func (v *View) WalkIn(rv RootView, prefix string) NodeSeq {
+	tree := v.treeFor(rv)
+	if tree == nil {
+		return func(yield func(Node, error) bool) {
+			yield(Node{}, errs.ErrPathNotFound)
+		}
+	}
+	return v.walkInTree(tree, prefix)
 }
 
 // treeFor returns the internal tree for the given RootView, or

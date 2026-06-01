@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 
-	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 	"scrinium.dev/projection"
 )
@@ -53,63 +52,4 @@ func (v *VFS) openRoot(
 		return nil, err
 	}
 	return wrapFile(f, subPath, fi), nil
-}
-
-// serviceLookup dispatches a Get on the right tree.
-func serviceLookup(view *projection.View, tree projection.RootView, sub string) (projection.Node, error) {
-	switch tree {
-	case projection.RootByPath:
-		return view.GetByPath(sub)
-	case projection.RootBySession:
-		return view.GetBySession(sub)
-	case projection.RootByNamespace:
-		return view.GetByNamespace(sub)
-	case projection.RootByDate:
-		return view.GetByDate(sub)
-	case projection.RootByArtifact:
-		return view.GetByArtifact(sub)
-	case projection.RootByOrphaned:
-		return view.GetByOrphaned(sub)
-	}
-	return projection.Node{}, errs.ErrPathNotFound
-}
-
-// serviceList dispatches a List on the right tree.
-func serviceList(view *projection.View, tree projection.RootView, sub string) projection.NodeSeq {
-	switch tree {
-	case projection.RootByPath:
-		return view.ListByPath(sub)
-	case projection.RootBySession:
-		return view.ListBySession(sub)
-	case projection.RootByNamespace:
-		return view.ListByNamespace(sub)
-	case projection.RootByDate:
-		return view.ListByDate(sub)
-	case projection.RootByArtifact:
-		return view.ListByArtifact(sub)
-	case projection.RootByOrphaned:
-		return view.ListByOrphaned(sub)
-	}
-	return func(yield func(projection.Node, error) bool) {
-		yield(projection.Node{}, errs.ErrPathNotFound)
-	}
-}
-
-// serviceOpen dispatches an Open on the right tree.
-func serviceOpen(ctx context.Context, view *projection.View, tree projection.RootView, sub string) (domain.ReadHandle, error) {
-	switch tree {
-	case projection.RootByPath:
-		return view.OpenByPath(ctx, sub)
-	case projection.RootBySession:
-		return view.OpenBySession(ctx, sub)
-	case projection.RootByNamespace:
-		return view.OpenByNamespace(ctx, sub)
-	case projection.RootByDate:
-		return view.OpenByDate(ctx, sub)
-	case projection.RootByArtifact:
-		return view.OpenByArtifact(ctx, sub)
-	case projection.RootByOrphaned:
-		return view.OpenByOrphaned(ctx, sub)
-	}
-	return nil, errs.ErrPathNotFound
 }

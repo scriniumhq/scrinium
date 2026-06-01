@@ -11,7 +11,7 @@
 // This file is a reference implementation, and webview is the most
 // likely of the three to be customised: the rendering lives in the
 // sibling web/ package (templates, listing, artifact, preview pages),
-// the data adapter in webfs.go/stats_data.go/decoders.go. To restyle
+// the data adapter in webfs.go/webview_stats_data.go/decoders.go. To restyle
 // or reshape the UI, copy this command and edit web/ — the data side
 // (the BackingFS adapter) stays as is. The store assembly itself
 // (scrinium) is never touched.

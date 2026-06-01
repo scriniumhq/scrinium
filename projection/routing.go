@@ -291,11 +291,11 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 	return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
 }
 
-// IsServicePath reports whether the path's first segment equals
+// isServicePath reports whether the path's first segment equals
 // the configured service prefix. Useful when validating new-file
 // creation: writes to <servicePrefix>/* are forbidden because the
 // service trees are read-only.
-func IsServicePath(path string, cfg RoutingConfig) bool {
+func isServicePath(path string, cfg RoutingConfig) bool {
 	if cfg.ServicePrefix == "" {
 		return false
 	}

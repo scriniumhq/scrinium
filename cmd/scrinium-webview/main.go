@@ -13,6 +13,7 @@ import (
 
 	"scrinium.dev"
 
+	"scrinium.dev/cmd/internal/daemon"
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
 	_ "scrinium.dev/engine/driver/localfs"
@@ -102,7 +103,7 @@ func runServe(args []string) int {
 		UnprefixedServiceTrees: true,
 	}
 
-	textStats := statsProvider(asm, startedAt, 2*time.Second)
+	textStats := daemon.StatsProvider(asm, startedAt, 2*time.Second)
 	htmlStats := func() web.StatsData {
 		capCtx, capCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer capCancel()
@@ -163,38 +164,6 @@ func runServe(args []string) int {
 		return 1
 	}
 	return 0
-}
-
-// statsProvider renders the plain-text stats body for vfs-level
-// _scrinium/stats reads. capacityTimeout caps Store.Capacity so a slow
-// driver never hangs a read; on error capacity is omitted.
-func statsProvider(asm *scrinium.ScriniumClient, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
-	return func() []byte {
-		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
-		defer cancel()
-
-		var capPtr *domain.StorageInfo
-		if info, err := asm.Store.Capacity(capCtx); err == nil {
-			capPtr = &info
-		}
-
-		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range asm.Extensions() {
-			exts = append(exts, projection.ExtensionInfo{Name: e.Name, SchemaVersion: e.SchemaVersion})
-		}
-
-		meta := asm.Info
-		return projection.RenderStats(asm.Projection.View, projection.DaemonInfo{
-			StartedAt:    startedAt,
-			MountSession: asm.MountSession,
-			StorePath:    meta.StoreURI,
-			ReadOnly:     meta.ReadOnly,
-			Editing:      meta.Editing,
-			Namespace:    meta.Namespace,
-			Capacity:     capPtr,
-			Extensions:   exts,
-		})
-	}
 }
 
 const usageText = `scrinium-webview — read-only HTML browser for a Scrinium store.

@@ -26,10 +26,10 @@ func TestBySession_Populated(t *testing.T) {
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	if _, err := v.GetBySession("abcd1234/sha256-aaaa1111"); err != nil {
+	if _, err := v.GetIn(projection.RootBySession, "abcd1234/sha256-aaaa1111"); err != nil {
 		t.Errorf("first artifact: %v", err)
 	}
-	if _, err := v.GetBySession("abcd1234/sha256-bbbb2222"); err != nil {
+	if _, err := v.GetIn(projection.RootBySession, "abcd1234/sha256-bbbb2222"); err != nil {
 		t.Errorf("second artifact: %v", err)
 	}
 	if v.Stats.SessionCount != 1 {
@@ -45,7 +45,7 @@ func TestBySession_EmptySessionSkipped(t *testing.T) {
 	defer v.Close()
 
 	count := 0
-	for n, err := range v.WalkBySession("") {
+	for n, err := range v.WalkIn(projection.RootBySession, "") {
 		if err != nil {
 			t.Fatalf("walk: %v", err)
 		}
@@ -65,7 +65,7 @@ func TestBySession_Short(t *testing.T) {
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	if _, err := v.GetBySession("ab/sha256-aabbccdd"); err != nil {
+	if _, err := v.GetIn(projection.RootBySession, "ab/sha256-aabbccdd"); err != nil {
 		t.Errorf("short session bucket: %v", err)
 	}
 }
@@ -79,7 +79,7 @@ func TestByNamespace_Populated(t *testing.T) {
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	if _, err := v.GetByNamespace("photos/aa/bb/sha256-aabbccdd"); err != nil {
+	if _, err := v.GetIn(projection.RootByNamespace, "photos/aa/bb/sha256-aabbccdd"); err != nil {
 		t.Errorf("by-namespace: %v", err)
 	}
 	if v.Stats.NamespaceCount != 1 {
@@ -94,7 +94,7 @@ func TestByNamespace_EmptyBucketsAsDefault(t *testing.T) {
 	v, _ := projection.NewView(context.Background(), src)
 	defer v.Close()
 
-	if _, err := v.GetByNamespace("_default/aa/bb/sha256-aabbccdd"); err != nil {
+	if _, err := v.GetIn(projection.RootByNamespace, "_default/aa/bb/sha256-aabbccdd"); err != nil {
 		t.Errorf("by-namespace _default: %v", err)
 	}
 }
@@ -110,7 +110,7 @@ func TestByDate_Populated(t *testing.T) {
 	defer v.Close()
 
 	expected := "2024/05/03/14-23-05-aabbccddeeff0011.bin"
-	if _, err := v.GetByDate(expected); err != nil {
+	if _, err := v.GetIn(projection.RootByDate, expected); err != nil {
 		t.Errorf("by-date %q: %v", expected, err)
 	}
 }
@@ -153,16 +153,16 @@ func TestAdd_AppearsInAllTrees(t *testing.T) {
 	if err := v.Add(m); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
-	if _, err := v.GetByPath("photos/img.jpg"); err != nil {
+	if _, err := v.GetIn(projection.RootByPath, "photos/img.jpg"); err != nil {
 		t.Errorf("by-path: %v", err)
 	}
-	if _, err := v.GetByArtifact("aa/bb/sha256-aabbccdd"); err != nil {
+	if _, err := v.GetIn(projection.RootByArtifact, "aa/bb/sha256-aabbccdd"); err != nil {
 		t.Errorf("by-artifact: %v", err)
 	}
-	if _, err := v.GetBySession("sess1/sha256-aabbccdd"); err != nil {
+	if _, err := v.GetIn(projection.RootBySession, "sess1/sha256-aabbccdd"); err != nil {
 		t.Errorf("by-session: %v", err)
 	}
-	if _, err := v.GetByNamespace("files/aa/bb/sha256-aabbccdd"); err != nil {
+	if _, err := v.GetIn(projection.RootByNamespace, "files/aa/bb/sha256-aabbccdd"); err != nil {
 		t.Errorf("by-namespace: %v", err)
 	}
 	if v.Stats.TotalNodes != 1 {
@@ -217,10 +217,10 @@ func TestRemove_DropsFromAllTrees(t *testing.T) {
 	if err := v.Remove("sha256-aabbccdd"); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
-	if _, err := v.GetByPath("photos/img.jpg"); !errors.Is(err, errs.ErrPathNotFound) {
+	if _, err := v.GetIn(projection.RootByPath, "photos/img.jpg"); !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("by-path should be gone, got %v", err)
 	}
-	if _, err := v.GetByArtifact("aa/bb/sha256-aabbccdd"); !errors.Is(err, errs.ErrPathNotFound) {
+	if _, err := v.GetIn(projection.RootByArtifact, "aa/bb/sha256-aabbccdd"); !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("by-artifact should be gone, got %v", err)
 	}
 	if v.Stats.TotalNodes != 0 {
@@ -247,7 +247,7 @@ func TestRemove_PromotesLoserOnOwnerRemove(t *testing.T) {
 	if err := v.Remove("sha256-bbbb2222"); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
-	n, err := v.GetByPath("shared")
+	n, err := v.GetIn(projection.RootByPath, "shared")
 	if err != nil {
 		t.Fatalf("GetByPath after promote: %v", err)
 	}
@@ -275,7 +275,7 @@ func TestRemove_LoserDoesNotAffectOwner(t *testing.T) {
 	if err := v.Remove("sha256-aaaa1111"); err != nil {
 		t.Fatalf("Remove loser: %v", err)
 	}
-	n, err := v.GetByPath("shared")
+	n, err := v.GetIn(projection.RootByPath, "shared")
 	if err != nil {
 		t.Fatalf("GetByPath: %v", err)
 	}
@@ -308,10 +308,10 @@ func TestMove_RenameFile(t *testing.T) {
 		t.Fatalf("Move: %v", err)
 	}
 
-	if _, err := v.GetByPath("old/path.txt"); !errors.Is(err, errs.ErrPathNotFound) {
+	if _, err := v.GetIn(projection.RootByPath, "old/path.txt"); !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("old path should be gone, got %v", err)
 	}
-	n, err := v.GetByPath("new/path.txt")
+	n, err := v.GetIn(projection.RootByPath, "new/path.txt")
 	if err != nil {
 		t.Fatalf("GetByPath new: %v", err)
 	}
@@ -337,10 +337,10 @@ func TestNewView_FilterPrefix(t *testing.T) {
 	if v.Stats.TotalNodes != 1 {
 		t.Errorf("TotalNodes: got %d, want 1", v.Stats.TotalNodes)
 	}
-	if _, err := v.GetByPath("photos/a.jpg"); err != nil {
+	if _, err := v.GetIn(projection.RootByPath, "photos/a.jpg"); err != nil {
 		t.Errorf("photos: %v", err)
 	}
-	if _, err := v.GetByPath("docs/b.txt"); !errors.Is(err, errs.ErrPathNotFound) {
+	if _, err := v.GetIn(projection.RootByPath, "docs/b.txt"); !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("docs should be filtered: got %v", err)
 	}
 }

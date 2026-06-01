@@ -224,7 +224,7 @@ func (v *VFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	case projection.RouteServiceRoot:
 		return synthDirInfo(v.routingCfg.ServicePrefix, v.startedAt), nil
 	case projection.RouteServiceTree:
-		node, err := serviceLookup(v.view, target.Tree, target.SubPath)
+		node, err := v.view.GetIn(target.Tree, target.SubPath)
 		if err != nil {
 			return nil, err
 		}
@@ -270,14 +270,14 @@ func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileM
 		if wantWrite || wantCreate {
 			return nil, errs.ErrEditingDisabled
 		}
-		node, err := serviceLookup(v.view, target.Tree, target.SubPath)
+		node, err := v.view.GetIn(target.Tree, target.SubPath)
 		if err != nil {
 			return nil, err
 		}
 		if node.FS.IsDir {
 			return newServiceDirFile(v, target.Tree, target.SubPath, false), nil
 		}
-		rh, err := serviceOpen(ctx, v.view, target.Tree, target.SubPath)
+		rh, err := v.view.OpenIn(ctx, target.Tree, target.SubPath)
 		if err != nil {
 			return nil, err
 		}
@@ -327,15 +327,6 @@ func (v *VFS) OpenFileAt(ctx context.Context, name string, flag int, perm os.Fil
 	}
 	return fa, nil
 }
-
-// RoutingConfig returns the routing config the VFS was
-// constructed with. Surfaces use it to format URLs that
-// route into service trees.
-func (v *VFS) RoutingConfig() projection.RoutingConfig { return v.routingCfg }
-
-// StartedAt returns the boot timestamp captured at New time.
-// Used by surfaces rendering uptime.
-func (v *VFS) StartedAt() time.Time { return v.startedAt }
 
 // --- helpers ---
 
