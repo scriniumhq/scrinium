@@ -16,9 +16,9 @@ import (
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/artifactfx"
-	"scrinium.dev/internal/testutil/eventfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/eventfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 const scrubHostID = "scrub-host-0001"
@@ -65,7 +65,7 @@ func (f scrubFixture) put(t *testing.T, ns, data string) domain.ArtifactID {
 	t.Helper()
 	id, err := f.store.Put(context.Background(),
 		artifactfx.Payload(data),
-		store.WithNamespace(ns))
+		domain.WithNamespace(ns))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

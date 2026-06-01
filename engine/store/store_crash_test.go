@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/faulty"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // Crash-consistency: a Put interrupted at any single I/O write must
@@ -94,7 +95,7 @@ func TestCrash_PutTornAtEveryWrite_IsAtomic(t *testing.T) {
 			base := env.fd.CallCount(faulty.MethodPut)
 			env.fd.SetFailOnCall(faulty.MethodPut, base+k)
 
-			id, putErr := s.Put(ctx, mkArtifact(payload), store.WithNamespace(ns))
+			id, putErr := s.Put(ctx, mkArtifact(payload), domain.WithNamespace(ns))
 			_ = s.Close()
 
 			// 3. Recover and reconcile.
@@ -138,7 +139,7 @@ func measurePutWrites(t *testing.T, payload []byte, ns string) int64 {
 	defer s.Close()
 
 	base := fd.CallCount(faulty.MethodPut)
-	if _, err := s.Put(context.Background(), mkArtifact(payload), store.WithNamespace("ns")); err != nil {
+	if _, err := s.Put(context.Background(), mkArtifact(payload), domain.WithNamespace("ns")); err != nil {
 		t.Fatalf("measure Put: %v", err)
 	}
 	return fd.CallCount(faulty.MethodPut) - base

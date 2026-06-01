@@ -5,7 +5,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/internal/testutil/manifestfx"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // Sinks defeat dead-code elimination so the benchmarked calls are not

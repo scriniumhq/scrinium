@@ -12,9 +12,9 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // scrubCapture collects every ScrubFailedPayload published by the
@@ -59,10 +59,10 @@ func (c *scrubCapture) last(t *testing.T) event.ScrubFailedPayload {
 // --- Happy path ---
 
 func TestVerify_TargetBlob_Roundtrip(t *testing.T) {
-	s, _ := storefx.InitWithRoot(t)
+	s, _ := storefx2.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("verify me"),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestVerify_InlineBlob_Roundtrip(t *testing.T) {
 	s, _ := newInlineStore(t, 1024)
 	id, err := s.Put(context.Background(),
 		payload("inline data"),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -91,10 +91,10 @@ func TestVerify_TargetBlob_TamperedBytes_ReturnsCorruptedBlob(t *testing.T) {
 	scrub := newScrubCapture()
 	bus.Subscribe(scrub.handle)
 
-	s, root := storefx.InitWithRoot(t, store.WithPublisher(bus))
+	s, root := storefx2.InitWithRoot(t, store.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("tamper target"),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -132,10 +132,10 @@ func TestVerify_TargetBlob_Missing_ReturnsCorruptedBlob(t *testing.T) {
 	scrub := newScrubCapture()
 	bus.Subscribe(scrub.handle)
 
-	s, root := storefx.InitWithRoot(t, store.WithPublisher(bus))
+	s, root := storefx2.InitWithRoot(t, store.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("delete the blob"),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestVerify_OfflineMode_Blocked(t *testing.T) {
 	s := newStore(t)
 	id, err := s.Put(context.Background(),
 		payload("offline test"),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -226,18 +226,18 @@ func TestVerify_EncryptedManifest_Succeeds(t *testing.T) {
 
 			if _, _, err := store.InitStore(context.Background(), drv,
 				store.WithConfig(cfg),
-				store.WithPassphrase(storefx.StaticPP("pw")),
+				store.WithPassphrase(storefx2.StaticPP("pw")),
 				store.WithStoreIndex(idx),
-				store.WithHashRegistry(storefx.Hashes()),
+				store.WithHashRegistry(storefx2.Hashes()),
 			); err != nil {
 				t.Fatalf("InitStore: %v", err)
 			}
 			s, err := store.OpenStore(context.Background(), drv,
 				store.WithConfig(cfg),
-				store.WithPassphrase(storefx.StaticPP("pw")),
+				store.WithPassphrase(storefx2.StaticPP("pw")),
 				store.WithAutoUnlock(),
 				store.WithStoreIndex(idx),
-				store.WithHashRegistry(storefx.Hashes()),
+				store.WithHashRegistry(storefx2.Hashes()),
 			)
 			if err != nil {
 				t.Fatalf("OpenStore: %v", err)
@@ -245,7 +245,7 @@ func TestVerify_EncryptedManifest_Succeeds(t *testing.T) {
 
 			id, err := s.Put(context.Background(),
 				payload("verify encrypted"),
-				store.WithNamespace("v"))
+				domain.WithNamespace("v"))
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}

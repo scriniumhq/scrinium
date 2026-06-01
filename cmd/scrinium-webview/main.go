@@ -6,37 +6,23 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
-	"scrinium.dev"
-
+	"scrinium.dev/cmd/internal/daemon"
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
 )
 
+const name = "scrinium-webview"
+
 func main() {
-	if len(os.Args) < 2 {
-		printUsage(os.Stderr)
-		os.Exit(2)
-	}
-	switch os.Args[1] {
-	case "serve":
-		os.Exit(runServe(os.Args[2:]))
-	case "-h", "--help", "help":
-		printUsage(os.Stdout)
-		os.Exit(0)
-	default:
-		fmt.Fprintf(os.Stderr, "scrinium-webview: unknown command %q\n\n", os.Args[1])
-		printUsage(os.Stderr)
-		os.Exit(2)
-	}
+	os.Exit(daemon.Dispatch(name, usageText, map[string]daemon.Command{
+		"serve": runServe,
+	}))
 }
 
 func runServe(args []string) int {
@@ -49,37 +35,16 @@ func runServe(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if *configPath == "" {
-		fmt.Fprintln(os.Stderr, "scrinium-webview serve: --config is required")
-		return 2
-	}
 	if *browsePrefix == "" {
-		fmt.Fprintln(os.Stderr, "scrinium-webview serve: --browse-prefix is required (use \"/\" for root)")
+		fmt.Fprintf(os.Stderr, "%s serve: --browse-prefix is required (use \"/\" for root)\n", name)
 		return 2
 	}
 
-	data, err := os.ReadFile(*configPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webview serve: read config: %v\n", err)
-		return 2
+	asm, ctx, stop, code := daemon.Load(name, *configPath, true)
+	if code != 0 {
+		return code
 	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
-	asm, err := scrinium.LoadOrInitYAML(ctx, data)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webview: %v\n", err)
-		return 1
-	}
-	defer asm.Close()
-
-	if asm.Projection == nil {
-		fmt.Fprintln(os.Stderr, "scrinium-webview: config has no projection section; nothing to serve")
-		return 1
-	}
-
-	fmt.Fprintf(os.Stderr, "Mount session: %s\n", asm.MountSession)
+	defer stop()
 
 	startedAt := time.Now().UTC()
 	meta := asm.Info
@@ -89,9 +54,8 @@ func runServe(args []string) int {
 	// …) and the text stats file off (it renders stats as HTML instead).
 	// These are properties of THIS surface, not of the stored data, so
 	// they are set here rather than in the config.
-	routingCfg := projection.RoutingConfig{
+	routingCfg := vfs.Config{
 		ServicePrefix:          "",
-		RootView:               projection.RootByPath,
 		ShowStats:              false,
 		ShowByArtifact:         true,
 		ShowOrphaned:           true,
@@ -102,7 +66,7 @@ func runServe(args []string) int {
 		UnprefixedServiceTrees: true,
 	}
 
-	textStats := statsProvider(asm, startedAt, 2*time.Second)
+	textStats := daemon.StatsProvider(asm, startedAt, 2*time.Second)
 	htmlStats := func() web.StatsData {
 		capCtx, capCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer capCancel()
@@ -115,12 +79,12 @@ func runServe(args []string) int {
 			exts = append(exts, web.StatsExtension{Name: e.Name, SchemaVersion: e.SchemaVersion})
 		}
 		// webview is always read-only; reflect that on the page.
-		return buildWebStatsData(asm.Projection.View, capPtr, exts, startedAt, asm.MountSession,
+		return buildWebStatsData(asm.Projection.Queries(), capPtr, exts, startedAt, asm.MountSession,
 			meta.StoreURI, true, "off", meta.Namespace)
 	}
 
-	v := vfs.New(asm.Projection.View, asm.Projection.FSOps, routingCfg, vfs.WithStatsProvider(textStats))
-	backing := newWebBackingFS(v, asm.Store)
+	v := vfs.New(asm.Projection, routingCfg, vfs.WithStatsProvider(textStats))
+	backing := newWebBackingFS(v, asm.Projection.Queries())
 	webHandler := web.NewHandler(backing, vfs.CleanPath, web.Config{
 		StorePath:     meta.StoreURI,
 		ServicePrefix: "",
@@ -150,51 +114,8 @@ func runServe(args []string) int {
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	go func() {
-		<-ctx.Done()
-		shutCtx, c := context.WithTimeout(context.Background(), 5*time.Second)
-		defer c()
-		_ = srv.Shutdown(shutCtx)
-	}()
-
 	fmt.Fprintf(os.Stderr, "Serving HTML view on %s\n", *listen)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		fmt.Fprintf(os.Stderr, "scrinium-webview: %v\n", err)
-		return 1
-	}
-	return 0
-}
-
-// statsProvider renders the plain-text stats body for vfs-level
-// _scrinium/stats reads. capacityTimeout caps Store.Capacity so a slow
-// driver never hangs a read; on error capacity is omitted.
-func statsProvider(asm *scrinium.ScriniumClient, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
-	return func() []byte {
-		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
-		defer cancel()
-
-		var capPtr *domain.StorageInfo
-		if info, err := asm.Store.Capacity(capCtx); err == nil {
-			capPtr = &info
-		}
-
-		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range asm.Extensions() {
-			exts = append(exts, projection.ExtensionInfo{Name: e.Name, SchemaVersion: e.SchemaVersion})
-		}
-
-		meta := asm.Info
-		return projection.RenderStats(asm.Projection.View, projection.DaemonInfo{
-			StartedAt:    startedAt,
-			MountSession: asm.MountSession,
-			StorePath:    meta.StoreURI,
-			ReadOnly:     meta.ReadOnly,
-			Editing:      meta.Editing,
-			Namespace:    meta.Namespace,
-			Capacity:     capPtr,
-			Extensions:   exts,
-		})
-	}
+	return daemon.ServeHTTP(ctx, name, srv)
 }
 
 const usageText = `scrinium-webview — read-only HTML browser for a Scrinium store.
@@ -207,10 +128,6 @@ Serving options are flags.
 
 Specification: docs/4 §16 WebView.
 `
-
-func printUsage(w *os.File) {
-	fmt.Fprint(w, usageText)
-}
 
 // redirectURL builds the absolute URL the bare browse prefix redirects
 // to. All trees live at /<tree>/ in webview's URL space.

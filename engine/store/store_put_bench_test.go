@@ -9,9 +9,9 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // BenchmarkPut measures the Put pipeline's per-call cost across
@@ -120,7 +120,7 @@ func benchmarkPut(b *testing.B, payloadSize int) {
 		binary.LittleEndian.PutUint64(payload[:8], uint64(i))
 		_, err := s.Put(ctx,
 			domain.Artifact{Payload: bytes.NewReader(payload)},
-			store.WithNamespace("bench"))
+			domain.WithNamespace("bench"))
 		if err != nil {
 			b.Fatalf("Put #%d: %v", i, err)
 		}

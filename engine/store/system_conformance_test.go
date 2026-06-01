@@ -12,7 +12,7 @@ import (
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // SystemStore behavioural contract (ADR-57), exercised against the

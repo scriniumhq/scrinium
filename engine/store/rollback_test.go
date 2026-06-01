@@ -10,7 +10,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // putWithSession is a one-liner Put helper for rollback tests.
@@ -19,7 +19,7 @@ func putWithSession(t *testing.T, s store.Store, sid domain.SessionID, ns, paylo
 	t.Helper()
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: strings.NewReader(payload)},
-		store.WithNamespace(ns), store.WithSession(sid))
+		domain.WithNamespace(ns), domain.WithSession(sid))
 	if err != nil {
 		t.Fatalf("Put(sid=%q): %v", sid, err)
 	}
@@ -32,7 +32,7 @@ func putWithRetention(t *testing.T, s store.Store, sid domain.SessionID, ns, pay
 	t.Helper()
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: strings.NewReader(payload)},
-		store.WithSession(sid), store.WithNamespace(ns), store.WithRetention(until))
+		domain.WithSession(sid), domain.WithNamespace(ns), domain.WithRetention(until))
 	if err != nil {
 		t.Fatalf("Put(sid=%q, retention): %v", sid, err)
 	}

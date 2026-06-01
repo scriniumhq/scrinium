@@ -16,9 +16,9 @@ import (
 	"scrinium.dev/engine/store/internal/artifactio"
 	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/artifactfx"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
+	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
 )
 
 // rwHarness shares one (driver, index) pair between a Writer and a Reader,

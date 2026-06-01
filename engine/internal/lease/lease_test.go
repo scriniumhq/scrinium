@@ -12,7 +12,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/lease"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/driverfx"
+	"scrinium.dev/testutil/driverfx"
 )
 
 const (

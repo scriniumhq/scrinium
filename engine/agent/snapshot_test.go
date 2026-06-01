@@ -13,9 +13,9 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/artifactfx"
-	"scrinium.dev/internal/testutil/eventfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/eventfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 const snapshotHostID = "snapshot-host-0001"
@@ -36,7 +36,7 @@ func newSnapshotFixture(t *testing.T) snapshotFixture {
 
 func (f snapshotFixture) put(t *testing.T, data string) {
 	t.Helper()
-	if _, err := f.store.Put(context.Background(), artifactfx.Payload(data), store.WithNamespace("s")); err != nil {
+	if _, err := f.store.Put(context.Background(), artifactfx.Payload(data), domain.WithNamespace("s")); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 }

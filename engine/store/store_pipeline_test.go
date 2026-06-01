@@ -14,10 +14,10 @@ import (
 	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/pipelinefx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/pipelinefx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // Pipeline tests. These replace the five TestPut_Pipeline_* example
@@ -41,7 +41,7 @@ func TestPipeline_RoundTrip(t *testing.T) {
 
 			id, err := s.Put(context.Background(),
 				domain.Artifact{Payload: bytes.NewReader(original)},
-				store.WithNamespace("ns"))
+				domain.WithNamespace("ns"))
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}
@@ -102,12 +102,12 @@ func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 		s, root := pipelinefx.Stack(t, "aes-gcm")
 		id, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader(marker)},
-			store.WithNamespace("secret"))
+			domain.WithNamespace("secret"))
 		if err != nil {
 			t.Fatalf("Put: %v", err)
 		}
 
-		blobs := storefx.OnDiskAt(root).BlobFiles()
+		blobs := storefx2.OnDiskAt(root).BlobFiles()
 		if len(blobs) == 0 {
 			t.Fatal("no blob files on disk — cannot verify confidentiality")
 		}
@@ -134,14 +134,14 @@ func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 	})
 
 	t.Run("plain store leaks plaintext (control)", func(t *testing.T) {
-		s, root := storefx.InitWithRoot(t)
+		s, root := storefx2.InitWithRoot(t)
 		if _, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader(marker)},
-			store.WithNamespace("plain")); err != nil {
+			domain.WithNamespace("plain")); err != nil {
 			t.Fatalf("Put: %v", err)
 		}
 		found := false
-		for _, p := range storefx.OnDiskAt(root).BlobFiles() {
+		for _, p := range storefx2.OnDiskAt(root).BlobFiles() {
 			raw, err := os.ReadFile(p)
 			if err != nil {
 				t.Fatalf("read blob %s: %v", p, err)
@@ -164,12 +164,12 @@ func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 func TestPipeline_ConfigGuards(t *testing.T) {
 	t.Run("unregistered algorithm", func(t *testing.T) {
 		reg := pipeline.NewTransformerRegistry() // empty: "zstd" not registered
-		s, _ := storefx.InitWithRoot(t,
+		s, _ := storefx2.InitWithRoot(t,
 			store.WithReadRegistry(reg),
 			store.WithConfig(domain.StoreConfig{Pipeline: []string{"zstd"}}))
 		_, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-			store.WithNamespace("ns"))
+			domain.WithNamespace("ns"))
 		if !errors.Is(err, errs.ErrUnsupportedAlgorithm) {
 			t.Fatalf("Put: got %v, want errs.ErrUnsupportedAlgorithm", err)
 		}
@@ -185,7 +185,7 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 		}
 		s, _, err := store.InitStore(context.Background(), driverfx.LocalFS(t),
 			store.WithStoreIndex(indexfx.Memory(t)),
-			store.WithHashRegistry(storefx.Hashes()),
+			store.WithHashRegistry(storefx2.Hashes()),
 			store.WithReadRegistry(reg),
 			store.WithConfig(cfg))
 		if err != nil {
@@ -195,7 +195,7 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 		}
 		if _, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-			store.WithNamespace("ns")); err == nil {
+			domain.WithNamespace("ns")); err == nil {
 			t.Fatal("Put: expected refusal for inline+pipeline, got nil")
 		}
 	})

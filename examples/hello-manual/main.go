@@ -67,7 +67,7 @@ func main() {
 	// Store an artifact.
 	id, err := st.Put(ctx,
 		domain.Artifact{Payload: strings.NewReader("hello, scrinium!\n")},
-		store.WithNamespace("demo"))
+		domain.WithNamespace("demo"))
 	if err != nil {
 		log.Fatalf("put: %v", err)
 	}

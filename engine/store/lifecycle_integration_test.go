@@ -13,7 +13,7 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // TestStore_FullLifecycle_DiskBacked is the end-to-end smoke test

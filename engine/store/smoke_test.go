@@ -14,10 +14,9 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/humanize"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // TestSmoke_MillionSmallFiles is the M1 exit-criterion smoke:
@@ -81,7 +80,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 		}
 	}
 	emit("config: N=%d, payload=%dB, heap-ceiling=%s",
-		n, payloadSize, humanize.Bytes(heapDeltaCeiling))
+		n, payloadSize, humanize_Bytes(heapDeltaCeiling))
 
 	s, _ := newDiskStore(t)
 	ctx := context.Background()
@@ -90,7 +89,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 	runtime.GC()
 	var baseline runtime.MemStats
 	runtime.ReadMemStats(&baseline)
-	emit("baseline HeapAlloc: %s", humanize.Bytes(int64(baseline.HeapAlloc)))
+	emit("baseline HeapAlloc: %s", humanize_Bytes(int64(baseline.HeapAlloc)))
 
 	// --- Put loop ---
 	ids := make([]domain.ArtifactID, 0, 3) // first, mid, last for sample Get
@@ -100,7 +99,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 		p := makePayload(i, payloadSize)
 		id, err := s.Put(ctx,
 			domain.Artifact{Payload: bytes.NewReader(p)},
-			store.WithNamespace("smoke"))
+			domain.WithNamespace("smoke"))
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
@@ -123,10 +122,10 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 	runtime.ReadMemStats(&afterPut)
 	delta := int64(afterPut.HeapAlloc) - int64(baseline.HeapAlloc)
 	emit("HeapAlloc after Put: %s (delta from baseline: %s)",
-		humanize.Bytes(int64(afterPut.HeapAlloc)), humanize.Bytes(delta))
+		humanize_Bytes(int64(afterPut.HeapAlloc)), humanize_Bytes(delta))
 	if delta > heapDeltaCeiling {
 		t.Errorf("heap delta %s exceeds ceiling %s — likely O(N) accumulation",
-			humanize.Bytes(delta), humanize.Bytes(int64(heapDeltaCeiling)))
+			humanize_Bytes(delta), humanize_Bytes(int64(heapDeltaCeiling)))
 	}
 
 	// --- Walk: every artifact visible through the index ---
@@ -323,7 +322,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 		}
 	}
 	emit("config: N=%d, crypto=Paranoid, payload=%dB, heap-ceiling=%s",
-		n, payloadSize, humanize.Bytes(heapDeltaCeiling))
+		n, payloadSize, humanize_Bytes(heapDeltaCeiling))
 
 	// Disk-backed Store, encrypted with Paranoid. Same factory
 	// as the Plain smoke would have used, with the additional
@@ -334,7 +333,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 	runtime.GC()
 	var baseline runtime.MemStats
 	runtime.ReadMemStats(&baseline)
-	emit("baseline HeapAlloc: %s", humanize.Bytes(int64(baseline.HeapAlloc)))
+	emit("baseline HeapAlloc: %s", humanize_Bytes(int64(baseline.HeapAlloc)))
 
 	// --- Put loop ---
 	//
@@ -356,7 +355,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 		p := makePayload(i, payloadSize)
 		id, err := s.Put(ctx,
 			domain.Artifact{Payload: bytes.NewReader(p)},
-			store.WithNamespace("smoke-enc"))
+			domain.WithNamespace("smoke-enc"))
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
@@ -413,9 +412,33 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 	var after runtime.MemStats
 	runtime.ReadMemStats(&after)
 	delta := int64(after.HeapAlloc) - int64(baseline.HeapAlloc)
-	emit("HeapAlloc delta: %s", humanize.Bytes(delta))
+	emit("HeapAlloc delta: %s", humanize_Bytes(delta))
 	if delta > heapDeltaCeiling {
 		t.Errorf("HeapAlloc delta %s exceeds ceiling %s",
-			humanize.Bytes(delta), humanize.Bytes(heapDeltaCeiling))
+			humanize_Bytes(delta), humanize_Bytes(heapDeltaCeiling))
+	}
+}
+
+func humanize_Bytes(n int64) string {
+	if n < 0 {
+		n = -n
+	}
+	const (
+		KiB = 1024
+		MiB = 1024 * KiB
+		GiB = 1024 * MiB
+		TiB = 1024 * GiB
+	)
+	switch {
+	case n >= TiB:
+		return fmt.Sprintf("%.1f TiB", float64(n)/float64(TiB))
+	case n >= GiB:
+		return fmt.Sprintf("%.1f GiB", float64(n)/float64(GiB))
+	case n >= MiB:
+		return fmt.Sprintf("%.1f MiB", float64(n)/float64(MiB))
+	case n >= KiB:
+		return fmt.Sprintf("%.1f KiB", float64(n)/float64(KiB))
+	default:
+		return fmt.Sprintf("%d B", n)
 	}
 }

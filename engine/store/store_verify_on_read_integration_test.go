@@ -12,7 +12,7 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
-	"scrinium.dev/internal/testutil/storefx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // localScrubCapture mirrors store_verify_test.go's scrubCapture for use
@@ -67,7 +67,7 @@ func configWith(policy domain.VerifyOnReadPolicy) domain.StoreConfig {
 // here writes one artifact before calling this helper.
 func corruptBlob(t *testing.T, root string) {
 	t.Helper()
-	files := storefx.OnDiskAt(root).BlobFiles()
+	files := storefx2.OnDiskAt(root).BlobFiles()
 	if len(files) != 1 {
 		t.Fatalf("expected 1 blob file, got %d", len(files))
 	}
@@ -87,12 +87,12 @@ func corruptBlob(t *testing.T, root string) {
 // --- ForceEnabled detects on-disk corruption ---
 
 func TestGet_VerifyOnRead_ForceEnabled_DetectsBlobCorruption(t *testing.T) {
-	s, root := storefx.InitWithRoot(t,
+	s, root := storefx2.InitWithRoot(t,
 		store.WithConfig(configWith(domain.VerifyOnReadForceEnabled)),
 	)
 	id, err := s.Put(context.Background(),
 		payload("hello verify on read"),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -112,12 +112,12 @@ func TestGet_VerifyOnRead_ForceEnabled_DetectsBlobCorruption(t *testing.T) {
 // --- Disabled does NOT detect corruption ---
 
 func TestGet_VerifyOnRead_Disabled_SilentOnCorruption(t *testing.T) {
-	s, root := storefx.InitWithRoot(t,
+	s, root := storefx2.InitWithRoot(t,
 		store.WithConfig(configWith(domain.VerifyOnReadDisabled)),
 	)
 	id, err := s.Put(context.Background(),
 		payload("trust the medium"),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -142,12 +142,12 @@ func TestGet_VerifyOnRead_Disabled_SilentOnCorruption(t *testing.T) {
 func TestGet_VerifyOnRead_Auto_PlainBlob_Verifies(t *testing.T) {
 	// Auto is the default; passing it explicitly here documents
 	// the case under test.
-	s, root := storefx.InitWithRoot(t,
+	s, root := storefx2.InitWithRoot(t,
 		store.WithConfig(configWith(domain.VerifyOnReadAuto)),
 	)
 	id, err := s.Put(context.Background(),
 		payload("auto must catch this"),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -167,13 +167,13 @@ func TestGet_VerifyOnRead_Auto_PlainBlob_Verifies(t *testing.T) {
 // --- Happy path: clean blob passes through under ForceEnabled ---
 
 func TestGet_VerifyOnRead_ForceEnabled_CleanBlobRoundtrip(t *testing.T) {
-	s, _ := storefx.InitWithRoot(t,
+	s, _ := storefx2.InitWithRoot(t,
 		store.WithConfig(configWith(domain.VerifyOnReadForceEnabled)),
 	)
 	const want = "clean blob no tamper"
 	id, err := s.Put(context.Background(),
 		payload(want),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -198,13 +198,13 @@ func TestGet_VerifyOnRead_EmitsScrubFailedEvent(t *testing.T) {
 	scrub := &localScrubCapture{}
 	bus.Subscribe(scrub.handle)
 
-	s, root := storefx.InitWithRoot(t,
+	s, root := storefx2.InitWithRoot(t,
 		store.WithConfig(configWith(domain.VerifyOnReadForceEnabled)),
 		store.WithPublisher(bus),
 	)
 	id, err := s.Put(context.Background(),
 		payload("event must fire"),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -241,12 +241,12 @@ func TestGet_VerifyOnRead_EmitsScrubFailedEvent(t *testing.T) {
 func TestGet_VerifyOnRead_ForceEnabled_InlineRoundtrip(t *testing.T) {
 	cfg := configWith(domain.VerifyOnReadForceEnabled)
 	cfg.InlineBlobLimit = 1024
-	s, _ := storefx.InitWithRoot(t, store.WithConfig(cfg))
+	s, _ := storefx2.InitWithRoot(t, store.WithConfig(cfg))
 
 	const want = "inline body"
 	id, err := s.Put(context.Background(),
 		payload(want),
-		store.WithNamespace("v"))
+		domain.WithNamespace("v"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

@@ -15,9 +15,9 @@ import (
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/artifactfx"
-	"scrinium.dev/internal/testutil/eventfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/eventfx"
+	"scrinium.dev/testutil/storefx"
 )
 
 const gcHostID = "gc-host-0001"
@@ -46,7 +46,7 @@ func newGCFixture(t *testing.T, grace time.Duration, policy domain.GCLeasePolicy
 func (f gcFixture) putAndOrphan(t *testing.T, data string) (domain.ArtifactID, string) {
 	t.Helper()
 	ctx := context.Background()
-	id, err := f.store.Put(ctx, artifactfx.Payload(data), store.WithNamespace("g"))
+	id, err := f.store.Put(ctx, artifactfx.Payload(data), domain.WithNamespace("g"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestGC_RevivedBlobSurvivesSweep(t *testing.T) {
 	// still exists, but it is no longer ref_count=0 — so even with
 	// grace=0 the Sweep's DeleteOrphanBlob guard must keep it.
 	if _, err := f.store.Put(context.Background(), artifactfx.Payload("revive me"),
-		store.WithNamespace("g2")); err != nil {
+		domain.WithNamespace("g2")); err != nil {
 		t.Fatalf("revive Put: %v", err)
 	}
 

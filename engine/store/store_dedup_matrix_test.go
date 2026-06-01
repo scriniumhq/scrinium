@@ -11,9 +11,9 @@ import (
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/internal/testutil/driverfx"
-	"scrinium.dev/internal/testutil/indexfx"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // TestDedup_Matrix is the single source of truth for the blob
@@ -127,13 +127,13 @@ func TestDedup_Matrix(t *testing.T) {
 					store.WithReadRegistry(pipeline.NewTransformerRegistry().Register("aes-gcm", f)))
 			}
 			opts = append(opts, store.WithConfig(cfg))
-			s := storefx.InitOn(t, drv, opts...)
+			s := storefx2.InitOn(t, drv, opts...)
 
 			ids := make([]domain.ArtifactID, len(tc.payloads))
 			for i, p := range tc.payloads {
 				id, err := s.Put(ctx,
 					domain.Artifact{Payload: bytes.NewReader([]byte(p))},
-					store.WithNamespace("ns"))
+					domain.WithNamespace("ns"))
 				if err != nil {
 					t.Fatalf("Put #%d: %v", i, err)
 				}
@@ -141,7 +141,7 @@ func TestDedup_Matrix(t *testing.T) {
 			}
 
 			// (1) physical blob count matches the dedup policy.
-			if got := storefx.OnDiskAt(drv.Root()).BlobCount(); got != tc.wantBlobs {
+			if got := storefx2.OnDiskAt(drv.Root()).BlobCount(); got != tc.wantBlobs {
 				t.Errorf("BlobCount = %d, want %d", got, tc.wantBlobs)
 			}
 

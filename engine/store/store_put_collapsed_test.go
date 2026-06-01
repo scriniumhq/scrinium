@@ -18,9 +18,8 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	storefx2 "scrinium.dev/testutil/storefx"
 )
 
 // TestPut_OnDiskLayout is the single physical-layout sanity check: a
@@ -29,10 +28,10 @@ import (
 // covered by the seeded round-trip and the model test; this pins the
 // on-disk shape and the Capacity surface, which nothing else asserts.)
 func TestPut_OnDiskLayout(t *testing.T) {
-	s, root := storefx.InitWithRoot(t)
+	s, root := storefx2.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("hello scrinium"),
-		store.WithNamespace("users"))
+		domain.WithNamespace("users"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -40,7 +39,7 @@ func TestPut_OnDiskLayout(t *testing.T) {
 		t.Errorf("ArtifactID prefix: got %q", id)
 	}
 
-	disk := storefx.OnDiskAt(root)
+	disk := storefx2.OnDiskAt(root)
 	if !disk.ManifestExists(id) {
 		t.Errorf("manifest not on disk at %s", disk.ManifestPath(id))
 	}
@@ -66,16 +65,16 @@ func TestPut_OnDiskLayout(t *testing.T) {
 // property does not cover (that one puts the same content under the
 // same identity and expects the same ID).
 func TestPut_SharedBlobAcrossArtifacts(t *testing.T) {
-	s, root := storefx.InitWithRoot(t)
+	s, root := storefx2.InitWithRoot(t)
 	const text = "shared content"
 
 	id1, err := s.Put(context.Background(), payload(text),
-		store.WithNamespace("n"), store.WithSession("a"))
+		domain.WithNamespace("n"), domain.WithSession("a"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	id2, err := s.Put(context.Background(), payload(text),
-		store.WithNamespace("n"), store.WithSession("b"))
+		domain.WithNamespace("n"), domain.WithSession("b"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +82,7 @@ func TestPut_SharedBlobAcrossArtifacts(t *testing.T) {
 		t.Fatalf("different SessionID must produce different ArtifactIDs, got %q", id1)
 	}
 
-	disk := storefx.OnDiskAt(root)
+	disk := storefx2.OnDiskAt(root)
 	if n := disk.BlobCount(); n != 1 {
 		t.Errorf("shared content should leave 1 blob, got %d", n)
 	}
@@ -112,17 +111,17 @@ func TestPut_InputValidation(t *testing.T) {
 	cases := []struct {
 		name    string
 		art     domain.Artifact
-		opts    []store.PutOption
+		opts    []domain.PutOption
 		wantErr error // nil means "any non-nil error"
 	}{
 		{"reserved system namespace", payload("x"),
-			[]store.PutOption{store.WithNamespace("system.config")}, errs.ErrReservedNamespace},
+			[]domain.PutOption{domain.WithNamespace("system.config")}, errs.ErrReservedNamespace},
 		{"wildcard namespace", payload("x"),
-			[]store.PutOption{store.WithNamespace("*")}, errs.ErrReservedNamespace},
+			[]domain.PutOption{domain.WithNamespace("*")}, errs.ErrReservedNamespace},
 		{"namespace too long", payload("x"),
-			[]store.PutOption{store.WithNamespace(strings.Repeat("a", 256))}, errs.ErrNamespaceTooLong},
+			[]domain.PutOption{domain.WithNamespace(strings.Repeat("a", 256))}, errs.ErrNamespaceTooLong},
 		{"session id too long", payload("x"),
-			[]store.PutOption{store.WithSession(domain.SessionID(strings.Repeat("a", 256)))}, errs.ErrSessionIDTooLong},
+			[]domain.PutOption{domain.WithSession(domain.SessionID(strings.Repeat("a", 256)))}, errs.ErrSessionIDTooLong},
 		{"ext too large",
 			domain.Artifact{Payload: strings.NewReader("ok"), Ext: append([]byte(`"`), append(huge, '"')...)},
 			nil, errs.ErrExtTooLarge},
@@ -131,7 +130,7 @@ func TestPut_InputValidation(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _ := storefx.InitWithRoot(t)
+			s, _ := storefx2.InitWithRoot(t)
 			_, err := s.Put(context.Background(), tc.art, tc.opts...)
 			if tc.wantErr == nil {
 				if err == nil {
@@ -173,11 +172,11 @@ func TestPut_InlinePolicy(t *testing.T) {
 			s, root := newInlineStore(t, tc.limit)
 			id, err := s.Put(context.Background(),
 				payload(tc.content),
-				store.WithNamespace("inline"))
+				domain.WithNamespace("inline"))
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}
-			disk := storefx.OnDiskAt(root)
+			disk := storefx2.OnDiskAt(root)
 			if n := disk.BlobCount(); n != tc.wantBlobs {
 				t.Errorf("blob files: got %d, want %d", n, tc.wantBlobs)
 			}
@@ -196,11 +195,11 @@ func TestPut_InlinePolicy(t *testing.T) {
 		const content = "shared inline"
 		for _, sid := range []domain.SessionID{"a", "b"} {
 			if _, err := s.Put(context.Background(), payload(content),
-				store.WithNamespace("ns"), store.WithSession(sid)); err != nil {
+				domain.WithNamespace("ns"), domain.WithSession(sid)); err != nil {
 				t.Fatal(err)
 			}
 		}
-		if n := storefx.OnDiskAt(root).BlobCount(); n != 0 {
+		if n := storefx2.OnDiskAt(root).BlobCount(); n != 0 {
 			t.Errorf("blob files after 2 inline Puts: got %d, want 0", n)
 		}
 		var manifests int

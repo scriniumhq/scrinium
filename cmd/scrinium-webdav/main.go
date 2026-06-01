@@ -1,42 +1,28 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"golang.org/x/net/webdav"
-	"scrinium.dev"
 
 	// Built-in backends register by blank import (ADR-63).
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"
 
-	"scrinium.dev/domain"
-	"scrinium.dev/projection"
+	"scrinium.dev/cmd/internal/daemon"
+	"scrinium.dev/projection/vfs"
 )
 
+const name = "scrinium-webdav"
+
 func main() {
-	if len(os.Args) < 2 {
-		printUsage(os.Stderr)
-		os.Exit(2)
-	}
-	switch os.Args[1] {
-	case "serve":
-		os.Exit(runServe(os.Args[2:]))
-	case "-h", "--help", "help":
-		printUsage(os.Stdout)
-		os.Exit(0)
-	default:
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: unknown command %q\n\n", os.Args[1])
-		printUsage(os.Stderr)
-		os.Exit(2)
-	}
+	os.Exit(daemon.Dispatch(name, usageText, map[string]daemon.Command{
+		"serve": runServe,
+	}))
 }
 
 func runServe(args []string) int {
@@ -48,42 +34,22 @@ func runServe(args []string) int {
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if *configPath == "" {
-		fmt.Fprintln(os.Stderr, "scrinium-webdav serve: --config is required")
-		return 2
-	}
 
-	data, err := os.ReadFile(*configPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav serve: read config: %v\n", err)
-		return 2
+	asm, ctx, stop, code := daemon.Load(name, *configPath, true)
+	if code != 0 {
+		return code
 	}
-
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-
-	asm, err := scrinium.LoadOrInitYAML(ctx, data)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: %v\n", err)
-		return 1
-	}
-	defer asm.Close()
-
-	if asm.Projection == nil {
-		fmt.Fprintln(os.Stderr, "scrinium-webdav: config has no projection section; nothing to serve")
-		return 1
-	}
+	defer stop()
 
 	startedAt := time.Now().UTC()
 	// WebDAV exposes only the user filesystem: every diagnostic tree is
 	// off so Finder/rclone see a clean root. Service prefix is kept for
 	// the stats pseudo-file path only.
-	routingCfg := projection.RoutingConfig{
+	routingCfg := vfs.Config{
 		ServicePrefix: "_scrinium",
-		RootView:      projection.RootByPath,
 	}
-	stats := statsProvider(asm, startedAt, 2*time.Second)
-	wfs := newWebdavFS(asm.Projection.View, asm.Projection.FSOps, routingCfg, !*allowOSJunk, stats)
+	stats := daemon.StatsProvider(asm, startedAt, 2*time.Second)
+	wfs := newWebdavFS(asm.Projection, routingCfg, !*allowOSJunk, stats)
 
 	handler := &webdav.Handler{
 		FileSystem: wfs,
@@ -92,7 +58,7 @@ func runServe(args []string) int {
 			if err == nil {
 				return
 			}
-			if !*allowOSJunk && isOSJunk(cleanWebDAVPath(r.URL.Path)) {
+			if !*allowOSJunk && isOSJunk(vfs.CleanPath(r.URL.Path)) {
 				return
 			}
 			fmt.Fprintf(os.Stderr, "webdav: %s %s: %v\n", r.Method, r.URL.Path, err)
@@ -104,52 +70,8 @@ func runServe(args []string) int {
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	go func() {
-		<-ctx.Done()
-		shutCtx, c := context.WithTimeout(context.Background(), 5*time.Second)
-		defer c()
-		_ = srv.Shutdown(shutCtx)
-	}()
-
-	fmt.Fprintf(os.Stderr, "Mount session: %s\n", asm.MountSession)
 	fmt.Fprintf(os.Stderr, "Serving WebDAV on %s\n", *listen)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		fmt.Fprintf(os.Stderr, "scrinium-webdav: %v\n", err)
-		return 1
-	}
-	return 0
-}
-
-// statsProvider renders the assembly's stats snapshot for the
-// _scrinium/stats pseudo-file. capacityTimeout caps Store.Capacity so a
-// slow driver never hangs a stats read; on error capacity is omitted.
-func statsProvider(asm *scrinium.ScriniumClient, startedAt time.Time, capacityTimeout time.Duration) func() []byte {
-	return func() []byte {
-		capCtx, cancel := context.WithTimeout(context.Background(), capacityTimeout)
-		defer cancel()
-
-		var capPtr *domain.StorageInfo
-		if info, err := asm.Store.Capacity(capCtx); err == nil {
-			capPtr = &info
-		}
-
-		exts := make([]projection.ExtensionInfo, 0)
-		for _, e := range asm.Extensions() {
-			exts = append(exts, projection.ExtensionInfo{Name: e.Name, SchemaVersion: e.SchemaVersion})
-		}
-
-		meta := asm.Info
-		return projection.RenderStats(asm.Projection.View, projection.DaemonInfo{
-			StartedAt:    startedAt,
-			MountSession: asm.MountSession,
-			StorePath:    meta.StoreURI,
-			ReadOnly:     meta.ReadOnly,
-			Editing:      meta.Editing,
-			Namespace:    meta.Namespace,
-			Capacity:     capPtr,
-			Extensions:   exts,
-		})
-	}
+	return daemon.ServeHTTP(ctx, name, srv)
 }
 
 const usageText = `scrinium-webdav — expose a Scrinium store over WebDAV.
@@ -162,7 +84,3 @@ Serving options are flags.
 
 Specification: docs/4 §15 WebDAV Mount.
 `
-
-func printUsage(w *os.File) {
-	fmt.Fprint(w, usageText)
-}

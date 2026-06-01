@@ -9,7 +9,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/artifactfx"
+	"scrinium.dev/testutil/artifactfx"
 )
 
 func TestSealed_CrossBlockSwapFails(t *testing.T) {

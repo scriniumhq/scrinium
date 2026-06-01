@@ -1,0 +1,68 @@
+package domain
+
+import "time"
+
+// PutOption configures a Put. Options apply left to right; the zero
+// set means: default namespace, no session, regular blob, no
+// retention, no routing hints.
+//
+// The options live in domain (not the store) so the projection layer
+// and other store clients can construct Put/Get calls without
+// importing the engine. The store applies them via ApplyPut.
+type PutOption func(*PutOptions)
+
+// WithNamespace places the artifact in a namespace. Empty (the
+// default) is the store's default namespace.
+func WithNamespace(ns string) PutOption {
+	return func(o *PutOptions) { o.Namespace = ns }
+}
+
+// WithSession ties the Put to a session for RollbackSession.
+func WithSession(id SessionID) PutOption {
+	return func(o *PutOptions) { o.SessionID = id }
+}
+
+// WithBlobType sets the blob type (default: regular).
+func WithBlobType(bt BlobType) PutOption {
+	return func(o *PutOptions) { o.BlobType = bt }
+}
+
+// WithRetention sets a retention deadline for the artifact.
+func WithRetention(t time.Time) PutOption {
+	return func(o *PutOptions) { o.RetentionUntil = t }
+}
+
+// WithRouting attaches routing hints (e.g. for a multistore router).
+func WithRouting(h RoutingHints) PutOption {
+	return func(o *PutOptions) { o.Routing = h }
+}
+
+// ApplyPut folds options into a PutOptions. The store calls this to
+// resolve a Put; decorators and test doubles that wrap a Store and
+// need the resolved values (namespace, session, …) use it too.
+func ApplyPut(opts ...PutOption) PutOptions {
+	var o PutOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}
+
+// GetOption configures a Get. The zero set means a normal read.
+type GetOption func(*GetOptions)
+
+// WithColdRead permits fetching from cold/expensive backing storage
+// (e.g. a multistore tier normally skipped on reads).
+func WithColdRead() GetOption {
+	return func(o *GetOptions) { o.AllowColdRead = true }
+}
+
+// ApplyGet folds options into a GetOptions. Decorators (e.g.
+// multistore) that wrap a Store and branch on the result use it.
+func ApplyGet(opts ...GetOption) GetOptions {
+	var o GetOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return o
+}

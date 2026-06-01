@@ -3,6 +3,7 @@ package assembly
 import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/index/extension"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/projection"
 )
@@ -24,7 +25,7 @@ type Assembly interface {
 	// StoreIndex directly from the assembler at construction time
 	// (engine-internal); they do not reach them through this surface,
 	// and neither do hosts.
-	Extensions() []index.ExtensionInfo
+	Extensions() []extension.ExtensionInfo
 
 	// Projection is the read-side View plus the optional read/write
 	// FSOps facade, bundled. Nil when the assembly was built without a
@@ -110,10 +111,10 @@ func (a *asm) MountSession() domain.SessionID     { return a.mountSession }
 func (a *asm) Info() Info                         { return a.info }
 
 // Extensions reports the index extensions when the backend implements
-// index.ExtensionLister, and nil otherwise. The raw index is held only
+// extension.ExtensionLister, and nil otherwise. The raw index is held only
 // internally (a.index) and never handed out.
-func (a *asm) Extensions() []index.ExtensionInfo {
-	if l, ok := a.index.(index.ExtensionLister); ok {
+func (a *asm) Extensions() []extension.ExtensionInfo {
+	if l, ok := a.index.(extension.ExtensionLister); ok {
 		return l.ListExtensions()
 	}
 	return nil

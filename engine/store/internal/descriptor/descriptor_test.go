@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/internal/testutil/driverfx"
+	"scrinium.dev/testutil/driverfx"
 )
 
 // validDescriptor returns a descriptor with one of every field set.

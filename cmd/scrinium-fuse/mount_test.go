@@ -11,31 +11,27 @@ import (
 	"time"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"scrinium.dev/internal/testutil/projectionfx"
-	viewfx "scrinium.dev/internal/testutil/viewfx"
+	"scrinium.dev/projection/vfs"
+	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/testutil/viewfx"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 )
 
-// newTestRoot builds a rootNode wired against an in-memory
-// FakeSource. Tests pass any pre-populated manifests through
-// `manifests` because the View backfills synchronously at
-// construction time — adding to the source after NewView has no
-// effect on the View's trees.
-func newTestRoot(t *testing.T, manifests ...domain.Manifest) (*rootNode, *projectionfx.FakeSource) {
+// newTestRoot builds the FUSE mount root over an in-memory
+// FakeSource via the VFS facade. Tests pass pre-populated
+// manifests through `manifests` because the View backfills
+// synchronously at construction — adding to the source after
+// NewView has no effect on the View's trees.
+func newTestRoot(t *testing.T, manifests ...domain.Manifest) *node {
 	t.Helper()
-	v, o, src := viewfx.Stack(t, manifests...)
-	return &rootNode{
-		view:       v,
-		fsops:      o,
-		store:      src,
-		routingCfg: viewfx.RoutingAll(),
-		startedAt:  time.Now(),
-	}, src
+	proj, _ := viewfx.Stack(t, manifests...)
+	fsys := vfs.New(proj, viewfx.RoutingAll())
+	return newRoot(fsys, time.Now())
 }
 
-// --- errnoFromError ---
+// --- errnoFromError (FUSE-specific error translation) ---
 
 func TestErrnoFromError_KnownSentinels(t *testing.T) {
 	cases := []struct {
@@ -73,44 +69,39 @@ func TestErrnoFromError_UnknownIsEIO(t *testing.T) {
 	}
 }
 
-// --- inodeFor ---
+// --- inodeForPath (FUSE-specific inode allocation) ---
 
-func TestInodeFor_StableForSameInputs(t *testing.T) {
-	a := inodeFor("by-path", "photos/img.jpg")
-	b := inodeFor("by-path", "photos/img.jpg")
-	if a != b {
-		t.Errorf("not stable: %d vs %d", a, b)
+func TestInodeForPath_StableForSameInput(t *testing.T) {
+	if inodeForPath("by-path/photos/img.jpg") != inodeForPath("by-path/photos/img.jpg") {
+		t.Error("not stable for the same path")
 	}
 }
 
-func TestInodeFor_DifferentForDifferentInputs(t *testing.T) {
-	a := inodeFor("by-path", "photos/img.jpg")
-	b := inodeFor("by-date", "photos/img.jpg")
-	if a == b {
-		t.Errorf("collision: same inode for different trees: %d", a)
+func TestInodeForPath_DifferentForDifferentInput(t *testing.T) {
+	if inodeForPath("by-path/photos/img.jpg") == inodeForPath("by-date/photos/img.jpg") {
+		t.Error("collision: same inode for different full paths")
 	}
 }
 
-func TestInodeFor_RootIsOne(t *testing.T) {
-	if inodeFor("", "") != 1 {
+func TestInodeForPath_RootIsOne(t *testing.T) {
+	if inodeForPath("") != 1 {
 		t.Error("root inode must be 1")
 	}
 }
 
-func TestInodeFor_AvoidsReservedRange(t *testing.T) {
-	// Many path/tree combinations should never produce 1..15.
+func TestInodeForPath_AvoidsReservedRange(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		ino := inodeFor("by-path", "p"+string(rune('a'+i)))
+		ino := inodeForPath("by-path/p" + string(rune('a'+i)))
 		if ino > 0 && ino < 16 {
 			t.Errorf("inode %d in reserved range for input p%c", ino, 'a'+i)
 		}
 	}
 }
 
-// --- rootNode.Getattr ---
+// --- node: mount-root attributes ---
 
-func TestRootNode_Getattr(t *testing.T) {
-	root, _ := newTestRoot(t)
+func TestNode_RootGetattr(t *testing.T) {
+	root := newTestRoot(t)
 	out := &fuse.AttrOut{}
 	if errno := root.Getattr(context.Background(), nil, out); errno != 0 {
 		t.Fatalf("Getattr: %v", errno)
@@ -120,17 +111,10 @@ func TestRootNode_Getattr(t *testing.T) {
 	}
 }
 
-// --- rootNode.Lookup ---
+// --- node.Lookup: negative path returns without NewInode ---
 
-// Lookup tests that need NewInode to succeed require a real
-// FUSE mount (the embedded fs.Inode of rootNode acquires its
-// rawBridge only when fs.Mount runs). Those go in
-// mount_root_test.go (5c, integration). Here we exercise only
-// the negative path where Lookup can return without ever calling
-// NewInode.
-
-func TestRootNode_Lookup_Missing(t *testing.T) {
-	root, _ := newTestRoot(t)
+func TestNode_Lookup_Missing(t *testing.T) {
+	root := newTestRoot(t)
 	out := &fuse.EntryOut{}
 	_, errno := root.Lookup(context.Background(), "nope", out)
 	if errno != syscall.ENOENT {
@@ -138,11 +122,16 @@ func TestRootNode_Lookup_Missing(t *testing.T) {
 	}
 }
 
-// --- rootNode.Readdir ---
+// --- node.Readdir: surfaces the VFS listing as fuse.DirEntry ---
+//
+// This verifies the FUSE-side delegation/translation end to end
+// (the service-prefix and root-view policy themselves are tested
+// at the vfs layer). The artifact "alpha" and the "_scrinium"
+// prefix entry must both reach the DirStream.
 
-func TestRootNode_Readdir_IncludesServicePrefix(t *testing.T) {
-	root, _ := newTestRoot(t,
-		projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
+func TestNode_Readdir_SurfacesEntries(t *testing.T) {
+	root := newTestRoot(t,
+		manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
 
 	stream, errno := root.Readdir(context.Background())
 	if errno != 0 {
@@ -150,104 +139,20 @@ func TestRootNode_Readdir_IncludesServicePrefix(t *testing.T) {
 	}
 	defer stream.Close()
 
-	var names []string
+	var hasService, hasAlpha bool
 	for stream.HasNext() {
 		entry, _ := stream.Next()
-		names = append(names, entry.Name)
-	}
-
-	hasService := false
-	hasAlpha := false
-	for _, n := range names {
-		if n == "_scrinium" {
+		switch entry.Name {
+		case "_scrinium":
 			hasService = true
-		}
-		if n == "alpha" {
+		case "alpha":
 			hasAlpha = true
 		}
 	}
 	if !hasService {
-		t.Errorf("_scrinium missing from listing: %v", names)
+		t.Error("_scrinium missing from listing")
 	}
 	if !hasAlpha {
-		t.Errorf("alpha missing from listing: %v", names)
+		t.Error("alpha missing from listing")
 	}
-}
-
-func TestRootNode_Readdir_ServicePrefixDisabled(t *testing.T) {
-	root, _ := newTestRoot(t)
-	root.routingCfg.ServicePrefix = "" // disable
-
-	stream, errno := root.Readdir(context.Background())
-	if errno != 0 {
-		t.Fatalf("Readdir: %v", errno)
-	}
-	defer stream.Close()
-
-	for stream.HasNext() {
-		entry, _ := stream.Next()
-		if entry.Name == "_scrinium" {
-			t.Errorf("_scrinium should not appear when servicePrefix is empty")
-		}
-	}
-}
-
-// --- serviceRootNode children ---
-
-func TestServiceRootNode_ChildrenRespectShowFlags(t *testing.T) {
-	root, _ := newTestRoot(t)
-	s := &serviceRootNode{root: root}
-	got := s.children()
-
-	want := map[string]bool{
-		"stats": true, "by-artifact": true, "by-date": true,
-		"by-session": true, "by-namespace": true, "orphaned": true,
-		"by-path": true,
-	}
-	if len(got) != len(want) {
-		t.Errorf("children count: got %d, want %d (%v)", len(got), len(want), got)
-	}
-	for _, n := range got {
-		if !want[n] {
-			t.Errorf("unexpected child %q", n)
-		}
-	}
-}
-
-func TestServiceRootNode_ChildrenSkipDisabled(t *testing.T) {
-	root, _ := newTestRoot(t)
-	root.routingCfg.ShowBySession = false
-	root.routingCfg.ShowByDate = false
-	s := &serviceRootNode{root: root}
-	got := s.children()
-	for _, n := range got {
-		if n == "by-session" || n == "by-date" {
-			t.Errorf("disabled tree %q in listing", n)
-		}
-	}
-}
-
-// --- Stats body ---
-
-func TestStatsBody_NonEmpty(t *testing.T) {
-	root, src := newTestRoot(t)
-	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
-		"x"), nil)
-	body := root.statsBody()
-	if len(body) == 0 {
-		t.Error("stats body empty")
-	}
-	// Sanity: must mention TotalNodes.
-	if !contains(string(body), "TotalNodes") {
-		t.Errorf("missing TotalNodes in body:\n%s", body)
-	}
-}
-
-func contains(s, sub string) bool {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
 }

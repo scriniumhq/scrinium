@@ -11,35 +11,17 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/testutil/projectionfx"
-	viewfx "scrinium.dev/internal/testutil/viewfx"
+	"scrinium.dev/testutil/manifestfx"
+	"scrinium.dev/testutil/viewfx"
 )
 
 // newTestFS builds a webdavFS wired against an in-memory
 // FakeSource. Manifests passed in are added BEFORE NewView so
 // they survive backfill.
-func newTestFS(t *testing.T, manifests ...domain.Manifest) (*webdavFS, *projectionfx.FakeSource) {
+func newTestFS(t *testing.T, manifests ...domain.Manifest) *webdavFS {
 	t.Helper()
-	v, o, src := viewfx.Stack(t, manifests...)
-	return newWebdavFS(v, o, viewfx.RoutingAll(), true /* rejectJunk */, nil /* statsProvider */), src
-}
-
-// --- cleanWebDAVPath ---
-
-func TestCleanWebDAVPath(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"", ""},
-		{"/", ""},
-		{"/photos", "photos"},
-		{"/photos/", "photos"},
-		{"/photos/img.jpg", "photos/img.jpg"},
-		{"photos/img.jpg", "photos/img.jpg"},
-	}
-	for _, tc := range cases {
-		if got := cleanWebDAVPath(tc.in); got != tc.want {
-			t.Errorf("cleanWebDAVPath(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
+	proj, _ := viewfx.Stack(t, manifests...)
+	return newWebdavFS(proj, viewfx.RoutingAll(), true, nil)
 }
 
 // (TestIsAtServiceRoot moved to projection/vfs — that helper
@@ -48,7 +30,7 @@ func TestCleanWebDAVPath(t *testing.T) {
 // --- Stat ---
 
 func TestStat_Root(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	fi, err := w.Stat(context.Background(), "/")
 	if err != nil {
 		t.Fatalf("Stat /: %v", err)
@@ -59,8 +41,8 @@ func TestStat_Root(t *testing.T) {
 }
 
 func TestStat_File(t *testing.T) {
-	w, _ := newTestFS(t,
-		projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
+	w := newTestFS(t,
+		manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
 	fi, err := w.Stat(context.Background(), "/alpha")
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
@@ -74,7 +56,7 @@ func TestStat_File(t *testing.T) {
 }
 
 func TestStat_NotFound(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	_, err := w.Stat(context.Background(), "/nope")
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("expected fs.ErrNotExist, got %v", err)
@@ -82,7 +64,7 @@ func TestStat_NotFound(t *testing.T) {
 }
 
 func TestStat_ServiceRoot(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	fi, err := w.Stat(context.Background(), "/_scrinium")
 	if err != nil {
 		t.Fatalf("Stat _scrinium: %v", err)
@@ -96,7 +78,7 @@ func TestStat_ServiceRoot(t *testing.T) {
 }
 
 func TestStat_StatsFile(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	fi, err := w.Stat(context.Background(), "/_scrinium/stats")
 	if err != nil {
 		t.Fatalf("Stat stats: %v", err)
@@ -112,7 +94,7 @@ func TestStat_StatsFile(t *testing.T) {
 // --- Mkdir ---
 
 func TestMkdir_PendingDir(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	err := w.Mkdir(context.Background(), "/photos", 0o755)
 	if err != nil {
 		t.Fatalf("Mkdir: %v", err)
@@ -127,7 +109,7 @@ func TestMkdir_PendingDir(t *testing.T) {
 }
 
 func TestMkdir_AtServiceRoot_Forbidden(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	err := w.Mkdir(context.Background(), "/_scrinium/inside", 0o755)
 	if !errors.Is(err, fs.ErrPermission) {
 		t.Errorf("expected fs.ErrPermission, got %v", err)
@@ -137,7 +119,7 @@ func TestMkdir_AtServiceRoot_Forbidden(t *testing.T) {
 // --- OpenFile + Read ---
 
 func TestOpenFile_ReadFile(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 
 	// Create a file via WebDAV, then re-open and verify content.
 	flag := os.O_WRONLY | syscall.O_CREAT | os.O_TRUNC
@@ -170,7 +152,7 @@ func TestOpenFile_ReadFile(t *testing.T) {
 // --- OpenFile + Create + Write + Close roundtrip ---
 
 func TestOpenFile_CreateWriteRead(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	flag := os.O_WRONLY | syscall.O_CREAT | os.O_TRUNC
 
 	wf, err := w.OpenFile(context.Background(), "/note.txt", flag, 0o644)
@@ -197,8 +179,8 @@ func TestOpenFile_CreateWriteRead(t *testing.T) {
 // --- Readdir on root ---
 
 func TestRootDir_ListsServicePrefix(t *testing.T) {
-	w, _ := newTestFS(t,
-		projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
+	w := newTestFS(t,
+		manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
 
 	f, err := w.OpenFile(context.Background(), "/", os.O_RDONLY, 0)
 	if err != nil {
@@ -231,7 +213,7 @@ func TestRootDir_ListsServicePrefix(t *testing.T) {
 // --- Service tree listing ---
 
 func TestServiceRoot_ListsTrees(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	f, err := w.OpenFile(context.Background(), "/_scrinium", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("OpenFile _scrinium: %v", err)
@@ -254,7 +236,7 @@ func TestServiceRoot_ListsTrees(t *testing.T) {
 // --- Stats body ---
 
 func TestStatsFile_BodyHasTotalNodes(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	f, err := w.OpenFile(context.Background(), "/_scrinium/stats", os.O_RDONLY, 0)
 	if err != nil {
 		t.Fatalf("OpenFile stats: %v", err)
@@ -333,7 +315,7 @@ func TestOpenFile_JunkCreateBlackHole(t *testing.T) {
 	// AppleDouble sidecars must accept writes (and silently drop
 	// them) — otherwise macOS Finder aborts copies. The store
 	// must remain unaffected.
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	flag := os.O_WRONLY | syscall.O_CREAT | os.O_TRUNC
 
 	f, err := w.OpenFile(context.Background(), "/.DS_Store", flag, 0o644)
@@ -361,7 +343,7 @@ func TestOpenFile_JunkCreateBlackHole(t *testing.T) {
 }
 
 func TestOpenFile_JunkReadIsNotFound(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	_, err := w.OpenFile(context.Background(), "/.DS_Store", os.O_RDONLY, 0)
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("expected fs.ErrNotExist for .DS_Store read, got %v", err)
@@ -369,7 +351,7 @@ func TestOpenFile_JunkReadIsNotFound(t *testing.T) {
 }
 
 func TestStat_JunkIsNotFound(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	_, err := w.Stat(context.Background(), "/.DS_Store")
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("expected fs.ErrNotExist, got %v", err)
@@ -377,7 +359,7 @@ func TestStat_JunkIsNotFound(t *testing.T) {
 }
 
 func TestMkdir_RejectsJunk(t *testing.T) {
-	w, _ := newTestFS(t)
+	w := newTestFS(t)
 	err := w.Mkdir(context.Background(), "/.Trashes", 0o755)
 	if !errors.Is(err, fs.ErrPermission) {
 		t.Errorf("expected fs.ErrPermission, got %v", err)

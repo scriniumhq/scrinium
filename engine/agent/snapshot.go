@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
 	"time"
 
 	"scrinium.dev/domain"
@@ -126,9 +125,7 @@ type snapshotAgent struct {
 	storeID string
 	cfg     SnapshotConfig
 
-	mu    sync.Mutex
-	state State
-	err   error
+	baseState
 }
 
 var _ SnapshotAgent = (*snapshotAgent)(nil)
@@ -158,13 +155,6 @@ func (a *snapshotAgent) Run(ctx context.Context) error {
 			}
 		}
 	}
-}
-
-// Status reports the current state and the last fatal error.
-func (a *snapshotAgent) Status() (State, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.state, a.err
 }
 
 // TakeSnapshot vacuums the index into a temp file, publishes it into
@@ -304,12 +294,6 @@ func (a *snapshotAgent) pruneOldSnapshots(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-func (a *snapshotAgent) setState(s State, err error) {
-	a.mu.Lock()
-	a.state, a.err = s, err
-	a.mu.Unlock()
 }
 
 // drainHeartbeat returns a non-context heartbeat error if one is already

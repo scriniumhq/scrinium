@@ -6,7 +6,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/internal/testutil/artifactfx"
+	"scrinium.dev/testutil/artifactfx"
 )
 
 func FuzzDecode(f *testing.F) {

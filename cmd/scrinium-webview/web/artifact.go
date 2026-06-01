@@ -15,10 +15,11 @@ import (
 	"strings"
 	"time"
 
+	"scrinium.dev/cmd/internal/humanize"
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/humanize"
-	"scrinium.dev/internal/pathx"
-	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/projection"
+	"scrinium.dev/projection/pathx"
 )
 
 // SchemaDecoder is the contract for plugging schema-aware
@@ -218,7 +219,7 @@ func (h *Handler) tryPreview(ctx context.Context, id domain.ArtifactID, m domain
 // stable links: even if the daemon is started with
 // RootView=byDate (so byDate is at the URL root), the by-path
 // link still works via /_browse/_scrinium/by-path/...
-func (h *Handler) buildLocationViews(locs Locations) []locationView {
+func (h *Handler) buildLocationViews(locs projection.Locations) []locationView {
 	out := make([]locationView, 0, 6)
 	servicePrefix := h.cfg.ServicePrefix
 	if servicePrefix == "" {
@@ -633,7 +634,7 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	data.Storage = []labelValue{
 		{Label: "BlobRef", Value: blobRefValue, Mono: true},
 		{Label: "ContentHash", Value: string(m.ContentHash), Mono: true},
-		{Label: "OriginalSize", Value: fmt.Sprintf("%d (%s)", m.OriginalSize, humanize.Bytes(m.OriginalSize))},
+		{Label: "OriginalSize", Value: humanize.BytesWithRaw(m.OriginalSize)},
 		{Label: "Layout", Value: orDash(m.LayoutHeader.BlobStorage)},
 		{Label: "KeyID", Value: orDash(m.KeyID), Mono: m.KeyID != ""},
 	}

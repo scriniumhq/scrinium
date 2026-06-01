@@ -5,11 +5,13 @@ import (
 	"io"
 	"io/fs"
 	"os"
+
+	fso "scrinium.dev/projection/internal/fsops"
+	"scrinium.dev/projection/pathx"
+
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/pathx"
-	"scrinium.dev/projection"
 )
 
 // File is the open-handle interface VFS hands back from
@@ -46,7 +48,7 @@ type File interface {
 //   - readHandleFile  : read-only over a store.ReadHandle (service
 //                       trees, by-X paths inside _scrinium).
 //   - bytesFile       : in-memory read-only (stats virtual file).
-//   - rwFile          : read/write over projection.File (root view).
+//   - rwFile          : read/write over fso.File (root view).
 //   - blackHoleFile   : write-discarding (used by surface-level
 //                       junk-filter wrappers — safe to ignore
 //                       when not needed).
@@ -55,6 +57,7 @@ type File interface {
 // satisfy io.Reader/io.Seeker since store.ReadHandle is
 // offset-addressable via ReadAt only.
 type readHandleFile struct {
+	nonDirStub
 	rh    domain.ReadHandle
 	name  string
 	path  string
@@ -111,10 +114,6 @@ func (f *readHandleFile) Seek(offset int64, whence int) (int64, error) {
 	return f.off, nil
 }
 
-func (f *readHandleFile) Readdir(count int) ([]os.FileInfo, error) {
-	return nil, fs.ErrInvalid // not a directory
-}
-
 func (f *readHandleFile) Stat() (os.FileInfo, error) {
 	return synthInfo{
 		name:    f.name,
@@ -127,6 +126,7 @@ func (f *readHandleFile) Stat() (os.FileInfo, error) {
 // bytesFile is a fully-buffered read-only file backed by a
 // byte slice. Used for the stats virtual file.
 type bytesFile struct {
+	nonDirStub
 	name string
 	body []byte
 	t    time.Time
@@ -167,16 +167,16 @@ func (f *bytesFile) Seek(offset int64, whence int) (int64, error) {
 	return f.off, nil
 }
 
-func (f *bytesFile) Readdir(count int) ([]os.FileInfo, error) { return nil, fs.ErrInvalid }
 func (f *bytesFile) Stat() (os.FileInfo, error) {
 	return synthFileInfo(f.name, int64(len(f.body)), f.t), nil
 }
 
-// rwFile wraps a projection.File for the root view. Tracks a
+// rwFile wraps a fso.File for the root view. Tracks a
 // manual offset to satisfy io.Reader/io.Writer/io.Seeker on
-// top of the projection.File's WriteAt/ReadAt.
+// top of the fso.File's WriteAt/ReadAt.
 type rwFile struct {
-	f      projection.File
+	nonDirStub
+	f      fso.File
 	path   string
 	size   int64
 	mtime  time.Time
@@ -186,7 +186,7 @@ type rwFile struct {
 	closed bool
 }
 
-func wrapFile(pf projection.File, path string, fi projection.FileInfo) *rwFile {
+func wrapFile(pf fso.File, path string, fi fso.FileInfo) *rwFile {
 	return &rwFile{
 		f:     pf,
 		path:  path,
@@ -198,7 +198,7 @@ func wrapFile(pf projection.File, path string, fi projection.FileInfo) *rwFile {
 }
 
 // wrapWriteFile is a Create-side variant: a fresh file, size 0.
-func wrapWriteFile(pf projection.File, path string) *rwFile {
+func wrapWriteFile(pf fso.File, path string) *rwFile {
 	return &rwFile{
 		f:     pf,
 		path:  path,
@@ -252,7 +252,6 @@ func (f *rwFile) Seek(offset int64, whence int) (int64, error) {
 	return f.off, nil
 }
 
-func (f *rwFile) Readdir(count int) ([]os.FileInfo, error) { return nil, fs.ErrInvalid }
 func (f *rwFile) Stat() (os.FileInfo, error) {
 	return synthInfo{
 		name:    pathx.LastSegment(f.path),
@@ -272,6 +271,7 @@ func (f *rwFile) Stat() (os.FileInfo, error) {
 // surfaces wrap VFS and substitute one when their own policy
 // demands.
 type blackHoleFile struct {
+	nonDirStub
 	name    string
 	written int64
 	closed  bool
@@ -309,10 +309,6 @@ func (f *blackHoleFile) Seek(offset int64, whence int) (int64, error) {
 	return 0, fs.ErrInvalid
 }
 
-func (f *blackHoleFile) Readdir(count int) ([]os.FileInfo, error) {
-	return nil, fs.ErrInvalid
-}
-
 func (f *blackHoleFile) Stat() (os.FileInfo, error) {
 	return synthInfo{
 		name:    f.name,
@@ -322,10 +318,94 @@ func (f *blackHoleFile) Stat() (os.FileInfo, error) {
 	}, nil
 }
 
+// FileAt is a File that additionally supports positioned IO
+// (ReadAt/WriteAt). FUSE requires it because the kernel
+// addresses file content by offset rather than through a
+// streaming cursor. Every regular-file handle implements
+// FileAt; directory handles deliberately do not, so
+// VFS.OpenFileAt can reject directories with
+// errs.ErrIsADirectory.
+//
+// Per the io.ReaderAt / io.WriterAt contract, ReadAt and
+// WriteAt are independent of the Seek cursor and do not
+// mutate it.
+type FileAt interface {
+	File
+	io.ReaderAt
+	io.WriterAt
+
+	// Sync flushes buffered writes to the backing store.
+	// Read-only handles (service trees, stats) are no-ops.
+	Sync() error
+}
+
+func (f *readHandleFile) ReadAt(p []byte, off int64) (int, error) {
+	if !f.rh.SupportsRandomAccess() {
+		return 0, errors.New("vfs: read handle does not support random access")
+	}
+	return f.rh.ReadAt(p, off)
+}
+
+func (f *readHandleFile) WriteAt(p []byte, off int64) (int, error) {
+	return 0, fs.ErrPermission
+}
+
+func (f *bytesFile) ReadAt(p []byte, off int64) (int, error) {
+	if off < 0 {
+		return 0, fs.ErrInvalid
+	}
+	if off >= int64(len(f.body)) {
+		return 0, io.EOF
+	}
+	n := copy(p, f.body[off:])
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+func (f *bytesFile) WriteAt(p []byte, off int64) (int, error) {
+	return 0, fs.ErrPermission
+}
+
+func (f *rwFile) ReadAt(p []byte, off int64) (int, error) {
+	return f.f.ReadAt(p, off)
+}
+
+// WriteAt assumes a single writer per handle (the FUSE/WebDAV
+// convention): it updates the cached size without locking,
+// matching the existing Write path.
+func (f *rwFile) WriteAt(p []byte, off int64) (int, error) {
+	n, err := f.f.WriteAt(p, off)
+	if end := off + int64(n); end > f.size {
+		f.size = end
+	}
+	return n, err
+}
+
+func (f *blackHoleFile) ReadAt(p []byte, off int64) (int, error) {
+	return 0, io.EOF
+}
+
+func (f *blackHoleFile) WriteAt(p []byte, off int64) (int, error) {
+	f.written += int64(len(p))
+	return len(p), nil
+}
+
+func (f *rwFile) Sync() error         { return f.f.Sync() }
+func (f *readHandleFile) Sync() error { return nil }
+func (f *bytesFile) Sync() error      { return nil }
+func (f *blackHoleFile) Sync() error  { return nil }
+
 // Compile-time guards.
 var (
 	_ File = (*readHandleFile)(nil)
 	_ File = (*bytesFile)(nil)
 	_ File = (*rwFile)(nil)
 	_ File = (*blackHoleFile)(nil)
+
+	_ FileAt = (*readHandleFile)(nil)
+	_ FileAt = (*bytesFile)(nil)
+	_ FileAt = (*rwFile)(nil)
+	_ FileAt = (*blackHoleFile)(nil)
 )

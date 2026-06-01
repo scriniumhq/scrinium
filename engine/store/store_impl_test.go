@@ -10,7 +10,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
 )
 
 var newStore = storefx.Init
