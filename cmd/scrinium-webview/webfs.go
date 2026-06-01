@@ -10,6 +10,7 @@ import (
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/vfs"
 )
@@ -23,11 +24,12 @@ import (
 // directly because its only consumer is HTML rendering.
 type webBackingFS struct {
 	v     *vfs.VFS
+	view  *projection.View
 	store store.Store
 }
 
-func newWebBackingFS(v *vfs.VFS, store store.Store) *webBackingFS {
-	return &webBackingFS{v: v, store: store}
+func newWebBackingFS(v *vfs.VFS, view *projection.View, store store.Store) *webBackingFS {
+	return &webBackingFS{v: v, view: view, store: store}
 }
 
 func (b *webBackingFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
@@ -130,7 +132,7 @@ func (a *readHandleAdapter) Stat() (os.FileInfo, error)         { return nil, ni
 // LookupRelated walks the View for artifacts pointing at
 // the same blob.
 func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]web.RelatedArtifact, error) {
-	siblings := b.v.View().RelatedByBlobRef(blobRef, exclude)
+	siblings := b.view.RelatedByBlobRef(blobRef, exclude)
 	out := make([]web.RelatedArtifact, 0, len(siblings))
 	for _, s := range siblings {
 		out = append(out, web.RelatedArtifact{
@@ -146,7 +148,7 @@ func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef
 
 // Search proxies to the View's text search.
 func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]web.SearchResult, error) {
-	hits := b.v.View().Search(query, limit)
+	hits := b.view.Search(query, limit)
 	out := make([]web.SearchResult, 0, len(hits))
 	for _, h := range hits {
 		out = append(out, web.SearchResult{
@@ -165,7 +167,7 @@ func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]w
 // LookupLocations returns the per-tree placement of an
 // artifact for the Locations panel.
 func (b *webBackingFS) LookupLocations(ctx context.Context, id domain.ArtifactID) (web.Locations, bool, error) {
-	locs, ok := b.v.View().LookupLocations(id)
+	locs, ok := b.view.LookupLocations(id)
 	if !ok {
 		return web.Locations{}, false, nil
 	}

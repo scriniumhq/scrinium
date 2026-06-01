@@ -328,15 +328,6 @@ func (v *VFS) OpenFileAt(ctx context.Context, name string, flag int, perm os.Fil
 	return fa, nil
 }
 
-// View returns the underlying projection.View for surfaces
-// that need direct access (HTML browsers querying related
-// artifacts, search, locations). Don't use for plain Stat /
-// OpenFile traffic — go through the VFS for that.
-func (v *VFS) View() *projection.View { return v.view }
-
-// FSOps returns the underlying FSOps. Same caveat as View.
-func (v *VFS) FSOps() *projection.FSOps { return v.fsops }
-
 // RoutingConfig returns the routing config the VFS was
 // constructed with. Surfaces use it to format URLs that
 // route into service trees.
