@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"scrinium.dev/domain"
@@ -135,9 +134,7 @@ type scrubAgent struct {
 	storeID string
 	cfg     ScrubConfig
 
-	mu    sync.Mutex
-	state State
-	err   error
+	baseState
 }
 
 var _ ScrubAgent = (*scrubAgent)(nil)
@@ -176,13 +173,6 @@ func (a *scrubAgent) Run(ctx context.Context) error {
 			}
 		}
 	}
-}
-
-// Status reports the current state and the last fatal error.
-func (a *scrubAgent) Status() (State, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.state, a.err
 }
 
 // RunOnce performs one verification pass under the scrub lease: a blob
@@ -351,12 +341,6 @@ func (a *scrubAgent) cascadeStampConsumers(ctx context.Context, blobRef string) 
 		// A corrupt consumer manifest already emitted EventScrubFailed
 		// inside VerifyManifest; the cascade does not abort on it.
 	}
-}
-
-func (a *scrubAgent) setState(s State, err error) {
-	a.mu.Lock()
-	a.state, a.err = s, err
-	a.mu.Unlock()
 }
 
 // isCtxErr reports whether err is a context cancellation/deadline.

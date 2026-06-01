@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"scrinium.dev/domain"
@@ -139,9 +138,7 @@ type gcAgent struct {
 	storeID string
 	cfg     GCConfig
 
-	mu    sync.Mutex
-	state State
-	err   error
+	baseState
 }
 
 var _ GCAgent = (*gcAgent)(nil)
@@ -175,13 +172,6 @@ func (a *gcAgent) Run(ctx context.Context) error {
 			}
 		}
 	}
-}
-
-// Status reports the current state and the last fatal error.
-func (a *gcAgent) Status() (State, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.state, a.err
 }
 
 // RunOnce executes one Mark+Sweep cycle. Under GCLeasePolicy:
@@ -386,10 +376,4 @@ func (a *gcAgent) sweep(ctx context.Context, grace time.Duration, stats *GCStats
 		})
 	}
 	return listErr
-}
-
-func (a *gcAgent) setState(s State, err error) {
-	a.mu.Lock()
-	a.state, a.err = s, err
-	a.mu.Unlock()
 }
