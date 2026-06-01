@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"scrinium.dev/contract/projection"
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/internal/humanize"
@@ -218,7 +219,7 @@ func (h *Handler) tryPreview(ctx context.Context, id domain.ArtifactID, m domain
 // stable links: even if the daemon is started with
 // RootView=byDate (so byDate is at the URL root), the by-path
 // link still works via /_browse/_scrinium/by-path/...
-func (h *Handler) buildLocationViews(locs Locations) []locationView {
+func (h *Handler) buildLocationViews(locs projection.Locations) []locationView {
 	out := make([]locationView, 0, 6)
 	servicePrefix := h.cfg.ServicePrefix
 	if servicePrefix == "" {

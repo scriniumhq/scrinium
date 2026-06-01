@@ -1,7 +1,7 @@
 package stats_test
 
 import (
-	"scrinium.dev/projection"
+	"scrinium.dev/contract/projection"
 	"strings"
 	"testing"
 	"time"

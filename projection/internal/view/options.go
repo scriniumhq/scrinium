@@ -3,6 +3,7 @@ package view
 import (
 	"time"
 
+	"scrinium.dev/contract/projection"
 	"scrinium.dev/domain"
 	"scrinium.dev/event"
 	"scrinium.dev/projection/internal/source"
@@ -37,7 +38,7 @@ type Option func(*viewOptions)
 
 type viewOptions struct {
 	resolver source.Resolver
-	rootView RootView
+	rootView projection.RootView
 	fallback Fallback
 	filter   Filter
 	bus      event.EventBus
@@ -83,7 +84,7 @@ func WithPathResolver(r source.Resolver) Option {
 // default is RootByPath. The choice is informational for the View
 // itself; transports (FUSE) react to it by hiding the same tree
 // from the service directory.
-func WithRootView(rv RootView) Option {
+func WithRootView(rv projection.RootView) Option {
 	return func(o *viewOptions) { o.rootView = rv }
 }
 
@@ -105,19 +106,6 @@ func WithFilter(f Filter) Option {
 // silently drops events.
 func WithEventBus(bus event.EventBus) Option {
 	return func(o *viewOptions) { o.bus = bus }
-}
-
-// Stats holds the aggregate counters of a View. Populated
-// during backfill and updated by Add/Remove/Move calls.
-type Stats struct {
-	TotalNodes     int64
-	TotalBytes     int64
-	SessionCount   int64
-	NamespaceCount int64
-	OrphanedCount  int64
-	CollisionCount int64
-	ByStore        map[string]int64
-	TransitCount   int64
 }
 
 // --- Events ---

@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"scrinium.dev/contract/projection"
 	fso "scrinium.dev/projection/internal/fsops"
 	vw "scrinium.dev/projection/internal/view"
 
@@ -43,7 +44,7 @@ type VFS struct {
 	// rootView is the tree that backs the mount root. Derived
 	// once from view.RootView() so routing agrees with FSOps,
 	// which resolves the root tree the same way.
-	rootView  vw.RootView
+	rootView  projection.RootView
 	startedAt time.Time
 
 	// statsProvider, if non-nil, returns the bytes served at

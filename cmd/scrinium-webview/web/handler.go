@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"scrinium.dev/contract/projection"
 	"scrinium.dev/domain"
 )
 
@@ -57,56 +58,21 @@ type BackingFS interface {
 	//
 	// Returns a fresh slice on every call; nil when no
 	// siblings exist.
-	LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]RelatedArtifact, error)
+	LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]projection.RelatedArtifact, error)
 
 	// Search returns artifacts whose path or namespace
 	// contains the query as a substring (case-insensitive),
 	// or whose id matches exactly. limit caps the response;
 	// a value of 0 means unlimited. Used by the /_search
 	// endpoint.
-	Search(ctx context.Context, query string, limit int) ([]SearchResult, error)
+	Search(ctx context.Context, query string, limit int) ([]projection.SearchResult, error)
 
 	// LookupLocations returns the per-tree paths of an
 	// artifact. Empty fields signal "this tree doesn't
 	// carry it" (e.g. PathByPath="" for orphaned artifacts).
 	// Used by the artifact details page's Locations panel
 	// to wire "show me where this lives" links.
-	LookupLocations(ctx context.Context, id domain.ArtifactID) (Locations, bool, error)
-}
-
-// Locations mirrors view.Locations.
-type Locations struct {
-	ByArtifact  string
-	BySession   string
-	ByNamespace string
-	ByDate      string
-	ByPath      string
-	ByOrphaned  string
-}
-
-// SearchResult mirrors view.SearchResult — kept here so
-// web stays a clean library hosts adapt to.
-type SearchResult struct {
-	ArtifactID  domain.ArtifactID
-	Path        string
-	Namespace   string
-	SessionID   domain.SessionID
-	CreatedAt   time.Time
-	MIME        string
-	MatchReason string // "path" | "namespace" | "id"
-}
-
-// RelatedArtifact mirrors view.RelatedArtifact verbatim,
-// kept here so web stays a clean library that hosts adapt to
-// rather than importing projection. Hosts translate at the
-// boundary; the few extra fields don't justify a shared
-// package.
-type RelatedArtifact struct {
-	ArtifactID domain.ArtifactID
-	Path       string // by-path placement; empty if orphaned
-	Namespace  string
-	SessionID  domain.SessionID
-	CreatedAt  time.Time
+	LookupLocations(ctx context.Context, id domain.ArtifactID) (projection.Locations, bool, error)
 }
 
 // ArtifactMeta is the small descriptor returned alongside the

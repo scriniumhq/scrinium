@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"scrinium.dev/contract/projection"
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
@@ -40,7 +41,7 @@ type View struct {
 	// Public, read-only after New returns.
 	Source    source.Kind
 	CreatedAt time.Time
-	Stats     Stats
+	Stats     projection.Stats
 
 	// Internal state, guarded by mu.
 	mu sync.RWMutex
@@ -136,7 +137,7 @@ func New(ctx context.Context, src source.Provider, opts ...Option) (*View, error
 	}
 
 	o := viewOptions{
-		rootView: RootByPath,
+		rootView: projection.RootByPath,
 		fallback: FallbackOrphaned,
 	}
 	for _, opt := range opts {
@@ -515,13 +516,13 @@ func (v *View) removeLoser(path string, id domain.ArtifactID) {
 //
 // Stable for the lifetime of the View — the option is set at
 // New time and never mutated.
-func (v *View) RootView() RootView { return v.opts.rootView }
+func (v *View) RootView() projection.RootView { return v.opts.rootView }
 
 // StatsSnapshot returns a copy of the View's current counters. It is
 // the method form of the Stats field, so the read-only projection
 // surface can expose stats through an interface without leaking the
 // field (and thus the View type) to external callers.
-func (v *View) StatsSnapshot() Stats { return v.Stats }
+func (v *View) StatsSnapshot() projection.Stats { return v.Stats }
 
 // SourceName returns the source kind as a string (e.g. "store",
 // "multistore"). Method form of the Source field, for the same
@@ -530,35 +531,22 @@ func (v *View) SourceName() string { return string(v.Source) }
 
 // --- Read methods (one set per tree) ---
 
-// Locations bundles every tree-placement of one artifact —
-// what the web "Locations" panel shows. Empty fields (e.g.
-// PathByPath="" for orphaned, PathByOrphaned="" for placed)
-// signal "this tree doesn't carry this artifact".
-type Locations struct {
-	ByArtifact  string
-	BySession   string
-	ByNamespace string
-	ByDate      string
-	ByPath      string // "" if orphaned
-	ByOrphaned  string // "" if placed under byPath
-}
-
 // LookupLocations returns the per-tree paths of an artifact.
 // Used by the web artifact details page to surface "show me
 // where this lives" links into each tree's listing.
 //
 // (zero, false) if the artifact isn't tracked.
-func (v *View) LookupLocations(id domain.ArtifactID) (Locations, bool) {
+func (v *View) LookupLocations(id domain.ArtifactID) (projection.Locations, bool) {
 	if v.closed.Load() {
-		return Locations{}, false
+		return projection.Locations{}, false
 	}
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	rec, ok := v.artifacts[id]
 	if !ok {
-		return Locations{}, false
+		return projection.Locations{}, false
 	}
-	return Locations{
+	return projection.Locations{
 		ByArtifact:  rec.pathByArtifact,
 		BySession:   rec.pathBySession,
 		ByNamespace: rec.pathByNamespace,
@@ -566,19 +554,6 @@ func (v *View) LookupLocations(id domain.ArtifactID) (Locations, bool) {
 		ByPath:      rec.pathByPath,
 		ByOrphaned:  rec.pathByOrphaned,
 	}, true
-}
-
-// SearchResult is one hit returned by View.Search. Carries
-// enough fields to render a result row without forcing the
-// caller to follow up with manifest lookups.
-type SearchResult struct {
-	ArtifactID  domain.ArtifactID
-	Path        string // by-path placement; empty if orphaned
-	Namespace   string
-	SessionID   domain.SessionID
-	CreatedAt   time.Time
-	MIME        string // from fsmeta when present
-	MatchReason string // "path" | "namespace" | "id"
 }
 
 // Search scans the View for artifacts matching the query.
@@ -597,7 +572,7 @@ type SearchResult struct {
 // Implementation is the same linear scan as RelatedByBlobRef:
 // O(N) under RLock, fast for stores up to ~100K artifacts.
 // Beyond that, we'd want an actual search index — see backlog.
-func (v *View) Search(query string, limit int) []SearchResult {
+func (v *View) Search(query string, limit int) []projection.SearchResult {
 	if v.closed.Load() {
 		return nil
 	}
@@ -609,7 +584,7 @@ func (v *View) Search(query string, limit int) []SearchResult {
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	var out []SearchResult
+	var out []projection.SearchResult
 	for id, rec := range v.artifacts {
 		// Exact id match — strongest signal, surface first.
 		if string(id) == query {
@@ -642,8 +617,8 @@ func (v *View) Search(query string, limit int) []SearchResult {
 // record. MIME is best-effort from fsmeta; absence falls back
 // to empty (the UI is responsible for any extension-based
 // inference it cares about).
-func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) SearchResult {
-	r := SearchResult{
+func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) projection.SearchResult {
+	r := projection.SearchResult{
 		ArtifactID:  id,
 		Path:        rec.pathByPath,
 		Namespace:   rec.manifest.Namespace,
@@ -655,18 +630,6 @@ func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) 
 		r.MIME = fs.MIME
 	}
 	return r
-}
-
-// RelatedArtifact is the small descriptor returned by
-// RelatedByBlobRef. Carries enough fields for a UI to render
-// "where else this blob lives" without forcing the caller to
-// follow up with manifest lookups.
-type RelatedArtifact struct {
-	ArtifactID domain.ArtifactID
-	Path       string // by-path placement; empty if orphaned
-	Namespace  string
-	SessionID  domain.SessionID
-	CreatedAt  time.Time
 }
 
 // RelatedByBlobRef returns every artifact that shares the given
@@ -684,14 +647,14 @@ type RelatedArtifact struct {
 // Concurrency: holds RLock for the scan duration. A
 // long-running scan would block writers; the 100K-artifact
 // budget keeps it under ~10ms in practice.
-func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactID) []RelatedArtifact {
+func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactID) []projection.RelatedArtifact {
 	if v.closed.Load() {
 		return nil
 	}
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
-	var out []RelatedArtifact
+	var out []projection.RelatedArtifact
 	for id, rec := range v.artifacts {
 		if id == exclude {
 			continue
@@ -699,7 +662,7 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 		if rec.manifest.BlobRef != blobRef {
 			continue
 		}
-		out = append(out, RelatedArtifact{
+		out = append(out, projection.RelatedArtifact{
 			ArtifactID: id,
 			Path:       rec.pathByPath,
 			Namespace:  rec.manifest.Namespace,
@@ -723,7 +686,7 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 // service callers expect when a configuration drifts.
 
 // GetIn returns the node at path within the rv tree.
-func (v *View) GetIn(rv RootView, path string) (Node, error) {
+func (v *View) GetIn(rv projection.RootView, path string) (Node, error) {
 	tree := v.treeFor(rv)
 	if tree == nil {
 		return Node{}, errs.ErrPathNotFound
@@ -732,7 +695,7 @@ func (v *View) GetIn(rv RootView, path string) (Node, error) {
 }
 
 // ListIn lists the immediate children at path within the rv tree.
-func (v *View) ListIn(rv RootView, path string) Seq {
+func (v *View) ListIn(rv projection.RootView, path string) Seq {
 	tree := v.treeFor(rv)
 	if tree == nil {
 		return func(yield func(Node, error) bool) {
@@ -743,7 +706,7 @@ func (v *View) ListIn(rv RootView, path string) Seq {
 }
 
 // OpenIn opens an artifact at path within the rv tree.
-func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
+func (v *View) OpenIn(ctx context.Context, rv projection.RootView, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
 	tree := v.treeFor(rv)
 	if tree == nil {
 		return nil, errs.ErrPathNotFound
@@ -754,7 +717,7 @@ func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...sto
 // WalkIn iterates every node at or under prefix within the rv
 // tree. An unknown RootView yields a single-shot error sequence,
 // matching ListIn.
-func (v *View) WalkIn(rv RootView, prefix string) Seq {
+func (v *View) WalkIn(rv projection.RootView, prefix string) Seq {
 	tree := v.treeFor(rv)
 	if tree == nil {
 		return func(yield func(Node, error) bool) {
@@ -767,19 +730,19 @@ func (v *View) WalkIn(rv RootView, prefix string) Seq {
 // treeFor returns the internal tree for the given RootView, or
 // nil for an unknown enum value. Private — outside callers go
 // through GetIn/ListIn/OpenIn, which absorb the nil check.
-func (v *View) treeFor(rv RootView) map[string]*viewNode {
+func (v *View) treeFor(rv projection.RootView) map[string]*viewNode {
 	switch rv {
-	case RootByPath:
+	case projection.RootByPath:
 		return v.byPath
-	case RootBySession:
+	case projection.RootBySession:
 		return v.bySession
-	case RootByNamespace:
+	case projection.RootByNamespace:
 		return v.byNamespace
-	case RootByDate:
+	case projection.RootByDate:
 		return v.byDate
-	case RootByArtifact:
+	case projection.RootByArtifact:
 		return v.byArtifact
-	case RootByOrphaned:
+	case projection.RootByOrphaned:
 		return v.byOrphaned
 	}
 	return nil

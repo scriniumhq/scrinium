@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"scrinium.dev/contract/projection"
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/projection/internal/fsops"
@@ -44,7 +45,7 @@ func buildView(ctx context.Context, st store.Store, fsidx ExtIndex, cfg Config) 
 		view.WithFSIndex(fsidx),
 	}
 	if cfg.RootView != "" {
-		opts = append(opts, view.WithRootView(view.RootView(cfg.RootView)))
+		opts = append(opts, view.WithRootView(projection.RootView(cfg.RootView)))
 	}
 	if cfg.ByPathFallback != "" {
 		opts = append(opts, view.WithFallback(view.Fallback(cfg.ByPathFallback)))

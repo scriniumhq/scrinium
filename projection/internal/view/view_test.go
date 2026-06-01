@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/contract/projection"
 	"scrinium.dev/projection/internal/source"
 	vw "scrinium.dev/projection/internal/view"
 
@@ -118,7 +119,7 @@ func TestGetByArtifact_File(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	node, err := v.GetIn(vw.RootByArtifact, "aa/bb/sha256-aabbccdd")
+	node, err := v.GetIn(projection.RootByArtifact, "aa/bb/sha256-aabbccdd")
 	if err != nil {
 		t.Fatalf("GetByArtifact: %v", err)
 	}
@@ -139,7 +140,7 @@ func TestGetByArtifact_VirtualDirectory(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	node, err := v.GetIn(vw.RootByArtifact, "aa")
+	node, err := v.GetIn(projection.RootByArtifact, "aa")
 	if err != nil {
 		t.Fatalf("GetByArtifact: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestGetByArtifact_Root(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	node, err := v.GetIn(vw.RootByArtifact, "")
+	node, err := v.GetIn(projection.RootByArtifact, "")
 	if err != nil {
 		t.Fatalf("GetByArtifact root: %v", err)
 	}
@@ -171,7 +172,7 @@ func TestGetByArtifact_NotFound(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	_, err := v.GetIn(vw.RootByArtifact, "nonexistent")
+	_, err := v.GetIn(projection.RootByArtifact, "nonexistent")
 	if !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("expected ErrPathNotFound, got %v", err)
 	}
@@ -182,7 +183,7 @@ func TestGetByArtifact_Closed(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	v.Close()
 
-	_, err := v.GetIn(vw.RootByArtifact, "")
+	_, err := v.GetIn(projection.RootByArtifact, "")
 	if !errors.Is(err, os.ErrClosed) {
 		t.Errorf("expected os.ErrClosed, got %v", err)
 	}
@@ -198,7 +199,7 @@ func TestListByArtifact_RootListsShards(t *testing.T) {
 	defer v.Close()
 
 	var names []string
-	for n, err := range v.ListIn(vw.RootByArtifact, "") {
+	for n, err := range v.ListIn(projection.RootByArtifact, "") {
 		if err != nil {
 			t.Fatalf("iter error: %v", err)
 		}
@@ -218,7 +219,7 @@ func TestListByArtifact_FileReturnsErrNotADirectory(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	for _, err := range v.ListIn(vw.RootByArtifact, "aa/bb/sha256-aabbccdd") {
+	for _, err := range v.ListIn(projection.RootByArtifact, "aa/bb/sha256-aabbccdd") {
 		if !errors.Is(err, errs.ErrNotADirectory) {
 			t.Errorf("expected ErrNotADirectory, got %v", err)
 		}
@@ -232,7 +233,7 @@ func TestListByArtifact_NonexistentReturnsErrPathNotFound(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	for _, err := range v.ListIn(vw.RootByArtifact, "nope/path") {
+	for _, err := range v.ListIn(projection.RootByArtifact, "nope/path") {
 		if !errors.Is(err, errs.ErrPathNotFound) {
 			t.Errorf("expected ErrPathNotFound, got %v", err)
 		}
@@ -251,7 +252,7 @@ func TestWalkByArtifact_AllNodes(t *testing.T) {
 	defer v.Close()
 
 	var paths []string
-	for n, err := range v.WalkIn(vw.RootByArtifact, "") {
+	for n, err := range v.WalkIn(projection.RootByArtifact, "") {
 		if err != nil {
 			t.Fatalf("iter error: %v", err)
 		}
@@ -274,7 +275,7 @@ func TestWalkByArtifact_StopEarly(t *testing.T) {
 	defer v.Close()
 
 	count := 0
-	for _, err := range v.WalkIn(vw.RootByArtifact, "") {
+	for _, err := range v.WalkIn(projection.RootByArtifact, "") {
 		if err != nil {
 			t.Fatalf("iter error: %v", err)
 		}
@@ -296,7 +297,7 @@ func TestOpenByArtifact_File(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	rh, err := v.OpenIn(context.Background(), vw.RootByArtifact, "aa/bb/sha256-aabbccdd")
+	rh, err := v.OpenIn(context.Background(), projection.RootByArtifact, "aa/bb/sha256-aabbccdd")
 	if err != nil {
 		t.Fatalf("OpenByArtifact: %v", err)
 	}
@@ -317,7 +318,7 @@ func TestOpenByArtifact_Directory(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	_, err := v.OpenIn(context.Background(), vw.RootByArtifact, "aa")
+	_, err := v.OpenIn(context.Background(), projection.RootByArtifact, "aa")
 	if !errors.Is(err, errs.ErrIsADirectory) {
 		t.Errorf("expected ErrIsADirectory, got %v", err)
 	}
@@ -328,7 +329,7 @@ func TestOpenByArtifact_NotFound(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	_, err := v.OpenIn(context.Background(), vw.RootByArtifact, "nope")
+	_, err := v.OpenIn(context.Background(), projection.RootByArtifact, "nope")
 	if !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("expected ErrPathNotFound, got %v", err)
 	}
@@ -345,7 +346,7 @@ func TestOpenByArtifact_SourceArtifactNotFound(t *testing.T) {
 
 	src.SetGetErr(errs.ErrArtifactNotFound)
 
-	_, err := v.OpenIn(context.Background(), vw.RootByArtifact, "aa/bb/sha256-aabbccdd")
+	_, err := v.OpenIn(context.Background(), projection.RootByArtifact, "aa/bb/sha256-aabbccdd")
 	if !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("expected ErrPathNotFound, got %v", err)
 	}
@@ -359,7 +360,7 @@ func TestOpenByArtifact_SourceLocked(t *testing.T) {
 
 	src.SetGetErr(errs.ErrLocked)
 
-	_, err := v.OpenIn(context.Background(), vw.RootByArtifact, "aa/bb/sha256-aabbccdd")
+	_, err := v.OpenIn(context.Background(), projection.RootByArtifact, "aa/bb/sha256-aabbccdd")
 	if !errors.Is(err, errs.ErrArtifactUnreadable) {
 		t.Errorf("expected ErrArtifactUnreadable, got %v", err)
 	}

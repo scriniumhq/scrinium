@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/contract/projection"
 	vw "scrinium.dev/projection/internal/view"
 
 	"scrinium.dev/domain"
@@ -41,7 +42,7 @@ func TestByPath_HappyPath(t *testing.T) {
 	}
 	defer v.Close()
 
-	node, err := v.GetIn(vw.RootByPath, "photos/2024/sunrise.jpg")
+	node, err := v.GetIn(projection.RootByPath, "photos/2024/sunrise.jpg")
 	if err != nil {
 		t.Fatalf("GetByPath: %v", err)
 	}
@@ -64,7 +65,7 @@ func TestByPath_VirtualDirsExist(t *testing.T) {
 	defer v.Close()
 
 	for _, dir := range []string{"photos", "photos/2024"} {
-		n, err := v.GetIn(vw.RootByPath, dir)
+		n, err := v.GetIn(projection.RootByPath, dir)
 		if err != nil {
 			t.Errorf("GetByPath(%q): %v", dir, err)
 			continue
@@ -88,7 +89,7 @@ func TestByPath_OrphanedNotPresent(t *testing.T) {
 		t.Errorf("OrphanedCount: got %d, want 1", v.Stats.OrphanedCount)
 	}
 	count := 0
-	for n, err := range v.WalkIn(vw.RootByPath, "") {
+	for n, err := range v.WalkIn(projection.RootByPath, "") {
 		if err != nil {
 			t.Fatalf("walk: %v", err)
 		}
@@ -112,7 +113,7 @@ func TestByPath_SyntheticFallback(t *testing.T) {
 	defer v.Close()
 
 	expected := "photos/s1/23/s12345/aabbccdd.bin"
-	if _, err := v.GetIn(vw.RootByPath, expected); err != nil {
+	if _, err := v.GetIn(projection.RootByPath, expected); err != nil {
 		t.Fatalf("GetByPath(%q): %v", expected, err)
 	}
 	if v.Stats.OrphanedCount != 0 {
@@ -129,7 +130,7 @@ func TestByPath_SyntheticAnonymous(t *testing.T) {
 	defer v.Close()
 
 	expected := "_anonymous/aabbccdd.bin"
-	if _, err := v.GetIn(vw.RootByPath, expected); err != nil {
+	if _, err := v.GetIn(projection.RootByPath, expected); err != nil {
 		t.Fatalf("GetByPath(%q): %v", expected, err)
 	}
 }
@@ -150,7 +151,7 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 		vw.WithEventBus(bus))
 	defer v.Close()
 
-	n, err := v.GetIn(vw.RootByPath, "shared/path.txt")
+	n, err := v.GetIn(projection.RootByPath, "shared/path.txt")
 	if err != nil {
 		t.Fatalf("GetByPath: %v", err)
 	}
@@ -162,10 +163,10 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 	}
 
 	// Both still reachable through by-artifact.
-	if _, err := v.GetIn(vw.RootByArtifact, "aa/aa/sha256-aaaa1111"); err != nil {
+	if _, err := v.GetIn(projection.RootByArtifact, "aa/aa/sha256-aaaa1111"); err != nil {
 		t.Errorf("loser must remain in by-artifact: %v", err)
 	}
-	if _, err := v.GetIn(vw.RootByArtifact, "bb/bb/sha256-bbbb2222"); err != nil {
+	if _, err := v.GetIn(projection.RootByArtifact, "bb/bb/sha256-bbbb2222"); err != nil {
 		t.Errorf("winner must be in by-artifact: %v", err)
 	}
 
@@ -197,7 +198,7 @@ func TestByPath_CollisionEqualCreatedAt(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	n, _ := v.GetIn(vw.RootByPath, "shared")
+	n, _ := v.GetIn(projection.RootByPath, "shared")
 	if n.Artifact.ArtifactID != domain.ArtifactID("sha256-bbbb2222") {
 		t.Errorf("lex-larger ID should win, got %q", n.Artifact.ArtifactID)
 	}
@@ -217,7 +218,7 @@ func TestByPath_OrderedArrival(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	n, _ := v.GetIn(vw.RootByPath, "shared")
+	n, _ := v.GetIn(projection.RootByPath, "shared")
 	if n.Artifact.ArtifactID != domain.ArtifactID("sha256-bbbb2222") {
 		t.Errorf("winner should still be newer (bbbb2222), got %q",
 			n.Artifact.ArtifactID)

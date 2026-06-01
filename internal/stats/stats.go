@@ -2,7 +2,7 @@ package stats
 
 import (
 	"fmt"
-	"scrinium.dev/projection"
+	"scrinium.dev/contract/projection"
 	"slices"
 	"strings"
 	"time"

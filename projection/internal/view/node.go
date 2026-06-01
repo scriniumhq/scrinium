@@ -65,15 +65,3 @@ type Node struct {
 // Seq is a sequence of nodes with an optional error per position
 // (the standard iter.Seq2 pattern for fallible streams).
 type Seq = iter.Seq2[Node, error]
-
-// RootView selects which logical tree appears at the root of a view.
-type RootView string
-
-const (
-	RootByPath      RootView = "by-path" // default
-	RootBySession   RootView = "by-session"
-	RootByNamespace RootView = "by-namespace"
-	RootByDate      RootView = "by-date"
-	RootByArtifact  RootView = "by-artifact"
-	RootByOrphaned  RootView = "by-orphaned"
-)
