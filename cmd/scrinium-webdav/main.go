@@ -58,7 +58,7 @@ func runServe(args []string) int {
 			if err == nil {
 				return
 			}
-			if !*allowOSJunk && isOSJunk(cleanWebDAVPath(r.URL.Path)) {
+			if !*allowOSJunk && isOSJunk(vfs.CleanPath(r.URL.Path)) {
 				return
 			}
 			fmt.Fprintf(os.Stderr, "webdav: %s %s: %v\n", r.Method, r.URL.Path, err)

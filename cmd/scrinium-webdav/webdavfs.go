@@ -4,7 +4,6 @@ import (
 	"context"
 	"io/fs"
 	"os"
-	"strings"
 	"syscall"
 
 	"golang.org/x/net/webdav"
@@ -18,7 +17,7 @@ import (
 // vfs/. This adapter contributes WebDAV-specific behaviour
 // only:
 //
-//   - the cleanWebDAVPath transformation (drop leading
+//   - the vfs.CleanPath transformation (drop leading
 //     slash);
 //   - the OS-junk filter (Finder/Office sidecar files);
 //   - the black-hole substitution for junk PUTs.
@@ -56,7 +55,7 @@ func (w *webdavFS) VFS() *vfs.VFS { return w.v }
 // --- webdav.FileSystem ---
 
 func (w *webdavFS) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
-	clean := cleanWebDAVPath(name)
+	clean := vfs.CleanPath(name)
 	if w.rejectJunk && isOSJunk(clean) {
 		return fs.ErrPermission
 	}
@@ -64,13 +63,13 @@ func (w *webdavFS) Mkdir(ctx context.Context, name string, perm os.FileMode) err
 }
 
 func (w *webdavFS) RemoveAll(ctx context.Context, name string) error {
-	clean := cleanWebDAVPath(name)
+	clean := vfs.CleanPath(name)
 	return w.v.RemoveAll(ctx, clean)
 }
 
 func (w *webdavFS) Rename(ctx context.Context, oldName, newName string) error {
-	oldClean := cleanWebDAVPath(oldName)
-	newClean := cleanWebDAVPath(newName)
+	oldClean := vfs.CleanPath(oldName)
+	newClean := vfs.CleanPath(newName)
 	if w.rejectJunk && isOSJunk(newClean) {
 		return fs.ErrPermission
 	}
@@ -78,7 +77,7 @@ func (w *webdavFS) Rename(ctx context.Context, oldName, newName string) error {
 }
 
 func (w *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
-	clean := cleanWebDAVPath(name)
+	clean := vfs.CleanPath(name)
 	if w.rejectJunk && isOSJunk(clean) {
 		return nil, fs.ErrNotExist
 	}
@@ -86,7 +85,7 @@ func (w *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 }
 
 func (w *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
-	clean := cleanWebDAVPath(name)
+	clean := vfs.CleanPath(name)
 	if w.rejectJunk && isOSJunk(clean) {
 		// Junk handling is Finder-friendly: a hard 403 on
 		// PUT breaks macOS's two-step AppleDouble copy (it
@@ -127,14 +126,6 @@ func (a webdavFileAdapter) Readdir(count int) ([]os.FileInfo, error) {
 func (a webdavFileAdapter) Stat() (os.FileInfo, error) { return a.f.Stat() }
 
 // --- helpers ---
-
-// cleanWebDAVPath strips the leading slash that WebDAV
-// always sends and any trailing slash on collection paths.
-func cleanWebDAVPath(name string) string {
-	name = strings.TrimPrefix(name, "/")
-	name = strings.TrimSuffix(name, "/")
-	return name
-}
 
 // Compile-time guard.
 var _ webdav.FileSystem = (*webdavFS)(nil)

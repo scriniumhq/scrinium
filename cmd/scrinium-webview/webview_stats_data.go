@@ -44,7 +44,7 @@ func buildWebStatsData(
 		View: web.StatsView{
 			TotalNodes:     stats.TotalNodes,
 			TotalBytes:     stats.TotalBytes,
-			TotalBytesText: fmt.Sprintf("%d (%s)", stats.TotalBytes, humanize.Bytes(stats.TotalBytes)),
+			TotalBytesText: humanize.BytesWithRaw(stats.TotalBytes),
 			SessionCount:   stats.SessionCount,
 			NamespaceCount: stats.NamespaceCount,
 			OrphanedCount:  stats.OrphanedCount,
@@ -60,9 +60,9 @@ func buildWebStatsData(
 			ArtifactCount:  formatCountOrNA(cap.ArtifactCount),
 			BlobCount:      formatCountOrNA(cap.BlobCount),
 			DedupRatio:     formatDedup(cap.ArtifactCount, cap.BlobCount),
-			TotalBytes:     formatBytesOrNA(cap.TotalBytes),
-			UsedBytes:      formatBytesOrNA(cap.UsedBytes),
-			AvailableBytes: formatBytesOrNA(cap.AvailableBytes),
+			TotalBytes:     humanize.BytesOrNA(cap.TotalBytes),
+			UsedBytes:      humanize.BytesOrNA(cap.UsedBytes),
+			AvailableBytes: humanize.BytesOrNA(cap.AvailableBytes),
 		}
 		d.HasStorage = true
 	}
@@ -86,15 +86,6 @@ func formatCountOrNA(n int64) string {
 		return "n/a"
 	}
 	return fmt.Sprintf("%d", n)
-}
-
-// formatBytesOrNA renders bytes with a humanised parenthetical
-// suffix, treating -1 as "n/a".
-func formatBytesOrNA(n int64) string {
-	if n < 0 {
-		return "n/a"
-	}
-	return fmt.Sprintf("%d (%s)", n, humanize.Bytes(n))
 }
 
 // formatDedup synthesises ArtifactCount / BlobCount as a ratio

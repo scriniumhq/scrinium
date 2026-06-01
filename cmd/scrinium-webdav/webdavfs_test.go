@@ -24,24 +24,6 @@ func newTestFS(t *testing.T, manifests ...domain.Manifest) *webdavFS {
 	return newWebdavFS(proj, viewfx.RoutingAll(), true, nil)
 }
 
-// --- cleanWebDAVPath ---
-
-func TestCleanWebDAVPath(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"", ""},
-		{"/", ""},
-		{"/photos", "photos"},
-		{"/photos/", "photos"},
-		{"/photos/img.jpg", "photos/img.jpg"},
-		{"photos/img.jpg", "photos/img.jpg"},
-	}
-	for _, tc := range cases {
-		if got := cleanWebDAVPath(tc.in); got != tc.want {
-			t.Errorf("cleanWebDAVPath(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
 // (TestIsAtServiceRoot moved to projection/vfs — that helper
 // is now an internal of the VFS package.)
 

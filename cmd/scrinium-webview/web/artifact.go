@@ -634,7 +634,7 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	data.Storage = []labelValue{
 		{Label: "BlobRef", Value: blobRefValue, Mono: true},
 		{Label: "ContentHash", Value: string(m.ContentHash), Mono: true},
-		{Label: "OriginalSize", Value: fmt.Sprintf("%d (%s)", m.OriginalSize, humanize.Bytes(m.OriginalSize))},
+		{Label: "OriginalSize", Value: humanize.BytesWithRaw(m.OriginalSize)},
 		{Label: "Layout", Value: orDash(m.LayoutHeader.BlobStorage)},
 		{Label: "KeyID", Value: orDash(m.KeyID), Mono: m.KeyID != ""},
 	}

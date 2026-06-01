@@ -101,7 +101,7 @@ func writeDaemonSection(b *strings.Builder, info DaemonInfo) {
 func writeViewSection(b *strings.Builder, stats projection.Stats) {
 	fmt.Fprintln(b, "[view]")
 	fmt.Fprintf(b, "TotalNodes:       %d\n", stats.TotalNodes)
-	fmt.Fprintf(b, "TotalBytes:       %d (%s)\n", stats.TotalBytes, humanize.Bytes(stats.TotalBytes))
+	fmt.Fprintf(b, "TotalBytes:       %s\n", humanize.BytesWithRaw(stats.TotalBytes))
 	fmt.Fprintf(b, "SessionCount:     %d\n", stats.SessionCount)
 	fmt.Fprintf(b, "NamespaceCount:   %d\n", stats.NamespaceCount)
 	fmt.Fprintf(b, "OrphanedCount:    %d\n", stats.OrphanedCount)
@@ -131,9 +131,9 @@ func writeStorageSection(b *strings.Builder, c *domain.StorageInfo) {
 		ratio := float64(c.ArtifactCount) / float64(c.BlobCount)
 		fmt.Fprintf(b, "DedupRatio:       %.2fx\n", ratio)
 	}
-	fmt.Fprintf(b, "TotalBytes:       %s\n", formatBytes(c.TotalBytes))
-	fmt.Fprintf(b, "UsedBytes:        %s\n", formatBytes(c.UsedBytes))
-	fmt.Fprintf(b, "AvailableBytes:   %s\n", formatBytes(c.AvailableBytes))
+	fmt.Fprintf(b, "TotalBytes:       %s\n", humanize.BytesOrNA(c.TotalBytes))
+	fmt.Fprintf(b, "UsedBytes:        %s\n", humanize.BytesOrNA(c.UsedBytes))
+	fmt.Fprintf(b, "AvailableBytes:   %s\n", humanize.BytesOrNA(c.AvailableBytes))
 	b.WriteString("\n")
 }
 
@@ -194,13 +194,6 @@ func formatUptime(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%ds", seconds)
 	}
-}
-
-func formatBytes(n int64) string {
-	if n < 0 {
-		return "n/a"
-	}
-	return fmt.Sprintf("%d (%s)", n, humanize.Bytes(n))
 }
 
 func formatCount(n int64) string {
