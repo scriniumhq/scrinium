@@ -322,10 +322,85 @@ func (f *blackHoleFile) Stat() (os.FileInfo, error) {
 	}, nil
 }
 
+// FileAt is a File that additionally supports positioned IO
+// (ReadAt/WriteAt). FUSE requires it because the kernel
+// addresses file content by offset rather than through a
+// streaming cursor. Every regular-file handle implements
+// FileAt; directory handles deliberately do not, so
+// VFS.OpenFileAt can reject directories with
+// errs.ErrIsADirectory.
+//
+// Per the io.ReaderAt / io.WriterAt contract, ReadAt and
+// WriteAt are independent of the Seek cursor and do not
+// mutate it.
+type FileAt interface {
+	File
+	io.ReaderAt
+	io.WriterAt
+}
+
+func (f *readHandleFile) ReadAt(p []byte, off int64) (int, error) {
+	if !f.rh.SupportsRandomAccess() {
+		return 0, errors.New("vfs: read handle does not support random access")
+	}
+	return f.rh.ReadAt(p, off)
+}
+
+func (f *readHandleFile) WriteAt(p []byte, off int64) (int, error) {
+	return 0, fs.ErrPermission
+}
+
+func (f *bytesFile) ReadAt(p []byte, off int64) (int, error) {
+	if off < 0 {
+		return 0, fs.ErrInvalid
+	}
+	if off >= int64(len(f.body)) {
+		return 0, io.EOF
+	}
+	n := copy(p, f.body[off:])
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+func (f *bytesFile) WriteAt(p []byte, off int64) (int, error) {
+	return 0, fs.ErrPermission
+}
+
+func (f *rwFile) ReadAt(p []byte, off int64) (int, error) {
+	return f.f.ReadAt(p, off)
+}
+
+// WriteAt assumes a single writer per handle (the FUSE/WebDAV
+// convention): it updates the cached size without locking,
+// matching the existing Write path.
+func (f *rwFile) WriteAt(p []byte, off int64) (int, error) {
+	n, err := f.f.WriteAt(p, off)
+	if end := off + int64(n); end > f.size {
+		f.size = end
+	}
+	return n, err
+}
+
+func (f *blackHoleFile) ReadAt(p []byte, off int64) (int, error) {
+	return 0, io.EOF
+}
+
+func (f *blackHoleFile) WriteAt(p []byte, off int64) (int, error) {
+	f.written += int64(len(p))
+	return len(p), nil
+}
+
 // Compile-time guards.
 var (
 	_ File = (*readHandleFile)(nil)
 	_ File = (*bytesFile)(nil)
 	_ File = (*rwFile)(nil)
 	_ File = (*blackHoleFile)(nil)
+
+	_ FileAt = (*readHandleFile)(nil)
+	_ FileAt = (*bytesFile)(nil)
+	_ FileAt = (*rwFile)(nil)
+	_ FileAt = (*blackHoleFile)(nil)
 )

@@ -160,6 +160,44 @@ func (v *VFS) Rename(ctx context.Context, oldName, newName string) error {
 	return v.fsops.Rename(ctx, oldClean, newClean)
 }
 
+// Attrs carries the mutable metadata Setattr can change; a nil
+// field leaves that attribute untouched. VFS owns this type so
+// surfaces (FUSE Setattr, future admin tools) don't reach into
+// the projection primitive for it.
+type Attrs struct {
+	Mode    *uint32
+	UID     *uint32
+	GID     *uint32
+	ModTime *time.Time
+}
+
+// Truncate resizes a root-view file to size bytes. The mount
+// root and service trees are read-only and return
+// ErrEditingDisabled.
+func (v *VFS) Truncate(ctx context.Context, name string, size int64) error {
+	clean := CleanPath(name)
+	if clean == "" || isAtServiceRoot(clean, v.routingCfg) {
+		return errs.ErrEditingDisabled
+	}
+	return v.fsops.Truncate(ctx, clean, size)
+}
+
+// Setattr applies metadata changes to a root-view path. The
+// mount root and service trees are read-only and return
+// ErrEditingDisabled. Nil Attrs fields are left untouched.
+func (v *VFS) Setattr(ctx context.Context, name string, attrs Attrs) error {
+	clean := CleanPath(name)
+	if clean == "" || isAtServiceRoot(clean, v.routingCfg) {
+		return errs.ErrEditingDisabled
+	}
+	return v.fsops.Setattr(ctx, clean, projection.Attrs{
+		Mode:    attrs.Mode,
+		UID:     attrs.UID,
+		GID:     attrs.GID,
+		ModTime: attrs.ModTime,
+	})
+}
+
 // --- read methods ---
 
 // Stat returns metadata for a path. Routing is centralised in
@@ -263,6 +301,31 @@ func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileM
 		return nil, fs.ErrNotExist
 	}
 	return nil, fs.ErrNotExist
+}
+
+// OpenFileAt opens a regular file for positioned IO. It is the
+// FUSE-facing entry point: the kernel reads and writes file
+// content by offset (ReadAt/WriteAt) rather than through the
+// streaming cursor that the sequential File from OpenFile
+// provides.
+//
+// Routing, flag handling, and read-only rejection are exactly
+// OpenFile's — this delegates and then narrows the result to
+// FileAt. Directory paths (mount root, service root, service
+// subtrees, root-view directories) return errs.ErrIsADirectory:
+// callers list directories through Stat plus the dir File from
+// OpenFile, never through OpenFileAt.
+func (v *VFS) OpenFileAt(ctx context.Context, name string, flag int, perm os.FileMode) (FileAt, error) {
+	f, err := v.OpenFile(ctx, name, flag, perm)
+	if err != nil {
+		return nil, err
+	}
+	fa, ok := f.(FileAt)
+	if !ok {
+		_ = f.Close()
+		return nil, errs.ErrIsADirectory
+	}
+	return fa, nil
 }
 
 // View returns the underlying projection.View for surfaces
