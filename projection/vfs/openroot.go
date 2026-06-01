@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"os"
+	fso "scrinium.dev/projection/fsops"
 
 	"scrinium.dev/errs"
-	"scrinium.dev/projection"
 )
 
 // openRoot is the FSOps-backed side of OpenFile.
@@ -43,9 +43,9 @@ func (v *VFS) openRoot(
 		// Read-only dir handle for Readdir.
 		return newPathDirFile(v, subPath), nil
 	}
-	mode := projection.OpenReadOnly
+	mode := fso.OpenReadOnly
 	if wantWrite {
-		mode = projection.OpenReadWrite
+		mode = fso.OpenReadWrite
 	}
 	f, err := v.fsops.Open(ctx, subPath, mode)
 	if err != nil {

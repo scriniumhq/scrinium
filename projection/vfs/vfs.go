@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	fso "scrinium.dev/projection/fsops"
 	"scrinium.dev/projection/node"
 	"scrinium.dev/projection/routing"
 	vw "scrinium.dev/projection/view"
@@ -14,7 +15,6 @@ import (
 
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/pathx"
-	"scrinium.dev/projection"
 )
 
 // POSIX flag bits used for OpenFile semantics. Aliased to
@@ -25,7 +25,7 @@ const (
 	syscallOExcl   = syscall.O_EXCL
 )
 
-// VFS exposes a vw.View + projection.FSOps as a
+// VFS exposes a vw.View + fso.Ops as a
 // virtual filesystem. Surfaces (FUSE, WebDAV, web view, custom
 // admin tools) consume Stat / OpenFile / Readdir without
 // reaching into the projection internals.
@@ -39,7 +39,7 @@ const (
 // lifetimes.
 type VFS struct {
 	view       *vw.View
-	fsops      *projection.FSOps
+	fsops      *fso.Ops
 	routingCfg routing.Config
 	startedAt  time.Time
 
@@ -89,7 +89,7 @@ func WithNameFilter(fn func(name string) bool) Option {
 
 // New constructs a VFS over view/fsops with the given routing
 // configuration.
-func New(view *vw.View, fsops *projection.FSOps, cfg routing.Config, opts ...Option) *VFS {
+func New(view *vw.View, fsops *fso.Ops, cfg routing.Config, opts ...Option) *VFS {
 	v := &VFS{
 		view:       view,
 		fsops:      fsops,
@@ -193,7 +193,7 @@ func (v *VFS) Setattr(ctx context.Context, name string, attrs Attrs) error {
 	if clean == "" || isAtServiceRoot(clean, v.routingCfg) {
 		return errs.ErrEditingDisabled
 	}
-	return v.fsops.Setattr(ctx, clean, projection.Attrs{
+	return v.fsops.Setattr(ctx, clean, fso.Attrs{
 		Mode:    attrs.Mode,
 		UID:     attrs.UID,
 		GID:     attrs.GID,

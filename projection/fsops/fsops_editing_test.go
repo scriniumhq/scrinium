@@ -1,30 +1,30 @@
-package projection_test
+package fsops_test
 
 import (
 	"context"
 	"errors"
 	"io"
+	fso "scrinium.dev/projection/fsops"
 	"testing"
 	"time"
 
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection"
 )
 
 // All editing tests need an FSOps with the relevant policy bit
 // turned on. newEditingFSOps wraps newFSOpsForWrite with
 // EditingOn() unless the caller overrides via opts.
-func newEditingFSOps(t *testing.T, opts ...projection.FSOpsOption) (*projection.FSOps, *projectionfx.FakeSource) {
+func newEditingFSOps(t *testing.T, opts ...fso.Option) (*fso.Ops, *projectionfx.FakeSource) {
 	t.Helper()
-	defaults := []projection.FSOpsOption{
-		projection.WithEditingPolicy(projection.EditingOn()),
+	defaults := []fso.Option{
+		fso.WithEditingPolicy(fso.EditingOn()),
 	}
 	return newFSOpsForWrite(t, append(defaults, opts...)...)
 }
 
 // readAllVia reads the whole file through repeated ReadAt calls.
-func readAllVia(t *testing.T, f projection.File) string {
+func readAllVia(t *testing.T, f fso.File) string {
 	t.Helper()
 	buf := make([]byte, 4096)
 	n, err := f.ReadAt(buf, 0)
@@ -60,7 +60,7 @@ func TestRename_MovesContent(t *testing.T) {
 	}
 
 	// Content survives.
-	rh, _ := o.Open(context.Background(), "new.txt", projection.OpenReadOnly)
+	rh, _ := o.Open(context.Background(), "new.txt", fso.OpenReadOnly)
 	defer rh.Close()
 	if got := readAllVia(t, rh); got != "hello" {
 		t.Errorf("content: got %q, want hello", got)
@@ -156,7 +156,7 @@ func TestSetattr_ChangesMode(t *testing.T) {
 	f.Close()
 
 	newMode := uint32(0o600)
-	if err := o.Setattr(context.Background(), "a.txt", projection.Attrs{Mode: &newMode}); err != nil {
+	if err := o.Setattr(context.Background(), "a.txt", fso.Attrs{Mode: &newMode}); err != nil {
 		t.Fatalf("Setattr: %v", err)
 	}
 	fi, _ := o.Stat("a.txt")
@@ -174,7 +174,7 @@ func TestSetattr_ChangesUIDGID(t *testing.T) {
 	newUID := uint32(1000)
 	newGID := uint32(2000)
 	if err := o.Setattr(context.Background(), "a.txt",
-		projection.Attrs{UID: &newUID, GID: &newGID}); err != nil {
+		fso.Attrs{UID: &newUID, GID: &newGID}); err != nil {
 		t.Fatalf("Setattr: %v", err)
 	}
 	fi, _ := o.Stat("a.txt")
@@ -191,7 +191,7 @@ func TestSetattr_ChangesModTime(t *testing.T) {
 
 	target := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	if err := o.Setattr(context.Background(), "a.txt",
-		projection.Attrs{ModTime: &target}); err != nil {
+		fso.Attrs{ModTime: &target}); err != nil {
 		t.Fatalf("Setattr: %v", err)
 	}
 	fi, _ := o.Stat("a.txt")
@@ -207,9 +207,9 @@ func TestSetattr_PreservesContent(t *testing.T) {
 	f.Close()
 
 	newMode := uint32(0o600)
-	o.Setattr(context.Background(), "a.txt", projection.Attrs{Mode: &newMode})
+	o.Setattr(context.Background(), "a.txt", fso.Attrs{Mode: &newMode})
 
-	rh, _ := o.Open(context.Background(), "a.txt", projection.OpenReadOnly)
+	rh, _ := o.Open(context.Background(), "a.txt", fso.OpenReadOnly)
 	defer rh.Close()
 	if got := readAllVia(t, rh); got != "hello world" {
 		t.Errorf("content: got %q, want hello world", got)
@@ -223,7 +223,7 @@ func TestSetattr_WithoutPolicy(t *testing.T) {
 	f.Close()
 
 	newMode := uint32(0o600)
-	err := o.Setattr(context.Background(), "a.txt", projection.Attrs{Mode: &newMode})
+	err := o.Setattr(context.Background(), "a.txt", fso.Attrs{Mode: &newMode})
 	if !errors.Is(err, errs.ErrEditingDisabled) {
 		t.Errorf("expected ErrEditingDisabled, got %v", err)
 	}
@@ -245,7 +245,7 @@ func TestTruncate_Shrinks(t *testing.T) {
 		t.Errorf("Size: got %d, want 5", fi.Size)
 	}
 
-	rh, _ := o.Open(context.Background(), "a.txt", projection.OpenReadOnly)
+	rh, _ := o.Open(context.Background(), "a.txt", fso.OpenReadOnly)
 	defer rh.Close()
 	if got := readAllVia(t, rh); got != "hello" {
 		t.Errorf("content: got %q, want hello", got)
@@ -314,7 +314,7 @@ func TestOpenReadWrite_EditExisting(t *testing.T) {
 	writeAll(t, f, []byte("hello"))
 	f.Close()
 
-	wf, err := o.Open(context.Background(), "a.txt", projection.OpenReadWrite)
+	wf, err := o.Open(context.Background(), "a.txt", fso.OpenReadWrite)
 	if err != nil {
 		t.Fatalf("Open RDWR: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestOpenReadWrite_EditExisting(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	rh, _ := o.Open(context.Background(), "a.txt", projection.OpenReadOnly)
+	rh, _ := o.Open(context.Background(), "a.txt", fso.OpenReadOnly)
 	defer rh.Close()
 	if got := readAllVia(t, rh); got != "Hello" {
 		t.Errorf("content: got %q, want Hello", got)
@@ -339,7 +339,7 @@ func TestOpenReadWrite_WithoutPolicy(t *testing.T) {
 	writeAll(t, f, []byte("x"))
 	f.Close()
 
-	_, err := o.Open(context.Background(), "a.txt", projection.OpenReadWrite)
+	_, err := o.Open(context.Background(), "a.txt", fso.OpenReadWrite)
 	if !errors.Is(err, errs.ErrEditingDisabled) {
 		t.Errorf("expected ErrEditingDisabled, got %v", err)
 	}
@@ -349,13 +349,13 @@ func TestOpenReadWrite_WithoutPolicy(t *testing.T) {
 
 func TestEditing_ReadOnlyTrumpsPolicy(t *testing.T) {
 	// Even with EditingOn, WithReadOnly forbids every mutation.
-	o, _ := newEditingFSOps(t, projection.WithReadOnly())
+	o, _ := newEditingFSOps(t, fso.WithReadOnly())
 
 	if err := o.Rename(context.Background(), "a", "b"); !errors.Is(err, errs.ErrEditingDisabled) {
 		t.Errorf("Rename: got %v", err)
 	}
 	mode := uint32(0o600)
-	if err := o.Setattr(context.Background(), "a", projection.Attrs{Mode: &mode}); !errors.Is(err, errs.ErrEditingDisabled) {
+	if err := o.Setattr(context.Background(), "a", fso.Attrs{Mode: &mode}); !errors.Is(err, errs.ErrEditingDisabled) {
 		t.Errorf("Setattr: got %v", err)
 	}
 	if err := o.Truncate(context.Background(), "a", 0); !errors.Is(err, errs.ErrEditingDisabled) {

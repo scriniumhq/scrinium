@@ -5,11 +5,11 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	fso "scrinium.dev/projection/fsops"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/pathx"
-	"scrinium.dev/projection"
 )
 
 // File is the open-handle interface VFS hands back from
@@ -46,7 +46,7 @@ type File interface {
 //   - readHandleFile  : read-only over a store.ReadHandle (service
 //                       trees, by-X paths inside _scrinium).
 //   - bytesFile       : in-memory read-only (stats virtual file).
-//   - rwFile          : read/write over projection.File (root view).
+//   - rwFile          : read/write over fso.File (root view).
 //   - blackHoleFile   : write-discarding (used by surface-level
 //                       junk-filter wrappers — safe to ignore
 //                       when not needed).
@@ -172,11 +172,11 @@ func (f *bytesFile) Stat() (os.FileInfo, error) {
 	return synthFileInfo(f.name, int64(len(f.body)), f.t), nil
 }
 
-// rwFile wraps a projection.File for the root view. Tracks a
+// rwFile wraps a fso.File for the root view. Tracks a
 // manual offset to satisfy io.Reader/io.Writer/io.Seeker on
-// top of the projection.File's WriteAt/ReadAt.
+// top of the fso.File's WriteAt/ReadAt.
 type rwFile struct {
-	f      projection.File
+	f      fso.File
 	path   string
 	size   int64
 	mtime  time.Time
@@ -186,7 +186,7 @@ type rwFile struct {
 	closed bool
 }
 
-func wrapFile(pf projection.File, path string, fi projection.FileInfo) *rwFile {
+func wrapFile(pf fso.File, path string, fi fso.FileInfo) *rwFile {
 	return &rwFile{
 		f:     pf,
 		path:  path,
@@ -198,7 +198,7 @@ func wrapFile(pf projection.File, path string, fi projection.FileInfo) *rwFile {
 }
 
 // wrapWriteFile is a Create-side variant: a fresh file, size 0.
-func wrapWriteFile(pf projection.File, path string) *rwFile {
+func wrapWriteFile(pf fso.File, path string) *rwFile {
 	return &rwFile{
 		f:     pf,
 		path:  path,

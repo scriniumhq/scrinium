@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	fso "scrinium.dev/projection/fsops"
 	"scrinium.dev/projection/node"
 	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsindex"
 	"scrinium.dev/projection/fsmeta"
 )
@@ -54,52 +54,52 @@ func buildFSOps(
 	p *Projection,
 	mountSession domain.SessionID,
 	storeURI string,
-) (*projection.FSOps, error) {
-	opts := []projection.FSOpsOption{
-		projection.WithStore(st),
-		projection.WithMountSession(mountSession),
-		projection.WithScratchQuota(p.ScratchQuota.Int64()),
-		projection.WithDefaultMode(p.DefaultMode),
-		projection.WithDefaultUID(defaultID(p.DefaultUID, os.Getuid)),
-		projection.WithDefaultGID(defaultID(p.DefaultGID, os.Getgid)),
-		projection.WithEditingPolicy(editingPolicy(p)),
-		projection.WithNamespace(p.Namespace),
+) (*fso.Ops, error) {
+	opts := []fso.Option{
+		fso.WithStore(st),
+		fso.WithMountSession(mountSession),
+		fso.WithScratchQuota(p.ScratchQuota.Int64()),
+		fso.WithDefaultMode(p.DefaultMode),
+		fso.WithDefaultUID(defaultID(p.DefaultUID, os.Getuid)),
+		fso.WithDefaultGID(defaultID(p.DefaultGID, os.Getgid)),
+		fso.WithEditingPolicy(editingPolicy(p)),
+		fso.WithNamespace(p.Namespace),
 	}
 
 	if p.ReadOnly {
-		opts = append(opts, projection.WithReadOnly())
+		opts = append(opts, fso.WithReadOnly())
 	} else {
 		scratch, err := resolveScratchDir(p.ScratchDir, storeURI)
 		if err != nil {
 			return nil, err
 		}
 		if scratch != "" {
-			opts = append(opts, projection.WithScratchDir(scratch))
+			opts = append(opts, fso.WithScratchDir(scratch))
 		}
 	}
 
-	fsops, err := projection.NewFSOps(view, opts...)
+	fsops, err := fso.New(view, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("build fsops: %w", err)
 	}
 	return fsops, nil
 }
 
-// editingPolicy maps the config string onto a projection.EditingPolicy.
+// editingPolicy maps the config string onto a fso.EditingPolicy.
 // "custom" consults the Allow* pointer flags (nil = false).
-func editingPolicy(p *Projection) projection.EditingPolicy {
+func editingPolicy(p *Projection) fso.EditingPolicy {
 	switch p.Editing {
 	case "on":
-		return projection.EditingOn()
+		return fso.EditingOn()
 	case "custom":
-		return projection.EditingPolicy{
+		return fso.EditingPolicy{
 			AllowRename:   derefBool(p.AllowRename),
 			AllowSetattr:  derefBool(p.AllowSetattr),
 			AllowTruncate: derefBool(p.AllowTruncate),
 			AllowAppend:   derefBool(p.AllowAppend),
 		}
 	default:
-		return projection.EditingOff()
+		return fso.EditingOff()
 	}
 }
 

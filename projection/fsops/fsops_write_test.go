@@ -1,16 +1,16 @@
-package projection_test
+package fsops_test
 
 import (
 	"context"
 	"errors"
 	"io"
+	fso "scrinium.dev/projection/fsops"
 	vw "scrinium.dev/projection/view"
 	"strings"
 	"testing"
 
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 )
 
@@ -20,7 +20,7 @@ import (
 // both ProjectionSource (for the View) and StoreClient (for
 // writes). Defaults: namespace=files, scratchDir=t.TempDir(),
 // editing=off, quota=unlimited.
-func newFSOpsForWrite(t *testing.T, opts ...projection.FSOpsOption) (*projection.FSOps, *projectionfx.FakeSource) {
+func newFSOpsForWrite(t *testing.T, opts ...fso.Option) (*fso.Ops, *projectionfx.FakeSource) {
 	t.Helper()
 	src := projectionfx.New()
 	v, err := vw.New(context.Background(), src,
@@ -30,12 +30,12 @@ func newFSOpsForWrite(t *testing.T, opts ...projection.FSOpsOption) (*projection
 	}
 	t.Cleanup(func() { v.Close() })
 
-	defaults := []projection.FSOpsOption{
-		projection.WithStore(src),
-		projection.WithNamespace("files"),
-		projection.WithScratchDir(t.TempDir()),
+	defaults := []fso.Option{
+		fso.WithStore(src),
+		fso.WithNamespace("files"),
+		fso.WithScratchDir(t.TempDir()),
 	}
-	o, err := projection.NewFSOps(v, append(defaults, opts...)...)
+	o, err := fso.New(v, append(defaults, opts...)...)
 	if err != nil {
 		t.Fatalf("NewFSOps: %v", err)
 	}
@@ -44,7 +44,7 @@ func newFSOpsForWrite(t *testing.T, opts ...projection.FSOpsOption) (*projection
 
 // writeAll writes the full byte slice via repeated WriteAt at
 // increasing offsets.
-func writeAll(t *testing.T, f projection.File, data []byte) {
+func writeAll(t *testing.T, f fso.File, data []byte) {
 	t.Helper()
 	n, err := f.WriteAt(data, 0)
 	if err != nil {
@@ -137,9 +137,9 @@ func TestCreate_NoNamespace(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v,
-		projection.WithStore(src),
-		projection.WithScratchDir(t.TempDir()))
+	o, _ := fso.New(v,
+		fso.WithStore(src),
+		fso.WithScratchDir(t.TempDir()))
 
 	_, err := o.Create(context.Background(), "a.txt", 0o644)
 	if err == nil || !strings.Contains(err.Error(), "WithNamespace") {
@@ -153,9 +153,9 @@ func TestCreate_NoStore(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v,
-		projection.WithNamespace("files"),
-		projection.WithScratchDir(t.TempDir()))
+	o, _ := fso.New(v,
+		fso.WithNamespace("files"),
+		fso.WithScratchDir(t.TempDir()))
 
 	_, err := o.Create(context.Background(), "a.txt", 0o644)
 	if err == nil || !strings.Contains(err.Error(), "WithStore") {
@@ -164,7 +164,7 @@ func TestCreate_NoStore(t *testing.T) {
 }
 
 func TestCreate_OnReadOnly(t *testing.T) {
-	o, _ := newFSOpsForWrite(t, projection.WithReadOnly())
+	o, _ := newFSOpsForWrite(t, fso.WithReadOnly())
 
 	_, err := o.Create(context.Background(), "a.txt", 0o644)
 	if !errors.Is(err, errs.ErrEditingDisabled) {
@@ -201,7 +201,7 @@ func TestCreate_WriteAt_RandomAccess(t *testing.T) {
 // --- Quota ---
 
 func TestQuota_BlocksWriteOverLimit(t *testing.T) {
-	o, _ := newFSOpsForWrite(t, projection.WithScratchQuota(10))
+	o, _ := newFSOpsForWrite(t, fso.WithScratchQuota(10))
 
 	f, _ := o.Create(context.Background(), "big.bin", 0o644)
 	defer f.Close()
@@ -218,7 +218,7 @@ func TestQuota_BlocksWriteOverLimit(t *testing.T) {
 }
 
 func TestQuota_ReleasedOnClose(t *testing.T) {
-	o, _ := newFSOpsForWrite(t, projection.WithScratchQuota(10))
+	o, _ := newFSOpsForWrite(t, fso.WithScratchQuota(10))
 
 	// First file uses 8 bytes, then closes — quota goes back to
 	// zero. Second file can use 8 again.
@@ -287,7 +287,7 @@ func TestUnlink_OnDirectory(t *testing.T) {
 }
 
 func TestUnlink_ReadOnly(t *testing.T) {
-	o, _ := newFSOpsForWrite(t, projection.WithReadOnly())
+	o, _ := newFSOpsForWrite(t, fso.WithReadOnly())
 	err := o.Unlink(context.Background(), "anything")
 	if !errors.Is(err, errs.ErrEditingDisabled) {
 		t.Errorf("expected ErrEditingDisabled, got %v", err)
@@ -443,7 +443,7 @@ func TestOpen_AfterCreate_ReadsContent(t *testing.T) {
 	writeAll(t, f, []byte("hello world"))
 	f.Close()
 
-	rh, err := o.Open(context.Background(), "msg.txt", projection.OpenReadOnly)
+	rh, err := o.Open(context.Background(), "msg.txt", fso.OpenReadOnly)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

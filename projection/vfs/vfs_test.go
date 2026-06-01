@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	fso "scrinium.dev/projection/fsops"
 	"scrinium.dev/projection/node"
 	"scrinium.dev/projection/routing"
 	vw "scrinium.dev/projection/view"
@@ -14,7 +15,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/vfs"
 )
@@ -39,11 +39,11 @@ func newTestVFS(t *testing.T, manifests ...domain.Manifest) (*vfs.VFS, *projecti
 	}
 	t.Cleanup(func() { v.Close() })
 
-	o, err := projection.NewFSOps(v,
-		projection.WithStore(src),
-		projection.WithNamespace("files"),
-		projection.WithScratchDir(t.TempDir()),
-		projection.WithEditingPolicy(projection.EditingOn()),
+	o, err := fso.New(v,
+		fso.WithStore(src),
+		fso.WithNamespace("files"),
+		fso.WithScratchDir(t.TempDir()),
+		fso.WithEditingPolicy(fso.EditingOn()),
 	)
 	if err != nil {
 		t.Fatalf("NewFSOps: %v", err)
@@ -184,10 +184,10 @@ func TestVFS_NoServicePrefix(t *testing.T) {
 		t.Fatalf("NewView: %v", err)
 	}
 	t.Cleanup(func() { view.Close() })
-	ops, err := projection.NewFSOps(view,
-		projection.WithStore(src),
-		projection.WithNamespace("files"),
-		projection.WithScratchDir(t.TempDir()),
+	ops, err := fso.New(view,
+		fso.WithStore(src),
+		fso.WithNamespace("files"),
+		fso.WithScratchDir(t.TempDir()),
 	)
 	if err != nil {
 		t.Fatalf("NewFSOps: %v", err)
@@ -241,10 +241,10 @@ func TestVFS_StatsProvider(t *testing.T) {
 		t.Fatalf("NewView: %v", err)
 	}
 	t.Cleanup(func() { view.Close() })
-	ops, err := projection.NewFSOps(view,
-		projection.WithStore(src),
-		projection.WithNamespace("files"),
-		projection.WithScratchDir(t.TempDir()),
+	ops, err := fso.New(view,
+		fso.WithStore(src),
+		fso.WithNamespace("files"),
+		fso.WithScratchDir(t.TempDir()),
 	)
 	if err != nil {
 		t.Fatalf("NewFSOps: %v", err)
@@ -288,10 +288,10 @@ func TestVFS_NameFilter_OmitsFromListing(t *testing.T) {
 		t.Fatalf("NewView: %v", err)
 	}
 	t.Cleanup(func() { view.Close() })
-	ops, err := projection.NewFSOps(view,
-		projection.WithStore(src),
-		projection.WithNamespace("files"),
-		projection.WithScratchDir(t.TempDir()),
+	ops, err := fso.New(view,
+		fso.WithStore(src),
+		fso.WithNamespace("files"),
+		fso.WithScratchDir(t.TempDir()),
 	)
 	if err != nil {
 		t.Fatalf("NewFSOps: %v", err)
@@ -351,10 +351,10 @@ func TestVFS_ServicePrefixListing_SkipsDisabled(t *testing.T) {
 		t.Fatalf("NewView: %v", err)
 	}
 	t.Cleanup(func() { view.Close() })
-	ops, err := projection.NewFSOps(view,
-		projection.WithStore(src),
-		projection.WithNamespace("files"),
-		projection.WithScratchDir(t.TempDir()),
+	ops, err := fso.New(view,
+		fso.WithStore(src),
+		fso.WithNamespace("files"),
+		fso.WithScratchDir(t.TempDir()),
 	)
 	if err != nil {
 		t.Fatalf("NewFSOps: %v", err)

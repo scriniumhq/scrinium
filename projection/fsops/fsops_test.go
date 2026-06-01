@@ -1,23 +1,23 @@
-package projection_test
+package fsops_test
 
 import (
 	"context"
 	"errors"
 	"io"
+	fso "scrinium.dev/projection/fsops"
 	"scrinium.dev/projection/node"
 	vw "scrinium.dev/projection/view"
 	"testing"
 
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 )
 
 // --- Construction ---
 
 func TestNewFSOps_NilView(t *testing.T) {
-	_, err := projection.NewFSOps(nil)
+	_, err := fso.New(nil)
 	if err == nil {
 		t.Fatal("expected error for nil view")
 	}
@@ -28,7 +28,7 @@ func TestNewFSOps_DefaultsApplied(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
-	o, err := projection.NewFSOps(v)
+	o, err := fso.New(v)
 	if err != nil {
 		t.Fatalf("NewFSOps: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestStat_FileInRootView(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
 	fi, err := o.Stat("photos/img.jpg")
 	if err != nil {
@@ -71,7 +71,7 @@ func TestStat_VirtualDirectory(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
 	fi, err := o.Stat("photos/2024")
 	if err != nil {
@@ -91,7 +91,7 @@ func TestStat_NotFound(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 	_, err := o.Stat("nope/path")
 	if !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("expected ErrPathNotFound, got %v", err)
@@ -108,8 +108,8 @@ func TestStat_AppliesDefaultMode(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v,
-		projection.WithDefaultMode(0o600))
+	o, _ := fso.New(v,
+		fso.WithDefaultMode(0o600))
 
 	fi, err := o.Stat("a.txt")
 	if err != nil {
@@ -129,9 +129,9 @@ func TestStat_AppliesDefaultUIDGID(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v,
-		projection.WithDefaultUID(1000),
-		projection.WithDefaultGID(2000))
+	o, _ := fso.New(v,
+		fso.WithDefaultUID(1000),
+		fso.WithDefaultGID(2000))
 
 	fi, _ := o.Stat("a.txt")
 	if fi.UID != 1000 || fi.GID != 2000 {
@@ -153,7 +153,7 @@ func TestStat_RoutesViaRootView_ByArtifact(t *testing.T) {
 		vw.WithRootView(node.RootByArtifact))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
 	// "photos/img.jpg" is the by-path key, NOT the by-artifact
 	// key. With RootByArtifact it must fail.
@@ -179,7 +179,7 @@ func TestListdir_ListsFiles(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
 	var names []string
 	for fi, err := range o.Listdir("photos") {
@@ -205,7 +205,7 @@ func TestListdir_OnFile(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
 	for _, err := range o.Listdir("a.txt") {
 		if !errors.Is(err, errs.ErrNotADirectory) {
@@ -222,7 +222,7 @@ func TestListdir_NotFound(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
 	for _, err := range o.Listdir("nope") {
 		if !errors.Is(err, errs.ErrPathNotFound) {
@@ -244,9 +244,9 @@ func TestOpen_ReadOnly(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
-	f, err := o.Open(context.Background(), "hello.txt", projection.OpenReadOnly)
+	f, err := o.Open(context.Background(), "hello.txt", fso.OpenReadOnly)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -273,12 +273,12 @@ func TestOpen_WriteModesRejectedWithoutPolicy(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
-	for _, mode := range []projection.OpenMode{
-		projection.OpenWriteOnly,
-		projection.OpenReadWrite,
-		projection.OpenAppend,
+	for _, mode := range []fso.OpenMode{
+		fso.OpenWriteOnly,
+		fso.OpenReadWrite,
+		fso.OpenAppend,
 	} {
 		_, err := o.Open(context.Background(), "a.txt", mode)
 		if !errors.Is(err, errs.ErrEditingDisabled) {
@@ -296,9 +296,9 @@ func TestOpen_OnDirectory(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
-	_, err := o.Open(context.Background(), "d", projection.OpenReadOnly)
+	_, err := o.Open(context.Background(), "d", fso.OpenReadOnly)
 	if !errors.Is(err, errs.ErrIsADirectory) {
 		t.Errorf("expected ErrIsADirectory, got %v", err)
 	}
@@ -310,9 +310,9 @@ func TestOpen_NotFound(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
-	_, err := o.Open(context.Background(), "nope", projection.OpenReadOnly)
+	_, err := o.Open(context.Background(), "nope", fso.OpenReadOnly)
 	if !errors.Is(err, errs.ErrPathNotFound) {
 		t.Errorf("expected ErrPathNotFound, got %v", err)
 	}
@@ -329,9 +329,9 @@ func TestReadOnlyFile_WriteAtRefused(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
-	f, _ := o.Open(context.Background(), "a.txt", projection.OpenReadOnly)
+	f, _ := o.Open(context.Background(), "a.txt", fso.OpenReadOnly)
 	defer f.Close()
 
 	_, err := f.WriteAt([]byte("x"), 0)
@@ -349,9 +349,9 @@ func TestReadOnlyFile_TruncateRefused(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
-	f, _ := o.Open(context.Background(), "a.txt", projection.OpenReadOnly)
+	f, _ := o.Open(context.Background(), "a.txt", fso.OpenReadOnly)
 	defer f.Close()
 
 	if err := f.Truncate(0); !errors.Is(err, errs.ErrEditingDisabled) {
@@ -368,9 +368,9 @@ func TestReadOnlyFile_ReadAtRandomAccess(t *testing.T) {
 		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
-	o, _ := projection.NewFSOps(v)
+	o, _ := fso.New(v)
 
-	f, _ := o.Open(context.Background(), "a.txt", projection.OpenReadOnly)
+	f, _ := o.Open(context.Background(), "a.txt", fso.OpenReadOnly)
 	defer f.Close()
 
 	buf := make([]byte, 3)
@@ -387,12 +387,12 @@ func TestReadOnlyFile_ReadAtRandomAccess(t *testing.T) {
 
 // asReader adapts a File handle into an io.Reader by sequentially
 // reading from offset 0. Used to test through io.ReadAll.
-func asReader(f projection.File) io.Reader {
+func asReader(f fso.File) io.Reader {
 	return &fileReader{f: f}
 }
 
 type fileReader struct {
-	f   projection.File
+	f   fso.File
 	off int64
 }
 

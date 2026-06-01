@@ -2,9 +2,8 @@ package main
 
 import (
 	"fmt"
-	"time"
-
 	vw "scrinium.dev/projection/view"
+	"time"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"

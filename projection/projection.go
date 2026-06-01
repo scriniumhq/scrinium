@@ -19,10 +19,9 @@
 package projection
 
 import (
+	"scrinium.dev/projection/fsops"
 	"scrinium.dev/projection/view"
 )
-
-// --- View configuration ---
 
 // Projection bundles the read-side View with the optional read/write
 // FSOps facade — the two ends of one projection over a store. They are
@@ -38,7 +37,7 @@ type Projection struct {
 
 	// FSOps is the read/write filesystem facade over View. Nil when the
 	// projection is read-only.
-	FSOps *FSOps
+	FSOps *fsops.Ops
 }
 
 // Close releases the projection. FSOps holds no resources beyond the

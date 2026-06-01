@@ -1,4 +1,4 @@
-package projection
+package fsops
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"io"
 	"iter"
 	"os"
+	vw "scrinium.dev/projection/view"
 	"slices"
 	"strings"
 	"sync"
@@ -18,25 +19,24 @@ import (
 	"scrinium.dev/internal/pathx"
 	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/node"
-	view2 "scrinium.dev/projection/view"
 )
 
-// FSOps is the filesystem-shaped operations layer over a View.
+// Ops is the filesystem-shaped operations layer over a View.
 // It serves transports (FUSE, WebDAV) by translating
 // path-keyed POSIX-like calls into View lookups (read side) and,
 // in stage 4b, into Store mutations (write side).
 //
-// The two reasons FSOps exists rather than the transport calling
+// The two reasons Ops exists rather than the transport calling
 // View directly:
 //
 //  1. Editing policy, scratch buffering, path-level locks live in
 //     one place — FUSE and WebDAV inherit them by construction.
 //  2. The transport works in terms of the configured root tree
-//     (RootView). FSOps hides that routing from the caller.
+//     (RootView). Ops hides that routing from the caller.
 //
 // Stage 4a: read-side (Stat, Listdir, Open). Mutations land in 4b.
-type FSOps struct {
-	view *view2.View
+type Ops struct {
+	view *vw.View
 
 	store StoreClient
 
@@ -70,10 +70,10 @@ type FSOps struct {
 	pendingDirs   map[string]struct{}
 }
 
-// StoreClient is the write-side surface FSOps depends on. Defined
+// StoreClient is the write-side surface Ops depends on. Defined
 // here rather than reusing store.Store so that:
 //
-//   - the dependency is minimal — FSOps does not need namespace
+//   - the dependency is minimal — Ops does not need namespace
 //     enumeration, lifecycle, crypto admin, or any of core's
 //     other surface;
 //   - tests can supply a fake without implementing every method
@@ -88,7 +88,7 @@ type StoreClient interface {
 }
 
 // FileInfo is the POSIX-shaped descriptor that Stat/Listdir
-// returns. Built from FilesystemFacet plus FSOps defaults.
+// returns. Built from FilesystemFacet plus Ops defaults.
 type FileInfo struct {
 	Name    string
 	Path    string
@@ -180,8 +180,8 @@ func EditingOn() EditingPolicy {
 	}
 }
 
-// FSOpsOption configures NewFSOps.
-type FSOpsOption func(*fsOpsOptions)
+// Option configures New.
+type Option func(*fsOpsOptions)
 
 type fsOpsOptions struct {
 	store        StoreClient
@@ -196,69 +196,69 @@ type fsOpsOptions struct {
 	readOnly     bool
 }
 
-func WithStore(s StoreClient) FSOpsOption {
+func WithStore(s StoreClient) Option {
 	return func(o *fsOpsOptions) { o.store = s }
 }
 
 // WithScratchDir sets the directory for scratch files. Must
 // exist and be writable. Scratch is created lazily on the first
 // Create/Open(write).
-func WithScratchDir(path string) FSOpsOption {
+func WithScratchDir(path string) Option {
 	return func(o *fsOpsOptions) { o.scratchDir = path }
 }
 
 // WithScratchQuota caps the total bytes held by active scratch
 // files. 0 means unlimited.
-func WithScratchQuota(bytes int64) FSOpsOption {
+func WithScratchQuota(bytes int64) Option {
 	return func(o *fsOpsOptions) { o.scratchQuota = bytes }
 }
 
 // WithDefaultMode is the POSIX mode applied to artifacts whose
 // fsmeta.Mode is zero. Default 0644.
-func WithDefaultMode(mode uint32) FSOpsOption {
+func WithDefaultMode(mode uint32) Option {
 	return func(o *fsOpsOptions) { o.defaultMode = mode }
 }
 
 // WithDefaultUID applies to fsmeta.UID == 0.
-func WithDefaultUID(uid uint32) FSOpsOption {
+func WithDefaultUID(uid uint32) Option {
 	return func(o *fsOpsOptions) { o.defaultUID = uid }
 }
 
 // WithDefaultGID applies to fsmeta.GID == 0.
-func WithDefaultGID(gid uint32) FSOpsOption {
+func WithDefaultGID(gid uint32) Option {
 	return func(o *fsOpsOptions) { o.defaultGID = gid }
 }
 
 // WithEditingPolicy gates editing operations. Default:
 // EditingOff.
-func WithEditingPolicy(p EditingPolicy) FSOpsOption {
+func WithEditingPolicy(p EditingPolicy) Option {
 	return func(o *fsOpsOptions) { o.editing = p }
 }
 
 // WithMountSession sets the SessionID stamped onto every Put
-// performed through FSOps in this mount. Empty means "no
+// performed through Ops in this mount. Empty means "no
 // session" — artifacts will not appear in by-session.
-func WithMountSession(sid domain.SessionID) FSOpsOption {
+func WithMountSession(sid domain.SessionID) Option {
 	return func(o *fsOpsOptions) { o.mountSession = sid }
 }
 
 // WithNamespace sets the Namespace stamped onto every Put.
 // Required when Create is called; Mkdir/Rmdir/Unlink/Rename
 // do not depend on it (they operate on existing artifacts).
-func WithNamespace(ns string) FSOpsOption {
+func WithNamespace(ns string) Option {
 	return func(o *fsOpsOptions) { o.namespace = ns }
 }
 
 // WithReadOnly forces every mutation to return ErrEditingDisabled
 // regardless of EditingPolicy or the existence of a StoreClient.
-func WithReadOnly() FSOpsOption {
+func WithReadOnly() Option {
 	return func(o *fsOpsOptions) { o.readOnly = true }
 }
 
-// NewFSOps wraps a View with filesystem-shaped operations.
+// New wraps a View with filesystem-shaped operations.
 //
 // The View must already exist (the caller is responsible for the
-// View's lifecycle); NewFSOps does not call NewView itself
+// View's lifecycle); New does not call view.New itself
 // because the View may be shared with other transports.
 //
 // Defaults:
@@ -270,9 +270,9 @@ func WithReadOnly() FSOpsOption {
 // Returns an error only if v is nil. Configuration sanity is
 // otherwise the caller's responsibility (e.g. an invalid
 // scratch dir surfaces only at the first Create call).
-func NewFSOps(v *view2.View, opts ...FSOpsOption) (*FSOps, error) {
+func New(v *vw.View, opts ...Option) (*Ops, error) {
 	if v == nil {
-		return nil, fmt.Errorf("projection.NewFSOps: view is nil")
+		return nil, fmt.Errorf("projection.New: view is nil")
 	}
 	o := fsOpsOptions{
 		defaultMode: 0o644,
@@ -280,7 +280,7 @@ func NewFSOps(v *view2.View, opts ...FSOpsOption) (*FSOps, error) {
 	for _, opt := range opts {
 		opt(&o)
 	}
-	return &FSOps{
+	return &Ops{
 		view:         v,
 		store:        o.store,
 		scratchDir:   o.scratchDir,
@@ -307,7 +307,7 @@ func NewFSOps(v *view2.View, opts ...FSOpsOption) (*FSOps, error) {
 // have no children yet — without them, sequences like
 // `mkdir foo && stat foo` would yield ENOENT for paths that the
 // caller just created.
-func (o *FSOps) Stat(path string) (FileInfo, error) {
+func (o *Ops) Stat(path string) (FileInfo, error) {
 	n, err := o.lookupInRoot(path)
 	if err == nil {
 		return o.fileInfoFromNode(n), nil
@@ -329,7 +329,7 @@ func (o *FSOps) Stat(path string) (FileInfo, error) {
 // even when they have no real children yet. The streamed
 // children include both real (View-known) entries and pending
 // directories whose parent matches path.
-func (o *FSOps) Listdir(path string) FileInfoSeq {
+func (o *Ops) Listdir(path string) FileInfoSeq {
 	return func(yield func(FileInfo, error) bool) {
 		// 1) Try the View first.
 		seq := o.listInRoot(path)
@@ -379,9 +379,9 @@ func (o *FSOps) Listdir(path string) FileInfoSeq {
 // In stage 4b, Open with a write mode on an existing file
 // returns ErrEditingDisabled — Create is the documented entry
 // point for new files; Setattr/Truncate (4c) covers editing.
-func (o *FSOps) Open(ctx context.Context, path string, mode OpenMode) (File, error) {
+func (o *Ops) Open(ctx context.Context, path string, mode OpenMode) (File, error) {
 	if o.readOnly && mode != OpenReadOnly {
-		return nil, fmt.Errorf("%w: write-mode Open on read-only FSOps",
+		return nil, fmt.Errorf("%w: write-mode Open on read-only Ops",
 			errs.ErrEditingDisabled)
 	}
 	if mode == OpenReadOnly {
@@ -408,7 +408,7 @@ func (o *FSOps) Open(ctx context.Context, path string, mode OpenMode) (File, err
 // openForEdit prepares a writeFile pre-loaded with the existing
 // artifact's content and fsmeta, ready for arbitrary WriteAt /
 // Truncate. On Close the result lands in the View through Move.
-func (o *FSOps) openForEdit(ctx context.Context, path string, mode OpenMode) (File, error) {
+func (o *Ops) openForEdit(ctx context.Context, path string, mode OpenMode) (File, error) {
 	lock := o.pathLocks.Get(path)
 	lock.Lock()
 
@@ -432,7 +432,7 @@ func (o *FSOps) openForEdit(ctx context.Context, path string, mode OpenMode) (Fi
 // bits at Close time? — no: the handle holds no per-op policy,
 // it just performs whatever writes/truncates the caller dispatches.
 // In practice O_APPEND callers only WriteAt at the end and Close.
-func (o *FSOps) openForAppend(ctx context.Context, path string) (File, error) {
+func (o *Ops) openForAppend(ctx context.Context, path string) (File, error) {
 	lock := o.pathLocks.Get(path)
 	lock.Lock()
 
@@ -446,7 +446,7 @@ func (o *FSOps) openForAppend(ctx context.Context, path string) (File, error) {
 }
 
 // openForRead is the stage-4a code path: pure View read.
-func (o *FSOps) openForRead(ctx context.Context, path string) (File, error) {
+func (o *Ops) openForRead(ctx context.Context, path string) (File, error) {
 	n, err := o.lookupInRoot(path)
 	if err != nil {
 		return nil, err
@@ -464,24 +464,24 @@ func (o *FSOps) openForRead(ctx context.Context, path string) (File, error) {
 // --- Read-side helpers (router into View per RootView) ---
 
 // lookupInRoot routes Get to the tree configured as the root.
-func (o *FSOps) lookupInRoot(path string) (node.Node, error) {
+func (o *Ops) lookupInRoot(path string) (node.Node, error) {
 	return o.view.GetIn(o.view.RootView(), path)
 }
 
-func (o *FSOps) listInRoot(path string) node.Seq {
+func (o *Ops) listInRoot(path string) node.Seq {
 	return o.view.ListIn(o.view.RootView(), path)
 }
 
-func (o *FSOps) openInRoot(ctx context.Context, path string) (domain.ReadHandle, error) {
+func (o *Ops) openInRoot(ctx context.Context, path string) (domain.ReadHandle, error) {
 	return o.view.OpenIn(ctx, o.view.RootView(), path)
 }
 
 // fileInfoFromNode converts a Node into a FileInfo, applying
-// FSOps defaults to fields the artifact left zero.
+// Ops defaults to fields the artifact left zero.
 //
-// For file nodes, FSOps reads fsmeta from Manifest.Ext directly
+// For file nodes, Ops reads fsmeta from Manifest.Ext directly
 // — the View itself is schema-agnostic and does not surface
-// fsmeta.Mode/UID/GID/ModTime through FilesystemFacet. FSOps is
+// fsmeta.Mode/UID/GID/ModTime through FilesystemFacet. Ops is
 // the layer that knows about the filesystem schema and applies
 // defaults at the boundary where they have to be visible to
 // FUSE/WebDAV.
@@ -489,7 +489,7 @@ func (o *FSOps) openInRoot(ctx context.Context, path string) (domain.ReadHandle,
 // Decode errors are silently swallowed: the same hot-path policy
 // as fsmeta.Resolver inside View. A single bad ext payload must
 // not poison Stat/Listdir for the whole tree.
-func (o *FSOps) fileInfoFromNode(n node.Node) FileInfo {
+func (o *Ops) fileInfoFromNode(n node.Node) FileInfo {
 	fi := FileInfo{
 		Name:    n.FS.Name,
 		Path:    n.FS.Path,
@@ -539,7 +539,7 @@ func (o *FSOps) fileInfoFromNode(n node.Node) FileInfo {
 //
 // Errors:
 //   - ErrInvalidPath if path fails fsmeta validation.
-//   - ErrEditingDisabled if FSOps was constructed with WithReadOnly.
+//   - ErrEditingDisabled if Ops was constructed with WithReadOnly.
 //   - "WithNamespace not configured" if Namespace is empty.
 //   - "WithStore not configured" if no StoreClient was supplied.
 //   - ErrPathExists wrapping the existing-path detail when the
@@ -547,18 +547,18 @@ func (o *FSOps) fileInfoFromNode(n node.Node) FileInfo {
 //
 // Stage 4b only supports Create for new paths; opening an
 // existing path for write lands in 4c.
-func (o *FSOps) Create(ctx context.Context, path string, mode uint32) (File, error) {
+func (o *Ops) Create(ctx context.Context, path string, mode uint32) (File, error) {
 	if o.readOnly {
-		return nil, fmt.Errorf("%w: Create on read-only FSOps", errs.ErrEditingDisabled)
+		return nil, fmt.Errorf("%w: Create on read-only Ops", errs.ErrEditingDisabled)
 	}
 	if err := fsmeta.ValidatePath(path); err != nil {
 		return nil, err
 	}
 	if o.namespace == "" {
-		return nil, fmt.Errorf("projection.FSOps.Create: WithNamespace not configured")
+		return nil, fmt.Errorf("projection.Ops.Create: WithNamespace not configured")
 	}
 	if o.store == nil {
-		return nil, fmt.Errorf("projection.FSOps.Create: WithStore not configured")
+		return nil, fmt.Errorf("projection.Ops.Create: WithStore not configured")
 	}
 	if _, err := o.lookupInRoot(path); err == nil {
 		return nil, fmt.Errorf("%w: %q already exists", errs.ErrPathExists, path)
@@ -600,17 +600,17 @@ func (o *FSOps) Create(ctx context.Context, path string, mode uint32) (File, err
 // after a successful Store.Delete.
 //
 // Errors:
-//   - ErrEditingDisabled if FSOps is read-only.
+//   - ErrEditingDisabled if Ops is read-only.
 //   - ErrPathNotFound if path is unknown to the View.
 //   - ErrIsADirectory if path is a virtual directory; use Rmdir.
 //   - Any error from Store.Delete (e.g. ErrLocked, ErrRetentionActive)
 //     is propagated.
-func (o *FSOps) Unlink(ctx context.Context, path string) error {
+func (o *Ops) Unlink(ctx context.Context, path string) error {
 	if o.readOnly {
-		return fmt.Errorf("%w: Unlink on read-only FSOps", errs.ErrEditingDisabled)
+		return fmt.Errorf("%w: Unlink on read-only Ops", errs.ErrEditingDisabled)
 	}
 	if o.store == nil {
-		return fmt.Errorf("projection.FSOps.Unlink: WithStore not configured")
+		return fmt.Errorf("projection.Ops.Unlink: WithStore not configured")
 	}
 
 	lock := o.pathLocks.Get(path)
@@ -640,16 +640,16 @@ func (o *FSOps) Unlink(ctx context.Context, path string) error {
 
 // Mkdir creates a virtual directory at path. The directory is
 // "pending" until a real artifact is created inside it; until
-// then it is visible only through Stat/Listdir on this FSOps
+// then it is visible only through Stat/Listdir on this Ops
 // (it does not exist in any tree of the View).
 //
 // Errors:
-//   - ErrEditingDisabled if FSOps is read-only.
+//   - ErrEditingDisabled if Ops is read-only.
 //   - ErrInvalidPath if path fails validation.
 //   - ErrPathExists if path is already taken (real or pending).
-func (o *FSOps) Mkdir(path string, mode uint32) error {
+func (o *Ops) Mkdir(path string, mode uint32) error {
 	if o.readOnly {
-		return fmt.Errorf("%w: Mkdir on read-only FSOps", errs.ErrEditingDisabled)
+		return fmt.Errorf("%w: Mkdir on read-only Ops", errs.ErrEditingDisabled)
 	}
 	if err := fsmeta.ValidatePath(path); err != nil {
 		return err
@@ -665,7 +665,7 @@ func (o *FSOps) Mkdir(path string, mode uint32) error {
 		return fmt.Errorf("%w: %q is a pending directory", errs.ErrPathExists, path)
 	}
 	o.pendingDirs[path] = struct{}{}
-	_ = mode // POSIX mode for virtual dirs is not stored; FSOps default applies
+	_ = mode // POSIX mode for virtual dirs is not stored; Ops default applies
 	return nil
 }
 
@@ -682,11 +682,11 @@ func (o *FSOps) Mkdir(path string, mode uint32) error {
 // Removing a virtual directory from the View has no persistent
 // effect: the directory exists by virtue of having children, and
 // a successful Rmdir on an already-empty view-dir is a no-op
-// outside the FSOps's own state. Future Adds re-create it
+// outside the Ops's own state. Future Adds re-create it
 // automatically through ensureDirs.
-func (o *FSOps) Rmdir(path string) error {
+func (o *Ops) Rmdir(path string) error {
 	if o.readOnly {
-		return fmt.Errorf("%w: Rmdir on read-only FSOps", errs.ErrEditingDisabled)
+		return fmt.Errorf("%w: Rmdir on read-only Ops", errs.ErrEditingDisabled)
 	}
 	o.pendingDirsMu.Lock()
 	if _, ok := o.pendingDirs[path]; ok {
@@ -723,15 +723,15 @@ func (o *FSOps) Rmdir(path string) error {
 // via View.Move.
 //
 // Errors:
-//   - ErrEditingDisabled if AllowRename is off or FSOps is read-only.
+//   - ErrEditingDisabled if AllowRename is off or Ops is read-only.
 //   - ErrInvalidPath if newPath fails validation.
 //   - ErrPathNotFound if oldPath does not exist.
 //   - ErrIsADirectory if oldPath points at a virtual directory.
 //   - ErrPathExists if newPath is already taken.
 //   - Any error from Store.Put / Store.Delete.
-func (o *FSOps) Rename(ctx context.Context, oldPath, newPath string) error {
+func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 	if o.readOnly {
-		return fmt.Errorf("%w: Rename on read-only FSOps", errs.ErrEditingDisabled)
+		return fmt.Errorf("%w: Rename on read-only Ops", errs.ErrEditingDisabled)
 	}
 	if !o.editing.AllowRename {
 		return fmt.Errorf("%w: Rename without AllowRename", errs.ErrEditingDisabled)
@@ -743,7 +743,7 @@ func (o *FSOps) Rename(ctx context.Context, oldPath, newPath string) error {
 		return nil
 	}
 	if o.store == nil {
-		return fmt.Errorf("projection.FSOps.Rename: WithStore not configured")
+		return fmt.Errorf("projection.Ops.Rename: WithStore not configured")
 	}
 
 	unlock := o.pathLocks.lockOrdered(oldPath, newPath)
@@ -782,15 +782,15 @@ func (o *FSOps) Rename(ctx context.Context, oldPath, newPath string) error {
 //
 // Errors mirror Rename, plus ErrEditingDisabled when AllowSetattr
 // is off.
-func (o *FSOps) Setattr(ctx context.Context, path string, attrs Attrs) error {
+func (o *Ops) Setattr(ctx context.Context, path string, attrs Attrs) error {
 	if o.readOnly {
-		return fmt.Errorf("%w: Setattr on read-only FSOps", errs.ErrEditingDisabled)
+		return fmt.Errorf("%w: Setattr on read-only Ops", errs.ErrEditingDisabled)
 	}
 	if !o.editing.AllowSetattr {
 		return fmt.Errorf("%w: Setattr without AllowSetattr", errs.ErrEditingDisabled)
 	}
 	if o.store == nil {
-		return fmt.Errorf("projection.FSOps.Setattr: WithStore not configured")
+		return fmt.Errorf("projection.Ops.Setattr: WithStore not configured")
 	}
 
 	lock := o.pathLocks.Get(path)
@@ -829,18 +829,18 @@ func (o *FSOps) Setattr(ctx context.Context, path string, attrs Attrs) error {
 // Errors mirror Rename, plus ErrEditingDisabled when
 // AllowTruncate is off, plus ErrScratchQuota if the scratch
 // pre-allocation would exceed the quota.
-func (o *FSOps) Truncate(ctx context.Context, path string, size int64) error {
+func (o *Ops) Truncate(ctx context.Context, path string, size int64) error {
 	if o.readOnly {
-		return fmt.Errorf("%w: Truncate on read-only FSOps", errs.ErrEditingDisabled)
+		return fmt.Errorf("%w: Truncate on read-only Ops", errs.ErrEditingDisabled)
 	}
 	if !o.editing.AllowTruncate {
 		return fmt.Errorf("%w: Truncate without AllowTruncate", errs.ErrEditingDisabled)
 	}
 	if size < 0 {
-		return fmt.Errorf("projection.FSOps.Truncate: negative size %d", size)
+		return fmt.Errorf("projection.Ops.Truncate: negative size %d", size)
 	}
 	if o.store == nil {
-		return fmt.Errorf("projection.FSOps.Truncate: WithStore not configured")
+		return fmt.Errorf("projection.Ops.Truncate: WithStore not configured")
 	}
 
 	lock := o.pathLocks.Get(path)
@@ -878,7 +878,7 @@ func (o *FSOps) Truncate(ctx context.Context, path string, size int64) error {
 //     (Setattr, Rename) so Close still performs a Put.
 //
 // On error the scratch is fully cleaned up.
-func (o *FSOps) prepareEditingScratch(ctx context.Context, path string) (*writeFile, error) {
+func (o *Ops) prepareEditingScratch(ctx context.Context, path string) (*writeFile, error) {
 	n, err := o.lookupInRoot(path)
 	if err != nil {
 		return nil, err
@@ -918,7 +918,7 @@ func (o *FSOps) prepareEditingScratch(ctx context.Context, path string) (*writeF
 	rh.Close()
 	if err != nil {
 		cleanup()
-		return nil, fmt.Errorf("projection.FSOps: stage scratch: %w", err)
+		return nil, fmt.Errorf("projection.Ops: stage scratch: %w", err)
 	}
 	// Reserve quota for the staged bytes. If the quota is
 	// exceeded we fail before the caller has a chance to mutate.
@@ -943,7 +943,7 @@ func (o *FSOps) prepareEditingScratch(ctx context.Context, path string) (*writeF
 
 // --- Pending directories ---
 
-func (o *FSOps) isPendingDir(path string) bool {
+func (o *Ops) isPendingDir(path string) bool {
 	o.pendingDirsMu.Lock()
 	defer o.pendingDirsMu.Unlock()
 	_, ok := o.pendingDirs[path]
@@ -951,8 +951,8 @@ func (o *FSOps) isPendingDir(path string) bool {
 }
 
 // pendingDirInfo synthesises a FileInfo for a pending directory.
-// Mode comes from FSOps default for directories (0755).
-func (o *FSOps) pendingDirInfo(path string) FileInfo {
+// Mode comes from Ops default for directories (0755).
+func (o *Ops) pendingDirInfo(path string) FileInfo {
 	return FileInfo{
 		Name:  pathx.LastSegment(path),
 		Path:  path,
@@ -965,7 +965,7 @@ func (o *FSOps) pendingDirInfo(path string) FileInfo {
 
 // pendingChildrenOf returns FileInfos for pending directories
 // whose parent equals parent. Order is sorted by Name.
-func (o *FSOps) pendingChildrenOf(parent string) []FileInfo {
+func (o *Ops) pendingChildrenOf(parent string) []FileInfo {
 	o.pendingDirsMu.Lock()
 	defer o.pendingDirsMu.Unlock()
 	var out []FileInfo
@@ -993,7 +993,7 @@ func (o *FSOps) pendingChildrenOf(parent string) []FileInfo {
 
 // newScratchFile creates a fresh scratch file in the configured
 // directory. Returns the absolute path and the open *os.File.
-func (o *FSOps) newScratchFile() (string, *os.File, error) {
+func (o *Ops) newScratchFile() (string, *os.File, error) {
 	dir := o.scratchDir
 	if dir == "" {
 		// Without an explicit scratch dir, use the OS temp dir.
@@ -1002,11 +1002,11 @@ func (o *FSOps) newScratchFile() (string, *os.File, error) {
 		dir = os.TempDir()
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", nil, fmt.Errorf("projection.FSOps: mkdir scratch: %w", err)
+		return "", nil, fmt.Errorf("projection.Ops: mkdir scratch: %w", err)
 	}
 	f, err := os.CreateTemp(dir, "scratch-*.tmp")
 	if err != nil {
-		return "", nil, fmt.Errorf("projection.FSOps: create scratch: %w", err)
+		return "", nil, fmt.Errorf("projection.Ops: create scratch: %w", err)
 	}
 	return f.Name(), f, nil
 }
@@ -1030,7 +1030,7 @@ func (o *FSOps) newScratchFile() (string, *os.File, error) {
 // The unlock function lives in `unlock` and is called once on
 // Close regardless of which path produced the lock.
 type writeFile struct {
-	fsops       *FSOps
+	fsops       *Ops
 	path        string
 	scratchPath string
 	handle      *os.File
@@ -1064,7 +1064,7 @@ func (f *writeFile) ReadAt(p []byte, off int64) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.closed {
-		return 0, fmt.Errorf("projection.FSOps: file closed")
+		return 0, fmt.Errorf("projection.Ops: file closed")
 	}
 	return f.handle.ReadAt(p, off)
 }
@@ -1077,7 +1077,7 @@ func (f *writeFile) WriteAt(p []byte, off int64) (int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.closed {
-		return 0, fmt.Errorf("projection.FSOps: file closed")
+		return 0, fmt.Errorf("projection.Ops: file closed")
 	}
 	newEnd := off + int64(len(p))
 	delta := newEnd - f.size
@@ -1113,7 +1113,7 @@ func (f *writeFile) Truncate(size int64) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.closed {
-		return fmt.Errorf("projection.FSOps: file closed")
+		return fmt.Errorf("projection.Ops: file closed")
 	}
 	if size > f.size {
 		// Reserve the growth against the quota.
@@ -1138,7 +1138,7 @@ func (f *writeFile) Sync() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.closed {
-		return fmt.Errorf("projection.FSOps: file closed")
+		return fmt.Errorf("projection.Ops: file closed")
 	}
 	return f.handle.Sync()
 }
@@ -1175,7 +1175,7 @@ func (f *writeFile) Close() error {
 	}
 	// Rewind the scratch so Store.Put can read from offset 0.
 	if _, err := f.handle.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("projection.FSOps: seek scratch: %w", err)
+		return fmt.Errorf("projection.Ops: seek scratch: %w", err)
 	}
 
 	// Build fsmeta. For editing, start from the inherited fsmeta
@@ -1226,14 +1226,14 @@ func (f *writeFile) Close() error {
 	// (e.g. GC) will eventually drop the orphan.
 	if f.replaceArtifactID != "" {
 		if err := f.fsops.store.Delete(context.Background(), f.replaceArtifactID); err != nil {
-			return fmt.Errorf("projection.FSOps: delete predecessor: %w", err)
+			return fmt.Errorf("projection.Ops: delete predecessor: %w", err)
 		}
 	}
 
 	// Fetch the resulting manifest to update the View.
 	rh, err := f.fsops.store.Get(context.Background(), id)
 	if err != nil {
-		return fmt.Errorf("projection.FSOps: refetch new manifest: %w", err)
+		return fmt.Errorf("projection.Ops: refetch new manifest: %w", err)
 	}
 	manifest := rh.Manifest()
 	rh.Close()
@@ -1262,7 +1262,7 @@ func (f *writeFile) Close() error {
 // dropParentPendingDirs removes pendingDirs entries that match
 // any ancestor of path. Called after a successful Add to clean
 // up "pre-created" directories now backed by real children.
-func (o *FSOps) dropParentPendingDirs(path string) {
+func (o *Ops) dropParentPendingDirs(path string) {
 	o.pendingDirsMu.Lock()
 	defer o.pendingDirsMu.Unlock()
 	for p := range o.pendingDirs {
@@ -1279,7 +1279,7 @@ func (o *FSOps) dropParentPendingDirs(path string) {
 // --- quotaTracker ---
 
 // quotaTracker enforces a global cap on the total bytes held by
-// all live scratch files of an FSOps instance. Reserve grows the
+// all live scratch files of an Ops instance. Reserve grows the
 // counter; Release shrinks it. quota == 0 disables the cap.
 type quotaTracker struct {
 	mu    sync.Mutex
@@ -1331,7 +1331,7 @@ type readOnlyFile struct {
 
 func (f *readOnlyFile) ReadAt(p []byte, off int64) (int, error) {
 	if !f.rh.SupportsRandomAccess() {
-		// FSOps File contract requires ReadAt; fall back to the
+		// Ops File contract requires ReadAt; fall back to the
 		// stream-only error so callers can detect the situation
 		// and degrade if they have an alternative path.
 		return 0, fmt.Errorf("%w: read handle has no random access",
@@ -1362,11 +1362,11 @@ func (f *readOnlyFile) Close() error { return f.rh.Close() }
 
 // --- pathLockManager ---
 
-// pathLockManager is the per-path RWMutex registry used by FSOps
+// pathLockManager is the per-path RWMutex registry used by Ops
 // to serialise mutating operations on a path while permitting
 // concurrent readers.
 //
-// The map is never pruned: an FSOps instance accumulates one
+// The map is never pruned: an Ops instance accumulates one
 // lock per unique path touched in its lifetime. For typical
 // mount sessions the count stays in the thousands; pruning would
 // require reference counting that is not worth the complexity

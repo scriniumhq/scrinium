@@ -4,13 +4,13 @@ import (
 	"context"
 	"io/fs"
 	"os"
+	fso "scrinium.dev/projection/fsops"
 	vw "scrinium.dev/projection/view"
 	"strings"
 	"syscall"
 
 	"golang.org/x/net/webdav"
 	"scrinium.dev/internal/pathx"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/routing"
 	"scrinium.dev/projection/vfs"
 )
@@ -31,7 +31,7 @@ type webdavFS struct {
 
 func newWebdavFS(
 	view *vw.View,
-	fsops *projection.FSOps,
+	fsops *fso.Ops,
 	cfg routing.Config,
 	rejectJunk bool,
 	statsProvider func() []byte,

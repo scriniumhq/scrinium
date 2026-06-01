@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	fso "scrinium.dev/projection/fsops"
 	"strings"
 
 	"scrinium.dev/domain"
@@ -143,7 +144,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 
 	mountSession := domain.NewMountSessionID()
 
-	var fsops *projection.FSOps
+	var fsops *fso.Ops
 	if effProj != nil {
 		fsops, err = buildFSOps(view, st, effProj, mountSession, spec.Driver)
 		if err != nil {

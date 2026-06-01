@@ -2,19 +2,19 @@ package vfs
 
 import (
 	"os"
+	fso "scrinium.dev/projection/fsops"
 	"scrinium.dev/projection/node"
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 )
 
 // --- os.FileInfo adapters ---
 
-// projectionFileInfo wraps a projection.FileInfo as os.FileInfo.
+// projectionFileInfo wraps a fso.FileInfo as os.FileInfo.
 type projectionFileInfo struct {
-	fi projection.FileInfo
+	fi fso.FileInfo
 }
 
 func (p projectionFileInfo) Name() string       { return p.fi.Name }

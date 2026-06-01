@@ -12,6 +12,7 @@ package viewfx
 
 import (
 	"context"
+	fso "scrinium.dev/projection/fsops"
 	"scrinium.dev/projection/node"
 	"scrinium.dev/projection/routing"
 	vw "scrinium.dev/projection/view"
@@ -19,7 +20,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 )
 
@@ -33,7 +33,7 @@ import (
 // t.TempDir(). Editing is on and the namespace is "files" — the
 // configuration fuse and webdav share. A surface that needs a
 // read-only or different-namespace FSOps builds it directly.
-func Stack(t testing.TB, manifests ...domain.Manifest) (*vw.View, *projection.FSOps, *projectionfx.FakeSource) {
+func Stack(t testing.TB, manifests ...domain.Manifest) (*vw.View, *fso.Ops, *projectionfx.FakeSource) {
 	t.Helper()
 	src := projectionfx.New()
 	for _, m := range manifests {
@@ -47,11 +47,11 @@ func Stack(t testing.TB, manifests ...domain.Manifest) (*vw.View, *projection.FS
 	}
 	t.Cleanup(func() { v.Close() })
 
-	o, err := projection.NewFSOps(v,
-		projection.WithStore(src),
-		projection.WithNamespace("files"),
-		projection.WithScratchDir(t.TempDir()),
-		projection.WithEditingPolicy(projection.EditingOn()),
+	o, err := fso.New(v,
+		fso.WithStore(src),
+		fso.WithNamespace("files"),
+		fso.WithScratchDir(t.TempDir()),
+		fso.WithEditingPolicy(fso.EditingOn()),
 	)
 	if err != nil {
 		t.Fatalf("viewfx.Stack: NewFSOps: %v", err)
