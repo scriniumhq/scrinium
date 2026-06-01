@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"scrinium.dev/projection/node"
 	"strings"
 	"syscall"
 	"time"
@@ -342,7 +343,7 @@ func isAtServiceRoot(clean string, cfg projection.RoutingConfig) bool {
 
 // nodeModTime returns the View node's modification time, or
 // fallback when the node has no time recorded.
-func nodeModTime(n projection.Node, fallback time.Time) time.Time {
+func nodeModTime(n node.Node, fallback time.Time) time.Time {
 	if !n.FS.ModTime.IsZero() {
 		return n.FS.ModTime
 	}

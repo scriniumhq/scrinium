@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	pnode "scrinium.dev/projection/node"
 	"syscall"
 	"time"
 
@@ -88,7 +89,7 @@ func runMount(args []string) int {
 	// at by-path under the _scrinium prefix.
 	routingCfg := projection.RoutingConfig{
 		ServicePrefix:   "_scrinium",
-		RootView:        projection.RootByPath,
+		RootView:        pnode.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,

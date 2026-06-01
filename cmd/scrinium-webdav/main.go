@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"scrinium.dev/projection/node"
 	"syscall"
 	"time"
 
@@ -80,7 +81,7 @@ func runServe(args []string) int {
 	// the stats pseudo-file path only.
 	routingCfg := projection.RoutingConfig{
 		ServicePrefix: "_scrinium",
-		RootView:      projection.RootByPath,
+		RootView:      node.RootByPath,
 	}
 	stats := daemon.StatsProvider(asm, startedAt, 2*time.Second)
 	wfs := newWebdavFS(asm.Projection.View, asm.Projection.FSOps, routingCfg, !*allowOSJunk, stats)

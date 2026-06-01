@@ -2,13 +2,14 @@ package projection
 
 import (
 	"errors"
+	"scrinium.dev/projection/node"
 	"testing"
 )
 
 func defaultRoutingConfig() RoutingConfig {
 	return RoutingConfig{
 		ServicePrefix:   "_scrinium",
-		RootView:        RootByPath,
+		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,
@@ -27,7 +28,7 @@ func TestRoute_MountRoot(t *testing.T) {
 	if r.Kind != RouteRoot {
 		t.Errorf("Kind: got %v, want RouteRoot", r.Kind)
 	}
-	if r.Tree != RootByPath {
+	if r.Tree != node.RootByPath {
 		t.Errorf("Tree: got %v, want by-path", r.Tree)
 	}
 }
@@ -47,9 +48,9 @@ func TestRoute_RegularPath(t *testing.T) {
 
 func TestRoute_RootViewByDate(t *testing.T) {
 	cfg := defaultRoutingConfig()
-	cfg.RootView = RootByDate
+	cfg.RootView = node.RootByDate
 	r, _ := Route("2024/05/03/14-23-05-aabb.bin", cfg)
-	if r.Tree != RootByDate {
+	if r.Tree != node.RootByDate {
 		t.Errorf("Tree: got %v, want by-date", r.Tree)
 	}
 }
@@ -69,7 +70,7 @@ func TestRoute_ServiceTree_BySession(t *testing.T) {
 	if r.Kind != RouteServiceTree {
 		t.Errorf("Kind: got %v, want RouteServiceTree", r.Kind)
 	}
-	if r.Tree != RootBySession {
+	if r.Tree != node.RootBySession {
 		t.Errorf("Tree: got %v, want by-session", r.Tree)
 	}
 	if r.SubPath != "ab/cd/sid/aid" {

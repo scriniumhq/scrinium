@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"scrinium.dev/internal/pathx"
+	"scrinium.dev/projection/node"
 )
 
 // RouteKind tags the destination of a routed path. The FUSE
@@ -49,7 +50,7 @@ type RouteTarget struct {
 
 	// Tree is the View tree to query when Kind == RouteRoot or
 	// RouteServiceTree. Unused otherwise.
-	Tree RootView
+	Tree node.RootView
 
 	// SubPath is the path *inside* Tree. For RouteRoot it's the
 	// input path verbatim; for RouteServiceTree it's the input
@@ -72,7 +73,7 @@ type RoutingConfig struct {
 	ServicePrefix string
 
 	// RootView selects the tree that backs RouteRoot.
-	RootView RootView
+	RootView node.RootView
 
 	// Show* mirror Config.Show* flags. A path under a hidden
 	// service tree returns RouteRejected (the dispatcher then
@@ -202,7 +203,7 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 		}
 		return RouteTarget{
 			Kind:    RouteServiceTree,
-			Tree:    RootByArtifact,
+			Tree:    node.RootByArtifact,
 			SubPath: treeRest,
 		}, nil
 
@@ -216,7 +217,7 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 		// artifact). See projection/view.go indexArtifact.
 		return RouteTarget{
 			Kind:    RouteServiceTree,
-			Tree:    RootByOrphaned,
+			Tree:    node.RootByOrphaned,
 			SubPath: treeRest,
 		}, nil
 
@@ -226,7 +227,7 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 		}
 		return RouteTarget{
 			Kind:    RouteServiceTree,
-			Tree:    RootByDate,
+			Tree:    node.RootByDate,
 			SubPath: treeRest,
 		}, nil
 
@@ -236,7 +237,7 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 		}
 		return RouteTarget{
 			Kind:    RouteServiceTree,
-			Tree:    RootBySession,
+			Tree:    node.RootBySession,
 			SubPath: treeRest,
 		}, nil
 
@@ -246,7 +247,7 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 		}
 		return RouteTarget{
 			Kind:    RouteServiceTree,
-			Tree:    RootByNamespace,
+			Tree:    node.RootByNamespace,
 			SubPath: treeRest,
 		}, nil
 
@@ -256,7 +257,7 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 		// RootView and wants the path tree as a service view.
 		return RouteTarget{
 			Kind:    RouteServiceTree,
-			Tree:    RootByPath,
+			Tree:    node.RootByPath,
 			SubPath: treeRest,
 		}, nil
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"scrinium.dev/projection/node"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -149,10 +150,10 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	}
 
 	// Both artifacts should be findable by their resolved paths.
-	if _, err := v.GetIn(projection.RootByPath, "in-source.txt"); err != nil {
+	if _, err := v.GetIn(node.RootByPath, "in-source.txt"); err != nil {
 		t.Errorf("fast-path artifact not in View by path: %v", err)
 	}
-	if _, err := v.GetIn(projection.RootByPath, "fallback.txt"); err != nil {
+	if _, err := v.GetIn(node.RootByPath, "fallback.txt"); err != nil {
 		t.Errorf("fallback (Source.Get) artifact not in View by path: %v", err)
 	}
 
@@ -191,7 +192,7 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 
 	// Path resolution failed (no Ext reached the resolver), so
 	// the artifact must be absent from by-path.
-	if _, err := v.GetIn(projection.RootByPath, "only-walk"); err == nil {
+	if _, err := v.GetIn(node.RootByPath, "only-walk"); err == nil {
 		t.Error("artifact unexpectedly indexed under by-path")
 	}
 
@@ -199,7 +200,7 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 	// path needs no resolver). This proves backfill completed
 	// for the artifact even though metadata recovery failed —
 	// "errors swallowed, build keeps going" semantics.
-	if _, err := v.GetIn(projection.RootByArtifact, byArtifactPathForTest(id)); err != nil {
+	if _, err := v.GetIn(node.RootByArtifact, byArtifactPathForTest(id)); err != nil {
 		t.Errorf("artifact not in by-artifact tree: %v", err)
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"scrinium.dev/event"
 	"scrinium.dev/internal/pathx"
 	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/projection/node"
 )
 
 // View is the read side of the projection. It holds five
@@ -89,9 +90,9 @@ type View struct {
 // viewNode is the internal node representation. The public Node
 // is built from these fields when read.
 type viewNode struct {
-	fs       FilesystemFacet
-	artifact *ArtifactFacet // nil for virtual directories
-	children []string       // sorted last-segment names; nil for files
+	fs       node.FilesystemFacet
+	artifact *node.ArtifactFacet // nil for virtual directories
+	children []string            // sorted last-segment names; nil for files
 }
 
 // artifactRecord is the cross-tree record of an artifact: the
@@ -135,7 +136,7 @@ func NewView(ctx context.Context, source ProjectionSource, opts ...ViewOption) (
 	}
 
 	o := viewOptions{
-		rootView: RootByPath,
+		rootView: node.RootByPath,
 		fallback: FallbackOrphaned,
 	}
 	for _, opt := range opts {
@@ -514,7 +515,7 @@ func (v *View) removeLoser(path string, id domain.ArtifactID) {
 //
 // Stable for the lifetime of the View — the option is set at
 // NewView time and never mutated.
-func (v *View) RootView() RootView { return v.opts.rootView }
+func (v *View) RootView() node.RootView { return v.opts.rootView }
 
 // --- Read methods (one set per tree) ---
 
@@ -711,27 +712,27 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 // service callers expect when a configuration drifts.
 
 // GetIn returns the node at path within the rv tree.
-func (v *View) GetIn(rv RootView, path string) (Node, error) {
+func (v *View) GetIn(rv node.RootView, path string) (node.Node, error) {
 	tree := v.treeFor(rv)
 	if tree == nil {
-		return Node{}, errs.ErrPathNotFound
+		return node.Node{}, errs.ErrPathNotFound
 	}
 	return v.getInTree(tree, path)
 }
 
 // ListIn lists the immediate children at path within the rv tree.
-func (v *View) ListIn(rv RootView, path string) NodeSeq {
+func (v *View) ListIn(rv node.RootView, path string) node.Seq {
 	tree := v.treeFor(rv)
 	if tree == nil {
-		return func(yield func(Node, error) bool) {
-			yield(Node{}, errs.ErrPathNotFound)
+		return func(yield func(node.Node, error) bool) {
+			yield(node.Node{}, errs.ErrPathNotFound)
 		}
 	}
 	return v.listInTree(tree, path)
 }
 
 // OpenIn opens an artifact at path within the rv tree.
-func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
+func (v *View) OpenIn(ctx context.Context, rv node.RootView, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
 	tree := v.treeFor(rv)
 	if tree == nil {
 		return nil, errs.ErrPathNotFound
@@ -742,11 +743,11 @@ func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...sto
 // WalkIn iterates every node at or under prefix within the rv
 // tree. An unknown RootView yields a single-shot error sequence,
 // matching ListIn.
-func (v *View) WalkIn(rv RootView, prefix string) NodeSeq {
+func (v *View) WalkIn(rv node.RootView, prefix string) node.Seq {
 	tree := v.treeFor(rv)
 	if tree == nil {
-		return func(yield func(Node, error) bool) {
-			yield(Node{}, errs.ErrPathNotFound)
+		return func(yield func(node.Node, error) bool) {
+			yield(node.Node{}, errs.ErrPathNotFound)
 		}
 	}
 	return v.walkInTree(tree, prefix)
@@ -755,19 +756,19 @@ func (v *View) WalkIn(rv RootView, prefix string) NodeSeq {
 // treeFor returns the internal tree for the given RootView, or
 // nil for an unknown enum value. Private — outside callers go
 // through GetIn/ListIn/OpenIn, which absorb the nil check.
-func (v *View) treeFor(rv RootView) map[string]*viewNode {
+func (v *View) treeFor(rv node.RootView) map[string]*viewNode {
 	switch rv {
-	case RootByPath:
+	case node.RootByPath:
 		return v.byPath
-	case RootBySession:
+	case node.RootBySession:
 		return v.bySession
-	case RootByNamespace:
+	case node.RootByNamespace:
 		return v.byNamespace
-	case RootByDate:
+	case node.RootByDate:
 		return v.byDate
-	case RootByArtifact:
+	case node.RootByArtifact:
 		return v.byArtifact
-	case RootByOrphaned:
+	case node.RootByOrphaned:
 		return v.byOrphaned
 	}
 	return nil
@@ -775,23 +776,23 @@ func (v *View) treeFor(rv RootView) map[string]*viewNode {
 
 // --- Per-tree implementations ---
 
-func (v *View) getInTree(tree map[string]*viewNode, path string) (Node, error) {
+func (v *View) getInTree(tree map[string]*viewNode, path string) (node.Node, error) {
 	if v.closed.Load() {
-		return Node{}, os.ErrClosed
+		return node.Node{}, os.ErrClosed
 	}
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	n, ok := tree[path]
 	if !ok {
-		return Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, path)
+		return node.Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, path)
 	}
 	return v.exportNode(n), nil
 }
 
-func (v *View) listInTree(tree map[string]*viewNode, path string) NodeSeq {
-	return func(yield func(Node, error) bool) {
+func (v *View) listInTree(tree map[string]*viewNode, path string) node.Seq {
+	return func(yield func(node.Node, error) bool) {
 		if v.closed.Load() {
-			yield(Node{}, os.ErrClosed)
+			yield(node.Node{}, os.ErrClosed)
 			return
 		}
 		v.mu.RLock()
@@ -799,11 +800,11 @@ func (v *View) listInTree(tree map[string]*viewNode, path string) NodeSeq {
 
 		n, ok := tree[path]
 		if !ok {
-			yield(Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, path))
+			yield(node.Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, path))
 			return
 		}
 		if !n.fs.IsDir {
-			yield(Node{}, fmt.Errorf("%w: %q", errs.ErrNotADirectory, path))
+			yield(node.Node{}, fmt.Errorf("%w: %q", errs.ErrNotADirectory, path))
 			return
 		}
 		names := append([]string(nil), n.children...)
@@ -823,10 +824,10 @@ func (v *View) listInTree(tree map[string]*viewNode, path string) NodeSeq {
 	}
 }
 
-func (v *View) walkInTree(tree map[string]*viewNode, prefix string) NodeSeq {
-	return func(yield func(Node, error) bool) {
+func (v *View) walkInTree(tree map[string]*viewNode, prefix string) node.Seq {
+	return func(yield func(node.Node, error) bool) {
 		if v.closed.Load() {
-			yield(Node{}, os.ErrClosed)
+			yield(node.Node{}, os.ErrClosed)
 			return
 		}
 		v.mu.RLock()
@@ -834,7 +835,7 @@ func (v *View) walkInTree(tree map[string]*viewNode, prefix string) NodeSeq {
 
 		root, ok := tree[prefix]
 		if !ok {
-			yield(Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, prefix))
+			yield(node.Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, prefix))
 			return
 		}
 		var stack []*viewNode
@@ -1060,7 +1061,7 @@ func (v *View) insertFile(tree map[string]*viewNode, path string, m domain.Manif
 	v.ensureDirs(tree, pathx.Parent(path))
 	name := pathx.LastSegment(path)
 	tree[path] = &viewNode{
-		fs: FilesystemFacet{
+		fs: node.FilesystemFacet{
 			Name:    name,
 			Path:    path,
 			IsDir:   false,
@@ -1134,7 +1135,7 @@ func (v *View) ensureDirs(tree map[string]*viewNode, path string) {
 // have no metadata of their own.
 func newDirNode(name, path string, modTime time.Time) *viewNode {
 	return &viewNode{
-		fs: FilesystemFacet{
+		fs: node.FilesystemFacet{
 			Name:    name,
 			Path:    path,
 			IsDir:   true,
@@ -1144,8 +1145,8 @@ func newDirNode(name, path string, modTime time.Time) *viewNode {
 }
 
 // artifactFacetFrom builds the Node.Artifact facet from a manifest.
-func artifactFacetFrom(m domain.Manifest) *ArtifactFacet {
-	return &ArtifactFacet{
+func artifactFacetFrom(m domain.Manifest) *node.ArtifactFacet {
+	return &node.ArtifactFacet{
 		ArtifactID:  m.ArtifactID,
 		ContentHash: m.ContentHash,
 		BlobRef:     m.BlobRef,
@@ -1159,8 +1160,8 @@ func artifactFacetFrom(m domain.Manifest) *ArtifactFacet {
 
 // exportNode builds the public Node from the internal viewNode.
 // Caller holds the read lock.
-func (v *View) exportNode(n *viewNode) Node {
-	out := Node{FS: n.fs}
+func (v *View) exportNode(n *viewNode) node.Node {
+	out := node.Node{FS: n.fs}
 	if n.artifact != nil {
 		af := *n.artifact
 		out.Artifact = &af

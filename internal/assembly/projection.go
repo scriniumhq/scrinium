@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"scrinium.dev/projection/node"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
@@ -28,7 +29,7 @@ func buildView(
 	}
 	if p != nil {
 		if p.RootView != "" {
-			opts = append(opts, projection.WithRootView(projection.RootView(p.RootView)))
+			opts = append(opts, projection.WithRootView(node.RootView(p.RootView)))
 		}
 		if p.ByPathFallback != "" {
 			opts = append(opts, projection.WithFallback(projection.PathFallback(p.ByPathFallback)))

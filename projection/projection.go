@@ -21,12 +21,12 @@ package projection
 import (
 	"context"
 	"encoding/json"
-	"iter"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
+	"scrinium.dev/projection/node"
 )
 
 // --- Source ---
@@ -75,79 +75,7 @@ type PathResolver func(m domain.Manifest) (path string, ok bool)
 
 // --- Node and facets ---
 
-// FilesystemFacet is the minimal POSIX-shaped view of a Node:
-// what every consumer of the View needs regardless of schema.
-// Always populated, including for virtual directories
-// synthesised from grouping.
-//
-// POSIX attributes (mode, uid, gid) are NOT in this facet:
-// they belong to the filesystem schema (fsmeta.FileSystem) and
-// are materialised by FSOps when the consumer crosses the
-// transport boundary (FUSE/WebDAV). Storing them here would
-// commit View to a single schema and pre-empt the consumer's
-// policy. Email- or other non-POSIX projections reuse Node
-// without paying for unused POSIX fields.
-type FilesystemFacet struct {
-	Name    string
-	Path    string
-	IsDir   bool
-	Size    int64
-	ModTime time.Time
-}
-
-// ArtifactFacet carries the CAS metadata of a concrete artifact.
-// Populated for file nodes; nil for virtual directories.
-type ArtifactFacet struct {
-	ArtifactID  domain.ArtifactID
-	ContentHash domain.ContentHash
-	BlobRef     domain.BlobRef
-	Namespace   string
-	SessionID   domain.SessionID
-	CreatedAt   time.Time
-	Type        domain.ManifestType
-
-	// Ext carries the engine-extension metadata block (fsmeta
-	// and friends — keys the engine reads through its own
-	// decoders). Per ADR-54 the Usr block is intentionally not
-	// surfaced at facet level; host applications consume Usr
-	// through a different read path.
-	Ext json.RawMessage
-}
-
-// StorageFacet carries placement data within a multistore stack.
-// Populated only when SourceKind == SourceKindMultistore.
-type StorageFacet struct {
-	StoreID  domain.StoreID
-	RefCount int
-}
-
-// Node is one entry in the View. FS is always populated; Artifact
-// for files; Storage only on a multistore source.
-type Node struct {
-	FS       FilesystemFacet
-	Artifact *ArtifactFacet
-	Storage  *StorageFacet
-}
-
-// NodeSeq is a sequence of nodes with an optional error per
-// position (the standard iter.Seq2 pattern for fallible streams).
-type NodeSeq = iter.Seq2[Node, error]
-
 // --- View configuration ---
-
-// RootView selects which logical tree appears at the root of the
-// View. The chosen tree does not duplicate into the service
-// directory of a FUSE mount.
-type RootView string
-
-const (
-	RootByPath      RootView = "by-path" // default
-	RootBySession   RootView = "by-session"
-	RootByNamespace RootView = "by-namespace"
-	RootByDate      RootView = "by-date"
-	RootByArtifact  RootView = "by-artifact"
-	RootByOrphaned  RootView = "by-orphaned"
-)
 
 // PathFallback governs how artifacts without a resolver path are
 // surfaced.
@@ -178,7 +106,7 @@ type ViewOption func(*viewOptions)
 
 type viewOptions struct {
 	resolver PathResolver
-	rootView RootView
+	rootView node.RootView
 	fallback PathFallback
 	filter   ViewFilter
 	bus      event.EventBus
@@ -248,7 +176,7 @@ func WithPathResolver(r PathResolver) ViewOption {
 // default is RootByPath. The choice is informational for the View
 // itself; transports (FUSE) react to it by hiding the same tree
 // from the service directory.
-func WithRootView(rv RootView) ViewOption {
+func WithRootView(rv node.RootView) ViewOption {
 	return func(o *viewOptions) { o.rootView = rv }
 }
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"scrinium.dev/projection/node"
 	"strings"
 	"syscall"
 	"time"
@@ -92,7 +93,7 @@ func runServe(args []string) int {
 	// they are set here rather than in the config.
 	routingCfg := projection.RoutingConfig{
 		ServicePrefix:          "",
-		RootView:               projection.RootByPath,
+		RootView:               node.RootByPath,
 		ShowStats:              false,
 		ShowByArtifact:         true,
 		ShowOrphaned:           true,

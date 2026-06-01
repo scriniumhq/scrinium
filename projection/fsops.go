@@ -17,6 +17,7 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/pathx"
 	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/projection/node"
 )
 
 // FSOps is the filesystem-shaped operations layer over a View.
@@ -462,11 +463,11 @@ func (o *FSOps) openForRead(ctx context.Context, path string) (File, error) {
 // --- Read-side helpers (router into View per RootView) ---
 
 // lookupInRoot routes Get to the tree configured as the root.
-func (o *FSOps) lookupInRoot(path string) (Node, error) {
+func (o *FSOps) lookupInRoot(path string) (node.Node, error) {
 	return o.view.GetIn(o.view.RootView(), path)
 }
 
-func (o *FSOps) listInRoot(path string) NodeSeq {
+func (o *FSOps) listInRoot(path string) node.Seq {
 	return o.view.ListIn(o.view.RootView(), path)
 }
 
@@ -487,7 +488,7 @@ func (o *FSOps) openInRoot(ctx context.Context, path string) (domain.ReadHandle,
 // Decode errors are silently swallowed: the same hot-path policy
 // as fsmeta.Resolver inside View. A single bad ext payload must
 // not poison Stat/Listdir for the whole tree.
-func (o *FSOps) fileInfoFromNode(n Node) FileInfo {
+func (o *FSOps) fileInfoFromNode(n node.Node) FileInfo {
 	fi := FileInfo{
 		Name:    n.FS.Name,
 		Path:    n.FS.Path,

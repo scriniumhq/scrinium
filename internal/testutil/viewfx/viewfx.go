@@ -12,6 +12,7 @@ package viewfx
 
 import (
 	"context"
+	"scrinium.dev/projection/node"
 	"testing"
 
 	"scrinium.dev/domain"
@@ -67,7 +68,7 @@ func Stack(t testing.TB, manifests ...domain.Manifest) (*projection.View, *proje
 func RoutingAll() projection.RoutingConfig {
 	return projection.RoutingConfig{
 		ServicePrefix:   "_scrinium",
-		RootView:        projection.RootByPath,
+		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,

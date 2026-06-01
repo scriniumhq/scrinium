@@ -4,27 +4,27 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/projection"
+	"scrinium.dev/projection/node"
 )
 
 func TestRootViewFlag_Set(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    projection.RootView
+		want    node.RootView
 		wantErr bool
 	}{
-		{"by-path", "by-path", projection.RootByPath, false},
-		{"by-session", "by-session", projection.RootBySession, false},
-		{"by-namespace", "by-namespace", projection.RootByNamespace, false},
-		{"by-date", "by-date", projection.RootByDate, false},
-		{"by-artifact", "by-artifact", projection.RootByArtifact, false},
+		{"by-path", "by-path", node.RootByPath, false},
+		{"by-session", "by-session", node.RootBySession, false},
+		{"by-namespace", "by-namespace", node.RootByNamespace, false},
+		{"by-date", "by-date", node.RootByDate, false},
+		{"by-artifact", "by-artifact", node.RootByArtifact, false},
 		{"invalid", "by-something", "", true},
 		{"empty", "", "", true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			var rv projection.RootView
+			var rv node.RootView
 			f := RootViewFlag{P: &rv}
 			err := f.Set(tc.input)
 			if (err != nil) != tc.wantErr {
@@ -38,7 +38,7 @@ func TestRootViewFlag_Set(t *testing.T) {
 }
 
 func TestRootViewFlag_String(t *testing.T) {
-	var rv projection.RootView = projection.RootByDate
+	var rv node.RootView = node.RootByDate
 	f := RootViewFlag{P: &rv}
 	if got := f.String(); got != "by-date" {
 		t.Errorf("String() = %q, want %q", got, "by-date")

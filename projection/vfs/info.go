@@ -2,6 +2,7 @@ package vfs
 
 import (
 	"os"
+	"scrinium.dev/projection/node"
 	"time"
 
 	"scrinium.dev/domain"
@@ -33,12 +34,12 @@ func (p projectionFileInfo) ArtifactID() domain.ArtifactID { return p.fi.Artifac
 // the row.
 func (p projectionFileInfo) MIME() string { return p.fi.MIME }
 
-// projectionNodeInfo wraps a projection.Node as os.FileInfo
+// projectionNodeInfo wraps a node.Node as os.FileInfo
 // for the service-tree side. POSIX attributes are best-effort:
 // the service trees do not run through FSOps so fsmeta is not
 // decoded — we surface 0o555 for dirs and 0o444 for files.
 type projectionNodeInfo struct {
-	node         projection.Node
+	node         node.Node
 	fallbackTime time.Time
 }
 

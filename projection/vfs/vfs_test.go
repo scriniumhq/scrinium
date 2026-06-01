@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"scrinium.dev/projection/node"
 	"strings"
 	"testing"
 
@@ -48,7 +49,7 @@ func newTestVFS(t *testing.T, manifests ...domain.Manifest) (*vfs.VFS, *projecti
 
 	cfg := projection.RoutingConfig{
 		ServicePrefix:   "_scrinium",
-		RootView:        projection.RootByPath,
+		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,
@@ -191,7 +192,7 @@ func TestVFS_NoServicePrefix(t *testing.T) {
 	}
 	v := vfs.New(view, ops, projection.RoutingConfig{
 		ServicePrefix: "", // disabled
-		RootView:      projection.RootByPath,
+		RootView:      node.RootByPath,
 	})
 
 	// _scrinium must not exist when service prefix is empty.
@@ -250,7 +251,7 @@ func TestVFS_StatsProvider(t *testing.T) {
 	const customBody = "stats injected by test"
 	v := vfs.New(view, ops, projection.RoutingConfig{
 		ServicePrefix:   "_scrinium",
-		RootView:        projection.RootByPath,
+		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,
@@ -297,7 +298,7 @@ func TestVFS_NameFilter_OmitsFromListing(t *testing.T) {
 	// VFS with a filter that suppresses .DS_Store.
 	filter := func(name string) bool { return name == ".DS_Store" }
 	v := vfs.New(view, ops, projection.RoutingConfig{
-		RootView: projection.RootByPath,
+		RootView: node.RootByPath,
 	}, vfs.WithNameFilter(filter))
 
 	d, err := v.OpenFile(context.Background(), "/", os.O_RDONLY, 0)
@@ -359,7 +360,7 @@ func TestVFS_ServicePrefixListing_SkipsDisabled(t *testing.T) {
 	// by-session and by-date disabled; the rest on.
 	v := vfs.New(view, ops, projection.RoutingConfig{
 		ServicePrefix:   "_scrinium",
-		RootView:        projection.RootByPath,
+		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,
