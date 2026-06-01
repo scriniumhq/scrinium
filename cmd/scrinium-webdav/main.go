@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+
 	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/routing"
+
 	"syscall"
 	"time"
 
@@ -19,7 +22,6 @@ import (
 	_ "scrinium.dev/engine/index/sqlite"
 
 	"scrinium.dev/cmd/internal/daemon"
-	"scrinium.dev/projection"
 )
 
 func main() {
@@ -79,7 +81,7 @@ func runServe(args []string) int {
 	// WebDAV exposes only the user filesystem: every diagnostic tree is
 	// off so Finder/rclone see a clean root. Service prefix is kept for
 	// the stats pseudo-file path only.
-	routingCfg := projection.RoutingConfig{
+	routingCfg := routing.Config{
 		ServicePrefix: "_scrinium",
 		RootView:      node.RootByPath,
 	}

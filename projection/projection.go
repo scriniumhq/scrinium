@@ -19,61 +19,13 @@
 package projection
 
 import (
-	"context"
-	"encoding/json"
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
 	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/source"
 )
-
-// --- Source ---
-
-// ProjectionSource is the minimal contract for an artifact source
-// supplying a View. Satisfied by store.DataStore and the multistore
-// without additional code. Extended abilities (StorageFacet
-// population) are detected on the View side via a type assertion
-// when needed — keeps the multistore out of projection's import graph.
-type ProjectionSource interface {
-	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
-	Get(ctx context.Context, id domain.ArtifactID, opts ...store.GetOption) (domain.ReadHandle, error)
-}
-
-// SourceKind labels the type of source backing a View. Governs
-// whether StorageFacet is meaningful for a Node.
-type SourceKind string
-
-const (
-	// SourceKindStore — a single store.DataStore. StorageFacet is
-	// always nil.
-	SourceKindStore SourceKind = "store"
-
-	// SourceKindMultistore — a multistore with MultistoreIndex.
-	// StorageFacet is populated.
-	SourceKindMultistore SourceKind = "multistore"
-)
-
-// --- PathResolver ---
-
-// PathResolver extracts a virtual path from a manifest. Implementing
-// it is how a host plugs a metadata schema into the projection.
-//
-// Returns:
-//   - (path, true) when the artifact carries a recognised schema
-//     and a valid path.
-//   - ("", false) when the artifact is opaque to this resolver.
-//
-// Pure: the same Manifest must always produce the same result —
-// the View caches the decision and any non-determinism shows up as
-// stale-tree bugs.
-//
-// Standard implementation for the filesystem schema is
-// projection/fsmeta.Resolver.
-type PathResolver func(m domain.Manifest) (path string, ok bool)
-
-// --- Node and facets ---
 
 // --- View configuration ---
 
@@ -105,7 +57,7 @@ type ViewFilter struct {
 type ViewOption func(*viewOptions)
 
 type viewOptions struct {
-	resolver PathResolver
+	resolver source.Resolver
 	rootView node.RootView
 	fallback PathFallback
 	filter   ViewFilter
@@ -116,31 +68,7 @@ type viewOptions struct {
 	// Source.Get round-trips. Set via WithExtSource or
 	// WithFSIndex (the latter is a typed convenience for the
 	// common projection/fsindex case).
-	extSource ExtSource
-}
-
-// ExtSource is the contract View backfill uses to fetch the
-// engine-extension block (Manifest.Ext) in bulk. Source.Walk
-// normally returns stripped manifests (the index is the
-// routing layer, not the content store) — without an
-// ExtSource, View has to round-trip Source.Get for every
-// manifest just to recover Ext, which is N+1.
-//
-// An ExtSource — typically an index extension that persisted
-// the ext block at write time — answers Ext(id) in O(log N)
-// from local storage. View.backfill skips the per-manifest Get
-// when one is configured.
-//
-// The interface is schema-agnostic: the source returns the raw
-// json.RawMessage that Manifest.Ext held at write time. View
-// consumers (FSOps and friends) decode into whatever schema
-// they care about (fsmeta, email, archive).
-type ExtSource interface {
-	// Ext returns the ext-block bytes for the given artifact
-	// id. (raw, true, nil) — found; (nil, false, nil) — not
-	// present; the third return is reserved for
-	// infrastructure errors (DB I/O failure).
-	Ext(id domain.ArtifactID) (json.RawMessage, bool, error)
+	extSource source.Ext
 }
 
 // WithExtSource installs a bulk metadata source for
@@ -149,7 +77,7 @@ type ExtSource interface {
 // (artifact not indexed by the source) falls back to Source.Get
 // transparently — the option is a performance hint, not a
 // correctness requirement.
-func WithExtSource(ms ExtSource) ViewOption {
+func WithExtSource(ms source.Ext) ViewOption {
 	return func(o *viewOptions) { o.extSource = ms }
 }
 
@@ -161,14 +89,14 @@ func WithExtSource(ms ExtSource) ViewOption {
 // taking a hard dependency on projection/fsindex from
 // projection — fsindex imports projection's fsmeta, so a back-
 // edge would cycle.
-func WithFSIndex(fsidx ExtSource) ViewOption {
+func WithFSIndex(fsidx source.Ext) ViewOption {
 	return WithExtSource(fsidx)
 }
 
 // WithPathResolver registers the path-extraction function. Without
 // it the by-path tree contains only artifacts produced by the
 // fallback (when FallbackSynthetic) or is empty.
-func WithPathResolver(r PathResolver) ViewOption {
+func WithPathResolver(r source.Resolver) ViewOption {
 	return func(o *viewOptions) { o.resolver = r }
 }
 

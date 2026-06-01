@@ -24,7 +24,7 @@ type Extension struct {
 // "n/a"-renders absent numbers (Capacity == nil, Extensions == nil).
 type DaemonInfo struct {
 	// Source labels the projection's backing source kind (e.g.
-	// the SourceKind the View was built from), rendered verbatim.
+	// the source.Kind the View was built from), rendered verbatim.
 	Source string
 
 	// StartedAt is the daemon's startup timestamp, driving the

@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+
 	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/routing"
+
 	"strings"
 	"syscall"
 	"time"
@@ -19,7 +22,6 @@ import (
 	"scrinium.dev/domain"
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/vfs"
 )
 
@@ -91,7 +93,7 @@ func runServe(args []string) int {
 	// …) and the text stats file off (it renders stats as HTML instead).
 	// These are properties of THIS surface, not of the stored data, so
 	// they are set here rather than in the config.
-	routingCfg := projection.RoutingConfig{
+	routingCfg := routing.Config{
 		ServicePrefix:          "",
 		RootView:               node.RootByPath,
 		ShowStats:              false,

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/source"
 	"testing"
 	"time"
 
@@ -60,7 +61,7 @@ func TestNewView_Empty(t *testing.T) {
 		t.Fatalf("NewView: %v", err)
 	}
 	defer v.Close()
-	if v.Source != projection.SourceKindStore {
+	if v.Source != source.KindStore {
 		t.Errorf("Source: got %q, want store", v.Source)
 	}
 	if v.Stats.TotalNodes != 0 {

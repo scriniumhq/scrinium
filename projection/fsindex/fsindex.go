@@ -212,7 +212,7 @@ func (e *Extension) GetByID(id domain.ArtifactID) (json.RawMessage, bool, error)
 	return json.RawMessage(value), true, nil
 }
 
-// Ext implements projection.ExtSource (declared in the
+// Ext implements source.Ext (declared in the
 // projection package). Same shape as GetByID — separate method
 // kept so projection can reference an interface without taking
 // a concrete dependency on fsindex.

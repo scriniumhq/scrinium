@@ -15,7 +15,7 @@
 // ErrFUSENotSupported / ErrWebDAVNotSupported.
 //
 // DAG: projection imports core, event. It does not import curator
-// (the dependency is inverted via ProjectionSource), agent, or
+// (the dependency is inverted via source.Provider), agent, or
 // maintenance.
 //
 // Implementation lands in M6. In M0 — the type contracts.

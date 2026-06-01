@@ -19,6 +19,7 @@ import (
 	"scrinium.dev/internal/pathx"
 	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/source"
 )
 
 // View is the read side of the projection. It holds five
@@ -38,7 +39,7 @@ import (
 // the mount root and which to hide under a service prefix.
 type View struct {
 	// Public, read-only after NewView returns.
-	Source    SourceKind
+	Source    source.Kind
 	CreatedAt time.Time
 	Stats     ViewStats
 
@@ -81,7 +82,7 @@ type View struct {
 	seenSessions   map[domain.SessionID]struct{}
 	seenNamespaces map[string]struct{}
 
-	source ProjectionSource
+	src    source.Provider
 	bus    event.EventBus // nil = events not published
 	opts   viewOptions
 	closed atomic.Bool
@@ -130,8 +131,8 @@ type loserEntry struct {
 //
 // EventBus is optional via WithEventBus; without it the View
 // silently produces no events.
-func NewView(ctx context.Context, source ProjectionSource, opts ...ViewOption) (*View, error) {
-	if source == nil {
+func NewView(ctx context.Context, src source.Provider, opts ...ViewOption) (*View, error) {
+	if src == nil {
 		return nil, fmt.Errorf("projection.NewView: source is nil")
 	}
 
@@ -144,12 +145,12 @@ func NewView(ctx context.Context, source ProjectionSource, opts ...ViewOption) (
 	}
 
 	v := &View{
-		Source:    SourceKindStore,
+		Source:    source.KindStore,
 		CreatedAt: time.Now().UTC(),
 
-		source: source,
-		bus:    o.bus,
-		opts:   o,
+		src:  src,
+		bus:  o.bus,
+		opts: o,
 
 		byPath:      make(map[string]*viewNode),
 		bySession:   make(map[string]*viewNode),
@@ -221,7 +222,7 @@ func (v *View) backfill(ctx context.Context) error {
 		v.indexArtifact(m, true /*duringBackfill*/)
 		return nil
 	}
-	if err := v.source.Walk(ctx, "*", cb); err != nil {
+	if err := v.src.Walk(ctx, "*", cb); err != nil {
 		return fmt.Errorf("%w: %w", errs.ErrSourceUnavailable, err)
 	}
 	return nil
@@ -258,7 +259,7 @@ func (v *View) populateExt(ctx context.Context, m *domain.Manifest) {
 	//
 	// FakeSource and similar in-memory test stubs already return
 	// complete manifests; doing a Get on top is a cheap no-op.
-	rh, err := v.source.Get(ctx, m.ArtifactID)
+	rh, err := v.src.Get(ctx, m.ArtifactID)
 	if err != nil {
 		return
 	}
@@ -880,7 +881,7 @@ func (v *View) openInTree(
 	if n.fs.IsDir {
 		return nil, fmt.Errorf("%w: %q", errs.ErrIsADirectory, path)
 	}
-	rh, err := v.source.Get(ctx, n.artifact.ArtifactID, opts...)
+	rh, err := v.src.Get(ctx, n.artifact.ArtifactID, opts...)
 	if err != nil {
 		return nil, mapSourceError(err)
 	}

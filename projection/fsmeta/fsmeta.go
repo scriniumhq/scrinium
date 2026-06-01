@@ -182,7 +182,7 @@ func Decode(raw json.RawMessage) (FileSystem, bool, error) {
 	return fs, true, nil
 }
 
-// Resolver is the projection.PathResolver for the filesystem
+// Resolver is the source.Resolver for the filesystem
 // schema. It returns (Path, true) for artifacts whose metadata
 // decodes cleanly; otherwise ("", false).
 //

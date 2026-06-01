@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/routing"
 	"strings"
 	"syscall"
 	"time"
@@ -38,7 +39,7 @@ const (
 type VFS struct {
 	view       *projection.View
 	fsops      *projection.FSOps
-	routingCfg projection.RoutingConfig
+	routingCfg routing.Config
 	startedAt  time.Time
 
 	// statsProvider, if non-nil, returns the bytes served at
@@ -87,7 +88,7 @@ func WithNameFilter(fn func(name string) bool) Option {
 
 // New constructs a VFS over view/fsops with the given routing
 // configuration.
-func New(view *projection.View, fsops *projection.FSOps, cfg projection.RoutingConfig, opts ...Option) *VFS {
+func New(view *projection.View, fsops *projection.FSOps, cfg routing.Config, opts ...Option) *VFS {
 	v := &VFS{
 		view:       view,
 		fsops:      fsops,
@@ -102,7 +103,7 @@ func New(view *projection.View, fsops *projection.FSOps, cfg projection.RoutingC
 
 // CleanPath normalises a slash-style path: drops the leading
 // and trailing slash. The result is a tree-relative path
-// suitable for projection.Route. Surfaces hand raw paths to
+// suitable for routing.Route. Surfaces hand raw paths to
 // VFS; VFS does its own cleaning so callers don't need to
 // duplicate the rule.
 func CleanPath(name string) string {
@@ -202,38 +203,38 @@ func (v *VFS) Setattr(ctx context.Context, name string, attrs Attrs) error {
 // --- read methods ---
 
 // Stat returns metadata for a path. Routing is centralised in
-// projection.Route; VFS just translates the route into a
+// routing.Route; VFS just translates the route into a
 // FileInfo. Service trees produce synthetic infos for the
 // service root and the stats virtual file; the rest go
 // through the View.
 func (v *VFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	clean := CleanPath(name)
-	target, err := projection.Route(clean, v.routingCfg)
+	target, err := routing.Route(clean, v.routingCfg)
 	if err != nil {
-		if errors.Is(err, projection.ErrRouteRejected) {
+		if errors.Is(err, routing.ErrRejected) {
 			return nil, fs.ErrNotExist
 		}
 		return nil, err
 	}
 	switch target.Kind {
-	case projection.RouteRoot:
+	case routing.KindRoot:
 		fi, err := v.fsops.Stat(target.SubPath)
 		if err != nil {
 			return nil, err
 		}
 		return projectionFileInfo{fi: fi}, nil
-	case projection.RouteServiceRoot:
+	case routing.KindServiceRoot:
 		return synthDirInfo(v.routingCfg.ServicePrefix, v.startedAt), nil
-	case projection.RouteServiceTree:
+	case routing.KindServiceTree:
 		node, err := v.view.GetIn(target.Tree, target.SubPath)
 		if err != nil {
 			return nil, err
 		}
 		return projectionNodeInfo{node: node, fallbackTime: v.startedAt}, nil
-	case projection.RouteStatsFile:
+	case routing.KindStatsFile:
 		body := v.statsBody()
 		return synthFileInfo("stats", int64(len(body)), time.Now()), nil
-	case projection.RouteRawMirror:
+	case routing.KindRawMirror:
 		return nil, fs.ErrNotExist // raw mirror not implemented yet
 	}
 	return nil, fs.ErrNotExist
@@ -244,9 +245,9 @@ func (v *VFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 // callers ignore flag bits and pass 0.
 func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (File, error) {
 	clean := CleanPath(name)
-	target, err := projection.Route(clean, v.routingCfg)
+	target, err := routing.Route(clean, v.routingCfg)
 	if err != nil {
-		if errors.Is(err, projection.ErrRouteRejected) {
+		if errors.Is(err, routing.ErrRejected) {
 			return nil, fs.ErrNotExist
 		}
 		return nil, err
@@ -258,16 +259,16 @@ func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileM
 	_ = wantTrunc
 
 	switch target.Kind {
-	case projection.RouteRoot:
+	case routing.KindRoot:
 		return v.openRoot(ctx, target.SubPath, flag, perm, wantCreate, wantWrite)
 
-	case projection.RouteServiceRoot:
+	case routing.KindServiceRoot:
 		if wantWrite || wantCreate {
 			return nil, errs.ErrEditingDisabled
 		}
 		return newServiceDirFile(v, v.routingCfg.ServicePrefix, "", true), nil
 
-	case projection.RouteServiceTree:
+	case routing.KindServiceTree:
 		if wantWrite || wantCreate {
 			return nil, errs.ErrEditingDisabled
 		}
@@ -291,14 +292,14 @@ func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileM
 			isDir: false,
 		}, nil
 
-	case projection.RouteStatsFile:
+	case routing.KindStatsFile:
 		if wantWrite || wantCreate {
 			return nil, errs.ErrEditingDisabled
 		}
 		body := v.statsBody()
 		return newBytesFile("stats", body, time.Now()), nil
 
-	case projection.RouteRawMirror:
+	case routing.KindRawMirror:
 		return nil, fs.ErrNotExist
 	}
 	return nil, fs.ErrNotExist
@@ -334,7 +335,7 @@ func (v *VFS) OpenFileAt(ctx context.Context, name string, flag int, perm os.Fil
 // isAtServiceRoot reports whether a path is exactly the
 // service prefix or anything under it. Service tree paths
 // are read-only; mutating methods reject them.
-func isAtServiceRoot(clean string, cfg projection.RoutingConfig) bool {
+func isAtServiceRoot(clean string, cfg routing.Config) bool {
 	if cfg.ServicePrefix == "" {
 		return false
 	}

@@ -12,7 +12,10 @@ package viewfx
 
 import (
 	"context"
+
 	"scrinium.dev/projection/node"
+	"scrinium.dev/projection/routing"
+
 	"testing"
 
 	"scrinium.dev/domain"
@@ -65,8 +68,8 @@ func Stack(t testing.TB, manifests ...domain.Manifest) (*projection.View, *proje
 // ShowRaw stays false: the raw tree is opt-in per surface (webview
 // turns it on, fuse/webdav do not), so a test that needs it flips the
 // field on the returned value.
-func RoutingAll() projection.RoutingConfig {
-	return projection.RoutingConfig{
+func RoutingAll() routing.Config {
+	return routing.Config{
 		ServicePrefix:   "_scrinium",
 		RootView:        node.RootByPath,
 		ShowStats:       true,

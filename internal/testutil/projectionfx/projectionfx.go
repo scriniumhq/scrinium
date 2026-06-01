@@ -18,7 +18,7 @@ import (
 
 // --- FakeSource ---
 
-// FakeSource is an in-memory ProjectionSource for unit tests.
+// FakeSource is an in-memory source.Provider for unit tests.
 // Manifests are registered through Add together with their
 // payload bytes; Walk iterates in insertion order; Get serves
 // payloads as FakeReadHandle.
@@ -43,7 +43,7 @@ type FakeSource struct {
 }
 
 // New returns an empty FakeSource ready to use as
-// projection.ProjectionSource.
+// source.Provider.
 func New() *FakeSource {
 	return &FakeSource{
 		payloads: make(map[domain.ArtifactID][]byte),

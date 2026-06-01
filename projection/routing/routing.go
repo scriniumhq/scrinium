@@ -1,4 +1,4 @@
-package projection
+package routing
 
 import (
 	"errors"
@@ -7,76 +7,76 @@ import (
 	"scrinium.dev/projection/node"
 )
 
-// RouteKind tags the destination of a routed path. The FUSE
+// Kind tags the destination of a routed path. The FUSE
 // dispatcher branches on this value to choose between FSOps
 // (for the root view) and direct View access (for the service
 // trees), plus virtual files (stats) and the raw mirror.
-type RouteKind int
+type Kind int
 
 const (
-	// RouteRoot — the path lives in the configured root tree and
+	// KindRoot — the path lives in the configured root tree and
 	// goes through FSOps (read-write per editing policy).
-	RouteRoot RouteKind = iota
+	KindRoot Kind = iota
 
-	// RouteServiceTree — the path lives in a _scrinium/<treeName>
+	// KindServiceTree — the path lives in a _scrinium/<treeName>
 	// subtree, served read-only directly from the View.
-	RouteServiceTree
+	KindServiceTree
 
-	// RouteServiceRoot — the path is exactly the service-prefix
+	// KindServiceRoot — the path is exactly the service-prefix
 	// directory (e.g. "_scrinium"). The dispatcher exposes a
 	// synthesised directory listing of the enabled service trees.
-	RouteServiceRoot
+	KindServiceRoot
 
-	// RouteStatsFile — the path is _scrinium/stats; the dispatcher
+	// KindStatsFile — the path is _scrinium/stats; the dispatcher
 	// returns a virtual file whose contents are generated on
 	// each read.
-	RouteStatsFile
+	KindStatsFile
 
-	// RouteRawMirror — the path is under _scrinium/raw/. The
+	// KindRawMirror — the path is under _scrinium/raw/. The
 	// dispatcher serves it directly from the store directory on
 	// disk (read-only).
-	RouteRawMirror
+	KindRawMirror
 
-	// RouteRejected — the path is reserved or otherwise refused
+	// KindRejected — the path is reserved or otherwise refused
 	// (e.g. the root component is a duplicate of the service
 	// prefix and cannot be created).
-	RouteRejected
+	KindRejected
 )
 
-// RouteTarget is the result of Route. The fields meaningful for a
+// Target is the result of Route. The fields meaningful for a
 // given Kind are listed in the Kind doc above.
-type RouteTarget struct {
-	Kind RouteKind
+type Target struct {
+	Kind Kind
 
-	// Tree is the View tree to query when Kind == RouteRoot or
-	// RouteServiceTree. Unused otherwise.
+	// Tree is the View tree to query when Kind == KindRoot or
+	// KindServiceTree. Unused otherwise.
 	Tree node.RootView
 
-	// SubPath is the path *inside* Tree. For RouteRoot it's the
-	// input path verbatim; for RouteServiceTree it's the input
+	// SubPath is the path *inside* Tree. For KindRoot it's the
+	// input path verbatim; for KindServiceTree it's the input
 	// path with the "_scrinium/<treeName>/" prefix stripped.
 	// Empty string means "tree root".
 	SubPath string
 
-	// RawSubPath, when Kind == RouteRawMirror, is the path inside
+	// RawSubPath, when Kind == KindRawMirror, is the path inside
 	// the store directory (the part after "_scrinium/raw/").
 	RawSubPath string
 }
 
-// RoutingConfig captures the routing-relevant subset of Config.
-// Decoupled so routing.go does not depend on the full Config
+// Config captures the routing-relevant subset of Config.
+// Decoupled so openroot.go does not depend on the full Config
 // definition (and tests can construct it cheaply).
-type RoutingConfig struct {
+type Config struct {
 	// ServicePrefix is the root component reserved for service
 	// trees. Empty disables the service surface entirely; every
-	// path then routes to RouteRoot.
+	// path then routes to KindRoot.
 	ServicePrefix string
 
-	// RootView selects the tree that backs RouteRoot.
+	// RootView selects the tree that backs KindRoot.
 	RootView node.RootView
 
 	// Show* mirror Config.Show* flags. A path under a hidden
-	// service tree returns RouteRejected (the dispatcher then
+	// service tree returns KindRejected (the dispatcher then
 	// surfaces ENOENT).
 	ShowStats       bool
 	ShowByArtifact  bool
@@ -106,10 +106,10 @@ type RoutingConfig struct {
 	UnprefixedServiceTrees bool
 }
 
-// ErrRouteRejected is returned by Route when the path falls into
-// RouteRejected. The dispatcher translates it to ENOENT or EACCES
+// ErrRejected is returned by Route when the path falls into
+// KindRejected. The dispatcher translates it to ENOENT or EACCES
 // depending on the call site.
-var ErrRouteRejected = errors.New("scrinium-fuse: path rejected by routing")
+var ErrRejected = errors.New("scrinium-fuse: path rejected by routing")
 
 // Route classifies an incoming filesystem path. The path is
 // slash-separated, no leading slash (consistent with the
@@ -118,24 +118,24 @@ var ErrRouteRejected = errors.New("scrinium-fuse: path rejected by routing")
 //
 // Routing rules:
 //
-//   - "" → RouteRoot at the configured RootView, SubPath="".
-//   - "<servicePrefix>" → RouteServiceRoot.
-//   - "<servicePrefix>/<treeName>[/...]" → RouteServiceTree at the
-//     corresponding RootView (or RouteStatsFile, RouteRawMirror
+//   - "" → KindRoot at the configured RootView, SubPath="".
+//   - "<servicePrefix>" → KindServiceRoot.
+//   - "<servicePrefix>/<treeName>[/...]" → KindServiceTree at the
+//     corresponding RootView (or KindStatsFile, KindRawMirror
 //     for the special leaves), provided the tree is enabled in
-//     cfg. Disabled tree → RouteRejected.
-//   - everything else → RouteRoot, SubPath = path.
+//     cfg. Disabled tree → KindRejected.
+//   - everything else → KindRoot, SubPath = path.
 //
 // Service prefix in non-root positions is allowed: "photos/_scrinium"
 // is a regular path component. Only the first segment matters.
 //
 // The function does no I/O and does not consult the View; it is
 // pure with respect to its inputs.
-func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
+func Route(path string, cfg Config) (Target, error) {
 	// Mount root.
 	if path == "" {
-		return RouteTarget{
-			Kind: RouteRoot,
+		return Target{
+			Kind: KindRoot,
 			Tree: cfg.RootView,
 		}, nil
 	}
@@ -146,13 +146,13 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 	if cfg.ServicePrefix == "" {
 		if cfg.UnprefixedServiceTrees {
 			// Treat the first segment as a tree name.
-			// dispatchServiceTree returns RouteRoot when no
+			// dispatchServiceTree returns KindRoot when no
 			// match, so plain user paths still work in the
 			// rare case the host has no service trees enabled.
 			return dispatchServiceTree(path, cfg)
 		}
-		return RouteTarget{
-			Kind:    RouteRoot,
+		return Target{
+			Kind:    KindRoot,
 			Tree:    cfg.RootView,
 			SubPath: path,
 		}, nil
@@ -162,8 +162,8 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 
 	// Non-service first segment: regular root path.
 	if first != cfg.ServicePrefix {
-		return RouteTarget{
-			Kind:    RouteRoot,
+		return Target{
+			Kind:    KindRoot,
 			Tree:    cfg.RootView,
 			SubPath: path,
 		}, nil
@@ -171,7 +171,7 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 
 	// Exactly the service prefix root.
 	if rest == "" {
-		return RouteTarget{Kind: RouteServiceRoot}, nil
+		return Target{Kind: KindServiceRoot}, nil
 	}
 
 	// Inside the service prefix: dispatch by the second
@@ -180,73 +180,73 @@ func Route(path string, cfg RoutingConfig) (RouteTarget, error) {
 }
 
 // dispatchServiceTree maps a path whose first segment is a
-// tree name (by-path, by-date, etc.) to its RouteTarget.
+// tree name (by-path, by-date, etc.) to its Target.
 // Used both by the prefixed flow (after stripping
 // ServicePrefix) and the unprefixed flow (as the top-level
 // dispatcher when ServicePrefix is empty).
-func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
+func dispatchServiceTree(path string, cfg Config) (Target, error) {
 	tree, treeRest := pathx.SplitFirst(path)
 	switch tree {
 	case "stats":
 		if !cfg.ShowStats {
-			return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
+			return Target{Kind: KindRejected}, ErrRejected
 		}
 		// stats is a leaf file; sub-paths under it are nonsense.
 		if treeRest != "" {
-			return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
+			return Target{Kind: KindRejected}, ErrRejected
 		}
-		return RouteTarget{Kind: RouteStatsFile}, nil
+		return Target{Kind: KindStatsFile}, nil
 
 	case "by-artifact":
 		if !cfg.ShowByArtifact {
-			return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
+			return Target{Kind: KindRejected}, ErrRejected
 		}
-		return RouteTarget{
-			Kind:    RouteServiceTree,
+		return Target{
+			Kind:    KindServiceTree,
 			Tree:    node.RootByArtifact,
 			SubPath: treeRest,
 		}, nil
 
 	case "orphaned":
 		if !cfg.ShowOrphaned {
-			return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
+			return Target{Kind: KindRejected}, ErrRejected
 		}
 		// orphaned has its own tree (RootByOrphaned), populated
 		// only with artifacts whose path could not be resolved.
 		// Distinct from by-artifact (which contains every
 		// artifact). See projection/view.go indexArtifact.
-		return RouteTarget{
-			Kind:    RouteServiceTree,
+		return Target{
+			Kind:    KindServiceTree,
 			Tree:    node.RootByOrphaned,
 			SubPath: treeRest,
 		}, nil
 
 	case "by-date":
 		if !cfg.ShowByDate {
-			return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
+			return Target{Kind: KindRejected}, ErrRejected
 		}
-		return RouteTarget{
-			Kind:    RouteServiceTree,
+		return Target{
+			Kind:    KindServiceTree,
 			Tree:    node.RootByDate,
 			SubPath: treeRest,
 		}, nil
 
 	case "by-session":
 		if !cfg.ShowBySession {
-			return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
+			return Target{Kind: KindRejected}, ErrRejected
 		}
-		return RouteTarget{
-			Kind:    RouteServiceTree,
+		return Target{
+			Kind:    KindServiceTree,
 			Tree:    node.RootBySession,
 			SubPath: treeRest,
 		}, nil
 
 	case "by-namespace":
 		if !cfg.ShowByNamespace {
-			return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
+			return Target{Kind: KindRejected}, ErrRejected
 		}
-		return RouteTarget{
-			Kind:    RouteServiceTree,
+		return Target{
+			Kind:    KindServiceTree,
 			Tree:    node.RootByNamespace,
 			SubPath: treeRest,
 		}, nil
@@ -255,18 +255,18 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 		// Always available when servicePrefix is set; the dispatcher
 		// surfaces this in case the user picked a non-by-path
 		// RootView and wants the path tree as a service view.
-		return RouteTarget{
-			Kind:    RouteServiceTree,
+		return Target{
+			Kind:    KindServiceTree,
 			Tree:    node.RootByPath,
 			SubPath: treeRest,
 		}, nil
 
 	case "raw":
 		if !cfg.ShowRaw {
-			return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
+			return Target{Kind: KindRejected}, ErrRejected
 		}
-		return RouteTarget{
-			Kind:       RouteRawMirror,
+		return Target{
+			Kind:       KindRawMirror,
 			RawSubPath: treeRest,
 		}, nil
 	}
@@ -275,7 +275,7 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 	//
 	// In prefixed mode (we got here after stripping
 	// ServicePrefix) anything unknown under the prefix is a
-	// nonsense path → RouteRejected.
+	// nonsense path → KindRejected.
 	//
 	// In unprefixed mode the first segment is just a
 	// regular path component, so the path routes to the
@@ -283,20 +283,20 @@ func dispatchServiceTree(path string, cfg RoutingConfig) (RouteTarget, error) {
 	// still serve user content even when service trees take
 	// the same namespace.
 	if cfg.ServicePrefix == "" && cfg.UnprefixedServiceTrees {
-		return RouteTarget{
-			Kind:    RouteRoot,
+		return Target{
+			Kind:    KindRoot,
 			Tree:    cfg.RootView,
 			SubPath: path,
 		}, nil
 	}
-	return RouteTarget{Kind: RouteRejected}, ErrRouteRejected
+	return Target{Kind: KindRejected}, ErrRejected
 }
 
 // isServicePath reports whether the path's first segment equals
 // the configured service prefix. Useful when validating new-file
 // creation: writes to <servicePrefix>/* are forbidden because the
 // service trees are read-only.
-func isServicePath(path string, cfg RoutingConfig) bool {
+func isServicePath(path string, cfg Config) bool {
 	if cfg.ServicePrefix == "" {
 		return false
 	}
