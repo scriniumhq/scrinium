@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/store"
 )
 
 // Provider is the minimal contract a view reads artifacts from: walk
@@ -14,7 +13,7 @@ import (
 // interface; the store implements it.
 type Provider interface {
 	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
-	Get(ctx context.Context, id domain.ArtifactID, opts ...store.GetOption) (domain.ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts ...domain.GetOption) (domain.ReadHandle, error)
 }
 
 // Ext is the optional bulk metadata provider a view's backfill uses

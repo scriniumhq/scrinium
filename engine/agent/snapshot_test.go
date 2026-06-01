@@ -36,7 +36,7 @@ func newSnapshotFixture(t *testing.T) snapshotFixture {
 
 func (f snapshotFixture) put(t *testing.T, data string) {
 	t.Helper()
-	if _, err := f.store.Put(context.Background(), artifactfx.Payload(data), store.WithNamespace("s")); err != nil {
+	if _, err := f.store.Put(context.Background(), artifactfx.Payload(data), domain.WithNamespace("s")); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 }

@@ -27,7 +27,7 @@ func (c *core) artifactIO() *artifactio.IO {
 // so the read path follows where the blob was actually written.
 // VerifyOnRead may wrap the handle to re-check the content hash as bytes
 // flow.
-func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...GetOption) (domain.ReadHandle, error) {
+func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain.GetOption) (domain.ReadHandle, error) {
 	if err := d.enterRead(ctx); err != nil {
 		return nil, err
 	}

@@ -23,11 +23,11 @@ import (
 // mechanics — blob materialization, manifest assembly, persistence — to
 // artifactio. The store keeps the policy and the secrets; artifactio
 // keeps the I/O.
-func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...PutOption) (domain.ArtifactID, error) {
+func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...domain.PutOption) (domain.ArtifactID, error) {
 	if err := d.enterWrite(ctx); err != nil {
 		return "", err
 	}
-	dopts := applyPut(opts).toDomain()
+	dopts := domain.ApplyPut(opts...)
 
 	cfg := d.snapshotConfig()
 	// Fall back to the store's default namespace when the caller left it

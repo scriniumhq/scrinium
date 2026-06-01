@@ -50,7 +50,7 @@ func newRebuildFixture(t *testing.T, opts ...store.StoreOption) rebuildFixture {
 
 func (f rebuildFixture) put(t *testing.T, ns, data string) domain.ArtifactID {
 	t.Helper()
-	id, err := f.store.Put(context.Background(), artifactfx.Payload(data), store.WithNamespace(ns))
+	id, err := f.store.Put(context.Background(), artifactfx.Payload(data), domain.WithNamespace(ns))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

@@ -37,7 +37,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/store"
 )
 
 func main() {
@@ -137,8 +136,8 @@ func run(srcDir, storeURI, namespace string) error {
 
 		id, err := asm.Store.Put(ctx,
 			domain.Artifact{Payload: f, Ext: md},
-			store.WithSession(sessionID),
-			store.WithNamespace(namespace),
+			domain.WithSession(sessionID),
+			domain.WithNamespace(namespace),
 		)
 		if err != nil {
 			return fmt.Errorf("put %s: %w", virtualPath, err)

@@ -32,7 +32,7 @@ func harness(t *testing.T) (*artifactio.IO, domain.StoreConfig) {
 }
 
 // nsOpts is the writer-level DTO the artifactio layer consumes directly
-// (the public store.PutOption surface is resolved before reaching here).
+// (the public domain.PutOption surface is resolved before reaching here).
 func nsOpts() domain.PutOptions { return domain.PutOptions{Namespace: "ns"} }
 
 // --- Target path: materialize → assemble → persist round-trip ---

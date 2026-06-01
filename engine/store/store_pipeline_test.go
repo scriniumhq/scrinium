@@ -41,7 +41,7 @@ func TestPipeline_RoundTrip(t *testing.T) {
 
 			id, err := s.Put(context.Background(),
 				domain.Artifact{Payload: bytes.NewReader(original)},
-				store.WithNamespace("ns"))
+				domain.WithNamespace("ns"))
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}
@@ -102,7 +102,7 @@ func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 		s, root := pipelinefx.Stack(t, "aes-gcm")
 		id, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader(marker)},
-			store.WithNamespace("secret"))
+			domain.WithNamespace("secret"))
 		if err != nil {
 			t.Fatalf("Put: %v", err)
 		}
@@ -137,7 +137,7 @@ func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 		s, root := storefx2.InitWithRoot(t)
 		if _, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader(marker)},
-			store.WithNamespace("plain")); err != nil {
+			domain.WithNamespace("plain")); err != nil {
 			t.Fatalf("Put: %v", err)
 		}
 		found := false
@@ -169,7 +169,7 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 			store.WithConfig(domain.StoreConfig{Pipeline: []string{"zstd"}}))
 		_, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-			store.WithNamespace("ns"))
+			domain.WithNamespace("ns"))
 		if !errors.Is(err, errs.ErrUnsupportedAlgorithm) {
 			t.Fatalf("Put: got %v, want errs.ErrUnsupportedAlgorithm", err)
 		}
@@ -195,7 +195,7 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 		}
 		if _, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-			store.WithNamespace("ns")); err == nil {
+			domain.WithNamespace("ns")); err == nil {
 			t.Fatal("Put: expected refusal for inline+pipeline, got nil")
 		}
 	})

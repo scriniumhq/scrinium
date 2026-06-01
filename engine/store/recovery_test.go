@@ -278,7 +278,7 @@ func TestRecovery_DoesNotTouchLiveArtifact(t *testing.T) {
 	// a subsequent recovery pass must leave them alone.
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader([]byte("real payload"))},
-		store.WithNamespace("live"))
+		domain.WithNamespace("live"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestRecovery_OpenStore_RemovesOrphanInjectedAfterInit(t *testing.T) {
 	// Recovery must distinguish it from the planted orphans.
 	liveID, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader([]byte("survivor"))},
-		store.WithNamespace("live"))
+		domain.WithNamespace("live"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

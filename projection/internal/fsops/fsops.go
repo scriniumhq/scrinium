@@ -17,7 +17,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 )
 
@@ -82,9 +81,9 @@ type Ops struct {
 // store.Store satisfies this interface naturally (subset typing
 // in Go).
 type StoreClient interface {
-	Put(ctx context.Context, a domain.Artifact, opts ...store.PutOption) (domain.ArtifactID, error)
+	Put(ctx context.Context, a domain.Artifact, opts ...domain.PutOption) (domain.ArtifactID, error)
 	Delete(ctx context.Context, id domain.ArtifactID) error
-	Get(ctx context.Context, id domain.ArtifactID, opts ...store.GetOption) (domain.ReadHandle, error)
+	Get(ctx context.Context, id domain.ArtifactID, opts ...domain.GetOption) (domain.ReadHandle, error)
 }
 
 // FileInfo is the POSIX-shaped descriptor that Stat/Listdir
@@ -1211,9 +1210,9 @@ func (f *writeFile) Close() error {
 			// block, not Usr (host-opaque).
 			Ext: metadata,
 		},
-		store.WithSession(f.fsops.mountSession),
-		store.WithNamespace(f.fsops.namespace),
-		store.WithBlobType(domain.BlobTypeRegular),
+		domain.WithSession(f.fsops.mountSession),
+		domain.WithNamespace(f.fsops.namespace),
+		domain.WithBlobType(domain.BlobTypeRegular),
 	)
 	if err != nil {
 		return err

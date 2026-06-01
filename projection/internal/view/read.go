@@ -8,7 +8,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 )
 
@@ -212,7 +211,7 @@ func (v *View) ListIn(rv RootView, path string) Seq {
 }
 
 // OpenIn opens an artifact at path within the rv tree.
-func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...store.GetOption) (domain.ReadHandle, error) {
+func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...domain.GetOption) (domain.ReadHandle, error) {
 	tree := v.treeFor(rv)
 	if tree == nil {
 		return nil, errs.ErrPathNotFound
@@ -355,7 +354,7 @@ func (v *View) openInTree(
 	ctx context.Context,
 	tree map[string]*viewNode,
 	path string,
-	opts ...store.GetOption,
+	opts ...domain.GetOption,
 ) (domain.ReadHandle, error) {
 	if v.closed.Load() {
 		return nil, os.ErrClosed

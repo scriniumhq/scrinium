@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 )
 
@@ -108,7 +107,7 @@ func (f *FakeSource) Walk(
 func (f *FakeSource) Get(
 	ctx context.Context,
 	id domain.ArtifactID,
-	opts ...store.GetOption,
+	opts ...domain.GetOption,
 ) (domain.ReadHandle, error) {
 	f.mu.RLock()
 	getErr := f.getErr
@@ -143,7 +142,7 @@ func (f *FakeSource) Get(
 func (f *FakeSource) Put(
 	ctx context.Context,
 	a domain.Artifact,
-	opts ...store.PutOption,
+	opts ...domain.PutOption,
 ) (domain.ArtifactID, error) {
 	f.mu.Lock()
 	if f.putErr != nil {
@@ -165,7 +164,7 @@ func (f *FakeSource) Put(
 		payload = buf
 	}
 
-	po := store.ResolvePutOptions(opts...)
+	po := domain.ApplyPut(opts...)
 	id := domain.ArtifactID(fmt.Sprintf("sha256-%064x", counter))
 	hash := domain.ContentHash(fmt.Sprintf("sha256-%064x", counter+0x10000))
 

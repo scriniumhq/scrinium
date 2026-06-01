@@ -46,7 +46,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 			} else {
 				s, root = storefx2.InitWithRoot(t)
 			}
-			id, err := s.Put(context.Background(), payload("delete me"), store.WithNamespace("d"))
+			id, err := s.Put(context.Background(), payload("delete me"), domain.WithNamespace("d"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -97,12 +97,12 @@ func TestStore_RefCountLifecycle(t *testing.T) {
 	const text = "shared content for delete"
 
 	idA, err := s.Put(context.Background(), payload(text),
-		store.WithNamespace("ns"), store.WithSession("a"))
+		domain.WithNamespace("ns"), domain.WithSession("a"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	idB, err := s.Put(context.Background(), payload(text),
-		store.WithNamespace("ns"), store.WithSession("b"))
+		domain.WithNamespace("ns"), domain.WithSession("b"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -70,7 +70,7 @@ type Artifact = domain.Artifact
 
 // WithNamespace scopes a Put to a namespace. Re-exported from the store
 // package so single-package programs need not import it directly.
-var WithNamespace = store.WithNamespace
+var WithNamespace = domain.WithNamespace
 
 // Info is assembly metadata an app may surface in diagnostics.
 type Info = assembly.Info

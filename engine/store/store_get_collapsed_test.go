@@ -76,7 +76,7 @@ func TestGet_ReadAt(t *testing.T) {
 func TestGet_Integrity(t *testing.T) {
 	t.Run("corrupted manifest", func(t *testing.T) {
 		s, root := storefx2.InitWithRoot(t)
-		id, err := s.Put(context.Background(), payload("tamper me"), store.WithNamespace("t"))
+		id, err := s.Put(context.Background(), payload("tamper me"), domain.WithNamespace("t"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -99,7 +99,7 @@ func TestGet_Integrity(t *testing.T) {
 
 	t.Run("missing blob", func(t *testing.T) {
 		s, root := storefx2.InitWithRoot(t)
-		id, err := s.Put(context.Background(), payload("blob will vanish"), store.WithNamespace("v"))
+		id, err := s.Put(context.Background(), payload("blob will vanish"), domain.WithNamespace("v"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -124,7 +124,7 @@ func TestGet_Integrity(t *testing.T) {
 func TestGet_ReadHandleSemantics(t *testing.T) {
 	s, _ := storefx2.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("semantics"),
-		store.WithNamespace("ns"), store.WithSession("sess-x"))
+		domain.WithNamespace("ns"), domain.WithSession("sess-x"))
 	if err != nil {
 		t.Fatal(err)
 	}

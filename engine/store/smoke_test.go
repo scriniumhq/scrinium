@@ -99,7 +99,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 		p := makePayload(i, payloadSize)
 		id, err := s.Put(ctx,
 			domain.Artifact{Payload: bytes.NewReader(p)},
-			store.WithNamespace("smoke"))
+			domain.WithNamespace("smoke"))
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
@@ -355,7 +355,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 		p := makePayload(i, payloadSize)
 		id, err := s.Put(ctx,
 			domain.Artifact{Payload: bytes.NewReader(p)},
-			store.WithNamespace("smoke-enc"))
+			domain.WithNamespace("smoke-enc"))
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
