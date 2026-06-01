@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"scrinium.dev/projection/node"
+	vw "scrinium.dev/projection/view"
 	"testing"
 
 	"scrinium.dev/errs"
@@ -24,7 +25,7 @@ func TestNewFSOps_NilView(t *testing.T) {
 
 func TestNewFSOps_DefaultsApplied(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	o, err := projection.NewFSOps(v)
@@ -43,8 +44,8 @@ func TestStat_FileInRootView(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"photos/img.jpg"), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -66,8 +67,8 @@ func TestStat_VirtualDirectory(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"photos/2024/img.jpg"), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -86,8 +87,8 @@ func TestStat_VirtualDirectory(t *testing.T) {
 
 func TestStat_NotFound(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -103,8 +104,8 @@ func TestStat_AppliesDefaultMode(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v,
@@ -124,8 +125,8 @@ func TestStat_AppliesDefaultUIDGID(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v,
@@ -147,9 +148,9 @@ func TestStat_RoutesViaRootView_ByArtifact(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"photos/img.jpg"), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithRootView(node.RootByArtifact))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithRootView(node.RootByArtifact))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -174,8 +175,8 @@ func TestListdir_ListsFiles(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-bbbb2222",
 		"photos/b.jpg"), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -200,8 +201,8 @@ func TestListdir_OnFile(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -217,8 +218,8 @@ func TestListdir_OnFile(t *testing.T) {
 
 func TestListdir_NotFound(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -239,8 +240,8 @@ func TestOpen_ReadOnly(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"hello.txt"), []byte("hello"))
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -268,8 +269,8 @@ func TestOpen_WriteModesRejectedWithoutPolicy(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("x"))
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -291,8 +292,8 @@ func TestOpen_OnDirectory(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"d/file.txt"), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -305,8 +306,8 @@ func TestOpen_OnDirectory(t *testing.T) {
 
 func TestOpen_NotFound(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -324,8 +325,8 @@ func TestReadOnlyFile_WriteAtRefused(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("hello"))
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -344,8 +345,8 @@ func TestReadOnlyFile_TruncateRefused(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("hello"))
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)
@@ -363,8 +364,8 @@ func TestReadOnlyFile_ReadAtRandomAccess(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("0123456789"))
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v)

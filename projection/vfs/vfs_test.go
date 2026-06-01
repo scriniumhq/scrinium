@@ -8,6 +8,7 @@ import (
 	"os"
 	"scrinium.dev/projection/node"
 	"scrinium.dev/projection/routing"
+	vw "scrinium.dev/projection/view"
 	"strings"
 	"testing"
 
@@ -31,8 +32,8 @@ func newTestVFS(t *testing.T, manifests ...domain.Manifest) (*vfs.VFS, *projecti
 	for _, m := range manifests {
 		src.Add(m, nil)
 	}
-	v, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
@@ -177,8 +178,8 @@ func TestVFS_ServicePrefixListing(t *testing.T) {
 
 func TestVFS_NoServicePrefix(t *testing.T) {
 	src := projectionfx.New()
-	view, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	view, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
@@ -234,8 +235,8 @@ func TestVFS_ServiceMkdirRejected(t *testing.T) {
 
 func TestVFS_StatsProvider(t *testing.T) {
 	src := projectionfx.New()
-	view, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	view, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
@@ -281,8 +282,8 @@ func TestVFS_NameFilter_OmitsFromListing(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(man, nil)
 
-	view, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	view, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
@@ -344,8 +345,8 @@ func mkManifest(path, namespace, payload string) domain.Manifest {
 // ServicePrefix listing omits trees whose Show* flag is off.
 func TestVFS_ServicePrefixListing_SkipsDisabled(t *testing.T) {
 	src := projectionfx.New()
-	view, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	view, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}

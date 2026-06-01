@@ -5,7 +5,7 @@
 //
 // The extension serves two roles:
 //
-//   - Backfill source for projection.View. After a process
+//   - Backfill source for view.View. After a process
 //     restart the View needs to rebuild its filesystem trees
 //     from indexed metadata; without fsindex it would fall
 //     back to N+1 round-trips through Source.Get to re-read

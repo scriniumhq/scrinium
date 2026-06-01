@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/fs"
 	"os"
+	vw "scrinium.dev/projection/view"
 	"strings"
 	"syscall"
 
@@ -29,7 +30,7 @@ type webdavFS struct {
 }
 
 func newWebdavFS(
-	view *projection.View,
+	view *vw.View,
 	fsops *projection.FSOps,
 	cfg routing.Config,
 	rejectJunk bool,

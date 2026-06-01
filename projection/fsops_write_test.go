@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	vw "scrinium.dev/projection/view"
 	"strings"
 	"testing"
 
@@ -22,8 +23,8 @@ import (
 func newFSOpsForWrite(t *testing.T, opts ...projection.FSOpsOption) (*projection.FSOps, *projectionfx.FakeSource) {
 	t.Helper()
 	src := projectionfx.New()
-	v, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
@@ -132,8 +133,8 @@ func TestCreate_InvalidPath(t *testing.T) {
 
 func TestCreate_NoNamespace(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v,
@@ -148,8 +149,8 @@ func TestCreate_NoNamespace(t *testing.T) {
 
 func TestCreate_NoStore(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := projection.NewFSOps(v,

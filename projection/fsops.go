@@ -18,6 +18,7 @@ import (
 	"scrinium.dev/internal/pathx"
 	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/node"
+	view2 "scrinium.dev/projection/view"
 )
 
 // FSOps is the filesystem-shaped operations layer over a View.
@@ -35,7 +36,7 @@ import (
 //
 // Stage 4a: read-side (Stat, Listdir, Open). Mutations land in 4b.
 type FSOps struct {
-	view *View
+	view *view2.View
 
 	store StoreClient
 
@@ -269,7 +270,7 @@ func WithReadOnly() FSOpsOption {
 // Returns an error only if v is nil. Configuration sanity is
 // otherwise the caller's responsibility (e.g. an invalid
 // scratch dir surfaces only at the first Create call).
-func NewFSOps(v *View, opts ...FSOpsOption) (*FSOps, error) {
+func NewFSOps(v *view2.View, opts ...FSOpsOption) (*FSOps, error) {
 	if v == nil {
 		return nil, fmt.Errorf("projection.NewFSOps: view is nil")
 	}

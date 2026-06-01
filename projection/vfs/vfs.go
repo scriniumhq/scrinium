@@ -7,6 +7,7 @@ import (
 	"os"
 	"scrinium.dev/projection/node"
 	"scrinium.dev/projection/routing"
+	vw "scrinium.dev/projection/view"
 	"strings"
 	"syscall"
 	"time"
@@ -24,7 +25,7 @@ const (
 	syscallOExcl   = syscall.O_EXCL
 )
 
-// VFS exposes a projection.View + projection.FSOps as a
+// VFS exposes a vw.View + projection.FSOps as a
 // virtual filesystem. Surfaces (FUSE, WebDAV, web view, custom
 // admin tools) consume Stat / OpenFile / Readdir without
 // reaching into the projection internals.
@@ -37,7 +38,7 @@ const (
 // references must outlive the VFS — the daemon owns those
 // lifetimes.
 type VFS struct {
-	view       *projection.View
+	view       *vw.View
 	fsops      *projection.FSOps
 	routingCfg routing.Config
 	startedAt  time.Time
@@ -88,7 +89,7 @@ func WithNameFilter(fn func(name string) bool) Option {
 
 // New constructs a VFS over view/fsops with the given routing
 // configuration.
-func New(view *projection.View, fsops *projection.FSOps, cfg routing.Config, opts ...Option) *VFS {
+func New(view *vw.View, fsops *projection.FSOps, cfg routing.Config, opts ...Option) *VFS {
 	v := &VFS{
 		view:       view,
 		fsops:      fsops,

@@ -1,17 +1,17 @@
-package projection_test
+package view_test
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
 	"scrinium.dev/projection/node"
+	vw "scrinium.dev/projection/view"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 )
 
@@ -84,9 +84,9 @@ func TestBackfill_FastPath_UsesExtSource(t *testing.T) {
 		ms.put(id, encodeFSMeta(t, path))
 	}
 
-	v, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithExtSource(ms),
+	v, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithExtSource(ms),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
@@ -141,9 +141,9 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	}, nil)
 	// Intentionally NOT calling ms.put for idMiss.
 
-	v, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithExtSource(ms),
+	v, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithExtSource(ms),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
@@ -182,8 +182,8 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 	// no path.
 	src.SetGetErr(errors.New("get unavailable"))
 
-	v, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver),
+	v, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver),
 		// No WithExtSource here.
 	)
 	if err != nil {
@@ -242,9 +242,9 @@ func TestWithFSIndex_Convenience(t *testing.T) {
 	src.Add(strippedManifest(id, "files"), nil)
 	ms.put(id, encodeFSMeta(t, "fs.txt"))
 
-	_, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithFSIndex(ms),
+	_, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithFSIndex(ms),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)

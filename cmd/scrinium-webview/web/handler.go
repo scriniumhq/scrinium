@@ -74,7 +74,7 @@ type BackingFS interface {
 	LookupLocations(ctx context.Context, id domain.ArtifactID) (Locations, bool, error)
 }
 
-// Locations mirrors projection.Locations.
+// Locations mirrors view.Locations.
 type Locations struct {
 	ByArtifact  string
 	BySession   string
@@ -84,7 +84,7 @@ type Locations struct {
 	ByOrphaned  string
 }
 
-// SearchResult mirrors projection.SearchResult — kept here so
+// SearchResult mirrors view.SearchResult — kept here so
 // web stays a clean library hosts adapt to.
 type SearchResult struct {
 	ArtifactID  domain.ArtifactID
@@ -96,7 +96,7 @@ type SearchResult struct {
 	MatchReason string // "path" | "namespace" | "id"
 }
 
-// RelatedArtifact mirrors projection.RelatedArtifact verbatim,
+// RelatedArtifact mirrors view.RelatedArtifact verbatim,
 // kept here so web stays a clean library that hosts adapt to
 // rather than importing projection. Hosts translate at the
 // boundary; the few extra fields don't justify a shared

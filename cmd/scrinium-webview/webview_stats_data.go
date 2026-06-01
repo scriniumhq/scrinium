@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"time"
 
+	vw "scrinium.dev/projection/view"
+
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/humanize"
-	"scrinium.dev/projection"
 )
 
 // buildWebStatsData translates the daemon's live state into the
@@ -20,7 +21,7 @@ import (
 // schema-agnostic; this helper knows about projection-level
 // types (View, ExtensionInfo) which web cannot import.
 func buildWebStatsData(
-	view *projection.View,
+	view *vw.View,
 	cap *domain.StorageInfo,
 	exts []web.StatsExtension,
 	startedAt time.Time,

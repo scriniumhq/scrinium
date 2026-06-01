@@ -1,6 +1,6 @@
 // Package stats composes and renders the Scrinium diagnostic stats
 // report. It is a composition layer, not a primitive: it joins the
-// projection's own counters (projection.ViewStats) with the store's
+// projection's own counters (view.Stats) with the store's
 // physical capacity (domain.StorageInfo) and per-process runtime
 // metadata, then renders the canonical text report served at
 // _scrinium/stats.

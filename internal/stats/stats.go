@@ -2,13 +2,13 @@ package stats
 
 import (
 	"fmt"
+	vw "scrinium.dev/projection/view"
 	"slices"
 	"strings"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/humanize"
-	"scrinium.dev/projection"
 )
 
 // Extension is the render-time DTO for a registered index extension.
@@ -63,7 +63,7 @@ type DaemonInfo struct {
 // labelled; empty groups are omitted; unavailable numbers render
 // "n/a" rather than "-1". Format is plain "key: value" lines, stable
 // across versions as long as field names don't move.
-func Render(vs projection.ViewStats, info DaemonInfo) []byte {
+func Render(vs vw.Stats, info DaemonInfo) []byte {
 	var b strings.Builder
 	b.WriteString("Scrinium projection stats\n\n")
 
@@ -97,7 +97,7 @@ func writeDaemonSection(b *strings.Builder, info DaemonInfo) {
 	b.WriteString("\n")
 }
 
-func writeViewSection(b *strings.Builder, stats projection.ViewStats) {
+func writeViewSection(b *strings.Builder, stats vw.Stats) {
 	fmt.Fprintln(b, "[view]")
 	fmt.Fprintf(b, "TotalNodes:       %d\n", stats.TotalNodes)
 	fmt.Fprintf(b, "TotalBytes:       %d (%s)\n", stats.TotalBytes, humanize.Bytes(stats.TotalBytes))

@@ -6,11 +6,11 @@ import (
 	"io"
 	"os"
 	pathpkg "path"
+	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/vfs"
 )
@@ -24,11 +24,11 @@ import (
 // directly because its only consumer is HTML rendering.
 type webBackingFS struct {
 	v     *vfs.VFS
-	view  *projection.View
+	view  *vw.View
 	store store.Store
 }
 
-func newWebBackingFS(v *vfs.VFS, view *projection.View, store store.Store) *webBackingFS {
+func newWebBackingFS(v *vfs.VFS, view *vw.View, store store.Store) *webBackingFS {
 	return &webBackingFS{v: v, view: view, store: store}
 }
 

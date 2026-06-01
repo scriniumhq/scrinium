@@ -41,7 +41,7 @@ type StatsDaemon struct {
 	StorePath    string
 }
 
-// StatsView mirrors projection.ViewStats. ByStore is rendered
+// StatsView mirrors view.Stats. ByStore is rendered
 // as a sorted list inside the template; the daemon hands the
 // map verbatim.
 type StatsView struct {

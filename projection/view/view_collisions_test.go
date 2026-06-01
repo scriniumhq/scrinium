@@ -1,15 +1,15 @@
-package projection_test
+package view_test
 
 import (
 	"context"
 	"scrinium.dev/projection/node"
+	vw "scrinium.dev/projection/view"
 	"testing"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/testutil/eventfx"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 )
 
@@ -32,9 +32,9 @@ func TestByPath_HappyPath(t *testing.T) {
 		nil,
 	)
 
-	v, err := projection.NewView(
+	v, err := vw.New(
 		context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver),
+		vw.WithPathResolver(fsmeta.Resolver),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
@@ -59,8 +59,8 @@ func TestByPath_HappyPath(t *testing.T) {
 func TestByPath_VirtualDirsExist(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/2024/img.jpg"), nil)
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	for _, dir := range []string{"photos", "photos/2024"} {
@@ -80,8 +80,8 @@ func TestByPath_OrphanedNotPresent(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	if v.Stats.OrphanedCount != 1 {
@@ -107,8 +107,8 @@ func TestByPath_SyntheticFallback(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "photos", "s12345", 100, time.Now().UTC()), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithFallback(projection.FallbackSynthetic))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithFallback(vw.FallbackSynthetic))
 	defer v.Close()
 
 	expected := "photos/s1/23/s12345/aabbccdd.bin"
@@ -124,8 +124,8 @@ func TestByPath_SyntheticAnonymous(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "", "", 100, time.Now().UTC()), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithFallback(projection.FallbackSynthetic))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithFallback(vw.FallbackSynthetic))
 	defer v.Close()
 
 	expected := "_anonymous/aabbccdd.bin"
@@ -145,9 +145,9 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 	src.Add(withCreatedAt("sha256-bbbb2222", "shared/path.txt", newer), nil)
 
 	bus := eventfx.New()
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithEventBus(bus))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithEventBus(bus))
 	defer v.Close()
 
 	n, err := v.GetIn(node.RootByPath, "shared/path.txt")
@@ -169,11 +169,11 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 		t.Errorf("winner must be in by-artifact: %v", err)
 	}
 
-	collisions := bus.ByType(projection.EventPathCollision)
+	collisions := bus.ByType(vw.EventPathCollision)
 	if len(collisions) != 1 {
 		t.Errorf("collision events: got %d, want 1", len(collisions))
 	} else {
-		p := collisions[0].Payload.(projection.PathCollisionPayload)
+		p := collisions[0].Payload.(vw.PathCollisionPayload)
 		if p.Path != "shared/path.txt" {
 			t.Errorf("payload Path: got %q", p.Path)
 		}
@@ -193,8 +193,8 @@ func TestByPath_CollisionEqualCreatedAt(t *testing.T) {
 	src.Add(withCreatedAt("sha256-aaaa1111", "shared", t0), nil)
 	src.Add(withCreatedAt("sha256-bbbb2222", "shared", t0), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	n, _ := v.GetIn(node.RootByPath, "shared")
@@ -213,8 +213,8 @@ func TestByPath_OrderedArrival(t *testing.T) {
 	src.Add(withCreatedAt("sha256-bbbb2222", "shared", newer), nil)
 	src.Add(withCreatedAt("sha256-aaaa1111", "shared", older), nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	n, _ := v.GetIn(node.RootByPath, "shared")

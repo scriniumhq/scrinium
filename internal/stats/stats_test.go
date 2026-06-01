@@ -1,13 +1,13 @@
 package stats_test
 
 import (
+	vw "scrinium.dev/projection/view"
 	"strings"
 	"testing"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/stats"
-	"scrinium.dev/projection"
 )
 
 // These cover stats.Render directly with a zero ViewStats plus an
@@ -16,7 +16,7 @@ import (
 // package when the report moved out of the primitive.
 
 func TestRender_HeaderAndDaemonSection(t *testing.T) {
-	out := string(stats.Render(projection.ViewStats{}, stats.DaemonInfo{
+	out := string(stats.Render(vw.Stats{}, stats.DaemonInfo{
 		Source:    "fake",
 		StartedAt: time.Now().Add(-1 * time.Hour),
 	}))
@@ -32,7 +32,7 @@ func TestRender_HeaderAndDaemonSection(t *testing.T) {
 }
 
 func TestRender_OmitsOptionalFields(t *testing.T) {
-	out := string(stats.Render(projection.ViewStats{}, stats.DaemonInfo{
+	out := string(stats.Render(vw.Stats{}, stats.DaemonInfo{
 		Source:    "fake",
 		StartedAt: time.Now(),
 	}))
@@ -45,7 +45,7 @@ func TestRender_OmitsOptionalFields(t *testing.T) {
 }
 
 func TestRender_StorageSection(t *testing.T) {
-	out := string(stats.Render(projection.ViewStats{}, stats.DaemonInfo{
+	out := string(stats.Render(vw.Stats{}, stats.DaemonInfo{
 		StartedAt: time.Now(),
 		Capacity: &domain.StorageInfo{
 			TotalBytes:     1024 * 1024 * 1024,
@@ -73,7 +73,7 @@ func TestRender_StorageSection(t *testing.T) {
 }
 
 func TestRender_StorageNA(t *testing.T) {
-	out := string(stats.Render(projection.ViewStats{}, stats.DaemonInfo{
+	out := string(stats.Render(vw.Stats{}, stats.DaemonInfo{
 		StartedAt: time.Now(),
 		Capacity: &domain.StorageInfo{
 			TotalBytes:     -1,
@@ -93,7 +93,7 @@ func TestRender_StorageNA(t *testing.T) {
 
 func TestRender_ExtensionsSection(t *testing.T) {
 	t.Run("populated", func(t *testing.T) {
-		out := string(stats.Render(projection.ViewStats{}, stats.DaemonInfo{
+		out := string(stats.Render(vw.Stats{}, stats.DaemonInfo{
 			StartedAt: time.Now(),
 			Extensions: []stats.Extension{
 				{Name: "scrinium.zeta", SchemaVersion: 2},
@@ -114,7 +114,7 @@ func TestRender_ExtensionsSection(t *testing.T) {
 	})
 
 	t.Run("empty slice shows (none registered)", func(t *testing.T) {
-		out := string(stats.Render(projection.ViewStats{}, stats.DaemonInfo{
+		out := string(stats.Render(vw.Stats{}, stats.DaemonInfo{
 			StartedAt:  time.Now(),
 			Extensions: []stats.Extension{},
 		}))
@@ -128,7 +128,7 @@ func TestRender_ExtensionsSection(t *testing.T) {
 }
 
 func TestRender_ConfigSection(t *testing.T) {
-	out := string(stats.Render(projection.ViewStats{}, stats.DaemonInfo{
+	out := string(stats.Render(vw.Stats{}, stats.DaemonInfo{
 		StartedAt: time.Now(),
 		ReadOnly:  true,
 		Editing:   "on",

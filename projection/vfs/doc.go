@@ -1,5 +1,5 @@
 // Package vfs is the read/write virtual filesystem layer
-// over a projection.View.
+// over a view.View.
 //
 // The View tracks artifact placements in several trees
 // (by-path, by-date, by-namespace, by-session, by-artifact,

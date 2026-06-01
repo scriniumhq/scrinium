@@ -1,4 +1,4 @@
-package projection
+package view
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 
 // View is the read side of the projection. It holds five
 // parallel in-memory trees (by-path, by-session, by-namespace,
-// by-date, by-artifact) populated by backfill at NewView time.
+// by-date, by-artifact) populated by backfill at New time.
 //
 // Concurrency: every public method takes the View's RWMutex.
 // Add/Remove/Move take the write lock; readers take a read lock.
@@ -38,10 +38,10 @@ import (
 // transport layer (FUSE, WebDAV) decides which tree to surface in
 // the mount root and which to hide under a service prefix.
 type View struct {
-	// Public, read-only after NewView returns.
+	// Public, read-only after New returns.
 	Source    source.Kind
 	CreatedAt time.Time
-	Stats     ViewStats
+	Stats     Stats
 
 	// Internal state, guarded by mu.
 	mu sync.RWMutex
@@ -120,8 +120,8 @@ type loserEntry struct {
 
 // --- Construction ---
 
-// NewView constructs a View by walking source and populating
-// every tree. Backfill is synchronous: NewView returns only after
+// New constructs a View by walking source and populating
+// every tree. Backfill is synchronous: New returns only after
 // the source has been fully traversed.
 //
 // Default options:
@@ -131,9 +131,9 @@ type loserEntry struct {
 //
 // EventBus is optional via WithEventBus; without it the View
 // silently produces no events.
-func NewView(ctx context.Context, src source.Provider, opts ...ViewOption) (*View, error) {
+func New(ctx context.Context, src source.Provider, opts ...Option) (*View, error) {
 	if src == nil {
-		return nil, fmt.Errorf("projection.NewView: source is nil")
+		return nil, fmt.Errorf("projection.New: source is nil")
 	}
 
 	o := viewOptions{
@@ -177,7 +177,7 @@ func NewView(ctx context.Context, src source.Provider, opts ...ViewOption) (*Vie
 	if err := v.backfill(ctx); err != nil {
 		return nil, err
 	}
-	v.publish(EventViewRebuilt, ViewRebuiltPayload{
+	v.publish(EventViewRebuilt, RebuiltPayload{
 		Duration:  time.Since(startedAt),
 		NodeCount: v.Stats.TotalNodes,
 	})
@@ -196,7 +196,7 @@ func (v *View) allTrees() []map[string]*viewNode {
 
 // backfill walks the source and classifies each manifest. The
 // caller holds no lock; backfill is single-threaded by virtue of
-// running before NewView returns.
+// running before New returns.
 //
 // Two paths exist:
 //
@@ -279,7 +279,7 @@ func (v *View) populateExt(ctx context.Context, m *domain.Manifest) {
 	}
 }
 
-// passesFilter checks the configured ViewFilter against a
+// passesFilter checks the configured Filter against a
 // manifest. All non-zero conditions combine by AND. Prefix is
 // applied to the resolver path — see resolvePathForManifest below.
 func (v *View) passesFilter(m domain.Manifest) bool {
@@ -338,7 +338,7 @@ func (v *View) syntheticPath(m domain.Manifest) string {
 }
 
 // indexArtifact registers an artifact in every applicable tree.
-// duringBackfill controls whether ViewStats counters are bumped
+// duringBackfill controls whether Stats counters are bumped
 // (always yes during backfill; on Add it is incremental).
 //
 // The function does NOT take the View lock — callers (backfill,
@@ -515,7 +515,7 @@ func (v *View) removeLoser(path string, id domain.ArtifactID) {
 // directory.
 //
 // Stable for the lifetime of the View — the option is set at
-// NewView time and never mutated.
+// New time and never mutated.
 func (v *View) RootView() node.RootView { return v.opts.rootView }
 
 // --- Read methods (one set per tree) ---

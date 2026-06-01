@@ -1,10 +1,11 @@
-package projection_test
+package view_test
 
 import (
 	"context"
 	"errors"
 	"os"
 	"scrinium.dev/projection/node"
+	vw "scrinium.dev/projection/view"
 	"testing"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/eventfx"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection"
 	"scrinium.dev/projection/fsmeta"
 )
 
@@ -24,7 +24,7 @@ func TestBySession_Populated(t *testing.T) {
 	src.Add(makeManifest("sha256-aaaa1111", "f", "abcd1234", 100, now), nil)
 	src.Add(makeManifest("sha256-bbbb2222", "f", "abcd1234", 200, now), nil)
 
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	if _, err := v.GetIn(node.RootBySession, "abcd1234/sha256-aaaa1111"); err != nil {
@@ -42,7 +42,7 @@ func TestBySession_EmptySessionSkipped(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "", 100, time.Now().UTC()), nil)
 
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	count := 0
@@ -63,7 +63,7 @@ func TestBySession_Short(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "ab", 100, time.Now().UTC()), nil)
 
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	if _, err := v.GetIn(node.RootBySession, "ab/sha256-aabbccdd"); err != nil {
@@ -77,7 +77,7 @@ func TestByNamespace_Populated(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "photos", "s", 100, time.Now().UTC()), nil)
 
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	if _, err := v.GetIn(node.RootByNamespace, "photos/aa/bb/sha256-aabbccdd"); err != nil {
@@ -92,7 +92,7 @@ func TestByNamespace_EmptyBucketsAsDefault(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "", "s", 100, time.Now().UTC()), nil)
 
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	if _, err := v.GetIn(node.RootByNamespace, "_default/aa/bb/sha256-aabbccdd"); err != nil {
@@ -107,7 +107,7 @@ func TestByDate_Populated(t *testing.T) {
 	t0 := time.Date(2024, 5, 3, 14, 23, 5, 0, time.UTC)
 	src.Add(makeManifest("sha256-aabbccddeeff0011", "f", "s", 100, t0), nil)
 
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	expected := "2024/05/03/14-23-05-aabbccddeeff0011.bin"
@@ -123,15 +123,15 @@ func TestEvent_ViewRebuilt(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 
 	bus := eventfx.New()
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithEventBus(bus))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithEventBus(bus))
 	defer v.Close()
 
-	if got := bus.Count(projection.EventViewRebuilt); got != 1 {
+	if got := bus.Count(vw.EventViewRebuilt); got != 1 {
 		t.Fatalf("expected 1 ViewRebuilt event, got %d", got)
 	}
-	rebuilt := bus.ByType(projection.EventViewRebuilt)
-	p := rebuilt[0].Payload.(projection.ViewRebuiltPayload)
+	rebuilt := bus.ByType(vw.EventViewRebuilt)
+	p := rebuilt[0].Payload.(vw.RebuiltPayload)
 	if p.NodeCount != 1 {
 		t.Errorf("NodeCount: got %d, want 1", p.NodeCount)
 	}
@@ -141,8 +141,8 @@ func TestEvent_ViewRebuilt(t *testing.T) {
 
 func TestAdd_AppearsInAllTrees(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	m := projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/img.jpg")
@@ -173,8 +173,8 @@ func TestAdd_AppearsInAllTrees(t *testing.T) {
 
 func TestAdd_Idempotent(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	m := projectionfx.ManifestWithFsmetaPath("sha256-aabbccdd", "a")
@@ -191,7 +191,7 @@ func TestAdd_Idempotent(t *testing.T) {
 
 func TestAdd_OnClosedView(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	v.Close()
 
 	err := v.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()))
@@ -211,8 +211,8 @@ func TestRemove_DropsFromAllTrees(t *testing.T) {
 	m.CreatedAt = time.Now().UTC()
 	src.Add(m, nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	if err := v.Remove("sha256-aabbccdd"); err != nil {
@@ -241,8 +241,8 @@ func TestRemove_PromotesLoserOnOwnerRemove(t *testing.T) {
 	src.Add(a, nil)
 	src.Add(b, nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	if err := v.Remove("sha256-bbbb2222"); err != nil {
@@ -269,8 +269,8 @@ func TestRemove_LoserDoesNotAffectOwner(t *testing.T) {
 	src.Add(a, nil)
 	src.Add(b, nil)
 
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	if err := v.Remove("sha256-aaaa1111"); err != nil {
@@ -287,7 +287,7 @@ func TestRemove_LoserDoesNotAffectOwner(t *testing.T) {
 
 func TestRemove_Idempotent(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	if err := v.Remove("nonexistent-id"); err != nil {
@@ -300,8 +300,8 @@ func TestRemove_Idempotent(t *testing.T) {
 func TestMove_RenameFile(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aaaa1111", "old/path.txt"), nil)
-	v, _ := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, _ := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	defer v.Close()
 
 	newM := projectionfx.ManifestWithFsmetaPath("sha256-bbbb2222", "new/path.txt")
@@ -328,10 +328,10 @@ func TestNewView_FilterPrefix(t *testing.T) {
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-aaaa1111", "photos/a.jpg"), nil)
 	src.Add(projectionfx.ManifestWithFsmetaPath("sha256-bbbb2222", "docs/b.txt"), nil)
 
-	v, _ := projection.NewView(
+	v, _ := vw.New(
 		context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithFilter(projection.ViewFilter{Prefix: "photos/"}),
+		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithFilter(vw.Filter{Prefix: "photos/"}),
 	)
 	defer v.Close()
 

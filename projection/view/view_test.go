@@ -1,4 +1,4 @@
-package projection_test
+package view_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"os"
 	"scrinium.dev/projection/node"
 	"scrinium.dev/projection/source"
+	vw "scrinium.dev/projection/view"
 	"testing"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/manifestfx"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection"
 )
 
 // makeManifest is a thin wrapper around manifestfx.Blob that
@@ -56,7 +56,7 @@ func makeShortID(i int) string {
 
 func TestNewView_Empty(t *testing.T) {
 	src := projectionfx.New()
-	v, err := projection.NewView(context.Background(), src)
+	v, err := vw.New(context.Background(), src)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestNewView_Empty(t *testing.T) {
 }
 
 func TestNewView_NilSource(t *testing.T) {
-	_, err := projection.NewView(context.Background(), nil)
+	_, err := vw.New(context.Background(), nil)
 	if err == nil {
 		t.Fatal("expected error for nil source")
 	}
@@ -79,7 +79,7 @@ func TestNewView_NilSource(t *testing.T) {
 func TestNewView_SourceWalkError(t *testing.T) {
 	src := projectionfx.New()
 	src.SetWalkErr(errors.New("source kaboom"))
-	_, err := projection.NewView(context.Background(), src)
+	_, err := vw.New(context.Background(), src)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -96,7 +96,7 @@ func TestNewView_PopulatesByArtifact(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, now), []byte("hello"))
 	src.Add(makeManifest("sha256-eeffgghh", "files", "sess1", 200, now), []byte("world"))
 
-	v, err := projection.NewView(context.Background(), src)
+	v, err := vw.New(context.Background(), src)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestNewView_PopulatesByArtifact(t *testing.T) {
 func TestGetByArtifact_File(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	node, err := v.GetIn(node.RootByArtifact, "aa/bb/sha256-aabbccdd")
@@ -136,7 +136,7 @@ func TestGetByArtifact_File(t *testing.T) {
 func TestGetByArtifact_VirtualDirectory(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	node, err := v.GetIn(node.RootByArtifact, "aa")
@@ -154,7 +154,7 @@ func TestGetByArtifact_VirtualDirectory(t *testing.T) {
 func TestGetByArtifact_Root(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	node, err := v.GetIn(node.RootByArtifact, "")
@@ -168,7 +168,7 @@ func TestGetByArtifact_Root(t *testing.T) {
 
 func TestGetByArtifact_NotFound(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	_, err := v.GetIn(node.RootByArtifact, "nonexistent")
@@ -179,7 +179,7 @@ func TestGetByArtifact_NotFound(t *testing.T) {
 
 func TestGetByArtifact_Closed(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	v.Close()
 
 	_, err := v.GetIn(node.RootByArtifact, "")
@@ -194,7 +194,7 @@ func TestListByArtifact_RootListsShards(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 	src.Add(makeManifest("sha256-ccddeeff", "f", "s", 100, time.Now().UTC()), nil)
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	var names []string
@@ -215,7 +215,7 @@ func TestListByArtifact_RootListsShards(t *testing.T) {
 func TestListByArtifact_FileReturnsErrNotADirectory(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	for _, err := range v.ListIn(node.RootByArtifact, "aa/bb/sha256-aabbccdd") {
@@ -229,7 +229,7 @@ func TestListByArtifact_FileReturnsErrNotADirectory(t *testing.T) {
 
 func TestListByArtifact_NonexistentReturnsErrPathNotFound(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	for _, err := range v.ListIn(node.RootByArtifact, "nope/path") {
@@ -247,7 +247,7 @@ func TestWalkByArtifact_AllNodes(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 	src.Add(makeManifest("sha256-aaccddee", "f", "s", 100, time.Now().UTC()), nil)
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	var paths []string
@@ -270,7 +270,7 @@ func TestWalkByArtifact_StopEarly(t *testing.T) {
 		id := makeShortID(i)
 		src.Add(makeManifest(id, "f", "s", 100, time.Now().UTC()), nil)
 	}
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	count := 0
@@ -293,7 +293,7 @@ func TestWalkByArtifact_StopEarly(t *testing.T) {
 func TestOpenByArtifact_File(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 5, time.Now().UTC()), []byte("hello"))
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	rh, err := v.OpenIn(context.Background(), node.RootByArtifact, "aa/bb/sha256-aabbccdd")
@@ -314,7 +314,7 @@ func TestOpenByArtifact_File(t *testing.T) {
 func TestOpenByArtifact_Directory(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	_, err := v.OpenIn(context.Background(), node.RootByArtifact, "aa")
@@ -325,7 +325,7 @@ func TestOpenByArtifact_Directory(t *testing.T) {
 
 func TestOpenByArtifact_NotFound(t *testing.T) {
 	src := projectionfx.New()
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	_, err := v.OpenIn(context.Background(), node.RootByArtifact, "nope")
@@ -340,7 +340,7 @@ func TestOpenByArtifact_SourceArtifactNotFound(t *testing.T) {
 	// ErrPathNotFound on the projection side.
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	src.SetGetErr(errs.ErrArtifactNotFound)
@@ -354,7 +354,7 @@ func TestOpenByArtifact_SourceArtifactNotFound(t *testing.T) {
 func TestOpenByArtifact_SourceLocked(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
-	v, _ := projection.NewView(context.Background(), src)
+	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
 	src.SetGetErr(errs.ErrLocked)
@@ -375,10 +375,10 @@ func TestNewView_FilterByNamespace(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "photos", "s", 100, time.Now().UTC()), nil)
 	src.Add(makeManifest("sha256-eeffaabb", "docs", "s", 100, time.Now().UTC()), nil)
 
-	v, err := projection.NewView(
+	v, err := vw.New(
 		context.Background(),
 		src,
-		projection.WithFilter(projection.ViewFilter{Namespace: "photos"}),
+		vw.WithFilter(vw.Filter{Namespace: "photos"}),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)

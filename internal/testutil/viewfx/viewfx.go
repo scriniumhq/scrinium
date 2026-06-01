@@ -12,10 +12,9 @@ package viewfx
 
 import (
 	"context"
-
 	"scrinium.dev/projection/node"
 	"scrinium.dev/projection/routing"
-
+	vw "scrinium.dev/projection/view"
 	"testing"
 
 	"scrinium.dev/domain"
@@ -34,15 +33,15 @@ import (
 // t.TempDir(). Editing is on and the namespace is "files" — the
 // configuration fuse and webdav share. A surface that needs a
 // read-only or different-namespace FSOps builds it directly.
-func Stack(t testing.TB, manifests ...domain.Manifest) (*projection.View, *projection.FSOps, *projectionfx.FakeSource) {
+func Stack(t testing.TB, manifests ...domain.Manifest) (*vw.View, *projection.FSOps, *projectionfx.FakeSource) {
 	t.Helper()
 	src := projectionfx.New()
 	for _, m := range manifests {
 		src.Add(m, nil)
 	}
 
-	v, err := projection.NewView(context.Background(), src,
-		projection.WithPathResolver(fsmeta.Resolver))
+	v, err := vw.New(context.Background(), src,
+		vw.WithPathResolver(fsmeta.Resolver))
 	if err != nil {
 		t.Fatalf("viewfx.Stack: NewView: %v", err)
 	}

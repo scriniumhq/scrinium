@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"scrinium.dev/projection/node"
+	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
@@ -22,20 +23,20 @@ func buildView(
 	st store.Store,
 	fsidx *fsindex.Extension,
 	p *Projection,
-) (*projection.View, error) {
-	opts := []projection.ViewOption{
-		projection.WithPathResolver(fsmeta.Resolver),
-		projection.WithFSIndex(fsidx),
+) (*vw.View, error) {
+	opts := []vw.Option{
+		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithFSIndex(fsidx),
 	}
 	if p != nil {
 		if p.RootView != "" {
-			opts = append(opts, projection.WithRootView(node.RootView(p.RootView)))
+			opts = append(opts, vw.WithRootView(node.RootView(p.RootView)))
 		}
 		if p.ByPathFallback != "" {
-			opts = append(opts, projection.WithFallback(projection.PathFallback(p.ByPathFallback)))
+			opts = append(opts, vw.WithFallback(vw.Fallback(p.ByPathFallback)))
 		}
 	}
-	view, err := projection.NewView(ctx, st, opts...)
+	view, err := vw.New(ctx, st, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("build view: %w", err)
 	}
@@ -48,7 +49,7 @@ func buildView(
 // to the running process when left at zero (matching the old
 // the historical default behaviour).
 func buildFSOps(
-	view *projection.View,
+	view *vw.View,
 	st store.Store,
 	p *Projection,
 	mountSession domain.SessionID,
