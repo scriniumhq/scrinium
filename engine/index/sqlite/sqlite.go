@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/index/extension"
 	"scrinium.dev/event"
 )
 
@@ -44,8 +45,8 @@ type Index struct {
 	// the in-memory work is map lookups; the SQL transaction it
 	// guards may be long, but the lock is released right after.
 	extMu     sync.Mutex
-	extByName map[string]index.IndexExtension
-	extByKind map[index.EventKind][]index.IndexExtension
+	extByName map[string]extension.IndexExtension
+	extByKind map[extension.EventKind][]extension.IndexExtension
 	// extStores keeps the long-lived ExtensionStore handed to each
 	// extension during Setup. Apply uses fresh tx-scoped stores
 	// (allocated per call); the long-lived stores in this map are
@@ -186,8 +187,8 @@ func newStoreInternal(ctx context.Context, path string, o options) (*Index, erro
 	return &Index{
 		db:        db,
 		opts:      o,
-		extByName: make(map[string]index.IndexExtension),
-		extByKind: make(map[index.EventKind][]index.IndexExtension),
+		extByName: make(map[string]extension.IndexExtension),
+		extByKind: make(map[extension.EventKind][]extension.IndexExtension),
 		extStores: make(map[string]*sqliteExtStore),
 	}, nil
 }

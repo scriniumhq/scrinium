@@ -13,7 +13,7 @@ import (
 )
 
 // Extension is the render-time DTO for a registered index extension.
-// Callers holding an index.ExtensionInfo translate field-for-field.
+// Callers holding an extension.ExtensionInfo translate field-for-field.
 type Extension struct {
 	Name          string
 	SchemaVersion int

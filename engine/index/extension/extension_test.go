@@ -1,4 +1,4 @@
-package index
+package extension
 
 import (
 	"context"
@@ -100,8 +100,8 @@ type stubRegistry struct{}
 
 func (stubRegistry) Register(ctx context.Context, ext IndexExtension) error { return nil }
 
-// stubLister satisfies index.ExtensionLister. The interface was
-// introduced in P0.6 alongside index.ExtensionInfo to give
+// stubLister satisfies ExtensionLister. The interface was
+// introduced in P0.6 alongside ExtensionInfo to give
 // backends a way to enumerate registered extensions without
 // re-exposing internal maps. Any future read-only proxy backend
 // would implement this independently of ExtensionHost.
@@ -109,7 +109,7 @@ type stubLister struct{}
 
 func (stubLister) ListExtensions() []ExtensionInfo { return nil }
 
-// stubHost satisfies index.ExtensionHost. The interface was
+// stubHost satisfies ExtensionHost. The interface was
 // introduced in P0.6 to let core (which must not import
 // engine/index/sqlite) type-assert "this StoreIndex supports
 // extension registration" generically.

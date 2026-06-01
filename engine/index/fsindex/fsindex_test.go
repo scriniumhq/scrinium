@@ -8,7 +8,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/index/extension"
 	"scrinium.dev/engine/index/fsindex"
 	"scrinium.dev/engine/index/sqlite"
 )
@@ -361,14 +361,14 @@ func TestSubscribe_OnlyManifestEvents(t *testing.T) {
 	if len(subs) != 2 {
 		t.Fatalf("Subscribe: got %d kinds, want 2", len(subs))
 	}
-	have := map[index.EventKind]bool{}
+	have := map[extension.EventKind]bool{}
 	for _, k := range subs {
 		have[k] = true
 	}
-	if !have[index.EventKindManifestIndexed] {
+	if !have[extension.EventKindManifestIndexed] {
 		t.Error("missing EventKindManifestIndexed")
 	}
-	if !have[index.EventKindManifestDeleted] {
+	if !have[extension.EventKindManifestDeleted] {
 		t.Error("missing EventKindManifestDeleted")
 	}
 }
