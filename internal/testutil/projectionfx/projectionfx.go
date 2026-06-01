@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/manifestfx"
-	"scrinium.dev/projection/fsmeta"
 )
 
 // --- FakeSource ---

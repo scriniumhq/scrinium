@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection/fsmeta"
 )
 
 // --- helpers ---

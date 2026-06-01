@@ -11,7 +11,7 @@
 // transport layer is a thin dispatcher.
 //
 // Schemas describing how artifacts map to filesystem paths live in
-// subpackages (projection/fsmeta is the standard one). They are
+// subpackages (domain/fsmeta is the standard one). They are
 // pluggable through the PathResolver function passed to NewView.
 //
 // Specification: docs/3 §5 Projection API, docs/4 §13 Projection,

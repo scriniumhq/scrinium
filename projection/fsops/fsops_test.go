@@ -9,9 +9,9 @@ import (
 	vw "scrinium.dev/projection/view"
 	"testing"
 
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection/fsmeta"
 )
 
 // --- Construction ---

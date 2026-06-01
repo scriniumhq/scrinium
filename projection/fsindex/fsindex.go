@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/projection/fsmeta"
 )
 
 // Tables under the extension namespace. Two K/V groups:

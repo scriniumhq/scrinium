@@ -19,8 +19,8 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection/fsmeta"
 )
 
 // Stack wires an in-memory FakeSource into a View + FSOps with the

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/errs"
-	"scrinium.dev/projection/fsmeta"
 )
 
 // --- ValidatePath ---

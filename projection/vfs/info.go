@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/domain/fsmeta"
 )
 
 // --- os.FileInfo adapters ---

@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/internal/testutil/eventfx"
 	"scrinium.dev/internal/testutil/projectionfx"
-	"scrinium.dev/projection/fsmeta"
 )
 
 // withCreatedAt builds a manifest at a specific time. fsmeta path

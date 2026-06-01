@@ -7,17 +7,18 @@ import (
 	"io"
 	"iter"
 	"os"
-	vw "scrinium.dev/projection/view"
 	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	vw "scrinium.dev/projection/view"
+
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/internal/pathx"
-	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/node"
 )
 

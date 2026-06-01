@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/index/sqlite"
 	"scrinium.dev/projection/fsindex"
-	"scrinium.dev/projection/fsmeta"
 )
 
 // --- helpers ---

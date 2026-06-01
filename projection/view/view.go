@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/internal/pathx"
-	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/node"
 	"scrinium.dev/projection/source"
 )

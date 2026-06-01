@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/domain/fsmeta"
 )
 
 // fsmetaDecoder renders Manifest.Metadata payloads that match
-// the scrinium.fs/v1 schema (the projection/fsmeta marker).
+// the scrinium.fs/v1 schema (the domain/fsmeta marker).
 // Registered with the web Handler at daemon startup so the
 // artifact details page surfaces filesystem metadata as a
 // nice table rather than raw JSON.

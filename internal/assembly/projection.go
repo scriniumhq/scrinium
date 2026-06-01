@@ -10,9 +10,9 @@ import (
 	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/projection/fsindex"
-	"scrinium.dev/projection/fsmeta"
 )
 
 // buildView constructs the read-side projection. The projection

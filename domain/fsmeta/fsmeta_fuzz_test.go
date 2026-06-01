@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"scrinium.dev/projection/fsmeta"
+	"scrinium.dev/domain/fsmeta"
 )
 
 // FuzzDecode hardens the fsmeta metadata decoder against arbitrary

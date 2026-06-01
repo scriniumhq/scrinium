@@ -10,8 +10,8 @@ import (
 
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/projection/fsmeta"
 	"scrinium.dev/projection/vfs"
 )
 

@@ -36,8 +36,8 @@ import (
 	_ "scrinium.dev/engine/index/sqlite"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/projection/fsmeta"
 )
 
 func main() {
