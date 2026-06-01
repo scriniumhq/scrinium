@@ -21,6 +21,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/projection"
+	"scrinium.dev/projection/vfs"
 )
 
 func main() {
@@ -96,14 +97,13 @@ func runMount(args []string) int {
 		ShowByNamespace: true,
 		ShowRaw:         true,
 	}
-	root := &rootNode{
-		view:          asm.Projection.View,
-		fsops:         asm.Projection.FSOps,
-		store:         asm.Store,
-		routingCfg:    routingCfg,
-		startedAt:     startedAt,
-		statsProvider: statsProvider(asm, startedAt, 2*time.Second),
-	}
+	fsys := vfs.New(
+		asm.Projection.View,
+		asm.Projection.FSOps,
+		routingCfg,
+		vfs.WithStatsProvider(statsProvider(asm, startedAt, 2*time.Second)),
+	)
+	root := newRoot(fsys, startedAt)
 
 	mountOpts := &fs.Options{
 		MountOptions: fuse.MountOptions{

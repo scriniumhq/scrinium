@@ -337,6 +337,10 @@ type FileAt interface {
 	File
 	io.ReaderAt
 	io.WriterAt
+
+	// Sync flushes buffered writes to the backing store.
+	// Read-only handles (service trees, stats) are no-ops.
+	Sync() error
 }
 
 func (f *readHandleFile) ReadAt(p []byte, off int64) (int, error) {
@@ -391,6 +395,11 @@ func (f *blackHoleFile) WriteAt(p []byte, off int64) (int, error) {
 	f.written += int64(len(p))
 	return len(p), nil
 }
+
+func (f *rwFile) Sync() error         { return f.f.Sync() }
+func (f *readHandleFile) Sync() error { return nil }
+func (f *bytesFile) Sync() error      { return nil }
+func (f *blackHoleFile) Sync() error  { return nil }
 
 // Compile-time guards.
 var (

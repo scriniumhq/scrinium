@@ -333,6 +333,73 @@ func mkManifest(path, namespace, payload string) domain.Manifest {
 	}
 }
 
+// These cases moved here from cmd/scrinium-fuse when the FUSE layer
+// was reduced to a thin adapter over the VFS facade. The behaviour
+// they cover — service-tree visibility under Show* flags and the
+// content of the stats virtual file — is owned by the VFS, so it is
+// tested at this layer rather than through a FUSE node.
+
+// ServicePrefix listing omits trees whose Show* flag is off.
+func TestVFS_ServicePrefixListing_SkipsDisabled(t *testing.T) {
+	src := projectionfx.New()
+	view, err := projection.NewView(context.Background(), src,
+		projection.WithPathResolver(fsmeta.Resolver))
+	if err != nil {
+		t.Fatalf("NewView: %v", err)
+	}
+	t.Cleanup(func() { view.Close() })
+	ops, err := projection.NewFSOps(view,
+		projection.WithStore(src),
+		projection.WithNamespace("files"),
+		projection.WithScratchDir(t.TempDir()),
+	)
+	if err != nil {
+		t.Fatalf("NewFSOps: %v", err)
+	}
+	// by-session and by-date disabled; the rest on.
+	v := vfs.New(view, ops, projection.RoutingConfig{
+		ServicePrefix:   "_scrinium",
+		RootView:        projection.RootByPath,
+		ShowStats:       true,
+		ShowByArtifact:  true,
+		ShowOrphaned:    true,
+		ShowByNamespace: true,
+	})
+
+	d, err := v.OpenFile(context.Background(), "/_scrinium", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("OpenFile _scrinium: %v", err)
+	}
+	defer d.Close()
+	infos, err := d.Readdir(-1)
+	if err != nil && !errors.Is(err, io.EOF) {
+		t.Fatalf("Readdir: %v", err)
+	}
+	for _, fi := range infos {
+		if fi.Name() == "by-session" || fi.Name() == "by-date" {
+			t.Errorf("disabled tree %q present in listing", fi.Name())
+		}
+	}
+}
+
+// The stats virtual file renders the View counters; at minimum it
+// names the TotalNodes field.
+func TestVFS_StatsBodyMentionsTotalNodes(t *testing.T) {
+	v, _ := newTestVFS(t)
+	f, err := v.OpenFile(context.Background(), "/_scrinium/stats", os.O_RDONLY, 0)
+	if err != nil {
+		t.Fatalf("OpenFile stats: %v", err)
+	}
+	defer f.Close()
+	body, err := io.ReadAll(f)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if !strings.Contains(string(body), "TotalNodes") {
+		t.Errorf("stats body missing TotalNodes:\n%s", body)
+	}
+}
+
 // --- Compile-time sanity ---
 
 var _ vfs.File = (vfs.File)(nil)
