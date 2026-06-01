@@ -713,6 +713,15 @@ func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...sto
 	return v.openInTree(ctx, tree, path, opts...)
 }
 
+// Open fetches an artifact's read handle by id, bypassing the tree
+// lookup. The handle also carries the manifest, so callers that only
+// need metadata can read rh.Manifest() and close immediately. This is
+// the read path surfaces use when they already hold an id (web view,
+// download) rather than a tree path.
+func (v *View) Open(ctx context.Context, id domain.ArtifactID) (domain.ReadHandle, error) {
+	return v.src.Get(ctx, id)
+}
+
 // WalkIn iterates every node at or under prefix within the rv
 // tree. An unknown RootView yields a single-shot error sequence,
 // matching ListIn.

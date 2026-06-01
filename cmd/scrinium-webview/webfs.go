@@ -11,7 +11,6 @@ import (
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/store"
 	"scrinium.dev/projection/vfs"
 )
 
@@ -25,11 +24,10 @@ import (
 type webBackingFS struct {
 	v      *vfs.VFS
 	reader projection.Reader
-	store  store.Store
 }
 
-func newWebBackingFS(v *vfs.VFS, reader projection.Reader, store store.Store) *webBackingFS {
-	return &webBackingFS{v: v, reader: reader, store: store}
+func newWebBackingFS(v *vfs.VFS, reader projection.Reader) *webBackingFS {
+	return &webBackingFS{v: v, reader: reader}
 }
 
 func (b *webBackingFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
@@ -48,10 +46,10 @@ func (b *webBackingFS) OpenFile(ctx context.Context, name string, flag int, perm
 }
 
 // LookupManifest fetches the manifest by id through the
-// store. Open-and-close pattern: web only needs the
+// projection. Open-and-close pattern: web only needs the
 // manifest, not bytes.
 func (b *webBackingFS) LookupManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, bool, error) {
-	rh, err := b.store.Get(ctx, id)
+	rh, err := b.reader.Open(ctx, id)
 	if err != nil {
 		// "Not found" and infrastructure errors aren't
 		// distinguished here; treat both as "not found"
@@ -65,7 +63,7 @@ func (b *webBackingFS) LookupManifest(ctx context.Context, id domain.ArtifactID)
 // OpenArtifact opens artifact bytes by id. Used by /_view
 // and /_download endpoints which don't have a path.
 func (b *webBackingFS) OpenArtifact(ctx context.Context, id domain.ArtifactID) (web.File, web.ArtifactMeta, error) {
-	rh, err := b.store.Get(ctx, id)
+	rh, err := b.reader.Open(ctx, id)
 	if err != nil {
 		return nil, web.ArtifactMeta{}, err
 	}
@@ -83,7 +81,7 @@ func (b *webBackingFS) OpenArtifact(ctx context.Context, id domain.ArtifactID) (
 	}, nil
 }
 
-// readHandleAdapter wraps a store.ReadHandle so it satisfies
+// readHandleAdapter wraps a domain.ReadHandle so it satisfies
 // web.File. Same shape as the webdav-cmd version — kept here
 // rather than in shared web because the type is glue
 // between core and the web pkg, owned by each cmd.

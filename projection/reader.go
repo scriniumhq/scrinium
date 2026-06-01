@@ -1,6 +1,7 @@
 package projection
 
 import (
+	"context"
 	"scrinium.dev/domain"
 )
 
@@ -25,6 +26,12 @@ type Reader interface {
 
 	// LookupLocations returns every tree-placement of an artifact.
 	LookupLocations(id domain.ArtifactID) (Locations, bool)
+
+	// Open fetches an artifact's read handle by id. The handle also
+	// carries the manifest (rh.Manifest()), so callers needing only
+	// metadata can read it and close immediately. This is how surfaces
+	// read artifact bytes without depending on the engine store.
+	Open(ctx context.Context, id domain.ArtifactID) (domain.ReadHandle, error)
 
 	// StatsSnapshot returns a copy of the current counters.
 	StatsSnapshot() Stats

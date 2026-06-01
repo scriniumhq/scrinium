@@ -120,7 +120,7 @@ func runServe(args []string) int {
 	}
 
 	v := vfs.New(asm.Projection, routingCfg, vfs.WithStatsProvider(textStats))
-	backing := newWebBackingFS(v, asm.Projection.Queries(), asm.Store)
+	backing := newWebBackingFS(v, asm.Projection.Queries())
 	webHandler := web.NewHandler(backing, vfs.CleanPath, web.Config{
 		StorePath:     meta.StoreURI,
 		ServicePrefix: "",
