@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	vw "scrinium.dev/projection/internal/view"
+	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"

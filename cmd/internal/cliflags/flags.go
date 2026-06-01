@@ -15,13 +15,13 @@ import (
 	"strconv"
 	"strings"
 
-	"scrinium.dev/contract/projection"
+	"scrinium.dev/projection/view"
 )
 
-// RootViewFlag binds a CLI flag to *projection.RootView with
+// RootViewFlag binds a CLI flag to *view.RootView with
 // allowed-value validation: by-path | by-session | by-namespace
 // | by-date | by-artifact.
-type RootViewFlag struct{ P *projection.RootView }
+type RootViewFlag struct{ P *view.RootView }
 
 func (f RootViewFlag) String() string {
 	if f.P == nil {
@@ -31,10 +31,10 @@ func (f RootViewFlag) String() string {
 }
 
 func (f RootViewFlag) Set(s string) error {
-	rv := projection.RootView(s)
+	rv := view.RootView(s)
 	switch rv {
-	case projection.RootByPath, projection.RootBySession,
-		projection.RootByNamespace, projection.RootByDate, projection.RootByArtifact:
+	case view.RootByPath, view.RootBySession,
+		view.RootByNamespace, view.RootByDate, view.RootByArtifact:
 		*f.P = rv
 		return nil
 	}

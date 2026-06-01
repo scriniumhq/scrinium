@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/contract/projection"
 	"scrinium.dev/domain"
+	"scrinium.dev/projection/view"
 )
 
 // BackingFS is the small file-system surface web needs from its
@@ -58,21 +58,21 @@ type BackingFS interface {
 	//
 	// Returns a fresh slice on every call; nil when no
 	// siblings exist.
-	LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]projection.RelatedArtifact, error)
+	LookupRelated(ctx context.Context, blobRef domain.BlobRef, exclude domain.ArtifactID) ([]view.RelatedArtifact, error)
 
 	// Search returns artifacts whose path or namespace
 	// contains the query as a substring (case-insensitive),
 	// or whose id matches exactly. limit caps the response;
 	// a value of 0 means unlimited. Used by the /_search
 	// endpoint.
-	Search(ctx context.Context, query string, limit int) ([]projection.SearchResult, error)
+	Search(ctx context.Context, query string, limit int) ([]view.SearchResult, error)
 
 	// LookupLocations returns the per-tree paths of an
 	// artifact. Empty fields signal "this tree doesn't
 	// carry it" (e.g. PathByPath="" for orphaned artifacts).
 	// Used by the artifact details page's Locations panel
 	// to wire "show me where this lives" links.
-	LookupLocations(ctx context.Context, id domain.ArtifactID) (projection.Locations, bool, error)
+	LookupLocations(ctx context.Context, id domain.ArtifactID) (view.Locations, bool, error)
 }
 
 // ArtifactMeta is the small descriptor returned alongside the

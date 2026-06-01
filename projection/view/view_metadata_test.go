@@ -8,8 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/contract/projection"
-	vw "scrinium.dev/projection/internal/view"
+	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
@@ -69,7 +68,7 @@ func encodeFSMeta(t *testing.T, path string) json.RawMessage {
 // --- tests ---
 
 // TestBackfill_FastPath_UsesExtSource verifies that when a
-// ExtSource is configured, View.backfill consults it for
+// ExtSource is configured, vw.backfill consults it for
 // every walked manifest. Source.Get is still callable (the slow
 // path is fallback), but the fast path should hit first when the
 // source has the artifact.
@@ -128,7 +127,7 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 
 	// Another artifact NOT in ExtSource. FakeSource keeps the
 	// full manifest in-memory; the slow-path Get returns it,
-	// recovering Ext for the View.
+	// recovering Ext for the vw.
 	idMiss := domain.ArtifactID("miss")
 	src.Add(domain.Manifest{
 		ArtifactID:   idMiss,
@@ -151,10 +150,10 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	}
 
 	// Both artifacts should be findable by their resolved paths.
-	if _, err := v.GetIn(projection.RootByPath, "in-source.txt"); err != nil {
+	if _, err := v.GetIn(vw.RootByPath, "in-source.txt"); err != nil {
 		t.Errorf("fast-path artifact not in View by path: %v", err)
 	}
-	if _, err := v.GetIn(projection.RootByPath, "fallback.txt"); err != nil {
+	if _, err := v.GetIn(vw.RootByPath, "fallback.txt"); err != nil {
 		t.Errorf("fallback (Source.Get) artifact not in View by path: %v", err)
 	}
 
@@ -193,7 +192,7 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 
 	// Path resolution failed (no Ext reached the resolver), so
 	// the artifact must be absent from by-path.
-	if _, err := v.GetIn(projection.RootByPath, "only-walk"); err == nil {
+	if _, err := v.GetIn(vw.RootByPath, "only-walk"); err == nil {
 		t.Error("artifact unexpectedly indexed under by-path")
 	}
 
@@ -201,7 +200,7 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 	// path needs no resolver). This proves backfill completed
 	// for the artifact even though metadata recovery failed —
 	// "errors swallowed, build keeps going" semantics.
-	if _, err := v.GetIn(projection.RootByArtifact, byArtifactPathForTest(id)); err != nil {
+	if _, err := v.GetIn(vw.RootByArtifact, byArtifactPathForTest(id)); err != nil {
 		t.Errorf("artifact not in by-artifact tree: %v", err)
 	}
 }

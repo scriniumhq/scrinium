@@ -7,7 +7,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 	fso "scrinium.dev/projection/internal/fsops"
-	"scrinium.dev/projection/internal/view"
+	"scrinium.dev/projection/view"
 )
 
 // --- os.FileInfo adapters ---

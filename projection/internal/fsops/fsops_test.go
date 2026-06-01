@@ -6,9 +6,8 @@ import (
 	"io"
 	"testing"
 
-	"scrinium.dev/contract/projection"
 	fso "scrinium.dev/projection/internal/fsops"
-	vw "scrinium.dev/projection/internal/view"
+	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/errs"
@@ -151,7 +150,7 @@ func TestStat_RoutesViaRootView_ByArtifact(t *testing.T) {
 
 	v, _ := vw.New(context.Background(), src,
 		vw.WithPathResolver(fsmeta.Resolver),
-		vw.WithRootView(projection.RootByArtifact))
+		vw.WithRootView(vw.RootByArtifact))
 	defer v.Close()
 
 	o, _ := fso.New(v)

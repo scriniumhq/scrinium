@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"os"
 	fso "scrinium.dev/projection/internal/fsops"
-	vw "scrinium.dev/projection/internal/view"
+	vw "scrinium.dev/projection/view"
 	"strings"
 	"testing"
 

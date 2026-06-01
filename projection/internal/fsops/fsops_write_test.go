@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"io"
-	fso "scrinium.dev/projection/internal/fsops"
-	vw "scrinium.dev/projection/internal/view"
 	"strings"
 	"testing"
+
+	fso "scrinium.dev/projection/internal/fsops"
+	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/errs"

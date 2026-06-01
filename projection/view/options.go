@@ -3,7 +3,6 @@ package view
 import (
 	"time"
 
-	"scrinium.dev/contract/projection"
 	"scrinium.dev/domain"
 	"scrinium.dev/event"
 	"scrinium.dev/projection/internal/source"
@@ -38,7 +37,7 @@ type Option func(*viewOptions)
 
 type viewOptions struct {
 	resolver source.Resolver
-	rootView projection.RootView
+	rootView RootView
 	fallback Fallback
 	filter   Filter
 	bus      event.EventBus
@@ -84,7 +83,7 @@ func WithPathResolver(r source.Resolver) Option {
 // default is RootByPath. The choice is informational for the View
 // itself; transports (FUSE) react to it by hiding the same tree
 // from the service directory.
-func WithRootView(rv projection.RootView) Option {
+func WithRootView(rv RootView) Option {
 	return func(o *viewOptions) { o.rootView = rv }
 }
 
