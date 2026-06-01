@@ -8,9 +8,6 @@ import (
 	"os"
 	"os/signal"
 
-	"scrinium.dev/projection/node"
-	"scrinium.dev/projection/routing"
-
 	"strings"
 	"syscall"
 	"time"
@@ -93,9 +90,8 @@ func runServe(args []string) int {
 	// …) and the text stats file off (it renders stats as HTML instead).
 	// These are properties of THIS surface, not of the stored data, so
 	// they are set here rather than in the config.
-	routingCfg := routing.Config{
+	routingCfg := vfs.Config{
 		ServicePrefix:          "",
-		RootView:               node.RootByPath,
 		ShowStats:              false,
 		ShowByArtifact:         true,
 		ShowOrphaned:           true,

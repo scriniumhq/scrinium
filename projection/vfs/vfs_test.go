@@ -7,8 +7,6 @@ import (
 	"io/fs"
 	"os"
 	fso "scrinium.dev/projection/fsops"
-	"scrinium.dev/projection/node"
-	"scrinium.dev/projection/routing"
 	vw "scrinium.dev/projection/view"
 	"strings"
 	"testing"
@@ -49,9 +47,8 @@ func newTestVFS(t *testing.T, manifests ...domain.Manifest) (*vfs.VFS, *projecti
 		t.Fatalf("NewFSOps: %v", err)
 	}
 
-	cfg := routing.Config{
+	cfg := vfs.Config{
 		ServicePrefix:   "_scrinium",
-		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,
@@ -192,9 +189,8 @@ func TestVFS_NoServicePrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFSOps: %v", err)
 	}
-	v := vfs.New(view, ops, routing.Config{
+	v := vfs.New(view, ops, vfs.Config{
 		ServicePrefix: "", // disabled
-		RootView:      node.RootByPath,
 	})
 
 	// _scrinium must not exist when service prefix is empty.
@@ -251,9 +247,8 @@ func TestVFS_StatsProvider(t *testing.T) {
 	}
 
 	const customBody = "stats injected by test"
-	v := vfs.New(view, ops, routing.Config{
+	v := vfs.New(view, ops, vfs.Config{
 		ServicePrefix:   "_scrinium",
-		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,
@@ -299,9 +294,7 @@ func TestVFS_NameFilter_OmitsFromListing(t *testing.T) {
 
 	// VFS with a filter that suppresses .DS_Store.
 	filter := func(name string) bool { return name == ".DS_Store" }
-	v := vfs.New(view, ops, routing.Config{
-		RootView: node.RootByPath,
-	}, vfs.WithNameFilter(filter))
+	v := vfs.New(view, ops, vfs.Config{}, vfs.WithNameFilter(filter))
 
 	d, err := v.OpenFile(context.Background(), "/", os.O_RDONLY, 0)
 	if err != nil {
@@ -360,9 +353,8 @@ func TestVFS_ServicePrefixListing_SkipsDisabled(t *testing.T) {
 		t.Fatalf("NewFSOps: %v", err)
 	}
 	// by-session and by-date disabled; the rest on.
-	v := vfs.New(view, ops, routing.Config{
+	v := vfs.New(view, ops, vfs.Config{
 		ServicePrefix:   "_scrinium",
-		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,

@@ -7,7 +7,6 @@ import (
 	"os"
 	fso "scrinium.dev/projection/fsops"
 	"scrinium.dev/projection/node"
-	"scrinium.dev/projection/routing"
 	vw "scrinium.dev/projection/view"
 	"strings"
 	"syscall"
@@ -40,8 +39,12 @@ const (
 type VFS struct {
 	view       *vw.View
 	fsops      *fso.Ops
-	routingCfg routing.Config
-	startedAt  time.Time
+	routingCfg Config
+	// rootView is the tree that backs the mount root. Derived
+	// once from view.RootView() so routing agrees with FSOps,
+	// which resolves the root tree the same way.
+	rootView  node.RootView
+	startedAt time.Time
 
 	// statsProvider, if non-nil, returns the bytes served at
 	// _scrinium/stats. Hosts inject one that bundles live
@@ -87,13 +90,15 @@ func WithNameFilter(fn func(name string) bool) Option {
 	return func(v *VFS) { v.nameFilter = fn }
 }
 
-// New constructs a VFS over view/fsops with the given routing
-// configuration.
-func New(view *vw.View, fsops *fso.Ops, cfg routing.Config, opts ...Option) *VFS {
+// New constructs a VFS over view/fsops with the given namespace
+// configuration. The tree backing the mount root is taken from
+// view.RootView().
+func New(view *vw.View, fsops *fso.Ops, cfg Config, opts ...Option) *VFS {
 	v := &VFS{
 		view:       view,
 		fsops:      fsops,
 		routingCfg: cfg,
+		rootView:   view.RootView(),
 		startedAt:  time.Now().UTC(),
 	}
 	for _, o := range opts {
@@ -104,7 +109,7 @@ func New(view *vw.View, fsops *fso.Ops, cfg routing.Config, opts ...Option) *VFS
 
 // CleanPath normalises a slash-style path: drops the leading
 // and trailing slash. The result is a tree-relative path
-// suitable for routing.Route. Surfaces hand raw paths to
+// suitable for route. Surfaces hand raw paths to
 // VFS; VFS does its own cleaning so callers don't need to
 // duplicate the rule.
 func CleanPath(name string) string {
@@ -204,38 +209,38 @@ func (v *VFS) Setattr(ctx context.Context, name string, attrs Attrs) error {
 // --- read methods ---
 
 // Stat returns metadata for a path. Routing is centralised in
-// routing.Route; VFS just translates the route into a
+// route; VFS just translates the route into a
 // FileInfo. Service trees produce synthetic infos for the
 // service root and the stats virtual file; the rest go
 // through the View.
 func (v *VFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	clean := CleanPath(name)
-	target, err := routing.Route(clean, v.routingCfg)
+	tgt, err := route(clean, v.routingCfg, v.rootView)
 	if err != nil {
-		if errors.Is(err, routing.ErrRejected) {
+		if errors.Is(err, errRejected) {
 			return nil, fs.ErrNotExist
 		}
 		return nil, err
 	}
-	switch target.Kind {
-	case routing.KindRoot:
-		fi, err := v.fsops.Stat(target.SubPath)
+	switch tgt.Kind {
+	case kindRoot:
+		fi, err := v.fsops.Stat(tgt.SubPath)
 		if err != nil {
 			return nil, err
 		}
 		return projectionFileInfo{fi: fi}, nil
-	case routing.KindServiceRoot:
+	case kindServiceRoot:
 		return synthDirInfo(v.routingCfg.ServicePrefix, v.startedAt), nil
-	case routing.KindServiceTree:
-		node, err := v.view.GetIn(target.Tree, target.SubPath)
+	case kindServiceTree:
+		node, err := v.view.GetIn(tgt.Tree, tgt.SubPath)
 		if err != nil {
 			return nil, err
 		}
 		return projectionNodeInfo{node: node, fallbackTime: v.startedAt}, nil
-	case routing.KindStatsFile:
+	case kindStatsFile:
 		body := v.statsBody()
 		return synthFileInfo("stats", int64(len(body)), time.Now()), nil
-	case routing.KindRawMirror:
+	case kindRawMirror:
 		return nil, fs.ErrNotExist // raw mirror not implemented yet
 	}
 	return nil, fs.ErrNotExist
@@ -246,9 +251,9 @@ func (v *VFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 // callers ignore flag bits and pass 0.
 func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (File, error) {
 	clean := CleanPath(name)
-	target, err := routing.Route(clean, v.routingCfg)
+	tgt, err := route(clean, v.routingCfg, v.rootView)
 	if err != nil {
-		if errors.Is(err, routing.ErrRejected) {
+		if errors.Is(err, errRejected) {
 			return nil, fs.ErrNotExist
 		}
 		return nil, err
@@ -259,48 +264,48 @@ func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileM
 	wantWrite := flag&(os.O_WRONLY|os.O_RDWR) != 0
 	_ = wantTrunc
 
-	switch target.Kind {
-	case routing.KindRoot:
-		return v.openRoot(ctx, target.SubPath, flag, perm, wantCreate, wantWrite)
+	switch tgt.Kind {
+	case kindRoot:
+		return v.openRoot(ctx, tgt.SubPath, flag, perm, wantCreate, wantWrite)
 
-	case routing.KindServiceRoot:
+	case kindServiceRoot:
 		if wantWrite || wantCreate {
 			return nil, errs.ErrEditingDisabled
 		}
 		return newServiceDirFile(v, v.routingCfg.ServicePrefix, "", true), nil
 
-	case routing.KindServiceTree:
+	case kindServiceTree:
 		if wantWrite || wantCreate {
 			return nil, errs.ErrEditingDisabled
 		}
-		node, err := v.view.GetIn(target.Tree, target.SubPath)
+		node, err := v.view.GetIn(tgt.Tree, tgt.SubPath)
 		if err != nil {
 			return nil, err
 		}
 		if node.FS.IsDir {
-			return newServiceDirFile(v, target.Tree, target.SubPath, false), nil
+			return newServiceDirFile(v, tgt.Tree, tgt.SubPath, false), nil
 		}
-		rh, err := v.view.OpenIn(ctx, target.Tree, target.SubPath)
+		rh, err := v.view.OpenIn(ctx, tgt.Tree, tgt.SubPath)
 		if err != nil {
 			return nil, err
 		}
 		return &readHandleFile{
 			rh:    rh,
-			name:  pathx.LastSegment(target.SubPath),
-			path:  target.SubPath,
+			name:  pathx.LastSegment(tgt.SubPath),
+			path:  tgt.SubPath,
 			size:  node.FS.Size,
 			mtime: nodeModTime(node, v.startedAt),
 			isDir: false,
 		}, nil
 
-	case routing.KindStatsFile:
+	case kindStatsFile:
 		if wantWrite || wantCreate {
 			return nil, errs.ErrEditingDisabled
 		}
 		body := v.statsBody()
 		return newBytesFile("stats", body, time.Now()), nil
 
-	case routing.KindRawMirror:
+	case kindRawMirror:
 		return nil, fs.ErrNotExist
 	}
 	return nil, fs.ErrNotExist
@@ -336,7 +341,7 @@ func (v *VFS) OpenFileAt(ctx context.Context, name string, flag int, perm os.Fil
 // isAtServiceRoot reports whether a path is exactly the
 // service prefix or anything under it. Service tree paths
 // are read-only; mutating methods reject them.
-func isAtServiceRoot(clean string, cfg routing.Config) bool {
+func isAtServiceRoot(clean string, cfg Config) bool {
 	if cfg.ServicePrefix == "" {
 		return false
 	}

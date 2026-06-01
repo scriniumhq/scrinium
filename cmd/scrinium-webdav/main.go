@@ -8,8 +8,7 @@ import (
 	"os"
 	"os/signal"
 
-	"scrinium.dev/projection/node"
-	"scrinium.dev/projection/routing"
+	"scrinium.dev/projection/vfs"
 
 	"syscall"
 	"time"
@@ -81,9 +80,8 @@ func runServe(args []string) int {
 	// WebDAV exposes only the user filesystem: every diagnostic tree is
 	// off so Finder/rclone see a clean root. Service prefix is kept for
 	// the stats pseudo-file path only.
-	routingCfg := routing.Config{
+	routingCfg := vfs.Config{
 		ServicePrefix: "_scrinium",
-		RootView:      node.RootByPath,
 	}
 	stats := daemon.StatsProvider(asm, startedAt, 2*time.Second)
 	wfs := newWebdavFS(asm.Projection.View, asm.Projection.FSOps, routingCfg, !*allowOSJunk, stats)

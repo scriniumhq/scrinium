@@ -11,8 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	pnode "scrinium.dev/projection/node"
-
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"scrinium.dev"
@@ -22,7 +20,6 @@ import (
 	_ "scrinium.dev/engine/index/sqlite"
 
 	"scrinium.dev/cmd/internal/daemon"
-	"scrinium.dev/projection/routing"
 	"scrinium.dev/projection/vfs"
 )
 
@@ -88,9 +85,8 @@ func runMount(args []string) int {
 	startedAt := time.Now().UTC()
 	// FUSE is a desktop browse target: every service tree is on, rooted
 	// at by-path under the _scrinium prefix.
-	routingCfg := routing.Config{
+	routingCfg := vfs.Config{
 		ServicePrefix:   "_scrinium",
-		RootView:        pnode.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,

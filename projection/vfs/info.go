@@ -2,9 +2,10 @@ package vfs
 
 import (
 	"os"
+	"time"
+
 	fso "scrinium.dev/projection/fsops"
 	"scrinium.dev/projection/node"
-	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"

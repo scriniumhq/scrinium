@@ -13,8 +13,7 @@ package viewfx
 import (
 	"context"
 	fso "scrinium.dev/projection/fsops"
-	"scrinium.dev/projection/node"
-	"scrinium.dev/projection/routing"
+	"scrinium.dev/projection/vfs"
 	vw "scrinium.dev/projection/view"
 	"testing"
 
@@ -67,10 +66,9 @@ func Stack(t testing.TB, manifests ...domain.Manifest) (*vw.View, *fso.Ops, *pro
 // ShowRaw stays false: the raw tree is opt-in per surface (webview
 // turns it on, fuse/webdav do not), so a test that needs it flips the
 // field on the returned value.
-func RoutingAll() routing.Config {
-	return routing.Config{
+func RoutingAll() vfs.Config {
+	return vfs.Config{
 		ServicePrefix:   "_scrinium",
-		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,

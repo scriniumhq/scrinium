@@ -1,15 +1,15 @@
-package routing
+package vfs
 
 import (
 	"errors"
-	"scrinium.dev/projection/node"
 	"testing"
+
+	"scrinium.dev/projection/node"
 )
 
 func defaultRoutingConfig() Config {
 	return Config{
 		ServicePrefix:   "_scrinium",
-		RootView:        node.RootByPath,
 		ShowStats:       true,
 		ShowByArtifact:  true,
 		ShowOrphaned:    true,
@@ -21,12 +21,12 @@ func defaultRoutingConfig() Config {
 }
 
 func TestRoute_MountRoot(t *testing.T) {
-	r, err := Route("", defaultRoutingConfig())
+	r, err := route("", defaultRoutingConfig(), node.RootByPath)
 	if err != nil {
-		t.Fatalf("Route: %v", err)
+		t.Fatalf("route: %v", err)
 	}
-	if r.Kind != KindRoot {
-		t.Errorf("Kind: got %v, want KindRoot", r.Kind)
+	if r.Kind != kindRoot {
+		t.Errorf("Kind: got %v, want kindRoot", r.Kind)
 	}
 	if r.Tree != node.RootByPath {
 		t.Errorf("Tree: got %v, want by-path", r.Tree)
@@ -34,11 +34,11 @@ func TestRoute_MountRoot(t *testing.T) {
 }
 
 func TestRoute_RegularPath(t *testing.T) {
-	r, err := Route("photos/img.jpg", defaultRoutingConfig())
+	r, err := route("photos/img.jpg", defaultRoutingConfig(), node.RootByPath)
 	if err != nil {
-		t.Fatalf("Route: %v", err)
+		t.Fatalf("route: %v", err)
 	}
-	if r.Kind != KindRoot {
+	if r.Kind != kindRoot {
 		t.Errorf("Kind: got %v", r.Kind)
 	}
 	if r.SubPath != "photos/img.jpg" {
@@ -47,28 +47,28 @@ func TestRoute_RegularPath(t *testing.T) {
 }
 
 func TestRoute_RootViewByDate(t *testing.T) {
-	cfg := defaultRoutingConfig()
-	cfg.RootView = node.RootByDate
-	r, _ := Route("2024/05/03/14-23-05-aabb.bin", cfg)
+	// rootView is now supplied separately (derived from the View),
+	// not carried in Config.
+	r, _ := route("2024/05/03/14-23-05-aabb.bin", defaultRoutingConfig(), node.RootByDate)
 	if r.Tree != node.RootByDate {
 		t.Errorf("Tree: got %v, want by-date", r.Tree)
 	}
 }
 
 func TestRoute_ServiceRoot(t *testing.T) {
-	r, err := Route("_scrinium", defaultRoutingConfig())
+	r, err := route("_scrinium", defaultRoutingConfig(), node.RootByPath)
 	if err != nil {
-		t.Fatalf("Route: %v", err)
+		t.Fatalf("route: %v", err)
 	}
-	if r.Kind != KindServiceRoot {
-		t.Errorf("Kind: got %v, want KindServiceRoot", r.Kind)
+	if r.Kind != kindServiceRoot {
+		t.Errorf("Kind: got %v, want kindServiceRoot", r.Kind)
 	}
 }
 
 func TestRoute_ServiceTree_BySession(t *testing.T) {
-	r, _ := Route("_scrinium/by-session/ab/cd/sid/aid", defaultRoutingConfig())
-	if r.Kind != KindServiceTree {
-		t.Errorf("Kind: got %v, want KindServiceTree", r.Kind)
+	r, _ := route("_scrinium/by-session/ab/cd/sid/aid", defaultRoutingConfig(), node.RootByPath)
+	if r.Kind != kindServiceTree {
+		t.Errorf("Kind: got %v, want kindServiceTree", r.Kind)
 	}
 	if r.Tree != node.RootBySession {
 		t.Errorf("Tree: got %v, want by-session", r.Tree)
@@ -79,8 +79,8 @@ func TestRoute_ServiceTree_BySession(t *testing.T) {
 }
 
 func TestRoute_ServiceTreeRoot(t *testing.T) {
-	r, _ := Route("_scrinium/by-session", defaultRoutingConfig())
-	if r.Kind != KindServiceTree {
+	r, _ := route("_scrinium/by-session", defaultRoutingConfig(), node.RootByPath)
+	if r.Kind != kindServiceTree {
 		t.Fatalf("Kind: got %v", r.Kind)
 	}
 	if r.SubPath != "" {
@@ -89,23 +89,23 @@ func TestRoute_ServiceTreeRoot(t *testing.T) {
 }
 
 func TestRoute_StatsFile(t *testing.T) {
-	r, _ := Route("_scrinium/stats", defaultRoutingConfig())
-	if r.Kind != KindStatsFile {
-		t.Errorf("Kind: got %v, want KindStatsFile", r.Kind)
+	r, _ := route("_scrinium/stats", defaultRoutingConfig(), node.RootByPath)
+	if r.Kind != kindStatsFile {
+		t.Errorf("Kind: got %v, want kindStatsFile", r.Kind)
 	}
 }
 
 func TestRoute_StatsWithSubPath_Rejected(t *testing.T) {
-	_, err := Route("_scrinium/stats/garbage", defaultRoutingConfig())
-	if !errors.Is(err, ErrRejected) {
-		t.Errorf("expected ErrRejected, got %v", err)
+	_, err := route("_scrinium/stats/garbage", defaultRoutingConfig(), node.RootByPath)
+	if !errors.Is(err, errRejected) {
+		t.Errorf("expected errRejected, got %v", err)
 	}
 }
 
 func TestRoute_RawMirror(t *testing.T) {
-	r, _ := Route("_scrinium/raw/blobs/sha256/aa/bb/file", defaultRoutingConfig())
-	if r.Kind != KindRawMirror {
-		t.Errorf("Kind: got %v, want KindRawMirror", r.Kind)
+	r, _ := route("_scrinium/raw/blobs/sha256/aa/bb/file", defaultRoutingConfig(), node.RootByPath)
+	if r.Kind != kindRawMirror {
+		t.Errorf("Kind: got %v, want kindRawMirror", r.Kind)
 	}
 	if r.RawSubPath != "blobs/sha256/aa/bb/file" {
 		t.Errorf("RawSubPath: got %q", r.RawSubPath)
@@ -115,36 +115,36 @@ func TestRoute_RawMirror(t *testing.T) {
 func TestRoute_RawDisabled(t *testing.T) {
 	cfg := defaultRoutingConfig()
 	cfg.ShowRaw = false
-	_, err := Route("_scrinium/raw/anything", cfg)
-	if !errors.Is(err, ErrRejected) {
-		t.Errorf("expected ErrRejected, got %v", err)
+	_, err := route("_scrinium/raw/anything", cfg, node.RootByPath)
+	if !errors.Is(err, errRejected) {
+		t.Errorf("expected errRejected, got %v", err)
 	}
 }
 
 func TestRoute_DisabledTree(t *testing.T) {
 	cfg := defaultRoutingConfig()
 	cfg.ShowBySession = false
-	_, err := Route("_scrinium/by-session/anything", cfg)
-	if !errors.Is(err, ErrRejected) {
-		t.Errorf("expected ErrRejected, got %v", err)
+	_, err := route("_scrinium/by-session/anything", cfg, node.RootByPath)
+	if !errors.Is(err, errRejected) {
+		t.Errorf("expected errRejected, got %v", err)
 	}
 }
 
 func TestRoute_UnknownTree(t *testing.T) {
-	_, err := Route("_scrinium/by-bogus/x", defaultRoutingConfig())
-	if !errors.Is(err, ErrRejected) {
-		t.Errorf("expected ErrRejected, got %v", err)
+	_, err := route("_scrinium/by-bogus/x", defaultRoutingConfig(), node.RootByPath)
+	if !errors.Is(err, errRejected) {
+		t.Errorf("expected errRejected, got %v", err)
 	}
 }
 
 func TestRoute_ServicePrefixDisabled(t *testing.T) {
-	// Empty prefix → every path routes to KindRoot, including
+	// Empty prefix → every path routes to kindRoot, including
 	// what would otherwise be a service path.
 	cfg := defaultRoutingConfig()
 	cfg.ServicePrefix = ""
-	r, _ := Route("_scrinium/by-session/anything", cfg)
-	if r.Kind != KindRoot {
-		t.Errorf("Kind: got %v, want KindRoot", r.Kind)
+	r, _ := route("_scrinium/by-session/anything", cfg, node.RootByPath)
+	if r.Kind != kindRoot {
+		t.Errorf("Kind: got %v, want kindRoot", r.Kind)
 	}
 	if r.SubPath != "_scrinium/by-session/anything" {
 		t.Errorf("SubPath: got %q", r.SubPath)
@@ -154,9 +154,9 @@ func TestRoute_ServicePrefixDisabled(t *testing.T) {
 func TestRoute_ServicePrefixOnlyAtRoot(t *testing.T) {
 	// "_scrinium" deeper in the path is a regular component.
 	cfg := defaultRoutingConfig()
-	r, _ := Route("photos/_scrinium/img.jpg", cfg)
-	if r.Kind != KindRoot {
-		t.Errorf("Kind: got %v, want KindRoot", r.Kind)
+	r, _ := route("photos/_scrinium/img.jpg", cfg, node.RootByPath)
+	if r.Kind != kindRoot {
+		t.Errorf("Kind: got %v, want kindRoot", r.Kind)
 	}
 	if r.SubPath != "photos/_scrinium/img.jpg" {
 		t.Errorf("SubPath: got %q", r.SubPath)
