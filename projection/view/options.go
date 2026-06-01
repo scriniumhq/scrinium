@@ -47,7 +47,7 @@ type viewOptions struct {
 	// metadata used by backfill to skip per-manifest
 	// Source.Get round-trips. Set via WithExtSource or
 	// WithFSIndex (the latter is a typed convenience for the
-	// common projection/fsindex case).
+	// common engine/index/fsindex case).
 	extSource source.Ext
 }
 
@@ -61,12 +61,12 @@ func WithExtSource(ms source.Ext) Option {
 	return func(o *viewOptions) { o.extSource = ms }
 }
 
-// WithFSIndex is a typed convenience for the projection/fsindex
+// WithFSIndex is a typed convenience for the engine/index/fsindex
 // case: pass the registered *fsindex.Extension and it doubles as
 // a ExtSource. Equivalent to WithExtSource(fsidx).
 //
 // Implemented at the package level via an interface to avoid
-// taking a hard dependency on projection/fsindex from
+// taking a hard dependency on engine/index/fsindex from
 // projection — fsindex imports projection's fsmeta, so a back-
 // edge would cycle.
 func WithFSIndex(fsidx source.Ext) Option {

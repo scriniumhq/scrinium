@@ -16,10 +16,10 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/index/fsindex"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/projection"
-	"scrinium.dev/projection/fsindex"
 )
 
 type buildMode int

@@ -9,8 +9,8 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/index/fsindex"
 	"scrinium.dev/engine/index/sqlite"
-	"scrinium.dev/projection/fsindex"
 )
 
 // --- helpers ---
