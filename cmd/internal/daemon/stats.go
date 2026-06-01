@@ -9,8 +9,8 @@ import (
 	"time"
 
 	scrinium "scrinium.dev"
+	"scrinium.dev/cmd/internal/stats"
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/stats"
 )
 
 // StatsProvider returns the closure a daemon installs via

@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/internal/humanize"
-	"scrinium.dev/internal/pathx"
+	"scrinium.dev/cmd/internal/humanize"
+	"scrinium.dev/projection/pathx"
 )
 
 // dirEntry is one row in the rendered listing. Computed up-front

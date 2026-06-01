@@ -3,7 +3,7 @@ package vfs
 import (
 	"errors"
 
-	"scrinium.dev/internal/pathx"
+	"scrinium.dev/projection/pathx"
 	"scrinium.dev/projection/view"
 )
 

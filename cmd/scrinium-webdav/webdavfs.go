@@ -8,8 +8,8 @@ import (
 	"syscall"
 
 	"golang.org/x/net/webdav"
-	"scrinium.dev/internal/pathx"
 	"scrinium.dev/projection"
+	"scrinium.dev/projection/pathx"
 	"scrinium.dev/projection/vfs"
 )
 

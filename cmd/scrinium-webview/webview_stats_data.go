@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
-	"scrinium.dev/projection"
 	"time"
+
+	"scrinium.dev/cmd/internal/humanize"
+	"scrinium.dev/projection"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/humanize"
 )
 
 // buildWebStatsData translates the daemon's live state into the

@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"scrinium.dev/cmd/internal/humanize"
 	"scrinium.dev/projection/view"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/humanize"
 )
 
 // Extension is the render-time DTO for a registered index extension.

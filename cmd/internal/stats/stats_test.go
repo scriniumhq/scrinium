@@ -1,13 +1,14 @@
 package stats_test
 
 import (
-	"scrinium.dev/projection/view"
 	"strings"
 	"testing"
 	"time"
 
+	"scrinium.dev/cmd/internal/stats"
+	"scrinium.dev/projection/view"
+
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/stats"
 )
 
 // These cover stats.Render directly with a zero ViewStats plus an

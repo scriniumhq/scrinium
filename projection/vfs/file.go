@@ -5,11 +5,13 @@ import (
 	"io"
 	"io/fs"
 	"os"
+
 	fso "scrinium.dev/projection/internal/fsops"
+	"scrinium.dev/projection/pathx"
+
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/internal/pathx"
 )
 
 // File is the open-handle interface VFS hands back from

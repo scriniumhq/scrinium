@@ -10,10 +10,10 @@ import (
 	"time"
 
 	fso "scrinium.dev/projection/internal/fsops"
+	"scrinium.dev/projection/pathx"
 	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/pathx"
 )
 
 // POSIX flag bits used for OpenFile semantics. Aliased to

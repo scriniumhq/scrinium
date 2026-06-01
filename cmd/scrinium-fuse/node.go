@@ -14,7 +14,7 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/pathx"
+	"scrinium.dev/projection/pathx"
 	"scrinium.dev/projection/vfs"
 )
 

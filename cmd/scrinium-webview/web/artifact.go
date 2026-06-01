@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"scrinium.dev/cmd/internal/humanize"
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/internal/humanize"
-	"scrinium.dev/internal/pathx"
+	"scrinium.dev/projection/pathx"
 	"scrinium.dev/projection/view"
 )
 

@@ -12,13 +12,13 @@ import (
 	"sync"
 	"time"
 
+	"scrinium.dev/projection/pathx"
 	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/internal/pathx"
 )
 
 // Ops is the filesystem-shaped operations layer over a View.
