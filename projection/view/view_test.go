@@ -5,11 +5,12 @@ import (
 	"errors"
 	"io"
 	"os"
-	"scrinium.dev/projection/node"
-	"scrinium.dev/projection/source"
-	vw "scrinium.dev/projection/view"
 	"testing"
 	"time"
+
+	"scrinium.dev/projection/internal/source"
+	"scrinium.dev/projection/node"
+	vw "scrinium.dev/projection/view"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"

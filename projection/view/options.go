@@ -5,8 +5,8 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/event"
+	"scrinium.dev/projection/internal/source"
 	"scrinium.dev/projection/node"
-	"scrinium.dev/projection/source"
 )
 
 // Fallback governs how artifacts without a resolver path are

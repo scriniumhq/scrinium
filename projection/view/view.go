@@ -18,8 +18,8 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/internal/pathx"
+	"scrinium.dev/projection/internal/source"
 	"scrinium.dev/projection/node"
-	"scrinium.dev/projection/source"
 )
 
 // View is the read side of the projection. It holds five
