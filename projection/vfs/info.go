@@ -116,3 +116,28 @@ func modeFromUint32(m uint32, isDir bool) os.FileMode {
 	}
 	return mode
 }
+
+// PosixOwner is the optional facet that carries POSIX ownership.
+// Surfaces needing UID/GID (FUSE Getattr) type-assert an os.FileInfo
+// to it. Root-view files report their real owner; synthetic entries
+// and service-tree nodes report 0/0 (root-owned), since those trees
+// have no per-file ownership.
+type PosixOwner interface {
+	OwnerUID() uint32
+	OwnerGID() uint32
+}
+
+func (p projectionFileInfo) OwnerUID() uint32 { return p.fi.UID }
+func (p projectionFileInfo) OwnerGID() uint32 { return p.fi.GID }
+
+func (p projectionNodeInfo) OwnerUID() uint32 { return 0 }
+func (p projectionNodeInfo) OwnerGID() uint32 { return 0 }
+
+func (s synthInfo) OwnerUID() uint32 { return 0 }
+func (s synthInfo) OwnerGID() uint32 { return 0 }
+
+var (
+	_ PosixOwner = projectionFileInfo{}
+	_ PosixOwner = projectionNodeInfo{}
+	_ PosixOwner = synthInfo{}
+)
