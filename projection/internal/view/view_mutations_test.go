@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/event"
 	vw "scrinium.dev/projection/internal/view"
 	"scrinium.dev/testutil/eventfx"
 	"scrinium.dev/testutil/manifestfx"
@@ -128,11 +129,11 @@ func TestEvent_ViewRebuilt(t *testing.T) {
 		vw.WithEventBus(bus))
 	defer v.Close()
 
-	if got := bus.Count(vw.EventViewRebuilt); got != 1 {
+	if got := bus.Count(event.EventViewRebuilt); got != 1 {
 		t.Fatalf("expected 1 ViewRebuilt event, got %d", got)
 	}
-	rebuilt := bus.ByType(vw.EventViewRebuilt)
-	p := rebuilt[0].Payload.(vw.RebuiltPayload)
+	rebuilt := bus.ByType(event.EventViewRebuilt)
+	p := rebuilt[0].Payload.(event.RebuiltPayload)
 	if p.NodeCount != 1 {
 		t.Errorf("NodeCount: got %d, want 1", p.NodeCount)
 	}

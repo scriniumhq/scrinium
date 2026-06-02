@@ -1,6 +1,6 @@
 package artifact_test
 
-// Recovery tests: coverage that existed in the old manifestcodec/encrypted
+// Recovery tests: coverage that existed in the old manifest codec/encrypted
 // test suites but was lost or weakened during the artifact extraction.
 //
 // This file is deliberately self-contained — it defines its own fixtures

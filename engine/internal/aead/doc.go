@@ -2,7 +2,7 @@
 // the AES-256-GCM constructor with the project's invariant checks,
 // the key-material constants, and the Wipe hygiene helper. It is the
 // single home for "build the cipher / zero a key" so neither the
-// manifest-body codec (internal/manifestcodec) nor the blob pipeline
+// manifest-body codec (engine/artifact) nor the blob pipeline
 // (pipeline/stage/aesgcm, pipeline/internal/segaead) re-implements the
 // AES-GCM construction.
 //

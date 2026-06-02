@@ -3,8 +3,7 @@ package errs
 import "errors"
 
 // Cryptography: passphrase derivation, KEK/DEK handling, recovery
-// kit. See docs/2. Internals/03 §3.1 for the key model,
-// docs/2. Internals/10 §10.3 for the RecoveryKit format.
+// kit.
 
 // ErrInvalidKey — the KEK does not decrypt the DEK: wrong password
 // or corrupted EncryptedDEK.

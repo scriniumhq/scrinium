@@ -4,7 +4,7 @@ import "errors"
 
 // Integrity and format compatibility: hashes that don't match,
 // schema versions a binary cannot read, unrecognised pack magic.
-// Surfaced by manifestcodec verification, by Get on read, and by
+// Surfaced by engine/artifact verification, by Get on read, and by
 // the Scrub Agent.
 
 // ErrCorruptedManifest — the hash of the manifest file does not

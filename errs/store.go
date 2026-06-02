@@ -6,9 +6,7 @@ import (
 )
 
 // Store lifecycle: states (Bootstrapping/Locked/...) and the
-// init/open transitions. See docs/2. Internals/01 §1.4 for the
-// finite-state machine, docs/2. Internals/10 §10.1 for the open
-// procedure that emits these.
+// init/open transitions.
 
 // ErrStoreNotReady — the Store is in StateBootstrapping. The API
 // is blocked until initialisation completes.

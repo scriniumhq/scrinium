@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/engine/index"
 	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // classifyError maps a low-level SQLite error to a core sentinel
@@ -73,7 +73,7 @@ func (e *busyError) Is(target error) bool {
 // the caller spent waiting (typically from a timer started before
 // the operation).
 func (i *Index) emitContention(operation string, waitedFor time.Duration) {
-	i.publish(index.EventIndexContentionError, index.IndexContentionErrorPayload{
+	i.publish(event.EventIndexContentionError, event.IndexContentionErrorPayload{
 		Operation: operation,
 		WaitedFor: waitedFor,
 	})
@@ -84,7 +84,7 @@ func (i *Index) emitContention(operation string, waitedFor time.Duration) {
 // still emit so dashboards can compare success/failure latency
 // distributions.
 func (i *Index) emitLatency(operation string, dur time.Duration) {
-	i.publish(index.EventIndexWriteLatency, index.IndexWriteLatencyPayload{
+	i.publish(event.EventIndexWriteLatency, event.IndexWriteLatencyPayload{
 		Operation: operation,
 		Duration:  dur,
 	})

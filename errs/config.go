@@ -3,9 +3,7 @@ package errs
 import "errors"
 
 // Configuration: system.config/current pointer and immutable-param
-// validation. See docs/2. Internals/10 §10.1.4 for the pointer
-// format and the four failure modes below; §4.4 for the Rules
-// Engine that produces ErrInvalidConfig.
+// validation. ErrInvalidConfig is produced by the Rules Engine.
 
 // ErrMissingConfigPointer — system.config/current is absent.
 var ErrMissingConfigPointer = errors.New("scrinium: missing config pointer")

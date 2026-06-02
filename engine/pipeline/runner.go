@@ -23,8 +23,8 @@ package pipeline
 // On the read path we hash nothing: the inverse pipeline simply
 // produces the original bytes; integrity of the encrypted/compressed
 // bytes is guaranteed at write-time (the on-disk file is named after
-// BlobRef) and re-verified by the AEAD tag for crypto stages, per
-// docs §3.2 "неявная верификация".
+// BlobRef) and re-verified by the AEAD tag for crypto stages
+// (implicit verification).
 
 import (
 	"fmt"

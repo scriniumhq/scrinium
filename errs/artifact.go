@@ -6,8 +6,7 @@ import (
 )
 
 // Artifact-level operations: lookup, namespace policy, retention,
-// deletion. See docs/2. Internals/02 §2.2 (Delete flow), §2.4
-// (Get path), docs/2. Internals/07 §7.2.2 (RetentionUntil).
+// deletion.
 
 // ErrArtifactNotFound — no manifest with the given ArtifactID
 // exists in the Store, or it is a ManifestTypePack (an internal

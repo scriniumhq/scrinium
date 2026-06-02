@@ -141,13 +141,10 @@ type StoreDegradedPayload struct {
 }
 
 // LeaseTakeoverPayload is the payload of two events:
-// store.EventStaleLeaseTakeover (Store-level lease — Open under
-// stale location.lock) and agent.EventAgentStaleLease (an agent
-// took over from a previous holder that stopped renewing). The
-// stale-lease concept is layer-agnostic, so a single struct
-// describes both. Lives in core because core was the first
-// emitter; agent imports core for unrelated reasons already, so
-// no new dependency is introduced.
+// EventStaleLeaseTakeover (Store-level lease — Open under a stale
+// location.lock) and EventAgentStaleLease (an agent took over from a
+// previous holder that stopped renewing). The stale-lease concept is
+// layer-agnostic, so a single struct in this package describes both.
 type LeaseTakeoverPayload struct {
 	LeaseKey       string
 	PreviousHolder string

@@ -56,7 +56,7 @@ type ScrubStats struct {
 // Engine-managed: a single Scrub Agent is launched automatically
 // Agent for every registered Target Store.
 type ScrubAgent interface {
-	BackgroundAgent
+	Agent
 
 	// RunOnce performs one full verification pass over every blob
 	// whose last_verified_at is older than MaxAge and returns. Used
@@ -80,7 +80,7 @@ func NewScrubAgent(
 	st store.Store,
 	drv driver.Driver,
 	idx index.StoreIndex,
-	bus event.EventBus,
+	bus event.Publisher,
 	hostID string,
 	storeID string,
 	cfg ScrubConfig,
@@ -129,7 +129,7 @@ type scrubAgent struct {
 	store   store.Store
 	drv     driver.Driver
 	idx     index.StoreIndex
-	bus     event.EventBus
+	bus     event.Publisher
 	hostID  string
 	storeID string
 	cfg     ScrubConfig
@@ -139,40 +139,56 @@ type scrubAgent struct {
 
 var _ ScrubAgent = (*scrubAgent)(nil)
 
-// Run is the background loop: a scrub pass every ScanInterval until ctx
-// is cancelled. A pass that fails (lease lost, fatal index error) is
-// logged via the failed event and the loop continues to the next tick —
-// a transient failure must not kill the agent.
-func (a *scrubAgent) Run(ctx context.Context) error {
+// scrubFactory builds the Scrub agent from the registry (ADR-51).
+type scrubFactory struct{}
+
+func (scrubFactory) Name() string { return "scrub" }
+
+func (scrubFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
+	c, _ := cfg.(ScrubConfig) // zero value on mismatch -> defaults
+	return NewScrubAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c)
+}
+
+func init() { Register(scrubFactory{}) }
+
+// AgentType is the short registry/event identifier.
+func (a *scrubAgent) AgentType() string { return "scrub" }
+
+// Validate checks preconditions. Scrub needs no maintenance mode; the
+// scrub lease is acquired inside Run, so the only precondition here is
+// a live context.
+func (a *scrubAgent) Validate(ctx context.Context) error { return ctx.Err() }
+
+// Run performs one verification pass and returns its AgentResult. The
+// agent is periodically invoked by the scheduler (ADR-69): an
+// interrupted pass resumes from last_verified_at on the next call.
+func (a *scrubAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 	a.setState(StateRunning, nil)
-	t := time.NewTicker(a.cfg.ScanInterval)
-	defer t.Stop()
-
-	// Run an initial pass immediately rather than waiting a full
-	// interval on startup.
-	if _, err := a.RunOnce(ctx); err != nil && !isCtxErr(err) {
-		// Non-fatal: recorded, loop continues.
-		a.bus.Publish(event.Event{Type: EventAgentFailed, Payload: AgentFailedPayload{
-			AgentType: "Scrub", StoreID: a.storeID, Err: err,
-		}})
+	stats, err := a.RunOnce(ctx)
+	res := &domain.AgentResult{
+		AgentType:   "scrub",
+		StoreID:     a.storeID,
+		CompletedAt: time.Now(),
+		Stats: map[string]int64{
+			"scanned_blobs":  stats.ScannedBlobs,
+			"verified_blobs": stats.VerifiedBlobs,
+			"failed_blobs":   stats.FailedBlobs,
+		},
 	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			a.setState(StateIdle, nil)
-			a.bus.Publish(event.Event{Type: EventAgentStopped, Payload: AgentStartedPayload{
-				AgentType: "Scrub", StoreID: a.storeID,
-			}})
-			return ctx.Err()
-		case <-t.C:
-			if _, err := a.RunOnce(ctx); err != nil && !isCtxErr(err) {
-				a.bus.Publish(event.Event{Type: EventAgentFailed, Payload: AgentFailedPayload{
-					AgentType: "Scrub", StoreID: a.storeID, Err: err,
-				}})
-			}
+	if err != nil {
+		a.setState(StateFaulted, err)
+		if isCtxErr(err) {
+			res.Partial = true
+			a.bus.Publish(event.Event{Type: event.EventAgentCancelled})
+			return res, err
 		}
+		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
+			AgentType: "scrub", StoreID: a.storeID, Err: err,
+		}})
+		return res, err
 	}
+	a.setState(StateIdle, nil)
+	return res, nil
 }
 
 // RunOnce performs one verification pass under the scrub lease: a blob
@@ -182,21 +198,21 @@ func (a *scrubAgent) Run(ctx context.Context) error {
 // fails verification is recorded and the pass continues — one bad blob
 // must not abort the scrub.
 func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
-	a.bus.Publish(event.Event{Type: EventAgentStarted, Payload: AgentStartedPayload{
-		AgentType: "Scrub", StoreID: a.storeID, StartedAt: time.Now(),
+	a.bus.Publish(event.Event{Type: event.EventAgentStarted, Payload: event.AgentStartedPayload{
+		AgentType: "scrub", StoreID: a.storeID, StartedAt: time.Now(),
 	}})
 
 	l, prev, err := lease.Acquire(ctx, a.drv, lease.Config{
 		Path:      scrubLeasePath,
 		HostID:    a.hostID,
-		AgentType: "Scrub",
+		AgentType: "scrub",
 		TTL:       defaultScrubLeaseTTL,
 	})
 	if err != nil {
 		return ScrubStats{}, fmt.Errorf("agent.Scrub.RunOnce: acquire lease: %w", err)
 	}
 	if prev != nil {
-		a.bus.Publish(event.Event{Type: EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
+		a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
 			LeaseKey: scrubLeasePath, PreviousHolder: prev.HostID,
 			ExpiredAt: prev.ExpiresAt, TakenBy: a.hostID,
 		}})
@@ -281,8 +297,8 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 		}
 	}
 
-	a.bus.Publish(event.Event{Type: EventAgentCycle, Payload: domain.AgentResult{
-		AgentType: "Scrub", StoreID: a.storeID, CompletedAt: time.Now(),
+	a.bus.Publish(event.Event{Type: event.EventAgentCycle, Payload: domain.AgentResult{
+		AgentType: "scrub", StoreID: a.storeID, CompletedAt: time.Now(),
 		Stats: map[string]int64{
 			"scanned_blobs":  stats.ScannedBlobs,
 			"verified_blobs": stats.VerifiedBlobs,

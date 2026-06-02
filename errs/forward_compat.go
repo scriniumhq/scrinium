@@ -3,7 +3,7 @@ package errs
 import "errors"
 
 // Forward-compatibility sentinels for unrecognised manifest
-// formats. Returned by internal/manifestcodec when the header on
+// formats. Returned by engine/artifact when the header on
 // disk or the StoreConfig in memory specifies an encoding or
 // crypto mode the running binary does not know how to handle.
 //

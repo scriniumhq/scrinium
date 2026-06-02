@@ -4,7 +4,7 @@
 // do I/O, no imports beyond the Go standard library.
 //
 // Why a separate package: helpers under internal/* (blobpath,
-// manifestcodec, future codecs) need these types. If they lived in
+// the manifest codec, future codecs) need these types. If they lived in
 // core/, the helpers would import core, and core imports the
 // helpers — a cycle. Pulling the value types one level below
 // breaks the cycle by making the dependency one-way:

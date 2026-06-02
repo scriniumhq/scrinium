@@ -27,8 +27,7 @@ import (
 // to its own substrate. Tables are namespace-prefixed by
 // extension Name to prevent collisions between extensions.
 //
-// Contract spec: 3. Contracts/06 Index Extensions.md.
-// Behaviour and sqlite implementation: 4. API Reference/16.
+// Contract spec: 3. Reference/09 Index Extensions.md.
 type IndexExtension interface {
 	// Name is the stable identifier for this extension. Used
 	// as the namespace prefix in ExtensionStore. Must be

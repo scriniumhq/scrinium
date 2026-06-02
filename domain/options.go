@@ -12,7 +12,7 @@ const (
 	BlobTypeChunk   BlobType = "Chunk"
 )
 
-// RoutingHints are policy hints for curator.RoutingFunc.
+// RoutingHints are policy hints for multistore.RoutingFunc.
 type RoutingHints struct {
 	ContentType string
 	Source      string

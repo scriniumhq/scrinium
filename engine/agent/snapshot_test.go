@@ -191,20 +191,13 @@ func TestSnapshot_RunStopsOnContextCancel(t *testing.T) {
 	f := newSnapshotFixture(t)
 	a := newSnapshot(t, f, agent.SnapshotConfig{Interval: time.Hour})
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- a.Run(ctx) }()
-	time.Sleep(100 * time.Millisecond)
-	cancel()
-	select {
-	case err := <-done:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("Run returned %v, want context.Canceled", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("Run did not stop after cancel")
+	cancel() // one-shot agent: a cancelled context must abort Run promptly
+	_, err := a.Run(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run returned %v, want context.Canceled", err)
 	}
-	if st, _ := a.Status(); st != agent.StateIdle {
-		t.Errorf("state after stop = %v, want StateIdle", st)
+	if st, _ := a.Status(); st != agent.StateFaulted {
+		t.Errorf("state after cancel = %v, want StateFaulted", st)
 	}
 }
 

@@ -118,8 +118,8 @@ func (i *Index) GetBySession(ctx context.Context, sessionID domain.SessionID) ([
 // ListOrphanBlobs iterates over blobs with ref_count = 0. Used by
 // the GC Agent's Mark phase — every entry is a deletion candidate.
 //
-// We rely on the partial index `blobs_orphan` (defined in
-// schemaV1: ON blobs(ref_count) WHERE ref_count = 0) so the scan
+// We rely on the partial index `blobs_orphan`
+// (ON blobs(ref_count) WHERE ref_count = 0) so the scan
 // is cheap even on very large blob tables. SQLite uses the
 // partial index automatically when the query predicate matches.
 func (i *Index) ListOrphanBlobs(

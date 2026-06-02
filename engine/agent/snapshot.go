@@ -59,7 +59,7 @@ type SnapshotStats struct {
 // uses a fresh snapshot as the starting point and reads in the
 // new manifests through ListObjectsWithModTime.
 type SnapshotAgent interface {
-	BackgroundAgent
+	Agent
 
 	// TakeSnapshot forces a snapshot regardless of Interval and
 	// ArtifactThreshold. Used before critical maintenance
@@ -88,7 +88,7 @@ func NewSnapshotAgent(
 	st store.Store,
 	drv driver.Driver,
 	idx index.StoreIndex,
-	bus event.EventBus,
+	bus event.Publisher,
 	hostID string,
 	storeID string,
 	cfg SnapshotConfig,
@@ -120,7 +120,7 @@ type snapshotAgent struct {
 	store   store.Store
 	drv     driver.Driver
 	idx     index.StoreIndex
-	bus     event.EventBus
+	bus     event.Publisher
 	hostID  string
 	storeID string
 	cfg     SnapshotConfig
@@ -130,31 +130,51 @@ type snapshotAgent struct {
 
 var _ SnapshotAgent = (*snapshotAgent)(nil)
 
-// Run periodically snapshots the index until ctx is cancelled. The
-// ArtifactThreshold trigger is not wired on M3: there is no cheap
-// "artifacts added since last snapshot" counter on the public surface,
-// so snapshots are driven by Interval and explicit TakeSnapshot. A
-// failed cycle is reported and the loop continues.
-func (a *snapshotAgent) Run(ctx context.Context) error {
+// snapshotFactory builds the Snapshot agent from the registry (ADR-51).
+type snapshotFactory struct{}
+
+func (snapshotFactory) Name() string { return "snapshot" }
+
+func (snapshotFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
+	c, _ := cfg.(SnapshotConfig) // zero value on mismatch -> defaults
+	return NewSnapshotAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c)
+}
+
+func init() { Register(snapshotFactory{}) }
+
+// AgentType is the short registry/event identifier.
+func (a *snapshotAgent) AgentType() string { return "snapshot" }
+
+// Validate checks preconditions. Snapshot needs no maintenance mode;
+// the snapshot lease is acquired inside Run, so the only precondition
+// here is a live context.
+func (a *snapshotAgent) Validate(ctx context.Context) error { return ctx.Err() }
+
+// Run takes one snapshot and returns its AgentResult. A one-shot
+// operation: the scheduler decides cadence (ADR-69).
+func (a *snapshotAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 	a.setState(StateRunning, nil)
-	t := time.NewTicker(a.cfg.Interval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			a.setState(StateIdle, nil)
-			a.bus.Publish(event.Event{Type: EventAgentStopped, Payload: AgentStartedPayload{
-				AgentType: "Snapshot", StoreID: a.storeID,
-			}})
-			return ctx.Err()
-		case <-t.C:
-			if _, err := a.TakeSnapshot(ctx); err != nil && !isCtxErr(err) {
-				a.bus.Publish(event.Event{Type: EventAgentFailed, Payload: AgentFailedPayload{
-					AgentType: "Snapshot", StoreID: a.storeID, Err: err,
-				}})
-			}
-		}
+	stats, err := a.TakeSnapshot(ctx)
+	res := &domain.AgentResult{
+		AgentType:   "snapshot",
+		StoreID:     a.storeID,
+		CompletedAt: time.Now(),
+		Stats:       map[string]int64{"db_bytes": stats.DBBytes},
 	}
+	if err != nil {
+		a.setState(StateFaulted, err)
+		if isCtxErr(err) {
+			res.Partial = true
+			a.bus.Publish(event.Event{Type: event.EventAgentCancelled})
+			return res, err
+		}
+		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
+			AgentType: "snapshot", StoreID: a.storeID, Err: err,
+		}})
+		return res, err
+	}
+	a.setState(StateIdle, nil)
+	return res, nil
 }
 
 // TakeSnapshot vacuums the index into a temp file, publishes it into
@@ -165,21 +185,21 @@ func (a *snapshotAgent) TakeSnapshot(ctx context.Context) (SnapshotStats, error)
 	if err := ctx.Err(); err != nil {
 		return SnapshotStats{}, err
 	}
-	a.bus.Publish(event.Event{Type: EventAgentStarted, Payload: AgentStartedPayload{
-		AgentType: "Snapshot", StoreID: a.storeID, StartedAt: time.Now(),
+	a.bus.Publish(event.Event{Type: event.EventAgentStarted, Payload: event.AgentStartedPayload{
+		AgentType: "snapshot", StoreID: a.storeID, StartedAt: time.Now(),
 	}})
 
 	l, prev, err := lease.Acquire(ctx, a.drv, lease.Config{
 		Path:      snapshotLeasePath,
 		HostID:    a.hostID,
-		AgentType: "Snapshot",
+		AgentType: "snapshot",
 		TTL:       defaultSnapshotLeaseTTL,
 	})
 	if err != nil {
 		return SnapshotStats{}, fmt.Errorf("agent.Snapshot.TakeSnapshot: acquire lease: %w", err)
 	}
 	if prev != nil {
-		a.bus.Publish(event.Event{Type: EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
+		a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
 			LeaseKey: snapshotLeasePath, PreviousHolder: prev.HostID,
 			ExpiredAt: prev.ExpiresAt, TakenBy: a.hostID,
 		}})
@@ -201,8 +221,8 @@ func (a *snapshotAgent) TakeSnapshot(ctx context.Context) (SnapshotStats, error)
 		return SnapshotStats{}, fmt.Errorf("agent.Snapshot.TakeSnapshot: lease lost: %w", herr)
 	}
 
-	a.bus.Publish(event.Event{Type: EventAgentCycle, Payload: domain.AgentResult{
-		AgentType: "Snapshot", StoreID: a.storeID, CompletedAt: time.Now(),
+	a.bus.Publish(event.Event{Type: event.EventAgentCompleted, Payload: domain.AgentResult{
+		AgentType: "snapshot", StoreID: a.storeID, CompletedAt: time.Now(),
 		Stats: map[string]int64{"db_bytes": stats.DBBytes},
 	}})
 	return stats, nil
@@ -245,8 +265,8 @@ func (a *snapshotAgent) snapshotOnce(ctx context.Context) (SnapshotStats, error)
 
 	if err := a.pruneOldSnapshots(ctx); err != nil {
 		// Retention failure does not invalidate the snapshot just taken.
-		a.bus.Publish(event.Event{Type: EventAgentFailed, Payload: AgentFailedPayload{
-			AgentType: "Snapshot", StoreID: a.storeID, Err: err,
+		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
+			AgentType: "snapshot", StoreID: a.storeID, Err: err,
 		}})
 	}
 

@@ -12,7 +12,7 @@ import (
 // Extension factory signatures. Hosts register implementations through
 // the Register* functions (typically in an init()), after which the
 // corresponding scheme/kind works in a config document alongside the
-// built-ins. See 3. Reference/10 Declarative Configuration.md §10.6.
+// built-ins.
 //
 // Built-in backends (file://, s3://, sqlite://, postgres://) and the
 // built-in pipeline stages (hash/compress/crypto) are NOT registered

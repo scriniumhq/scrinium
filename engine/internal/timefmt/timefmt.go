@@ -1,5 +1,5 @@
 // Package timefmt holds the on-disk timestamp format shared by
-// index/sqlite and internal/manifestcodec. Both write timestamps
+// index/sqlite and engine/artifact. Both write timestamps
 // to durable storage and must agree on the byte-level format,
 // or RebuildIndex (M3) cannot copy strings between subsystems
 // without reformatting.

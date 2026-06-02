@@ -1,7 +1,6 @@
 // Package lease implements the Scrinium lease primitive: a short-lived,
 // mutable, CAS-bypassing exclusive-access token stored as a single
-// service file under system.state/<domain>/lease (see
-// 2. Internals/11 Leases.md).
+// service file under system.state/<domain>/lease.
 //
 // A lease is NOT a CAS artifact. It is mutable (Renew rewrites the
 // body), short-lived (TTL of tens of seconds to minutes), and is

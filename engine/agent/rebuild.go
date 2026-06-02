@@ -106,7 +106,7 @@ type RebuildStats struct {
 // restore store.json (when lost) and the system.config/current
 // pointer (when dangling).
 type RebuildIndexAgent interface {
-	domain.MaintenanceAgent
+	Agent
 
 	// Stats returns a progress snapshot during execution (safe to
 	// call from another goroutine). After Run, returns the final
@@ -132,7 +132,7 @@ func NewRebuildIndexAgent(
 	st store.Store,
 	drv driver.Driver,
 	idx index.StoreIndex,
-	bus event.EventBus,
+	bus event.Publisher,
 	hostID string,
 	storeID string,
 	cfg RebuildConfig,
@@ -179,13 +179,15 @@ type rebuildAgent struct {
 	store   store.Store
 	drv     driver.Driver
 	idx     index.StoreIndex
-	bus     event.EventBus
+	bus     event.Publisher
 	hostID  string
 	storeID string
 	cfg     RebuildConfig
 
 	mu    sync.Mutex
 	stats RebuildStats
+
+	baseState
 }
 
 var _ RebuildIndexAgent = (*rebuildAgent)(nil)
@@ -209,13 +211,13 @@ func (a *rebuildAgent) Validate(ctx context.Context) error {
 // Run acquires the maintenance lease and rebuilds the index. On M3 the
 // only path is FullScan (Auto resolves to it, since Snapshot has no
 // source yet).
-func (a *rebuildAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
+func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	start := time.Now()
-	a.bus.Publish(event.Event{Type: EventAgentStarted, Payload: AgentStartedPayload{
-		AgentType: "RebuildIndex", StoreID: a.storeID, StartedAt: start,
+	a.bus.Publish(event.Event{Type: event.EventAgentStarted, Payload: event.AgentStartedPayload{
+		AgentType: "rebuild", StoreID: a.storeID, StartedAt: start,
 	}})
 
 	if a.cfg.RecoveryKit != nil {
@@ -227,14 +229,14 @@ func (a *rebuildAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 	l, prev, err := lease.Acquire(ctx, a.drv, lease.Config{
 		Path:      rebuildLeasePath,
 		HostID:    a.hostID,
-		AgentType: "RebuildIndex",
+		AgentType: "rebuild",
 		TTL:       a.cfg.LeaseTTL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("agent.Rebuild.Run: acquire lease: %w", err)
 	}
 	if prev != nil {
-		a.bus.Publish(event.Event{Type: EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
+		a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
 			LeaseKey: rebuildLeasePath, PreviousHolder: prev.HostID,
 			ExpiredAt: prev.ExpiresAt, TakenBy: a.hostID,
 		}})
@@ -250,8 +252,8 @@ func (a *rebuildAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 
 	a.setSource(RebuildSourceFullScan)
 	if err := a.fullScan(runCtx); err != nil {
-		a.bus.Publish(event.Event{Type: EventAgentFailed, Payload: AgentFailedPayload{
-			AgentType: "RebuildIndex", StoreID: a.storeID, Err: err,
+		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
+			AgentType: "rebuild", StoreID: a.storeID, Err: err,
 		}})
 		return nil, fmt.Errorf("agent.Rebuild.Run: %w", err)
 	}
@@ -280,7 +282,7 @@ func (a *rebuildAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 			"blobs_registered":  final.BlobsRegistered,
 		},
 	}
-	a.bus.Publish(event.Event{Type: EventAgentCompleted, Payload: *res})
+	a.bus.Publish(event.Event{Type: event.EventAgentCompleted, Payload: *res})
 	return res, nil
 }
 
@@ -321,8 +323,8 @@ func (a *rebuildAgent) fullScan(ctx context.Context) error {
 			// the whole rebuild; it is recorded via a failed-style event
 			// and the scan continues. (Encrypted manifests land here on
 			// M3 until the agent is wired with a KeyProvider.)
-			a.bus.Publish(event.Event{Type: EventAgentProgress, Payload: AgentProgressPayload{
-				AgentType: "RebuildIndex", StoreID: a.storeID,
+			a.bus.Publish(event.Event{Type: event.EventAgentProgress, Payload: event.AgentProgressPayload{
+				AgentType: "rebuild", StoreID: a.storeID,
 			}})
 			continue
 		}
@@ -413,3 +415,31 @@ func (a *rebuildAgent) countIndexed(registeredBlob bool) {
 	}
 	a.mu.Unlock()
 }
+
+// AgentType is the short registry/event identifier.
+func (a *rebuildAgent) AgentType() string { return "rebuild" }
+
+// Run is the contract entry point: it tracks lifecycle State around the
+// rebuild core (which owns lease handling and event emission).
+func (a *rebuildAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
+	a.setState(StateRunning, nil)
+	res, err := a.run(ctx)
+	if err != nil {
+		a.setState(StateFaulted, err)
+		return res, err
+	}
+	a.setState(StateIdle, nil)
+	return res, nil
+}
+
+// rebuildFactory builds the Rebuild agent from the registry (ADR-51).
+type rebuildFactory struct{}
+
+func (rebuildFactory) Name() string { return "rebuild" }
+
+func (rebuildFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
+	c, _ := cfg.(RebuildConfig) // zero value on mismatch -> defaults
+	return NewRebuildIndexAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c)
+}
+
+func init() { Register(rebuildFactory{}) }

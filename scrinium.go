@@ -68,9 +68,17 @@ type ScriniumClient struct {
 // domain package so a hello-world program can stay in one import.
 type Artifact = domain.Artifact
 
-// WithNamespace scopes a Put to a namespace. Re-exported from the store
-// package so single-package programs need not import it directly.
-var WithNamespace = domain.WithNamespace
+// Data-plane options, re-exported from domain so single-package
+// programs need not import domain directly. Rule: every public domain
+// option has a scrinium.WithX re-export of the same value-function.
+var (
+	WithNamespace = domain.WithNamespace // PutOption
+	WithSession   = domain.WithSession   // PutOption
+	WithBlobType  = domain.WithBlobType  // PutOption
+	WithRetention = domain.WithRetention // PutOption
+	WithRouting   = domain.WithRouting   // PutOption
+	WithColdRead  = domain.WithColdRead  // GetOption
+)
 
 // Info is assembly metadata an app may surface in diagnostics.
 type Info = assembly.Info

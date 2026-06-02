@@ -96,12 +96,11 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 		// OK
 	case domain.ManifestEncodingBinary:
 		// Binary (\x00SC2 / MsgPack) magic is reserved by the format
-		// and recognised by manifestcodec, but the deterministic-
-		// encode side is not yet shipped — see 7. Planning/backlog.md
-		// §3.3 "Бинарные манифесты (MsgPack)". Refuse loudly at
-		// InitStore rather than crash on the first user-level Put with
-		// ErrUnsupportedEncoding from manifestcodec.
-		return fmt.Errorf("%w: ManifestEncoding=Binary deferred (see backlog §3.3)",
+		// and recognised by the manifest codec, but the
+		// deterministic-encode side is not yet shipped. Refuse loudly
+		// at InitStore rather than crash on the first user-level Put
+		// with ErrUnsupportedEncoding from the codec.
+		return fmt.Errorf("%w: ManifestEncoding=Binary deferred",
 			errs.ErrInvalidConfig)
 	default:
 		return errs.ErrInvalidConfig
@@ -172,8 +171,7 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 // Rationale for "non-zero comparison": Go zero values are
 // indistinguishable from "field omitted". The caller can always pass
 // an explicit value to opt into the check; a default value passes
-// silently. This matches the contract documented in
-// 4. API Reference/01 Lifecycle §1.2.
+// silently.
 func ValidateAgainstActive(req, active domain.StoreConfig) error {
 	var mismatches []string
 
@@ -231,9 +229,9 @@ func ValidateAgainstActive(req, active domain.StoreConfig) error {
 // blobs — either the manifest body is protected (Sealed/Paranoid) or
 // the blob Pipeline contains a crypto stage. EncryptedDedup and
 // SegmentSize only have meaning for such stores. The Pipeline-stage
-// check is name-based against the registered crypto algorithms
-// (3. Reference/04 §4.3); it stays correct as long as crypto plugins
-// register under their canonical ids.
+// check is name-based against the registered crypto algorithms;
+// it stays correct as long as crypto plugins register under their
+// canonical ids.
 func isEncryptingConfig(cfg domain.StoreConfig) bool {
 	if cfg.ManifestCrypto != "" && cfg.ManifestCrypto != domain.ManifestCryptoPlain {
 		return true

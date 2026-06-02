@@ -7,7 +7,7 @@ import "hash"
 // Agent when parsing TOC blobs and Pack TOCs, and by parsers of
 // "<algo>-<hex>" identifiers.
 //
-// Lives in domain so that helpers (manifestcodec, future codecs,
+// Lives in domain so that helpers (the manifest codec, future codecs,
 // maintenance agents) can depend on the contract without pulling
 // in store. The default implementation lives in core, constructed
 // via store.NewHashRegistry().

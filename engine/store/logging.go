@@ -88,7 +88,7 @@ func optsLogger(o storeOptions, component string) *slog.Logger {
 	return resolveLogger(o.logger).With(slog.String("component", component))
 }
 
-// --- redaction (ADR-60 §"Безопасность", Concurrency Model §3.4) ---------
+// --- redaction (ADR-60) ------------------------------------------------
 //
 // Secret-bearing values carry a LogValuer so that an accidental
 // slog attribute can never spill key material, even if a future call site

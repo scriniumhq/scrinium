@@ -183,7 +183,6 @@ type AdminStore interface {
 	// expected to have set the maintenance mode the agent requires
 	// (see SetMaintenanceMode); Validate reports a mismatch. The
 	// contract lives in domain (domain.MaintenanceAgent).
-	// Full semantics: 3. Reference/06 Agents/00 Contract.md.
 	RunMaintenance(ctx context.Context, agent domain.MaintenanceAgent) (*domain.AgentResult, error)
 
 	// System returns the facade for engine-internal service artifacts
