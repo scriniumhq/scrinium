@@ -1,7 +1,7 @@
 # Scrinium
 
-A content-addressable storage engine in Go, with a high-level API and
-reference applications (FUSE, WebDAV, HTML browser).
+A content-addressable storage engine in Go, with a high-level front
+door and reference applications (FUSE, WebDAV, HTML browser).
 
 ## Status
 
@@ -13,90 +13,106 @@ Single Go module (`scrinium.dev`):
 
 ```
 scrinium/
-├── go.mod                   # scrinium.dev
-├── *.go                     # high-level wrapper API: scrinium.Open / scrinium.Init
+├── go.mod                   # module scrinium.dev
+├── scrinium.go              # front door: Open / Build / Load*, *ScriniumClient
 │
-├── engine/                  # the engine itself
-│   ├── store/               # Store implementation (Put/Get/Delete/Walk, lifecycle)
-│   ├── domain/              # types (Manifest, Artifact, config, ...)
-│   ├── artifact/            # manifest codec, on-disk paths, header/crypto
+├── domain/                  # core types (Manifest, Artifact, config, options, IDs)
+├── errs/                    # flat sentinel-error package (errors.Is targets)
+├── event/                   # flat event bus + payloads; reserved type-string
+│                            #   namespaces: store.* agent.* index.* projection.*
+│
+├── engine/                  # the engine
+│   ├── store/               # Store implementation (Put/Get/Delete/Walk, Admin, lifecycle)
+│   ├── artifact/            # manifest encode/decode, on-disk paths, header/crypto
 │   ├── driver/              # storage backends (localfs; faulty for tests; s3 stub)
-│   ├── index/               # metadata index backends (sqlite; postgres stub)
-│   ├── pipeline/            # blob transform stages (stage/zstd, stage/aesgcm; segaead)
-│   ├── projection/          # read-side: View, FSOps, fsmeta, fsindex, vfs
-│   ├── wrapper/             # composition helpers (bundler, chunker, host, multistore)
+│   ├── index/               # metadata index backends (sqlite; postgres stub) + extensions
+│   ├── pipeline/            # blob transform stages (zstd, aes-gcm; segmented AEAD)
+│   ├── wrapper/             # composition decorators (bundler, chunker, multistore)
 │   ├── hashing/             # content-hash registry
-│   ├── agent/, curator/, maintenance/   # workers (agent: interfaces, impl in progress)
-│   ├── errs/, event/        # cross-cutting types
-│   └── internal/            # engine-private helpers (aead, timefmt, uriresolve)
+│   ├── agent/               # background & maintenance workers (single Agent contract)
+│   └── internal/            # engine-private helpers (aead, lease, timefmt, ...)
+│
+├── projection/              # read/write filesystem projection (View, FSOps, vfs, pathx)
+├── internal/                # assembly (the wiring) + secretref
+├── testutil/                # shared test fixtures and harnesses (see TESTING.md)
 │
 ├── cmd/                     # reference binaries
 │   ├── scrinium-fuse/       # FUSE mount (build tag: fuse)
 │   ├── scrinium-webdav/     # WebDAV server
-│   └── scrinium-webview/    # HTML browser
+│   └── scrinium-webview/    # read-only HTML browser
 │
-├── internal/testutil/       # shared test fixtures (see TESTING.md)
-│
-└── examples/                # example programs
-    ├── hello/               # smallest open + put + get
+└── examples/                # runnable programs
+    ├── hello/               # smallest open + put + get (front door)
+    ├── hello-manual/        # the same store assembled from primitives, no front door
     ├── ingest/              # batch ingest from a directory tree
     └── browse/              # read-only inspector
 ```
 
-Some backends are intentionally stubs until their milestone: the s3
-driver and the postgres index return `ErrNotImplemented`, and the
-`agent` workers (gc, scrub, ingester, ejector) are interfaces and
-constructors with implementations still in progress. See `TESTING.md`
-for how this affects test coverage.
+Some backends and workers are intentionally stubs until their
+milestone, returning `errs.ErrNotImplemented`: the s3 driver, the
+postgres index, and the `ingester` / `ejector` agents. The implemented
+agents — `gc`, `scrub`, `snapshot`, and index `rebuild` — share one
+lifecycle contract (`agent.Agent`: `Validate` then `Run`) and register
+through a package-level factory registry; the host or a scheduler
+drives them. See `TESTING.md` for how the stubs affect coverage.
 
 ## Quick start
 
-The smallest program — open or create a store, put one artifact, read it back:
+The smallest program — open or create a store, put one artifact, read
+it back. Backends register by blank import (ADR-63), as with the
+drivers in `database/sql`:
 
 ```go
 package main
 
 import (
-  "bytes"
-  "context"
-  "io"
-  "log"
+	"context"
+	"fmt"
+	"io"
+	"log"
+	"strings"
 
-  scrinium "scrinium.dev"
-  "scrinium.dev/domain"
+	scrinium "scrinium.dev"
+
+	// Pull in the backends this program uses.
+	_ "scrinium.dev/engine/driver/localfs"
+	_ "scrinium.dev/engine/index/sqlite"
 )
 
 func main() {
-  ctx := context.Background()
+	ctx := context.Background()
 
-  cfg := scrinium.DefaultConfig()
-  cfg.Store = "file:///tmp/my-store"
+	// Open assembles a store from a driver URI, creating it if absent.
+	// A *ScriniumClient IS a store: Put/Get are called on it directly,
+	// and a single Close releases everything it assembled.
+	s, err := scrinium.Open(ctx, "file:///tmp/scrinium-hello")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer s.Close()
 
-  // OpenOrInit opens the store if it exists, initialises it
-  // otherwise — and surfaces real errors (bad URI, permissions)
-  // instead of silently reinitialising on top.
-  s, _, _, err := scrinium.OpenOrInit(ctx, cfg)
-  if err != nil {
-    log.Fatal(err)
-  }
-  defer s.Close()
+	id, err := s.Put(ctx,
+		scrinium.Artifact{Payload: strings.NewReader("hello, scrinium!\n")},
+		scrinium.WithNamespace("demo"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("stored: %s\n", id)
 
-  id, err := s.Store.Put(ctx,
-    domain.Artifact{Payload: bytes.NewReader([]byte("hello"))},
-    domain.PutOptions{Namespace: "demo"},
-  )
-  if err != nil {
-    log.Fatal(err)
-  }
+	rh, err := s.Get(ctx, id)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rh.Close()
 
-  rh, _ := s.Store.Get(ctx, id, domain.GetOptions{})
-  defer rh.Close()
-  body, _ := io.ReadAll(rh)
-  log.Printf("read back: %s", body)
+	body, _ := io.ReadAll(rh)
+	fmt.Printf("read back: %s", body)
 }
 ```
 
-See `examples/` for runnable variations (`go run ./hello`, `./ingest`, `./browse`).
+See `examples/` for runnable variations (`go run ./examples/hello`,
+`./ingest`, `./browse`), and `examples/hello-manual` for the same store
+assembled from primitives with no front door at all.
 
 ## Building
 
@@ -121,7 +137,7 @@ To run a single example or binary directly:
 
 ```bash
 go run ./examples/hello
-go run ./cmd/scrinium-webdav --store=/tmp/store --listen=:8080
+go run ./cmd/scrinium-webdav serve --config=store.yaml --listen=:8080
 ```
 
 ## Reference binaries
@@ -132,7 +148,8 @@ Pre-built CLI applications under `cmd/` demonstrate three integrations:
 - `scrinium-webdav` — cross-platform WebDAV server.
 - `scrinium-webview` — read-only HTML browser for inspecting a store.
 
-Install from source:
+Each takes a `serve` subcommand with a `--config` YAML file. Install
+from source:
 
 ```bash
 go install scrinium.dev/cmd/scrinium-webdav@latest
@@ -140,26 +157,36 @@ go install scrinium.dev/cmd/scrinium-webdav@latest
 
 ## Embedding
 
-For applications that want to host Scrinium directly, use the top-level
-`scrinium` package:
+For applications that host Scrinium directly, use the top-level
+`scrinium` package. Every entry point returns a `*ScriniumClient`,
+which embeds `store.Store` — `Put`/`Get`/`Walk` and the `Admin()` facet
+are called on it directly — and carries the optional `Projection`, the
+assembly `Info`, and the `MountSession`.
 
-- `scrinium.OpenOrInit(ctx, cfg)` — open or create. Convenient for
-  examples and single-binary tools; returns a `created` flag so the
-  host knows when a recovery kit has been produced.
-- `scrinium.Open(ctx, cfg)` — open an existing store. Returns
-  `errs.ErrStoreNotFound` (which bridges to `fs.ErrNotExist`) if no
-  store has been initialised at the location.
-- `scrinium.Init(ctx, cfg)` — create a fresh store. Returns the
-  recovery kit on encrypted stores; the host MUST persist it.
-- `(*Scrinium).Close()` — wipe secrets, release resources.
-  Idempotent.
+- `scrinium.Open(ctx, driverURI, opts...)` — assemble from a single
+  driver URI, creating it if absent. The simplest entry point: no
+  config document, no projection.
+- `scrinium.Build(ctx, cfg, opts...)` — assemble from a programmatic
+  `Config` (driver + index + policy, and an optional projection).
+- `scrinium.LoadYAML` / `LoadInitYAML` / `LoadOrInitYAML` (and the
+  `*JSON` mirrors) — assemble from a configuration document, the usual
+  shape for a deployed service an operator configures by file.
+- `scrinium.WithMode(ModeOpen | ModeInit | ModeOpenOrInit)` — choose
+  open/init behaviour; the default is `ModeOpenOrInit`.
+- `(*ScriniumClient).RecoveryKit() ([]byte, bool)` — on a freshly
+  initialised encrypted store, returns the recovery kit and `true`. The
+  host MUST persist it: it is the only way back in if the passphrase is
+  lost. Pair it with `Info.Created`.
+- `(*ScriniumClient).Close()` — cascades, releasing the projection, the
+  store, and the index together, and wipes secrets. Idempotent.
 
-Production daemons typically separate "init" and "serve" subcommands
-so an operator can audit when a brand-new store is being created.
+Production daemons typically separate "init" and "serve" so an operator
+can audit when a brand-new store is being created.
 
-For full control over wiring, compose `engine/store`,
-`engine/projection`, and friends directly. The top-level package is a
-convenience over them.
+For full control over the wiring, compose `engine/store`,
+`engine/index`, `projection`, and friends directly — the top-level
+package is a convenience over them. `examples/hello-manual` shows the
+hand-assembled path.
 
 ## License
 
