@@ -52,10 +52,10 @@ type IngesterConfig struct {
 	StateFile string
 }
 
-// Ingester is the background agent that captures data from an
+// Ingester is the agent that captures data from an
 // external source.
 type Ingester interface {
-	BackgroundAgent
+	Agent
 
 	// ForceCommit immediately commits the accumulated batch
 	// regardless of BatchSize/FlushTimeout. Used before an external

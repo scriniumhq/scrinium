@@ -29,8 +29,7 @@ type GCConfig struct {
 	LeaseTTL time.Duration
 
 	// CompactionEnabled toggles compaction of partially dead .pack
-	// volumes. The default in v1 is false (a deferred feature; see
-	// docs/2. Internals/05 Asynchronous Engine §5.3.7).
+	// volumes. The default in v1 is false (a deferred feature).
 	CompactionEnabled bool
 
 	// CompactionThreshold — a dead_ratio at or above this value
@@ -61,7 +60,7 @@ type GCStats struct {
 // automatically — the deletion policy is a deployment-specific
 // decision.
 type GCAgent interface {
-	BackgroundAgent
+	Agent
 
 	// RunOnce executes one full Mark+Sweep cycle and returns. Used
 	// for manual runs and tests; unlike Run it does not block on
@@ -83,7 +82,7 @@ func NewGCAgent(
 	st store.Store,
 	drv driver.Driver,
 	idx index.StoreIndex,
-	bus event.EventBus,
+	bus event.Publisher,
 	hostID string,
 	storeID string,
 	cfg GCConfig,
@@ -133,7 +132,7 @@ type gcAgent struct {
 	store   store.Store
 	drv     driver.Driver
 	idx     index.StoreIndex
-	bus     event.EventBus
+	bus     event.Publisher
 	hostID  string
 	storeID string
 	cfg     GCConfig
@@ -143,35 +142,58 @@ type gcAgent struct {
 
 var _ GCAgent = (*gcAgent)(nil)
 
-// Run is the background loop: one Mark+Sweep cycle every ScanInterval
-// until ctx is cancelled. A failed cycle (lease lost, fatal index
-// error) is reported via the failed event and the loop continues.
-func (a *gcAgent) Run(ctx context.Context) error {
-	a.setState(StateRunning, nil)
-	t := time.NewTicker(a.cfg.ScanInterval)
-	defer t.Stop()
+// gcFactory builds the GC agent from the registry (ADR-51).
+type gcFactory struct{}
 
-	if _, err := a.RunOnce(ctx); err != nil && !isCtxErr(err) {
-		a.bus.Publish(event.Event{Type: EventAgentFailed, Payload: AgentFailedPayload{
-			AgentType: "GC", StoreID: a.storeID, Err: err,
-		}})
+func (gcFactory) Name() string { return "gc" }
+
+func (gcFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
+	c, _ := cfg.(GCConfig) // zero value on mismatch -> defaults
+	return NewGCAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c)
+}
+
+func init() { Register(gcFactory{}) }
+
+// AgentType is the short registry/event identifier.
+func (a *gcAgent) AgentType() string { return "gc" }
+
+// Validate checks preconditions. GC needs no maintenance mode; the gc
+// lease is acquired inside Run, so the only precondition here is a live
+// context.
+func (a *gcAgent) Validate(ctx context.Context) error { return ctx.Err() }
+
+// Run performs one Mark+Sweep cycle and returns its AgentResult. The
+// agent is periodically invoked by the scheduler (ADR-69), not a
+// resident loop: an interrupted cycle resumes from the Store-held
+// progress (orphan re-selection) on the next call.
+func (a *gcAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
+	a.setState(StateRunning, nil)
+	stats, err := a.RunOnce(ctx)
+	res := &domain.AgentResult{
+		AgentType:   "gc",
+		StoreID:     a.storeID,
+		CompletedAt: time.Now(),
+		Stats: map[string]int64{
+			"scanned_blobs": stats.ScannedBlobs,
+			"marked_blobs":  stats.MarkedBlobs,
+			"removed_blobs": stats.RemovedBlobs,
+			"freed_bytes":   stats.FreedBytes,
+		},
 	}
-	for {
-		select {
-		case <-ctx.Done():
-			a.setState(StateIdle, nil)
-			a.bus.Publish(event.Event{Type: EventAgentStopped, Payload: AgentStartedPayload{
-				AgentType: "GC", StoreID: a.storeID,
-			}})
-			return ctx.Err()
-		case <-t.C:
-			if _, err := a.RunOnce(ctx); err != nil && !isCtxErr(err) {
-				a.bus.Publish(event.Event{Type: EventAgentFailed, Payload: AgentFailedPayload{
-					AgentType: "GC", StoreID: a.storeID, Err: err,
-				}})
-			}
+	if err != nil {
+		a.setState(StateFaulted, err)
+		if isCtxErr(err) {
+			res.Partial = true
+			a.bus.Publish(event.Event{Type: event.EventAgentCancelled})
+			return res, err
 		}
+		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
+			AgentType: "gc", StoreID: a.storeID, Err: err,
+		}})
+		return res, err
 	}
+	a.setState(StateIdle, nil)
+	return res, nil
 }
 
 // RunOnce executes one Mark+Sweep cycle. Under GCLeasePolicy:
@@ -183,8 +205,8 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 	if err := ctx.Err(); err != nil {
 		return GCStats{}, err
 	}
-	a.bus.Publish(event.Event{Type: EventAgentStarted, Payload: AgentStartedPayload{
-		AgentType: "GC", StoreID: a.storeID, StartedAt: time.Now(),
+	a.bus.Publish(event.Event{Type: event.EventAgentStarted, Payload: event.AgentStartedPayload{
+		AgentType: "gc", StoreID: a.storeID, StartedAt: time.Now(),
 	}})
 
 	cfg := a.store.Config()
@@ -196,14 +218,14 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 		l, prev, err := lease.Acquire(ctx, a.drv, lease.Config{
 			Path:      gcLeasePath,
 			HostID:    a.hostID,
-			AgentType: "GC",
+			AgentType: "gc",
 			TTL:       a.cfg.LeaseTTL,
 		})
 		if err != nil {
 			return GCStats{}, fmt.Errorf("agent.GC.RunOnce: acquire lease: %w", err)
 		}
 		if prev != nil {
-			a.bus.Publish(event.Event{Type: EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
+			a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
 				LeaseKey: gcLeasePath, PreviousHolder: prev.HostID,
 				ExpiredAt: prev.ExpiresAt, TakenBy: a.hostID,
 			}})
@@ -225,8 +247,8 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 	markErr := a.mark(runCtx, &stats)
 	sweepErr := a.sweep(runCtx, grace, &stats)
 
-	a.bus.Publish(event.Event{Type: EventAgentCycle, Payload: domain.AgentResult{
-		AgentType: "GC", StoreID: a.storeID, CompletedAt: time.Now(),
+	a.bus.Publish(event.Event{Type: event.EventAgentCycle, Payload: domain.AgentResult{
+		AgentType: "gc", StoreID: a.storeID, CompletedAt: time.Now(),
 		Stats: map[string]int64{
 			"scanned_blobs": stats.ScannedBlobs,
 			"marked_blobs":  stats.MarkedBlobs,

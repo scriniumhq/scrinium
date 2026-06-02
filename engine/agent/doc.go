@@ -1,41 +1,29 @@
-// Package agent contains the contracts and implementations of
-// background agents: Ingester, GC, Scrub, Snapshot, Sync, Ejector.
-// A coreutils-style toolkit for the storage: it automates the
-// maintenance work without forcing the host application to
-// hand-roll its own logic.
+// Package agent contains the contract and implementations of
+// Scrinium agents: Ingester, GC, Scrub, Snapshot, Rebuild, Ejector,
+// and the reserved Sync, Migration, and MoveStore. A coreutils-style
+// toolkit for the storage: it automates maintenance work without
+// forcing the host application to hand-roll its own logic.
 //
-// Two lifecycle modalities:
-//   - BackgroundAgent — cyclic or continuous work. Implemented here.
-//   - MaintenanceAgent — one-shot operation. The contract lives in
-//     domain (see domain.MaintenanceAgent); the implementations live in
-//     maintenance/.
+// One modality (ADR-68). An agent is a one-shot procedure over a
+// Store — Validate then Run, returning a domain.AgentResult —
+// initiated outside the operation path. There is no separate
+// background-versus-maintenance split: "background" is an external way
+// of invoking an agent (a scheduler, a bus subscriber, or a manual
+// call), not a property of the agent. Agents keep no resident
+// in-memory state; progress lives in the Store (last_verified_at,
+// orphan selection, queues), so an interrupted Run resumes from where
+// it left off on the next call.
 //
-// Two ownership modalities:
-//   - Engine-managed (Scrub, Snapshot) — automatically launched
-//     for every registered Target.
-//   - User-managed (Ingester, GC, Ejector) — created and started by
-//     the host application explicitly through the package
-//     constructors.
+// Construction is through the registry (ADR-51), like engine/wrapper:
+// agent.Register installs a Factory in an init(), and the assembler
+// looks it up by kind and calls Factory.Build(store, cfg, deps). The
+// dependencies (Publisher, Driver, Index, HostID) arrive in AgentDeps
+// from the assembler, so the Store facade is never opened up.
 //
-// DAG: agent imports core, driver, event. It does not import
-// curator, maintenance, or projection.
+// Status: GC, Scrub, Snapshot are implemented; Rebuild is nearly
+// complete (one path is a stub); Ingester and Ejector are stubs
+// pending M6. Sync, Migration, and MoveStore are reserved.
 //
-// Implementations land in M3 (GC, Scrub, Snapshot, RebuildIndex)
-// and M6 (Ingester, Ejector). In M0 — contracts and configuration
-// types.
-// Package maintenance contains the implementations of one-shot
-// administrative agents: RebuildIndexAgent, MigrateIndexAgent,
-// VerificationAgent, MoveStoreAgent.
-//
-// Each one implements domain.MaintenanceAgent (see domain/agent.go).
-// They are launched strictly explicitly (CLI/API), never
-// automatically. Exclusivity is guaranteed through a lease in
-// system.state/maintenance/lease.
-//
-// Stable in chunk A1 (M3): RebuildIndexAgent.
-// Reserved (stabilised on demand): MigrateIndexAgent,
-// VerificationAgent, MoveStoreAgent.
-//
-// DAG: maintenance imports domain, store, driver, event. It does not import
-// curator, agent, or projection.
+// DAG: agent imports domain, store, driver, event. It does not import
+// projection.
 package agent

@@ -12,7 +12,7 @@ import (
 
 // --- Sync Agent (Reserved, D-05) ---
 
-// SyncAgent is the background replicator of artifacts between a
+// SyncAgent is the agent that replicates artifacts between a
 // Target and a Backup Store.
 //
 // Status: Reserved. The interface is fixed for the agent API
@@ -20,7 +20,7 @@ import (
 // decision on the Reconciliation mechanism (event-driven,
 // pull/push, quarantine) is made.
 type SyncAgent interface {
-	BackgroundAgent
+	Agent
 
 	// Trigger schedules an out-of-band synchronisation of the
 	// given artifact between the Target and the Backup Store
@@ -47,11 +47,10 @@ type EjectorConfig struct {
 
 // Ejector materialises artifacts into the host OS environment on
 // demand. User-managed: created by the host application explicitly.
-// It uses a background worker pool for heavy I/O — this fits the
-// BackgroundAgent model with Run for the pool and an Eject method
-// that submits tasks.
+// A single Run performs the materialisation work; Eject submits a
+// target to the worker pool that Run drains.
 type Ejector interface {
-	BackgroundAgent
+	Agent
 
 	// Eject schedules the materialisation of the given artifact
 	// at targetPath. The method does not block on the physical

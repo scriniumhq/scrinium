@@ -26,7 +26,7 @@ const MaxSessionIDLen = 255
 // manifest file header per §7.1. The KeyID-length byte is one
 // octet, so the KeyID itself can be at most 255 bytes; producers
 // that hit the limit must shorten the identifier or prefix-hash
-// it externally. Returns a wrapped error from manifestcodec when
+// it externally. Returns a wrapped error from engine/artifact when
 // exceeded.
 const MaxKeyIDLength = 255
 

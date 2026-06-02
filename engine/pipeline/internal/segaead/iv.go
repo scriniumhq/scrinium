@@ -1,9 +1,8 @@
 package segaead
 
-// iv.go — per-segment IV derivation (ADR-59 §"Вывод IV сегмента",
-// docs/2. Internals/03 §3.2.1). The segment index always enters the
-// derivation so no two segments of one blob can share an IV, even
-// when their plaintext is identical.
+// iv.go — per-segment IV derivation (ADR-59). The segment index
+// always enters the derivation so no two segments of one blob can
+// share an IV, even when their plaintext is identical.
 
 import (
 	"crypto/hmac"

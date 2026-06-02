@@ -113,8 +113,8 @@ func defaultOptions() options {
 // migrations are applied forward-only. A version newer than
 // CurrentSchemaVersion returns errs.ErrIndexSchemaMismatch.
 //
-// The signature carries ctx and error even though the docs at
-// 3. Contracts/02 §2.4.1 show a simplified form without them.
+// The signature carries ctx and error even though some docs show a
+// simplified form without them.
 // Opening SQLite is real I/O: it can fail on bad paths,
 // permission errors, mid-flight migrations, or mmap limits, and
 // migrations are long-running and deserve cancellation. Doc

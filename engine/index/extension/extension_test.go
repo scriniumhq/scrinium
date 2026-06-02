@@ -143,7 +143,7 @@ func TestEventArgs_ZeroValueIsValid(t *testing.T) {
 
 // TestEventArgs_PopulatedShape demonstrates the per-kind shape
 // described in the contract. This test is the executable form
-// of the table in 3. Contracts/06 §6.4.
+// of that contract table.
 func TestEventArgs_PopulatedShape(t *testing.T) {
 	m := domain.Manifest{ArtifactID: "art-1", Namespace: "files"}
 

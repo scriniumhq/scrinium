@@ -23,7 +23,7 @@ func NewStaticKeyResolver(dek []byte) KeyResolver {
 // behaviour for typical scenarios.
 //
 // mu guards dek so Close (called from store.Close) and GetKeys
-// (called by manifestcodec on every encrypted decode) cannot race.
+// (called by engine/artifact on every encrypted decode) cannot race.
 type staticKeyResolver struct {
 	mu  sync.Mutex
 	dek []byte

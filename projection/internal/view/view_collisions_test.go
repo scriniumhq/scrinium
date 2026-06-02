@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/event"
 	vw "scrinium.dev/projection/internal/view"
 	"scrinium.dev/testutil/eventfx"
 	"scrinium.dev/testutil/manifestfx"
@@ -170,11 +171,11 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 		t.Errorf("winner must be in by-artifact: %v", err)
 	}
 
-	collisions := bus.ByType(vw.EventPathCollision)
+	collisions := bus.ByType(event.EventPathCollision)
 	if len(collisions) != 1 {
 		t.Errorf("collision events: got %d, want 1", len(collisions))
 	} else {
-		p := collisions[0].Payload.(vw.PathCollisionPayload)
+		p := collisions[0].Payload.(event.PathCollisionPayload)
 		if p.Path != "shared/path.txt" {
 			t.Errorf("payload Path: got %q", p.Path)
 		}

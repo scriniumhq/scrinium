@@ -2,7 +2,7 @@ package assembly
 
 import "fmt"
 
-// Default sizes/schedules from 3. Reference/10 Declarative Configuration.md §10.2.
+// Default sizes/schedules for declarative configuration.
 const (
 	defaultChunkMaxSize   = Size(64 << 20) // 64 MiB
 	defaultBundleMaxSize  = Size(64 << 20) // 64 MiB

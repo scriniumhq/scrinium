@@ -39,7 +39,7 @@ func CryptoIdentityOf(stages []PipelineStage) CryptoIdentity {
 // a keyed (encrypting) transform. Compression and other keyless
 // stages return false. Kept as an explicit allow-list rather than a
 // registry lookup so domain stays dependency-free; crypto plugins
-// must register under these canonical ids (3. Reference/04 §4.3).
+// must register under these canonical ids.
 func IsCryptoAlgorithm(algo string) bool {
 	switch strings.ToLower(algo) {
 	case "aes-gcm", "chacha20-poly1305":

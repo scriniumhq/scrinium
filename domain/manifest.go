@@ -77,14 +77,13 @@ type ManifestSystemFlags struct {
 // Manifest is the logical passport of an Artifact.
 type Manifest struct {
 	// ArtifactID is the in-memory identity of the manifest. It is
-	// NOT serialised: per docs/2. Internals/07 §7.4, ArtifactID is
-	// computed as the hash of the full file bytes (including the
-	// header), so it cannot live inside the body. The field is set
-	// at two places only:
-	//   - manifestcodec.ComputeArtifactID, after writing the body
+	// NOT serialised: ArtifactID is computed as the hash of the full
+	// file bytes (including the header), so it cannot live inside the
+	// body. The field is set at two places only:
+	//   - artifact.ComputeArtifactID, after writing the body
 	//     and hashing the result;
 	//   - store.loadManifest, from the id used to fetch the file.
-	// On the wire (manifestcodec) the field is invisible; in the
+	// On the wire (engine/artifact) the field is invisible; in the
 	// index (sqlite) it is the primary key. See codec_test.go for
 	// the "ArtifactID does not appear in JSON" invariant.
 	ArtifactID ArtifactID

@@ -1,11 +1,10 @@
 package segaead
 
 // format.go — the on-disk layout of a segmented-AEAD blob
-// (ADR-59, normative layout in docs/2. Internals/07 §7.6). The
-// header is symmetric to the manifest header (§7.1) and the
-// pack-TOC header (§8.1): magic + version + mode flag + KeyID, so
-// the read path and Recovery can read the decryption parameters
-// from a small prefix without touching the body.
+// (ADR-59). The header is symmetric to the manifest header and the
+// pack-TOC header: magic + version + mode flag + KeyID, so the read
+// path and Recovery can read the decryption parameters from a small
+// prefix without touching the body.
 //
 //	[header]
 //	  magic         4 bytes   blob magic (\x00 S B 1)

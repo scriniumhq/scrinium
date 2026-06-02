@@ -15,6 +15,11 @@ var ErrAgentNotRunning = errors.New("scrinium: agent not running")
 // running agent.
 var ErrAgentAlreadyRunning = errors.New("scrinium: agent already running")
 
+// ErrInvalidAgentType — an AgentType is ill-formed (not lowercase
+// [a-z0-9-], optionally one namespaced segment) or no agent is
+// registered for it. Returned by the agent registry.
+var ErrInvalidAgentType = errors.New("scrinium: invalid agent type")
+
 // ErrEjectorQueueFull — Ejector.Eject called while the task queue
 // is already full.
 var ErrEjectorQueueFull = errors.New("scrinium: ejector queue full")

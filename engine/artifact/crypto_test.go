@@ -14,7 +14,7 @@ import (
 
 func TestSealed_CrossBlockSwapFails(t *testing.T) {
 	m := artifactfx.Manifest(func(m *domain.Manifest) {
-		// Одинаковая длина для идеальной перестановки base64
+		// Equal length for a clean base64 swap
 		m.Ext = json.RawMessage(`{"a":"ext-data-AAAA"}`)
 		m.Usr = json.RawMessage(`{"a":"usr-data-BBBB"}`)
 	})
@@ -47,7 +47,7 @@ func TestSealed_CrossBlockSwapFails(t *testing.T) {
 }
 
 func TestSealed_TamperedHeaderFailsDecryption(t *testing.T) {
-	// AAD привязан к заголовку. Мутация KeyID в заголовке должна сломать парсинг Sealed-блоков.
+	// AAD is bound to the header. Mutating the KeyID in the header must break parsing of Sealed blocks.
 	_, bs := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoSealed)
 
 	idx := bytes.Index(bs, []byte("k1"))
@@ -57,7 +57,7 @@ func TestSealed_TamperedHeaderFailsDecryption(t *testing.T) {
 	tampered := append([]byte{}, bs...)
 	tampered[idx] = 'x' // k1 -> x1
 
-	// KeyID изменен, передаем провайдер, который знает "x1"
+	// KeyID changed; pass a provider that knows "x1"
 	_, err := artifact.DecodeEncrypted(tampered, artifactfx.Keys())
 	if !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("expected ErrDecryptionFailed (header AAD mismatch), got %v", err)
@@ -95,10 +95,10 @@ func TestDecodeEncrypted_RotationCandidates(t *testing.T) {
 	oldDEK := artifactfx.DEK()
 	newDEK := bytes.Repeat([]byte{0x99}, 32)
 
-	// Манифест зашифрован старым ключом
+	// Manifest encrypted with the old key
 	_, bs := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoParanoid)
 
-	// Провайдер отдает массив ключей [новый, старый]
+	// Provider returns the key array [new, old]
 	provider := artifactfx.Keys(newDEK, oldDEK)
 
 	got, err := artifact.DecodeEncrypted(bs, provider)

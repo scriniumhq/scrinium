@@ -2,7 +2,7 @@ package errs
 
 import "errors"
 
-// Lease coordination across hosts. See docs/2. Internals/11 Leases.md.
+// Lease coordination across hosts.
 
 // ErrLeaseHeld — an attempt to acquire a lease held by an active
 // owner.

@@ -9,6 +9,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
+	"scrinium.dev/event"
 	"scrinium.dev/projection/internal/source"
 )
 
@@ -71,7 +72,7 @@ func New(ctx context.Context, src source.Provider, opts ...Option) (*View, error
 	if err := v.backfill(ctx); err != nil {
 		return nil, err
 	}
-	v.publish(EventViewRebuilt, RebuiltPayload{
+	v.publish(event.EventViewRebuilt, event.RebuiltPayload{
 		Duration:  time.Since(startedAt),
 		NodeCount: v.Stats.TotalNodes,
 	})
@@ -296,9 +297,9 @@ func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
 //
 //  1. path is unclaimed → insert as winner.
 //  2. path is claimed; newcomer is fresher → newcomer wins,
-//     previous owner becomes loser, EventPathCollision emitted.
+//     previous owner becomes loser, event.EventPathCollision emitted.
 //  3. path is claimed; newcomer is older → newcomer joins the
-//     losers list, no by-path node, EventPathCollision emitted.
+//     losers list, no by-path node, event.EventPathCollision emitted.
 //
 // The "fresher" rule is CreatedAt descending; on tie, the
 // lexicographically larger ArtifactID wins (deterministic when
@@ -328,7 +329,7 @@ func (v *View) applyByPathInsert(path string, m domain.Manifest, rec *artifactRe
 		v.removeFile(v.byPath, path)
 		v.insertFile(v.byPath, path, m)
 		v.pushLoser(path, currentRec.manifest)
-		v.publish(EventPathCollision, PathCollisionPayload{
+		v.publish(event.EventPathCollision, event.PathCollisionPayload{
 			Path:   path,
 			Winner: m.ArtifactID,
 			Loser:  currentOwner,
@@ -339,7 +340,7 @@ func (v *View) applyByPathInsert(path string, m domain.Manifest, rec *artifactRe
 
 	// Newcomer loses.
 	v.pushLoser(path, m)
-	v.publish(EventPathCollision, PathCollisionPayload{
+	v.publish(event.EventPathCollision, event.PathCollisionPayload{
 		Path:   path,
 		Winner: currentOwner,
 		Loser:  m.ArtifactID,

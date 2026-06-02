@@ -1,9 +1,8 @@
 // Package segaead implements the segmented (framed) AEAD on-disk
-// blob format defined by ADR-59 and specified normatively in
-// docs/2. Internals/07 §7.6 and §03 §3.2.1.
+// blob format defined by ADR-59.
 //
-// It is the blob-level counterpart of internal/manifestcrypto and
-// internal/manifestcodec: where those frame and protect the manifest
+// It is the blob-level counterpart of the manifest crypto/codec in
+// engine/artifact: where those frame and protect the manifest
 // file, segaead frames and protects the blob body. An encrypted blob
 // is a small header followed by a sequence of independent AEAD
 // segments of fixed plaintext size:

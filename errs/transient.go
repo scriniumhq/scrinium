@@ -19,8 +19,7 @@ import "errors"
 //
 // Locally these rarely fire; the contract exists now so the future
 // network client can absorb transport faults transparently
-// (Principle 11) without callers rewriting their error handling. See
-// 7. Drafts/Network-Driver-Rationale.md §12.1.
+// (Principle 11) without callers rewriting their error handling.
 //
 // # Opting in
 //

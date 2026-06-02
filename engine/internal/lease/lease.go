@@ -20,7 +20,7 @@ import (
 // Record is the in-memory lease body. On disk it is one line of JSON
 // (§11.2); the AcquiredAt/ExpiresAt timestamps are encoded through
 // timefmt — the canonical RFC3339-second-UTC format the durable layer
-// (index/sqlite, manifestcodec) shares — so a lease written by one
+// (index/sqlite, engine/artifact) shares — so a lease written by one
 // subsystem parses byte-identically in another. Custom JSON methods
 // keep callers working with time.Time while the wire form stays
 // canonical.

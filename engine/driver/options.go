@@ -3,8 +3,7 @@ package driver
 // PutOption configures a single Driver.Put call. Functional options
 // keep the Driver.Put signature stable as the option set grows and
 // let existing callers pass no options at all (the zero PutConfig is
-// the historical unconditional-overwrite behaviour). See ADR-26 and
-// 3. Reference/02 Driver.md.
+// the historical unconditional-overwrite behaviour). See ADR-26.
 type PutOption func(*PutConfig)
 
 // PutConfig is the resolved set of per-call Put options. A Driver

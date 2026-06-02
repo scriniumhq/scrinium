@@ -29,7 +29,7 @@ type StoreIndex interface {
 	//   - blob: upsert blob, increment ref_count, insert manifest.
 	//   - toc:  + increment ref_count for each chunkRef.
 	//   - pack: transitive registration of every packed artifact via
-	//     packedEntries (see docs/2. Internals/09 §9.2.1).
+	//     packedEntries.
 	IndexManifest(
 		ctx context.Context,
 		m domain.Manifest,

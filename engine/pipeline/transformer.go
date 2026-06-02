@@ -101,7 +101,7 @@ type EncodeContext struct {
 // primitive. The engine detects this via type assertion to skip
 // redundant ContentHash recomputation on Get when the on-disk
 // bytes are already covered by an AEAD tag — see the VerifyOnRead
-// policy and docs/3. Reference/11 Configuration.
+// policy.
 //
 // The method is intentionally a marker: any non-trivial payload
 // would lock the contract to a specific algorithm shape, while
