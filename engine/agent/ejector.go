@@ -153,7 +153,7 @@ var _ Ejector = (*ejectorAgent)(nil)
 
 // NewEjector constructs an Ejector. TempDir is required; it is created
 // and swept (crash leftovers removed) on open.
-func NewEjector(st store.Store, bus event.Publisher, storeID string, cfg EjectorConfig) (Ejector, error) {
+func NewEjector(st store.Store, bus event.Publisher, storeID string, cfg EjectorConfig, opts ...AgentOption) (Ejector, error) {
 	if st == nil {
 		return nil, fmt.Errorf("agent.NewEjector: nil store")
 	}
@@ -173,6 +173,7 @@ func NewEjector(st store.Store, bus event.Publisher, storeID string, cfg Ejector
 		byHash:  make(map[string]*entry),
 		byReq:   make(map[reqKey]string),
 	}
+	a.log = resolveAgentLogger(opts)
 	a.sweepOnOpen()
 	return a, nil
 }
@@ -184,7 +185,7 @@ func (ejectorFactory) Name() string { return "ejector" }
 
 func (ejectorFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
 	c, _ := cfg.(EjectorConfig)
-	return NewEjector(st, deps.Publisher, deps.StoreID, c)
+	return NewEjector(st, deps.Publisher, deps.StoreID, c, WithAgentLogger(deps.Logger))
 }
 
 func init() { Register(ejectorFactory{}) }
@@ -385,7 +386,11 @@ func (a *ejectorAgent) EjectFragment(ctx context.Context, id domain.ArtifactID, 
 // result to TempDir/<encoded fragment hash>. Existing identical fragment
 // files are reused (deduplicated).
 func (a *ejectorAgent) writeFragment(ctx context.Context, rh domain.ReadHandle, start, end int64) (ch, final, vh string, err error) {
-	tmp := filepath.Join(a.cfg.TempDir, ".tmp-"+randHex())
+	suffix, err := randHex()
+	if err != nil {
+		return "", "", "", fmt.Errorf("agent.Ejector: temp name: %w", err)
+	}
+	tmp := filepath.Join(a.cfg.TempDir, ".tmp-"+suffix)
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return "", "", "", mapDiskErr(err)
@@ -462,7 +467,11 @@ func copyRangeAt(ctx context.Context, w io.Writer, rh domain.ReadHandle, start, 
 // atomicWrite writes via a private temp file, fsync, and rename into
 // final. Returns the sha256 hex of the bytes written.
 func (a *ejectorAgent) atomicWrite(final string, fill func(w io.Writer) error) (string, error) {
-	tmp := filepath.Join(a.cfg.TempDir, ".tmp-"+randHex())
+	suffix, err := randHex()
+	if err != nil {
+		return "", fmt.Errorf("agent.Ejector: temp name: %w", err)
+	}
+	tmp := filepath.Join(a.cfg.TempDir, ".tmp-"+suffix)
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return "", mapDiskErr(err)
@@ -529,7 +538,9 @@ func (a *ejectorAgent) Close() error {
 	a.byReq = make(map[reqKey]string)
 	a.mu.Unlock()
 	for _, p := range paths {
-		_ = os.Remove(p)
+		if err := os.Remove(p); err != nil {
+			a.logger().Debug("ejector: scratch remove on close failed", "path", p, "err", err)
+		}
 	}
 	return nil
 }
@@ -555,7 +566,9 @@ func (a *ejectorAgent) reclaim(now time.Time) map[string]int {
 	a.mu.Unlock()
 	counts := map[string]int{}
 	for _, v := range vs {
-		_ = os.Remove(v.path)
+		if err := os.Remove(v.path); err != nil {
+			a.logger().Debug("ejector: scratch remove on reclaim failed", "path", v.path, "err", err)
+		}
 		counts[v.reason]++
 	}
 	return counts
@@ -594,7 +607,9 @@ func (a *ejectorAgent) sizeCapEvict() {
 	}
 	a.mu.Unlock()
 	for _, p := range removed {
-		_ = os.Remove(p)
+		if err := os.Remove(p); err != nil {
+			a.logger().Debug("ejector: scratch remove under size pressure failed", "path", p, "err", err)
+		}
 	}
 	if n := len(removed); n > 0 {
 		a.emitCleanup(map[string]int{"pressure": n})
@@ -618,7 +633,10 @@ func (a *ejectorAgent) sweepOnOpen() {
 		return
 	}
 	for _, de := range ents {
-		_ = os.Remove(filepath.Join(a.cfg.TempDir, de.Name()))
+		p := filepath.Join(a.cfg.TempDir, de.Name())
+		if err := os.Remove(p); err != nil {
+			a.logger().Debug("ejector: open-sweep remove failed", "path", p, "err", err)
+		}
 	}
 }
 
@@ -677,10 +695,12 @@ func encodeName(ch string) string {
 	return strings.NewReplacer("/", "_", "+", "-").Replace(ch)
 }
 
-func randHex() string {
+func randHex() (string, error) {
 	var b [12]byte
-	_, _ = rand.Read(b[:])
-	return hex.EncodeToString(b[:])
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b[:]), nil
 }
 
 func mapDiskErr(err error) error {

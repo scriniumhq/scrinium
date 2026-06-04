@@ -14,9 +14,9 @@
 // available (so development stays transparent) but returns
 // ErrFUSENotSupported / ErrWebDAVNotSupported.
 //
-// DAG: projection imports core, event. It does not import curator
-// (the dependency is inverted via source.Provider), agent, or
-// maintenance.
+// DAG: projection imports domain, event. It does not import the engine
+// packages (store, agent) — the store dependency is inverted via
+// source.Provider.
 //
 // Implementation lands in M6. In M0 — the type contracts.
 package projection

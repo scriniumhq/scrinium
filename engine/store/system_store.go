@@ -78,7 +78,7 @@ func newSystemStore(
 //
 //	"config/*" → system.config (versioned configuration history)
 //	everything else (cursors, snapshots, scrub/, gc/, ingester/,
-//	snapshot/, maintenance/, index_snapshot/) → system.state
+//	checkpoint/, maintenance/, index_checkpoint/) → system.state
 func namespaceForName(name string) (string, error) {
 	if err := validateSystemName(name); err != nil {
 		return "", err

@@ -103,7 +103,7 @@ func (i *Index) DeleteOrphanBlob(ctx context.Context, blobRef string) (bool, err
 // destPath must point to a non-existent file. SQLite's VACUUM INTO
 // refuses to overwrite. We deliberately do not pre-delete: silently
 // overwriting a snapshot would mask an upstream bug where two
-// SnapshotAgents fight over the same path.
+// CheckpointAgents fight over the same path.
 //
 // :memory: source is rejected — there is no on-disk content to
 // snapshot. The Snapshot Agent should never call this on a memory

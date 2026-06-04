@@ -75,25 +75,25 @@ func TestScrub_LeaseExclusion(t *testing.T) {
 	}
 }
 
-func TestSnapshot_LeaseExclusion(t *testing.T) {
+func TestCheckpoint_LeaseExclusion(t *testing.T) {
 	rec := eventfx.New()
 	st, drv, idx := storefx.InitShared(t, store.WithPublisher(rec))
 	ctx := context.Background()
 
 	held, _, err := lease.Acquire(ctx, drv, lease.Config{
-		Path: snapshotLeasePath, HostID: exclHostSquatter, AgentType: "snapshot", TTL: time.Hour,
+		Path: checkpointLeasePath, HostID: exclHostSquatter, AgentType: "checkpoint", TTL: time.Hour,
 	})
 	if err != nil {
-		t.Fatalf("pre-acquire snapshot lease: %v", err)
+		t.Fatalf("pre-acquire checkpoint lease: %v", err)
 	}
 	t.Cleanup(func() { _ = held.Release(context.WithoutCancel(ctx)) })
 
-	a, err := NewSnapshotAgent(st, drv, idx, rec, exclHostAgent, "store-snap", SnapshotConfig{})
+	a, err := NewCheckpointAgent(st, drv, idx, rec, exclHostAgent, "store-snap", CheckpointConfig{})
 	if err != nil {
-		t.Fatalf("NewSnapshotAgent: %v", err)
+		t.Fatalf("NewCheckpointAgent: %v", err)
 	}
 	if _, err := a.Run(ctx); !errors.Is(err, errs.ErrLeaseHeld) {
-		t.Fatalf("Run under held snapshot lease err = %v, want ErrLeaseHeld", err)
+		t.Fatalf("Run under held checkpoint lease err = %v, want ErrLeaseHeld", err)
 	}
 	if s, _ := a.Status(); s != StateFaulted {
 		t.Errorf("state = %v, want StateFaulted", s)

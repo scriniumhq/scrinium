@@ -177,13 +177,13 @@ func TestSystemStore_WithoutIndexSkipsIndexing(t *testing.T) {
 
 	before := countNamespace(t, idx, domain.NamespaceSystemState)
 
-	if err := ss.Put(ctx, store.SystemArtifact{Name: "index_snapshot/2026-04-01", Payload: bytes.NewReader(body)}, store.WithoutIndex()); err != nil {
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "index_checkpoint/2026-04-01", Payload: bytes.NewReader(body)}, store.WithoutIndex()); err != nil {
 		t.Fatalf("Put with WithoutIndex: %v", err)
 	}
 
 	// Get must still succeed (pointer + manifest file are both
 	// written; the only thing skipped is the index row).
-	rh, err := ss.Get(ctx, "index_snapshot/2026-04-01")
+	rh, err := ss.Get(ctx, "index_checkpoint/2026-04-01")
 	if err != nil {
 		t.Fatalf("Get after WithoutIndex Put: %v", err)
 	}

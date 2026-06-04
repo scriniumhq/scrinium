@@ -136,6 +136,7 @@ func NewRebuildIndexAgent(
 	hostID string,
 	storeID string,
 	cfg RebuildConfig,
+	opts ...AgentOption,
 ) (RebuildIndexAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
 		return nil, fmt.Errorf("agent.NewRebuildIndexAgent: store, driver, index and bus are required")
@@ -145,7 +146,8 @@ func NewRebuildIndexAgent(
 	}
 	cfg = applyRebuildDefaults(cfg)
 	return &rebuildAgent{
-		store: st, drv: drv, idx: idx, bus: bus,
+		baseState: baseState{log: resolveAgentLogger(opts)},
+		store:     st, drv: drv, idx: idx, bus: bus,
 		hostID: hostID, storeID: storeID, cfg: cfg,
 	}, nil
 }
@@ -247,7 +249,9 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 	go func() { hbErr <- l.Heartbeat(runCtx) }()
 	defer func() {
 		cancel()
-		_ = l.Release(context.WithoutCancel(ctx))
+		if err := l.Release(context.WithoutCancel(ctx)); err != nil {
+			a.logger().Warn("lease release failed; lease will expire via TTL", "err", err)
+		}
 	}()
 
 	a.setSource(RebuildSourceFullScan)
@@ -344,7 +348,9 @@ func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string) err
 		return fmt.Errorf("get manifest %q: %w", path, err)
 	}
 	data, err := io.ReadAll(rc)
-	_ = rc.Close()
+	if cerr := rc.Close(); cerr != nil {
+		a.logger().Debug("rebuild: manifest reader close failed", "path", path, "err", cerr)
+	}
 	if err != nil {
 		return fmt.Errorf("read manifest %q: %w", path, err)
 	}
@@ -439,7 +445,7 @@ func (rebuildFactory) Name() string { return "rebuild" }
 
 func (rebuildFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
 	c, _ := cfg.(RebuildConfig) // zero value on mismatch -> defaults
-	return NewRebuildIndexAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c)
+	return NewRebuildIndexAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, WithAgentLogger(deps.Logger))
 }
 
 func init() { Register(rebuildFactory{}) }

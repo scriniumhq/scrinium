@@ -131,12 +131,12 @@ func TestScrub_RunRepeatable(t *testing.T) {
 	}
 }
 
-// TestSnapshot_RunResumesAfterCancel verifies that a cancelled Snapshot
-// Run faults without producing a snapshot, and a fresh Run then
+// TestCheckpoint_RunResumesAfterCancel verifies that a cancelled Checkpoint
+// Run faults without producing a checkpoint, and a fresh Run then
 // completes — the one-shot operation is re-runnable after interruption.
-func TestSnapshot_RunResumesAfterCancel(t *testing.T) {
-	f := newSnapshotFixture(t)
-	a := newSnapshot(t, f, agent.SnapshotConfig{Interval: time.Hour})
+func TestCheckpoint_RunResumesAfterCancel(t *testing.T) {
+	f := newCheckpointFixture(t)
+	a := newCheckpoint(t, f, agent.CheckpointConfig{Interval: time.Hour})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

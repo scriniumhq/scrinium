@@ -31,7 +31,7 @@ func (f fakeFactory) Build(_ store.Store, _ any, _ agent.AgentDeps) (agent.Agent
 // TestRegistry_BuiltinsRegistered checks the built-in agents register
 // themselves through their init().
 func TestRegistry_BuiltinsRegistered(t *testing.T) {
-	for _, kind := range []string{"gc", "scrub", "snapshot", "rebuild"} {
+	for _, kind := range []string{"gc", "scrub", "checkpoint", "rebuild"} {
 		if _, ok := agent.Lookup(kind); !ok {
 			t.Errorf("Lookup(%q) = false, want a registered built-in factory", kind)
 		}

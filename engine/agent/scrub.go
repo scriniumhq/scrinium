@@ -84,6 +84,7 @@ func NewScrubAgent(
 	hostID string,
 	storeID string,
 	cfg ScrubConfig,
+	opts ...AgentOption,
 ) (ScrubAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
 		return nil, fmt.Errorf("agent.NewScrubAgent: store, driver, index and bus are required")
@@ -93,7 +94,8 @@ func NewScrubAgent(
 	}
 	cfg = applyScrubDefaults(cfg)
 	return &scrubAgent{
-		store: st, drv: drv, idx: idx, bus: bus,
+		baseState: baseState{log: resolveAgentLogger(opts)},
+		store:     st, drv: drv, idx: idx, bus: bus,
 		hostID: hostID, storeID: storeID, cfg: cfg,
 	}, nil
 }
@@ -146,7 +148,7 @@ func (scrubFactory) Name() string { return "scrub" }
 
 func (scrubFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
 	c, _ := cfg.(ScrubConfig) // zero value on mismatch -> defaults
-	return NewScrubAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c)
+	return NewScrubAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, WithAgentLogger(deps.Logger))
 }
 
 func init() { Register(scrubFactory{}) }
@@ -224,7 +226,9 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 	go func() { hbErr <- l.Heartbeat(runCtx) }()
 	defer func() {
 		cancel()
-		_ = l.Release(context.WithoutCancel(ctx))
+		if err := l.Release(context.WithoutCancel(ctx)); err != nil {
+			a.logger().Warn("lease release failed; lease will expire via TTL", "err", err)
+		}
 	}()
 
 	var stats ScrubStats
@@ -256,7 +260,9 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 		switch err := a.store.VerifyBlobRef(runCtx, blobRef); {
 		case err == nil:
 			stats.VerifiedBlobs++
-			_ = a.idx.MarkVerified(runCtx, blobRef, time.Now())
+			if err := a.idx.MarkVerified(runCtx, blobRef, time.Now()); err != nil {
+				a.logger().Warn("scrub: failed to record blob verification", "blob_ref", blobRef, "err", err)
+			}
 			a.cascadeStampConsumers(runCtx, blobRef)
 		case errors.Is(err, errs.ErrArtifactNotFound):
 			// No consuming manifest (race vs Delete/GC, or orphan):
@@ -287,7 +293,9 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 		}
 		switch err := a.store.VerifyManifest(runCtx, id); {
 		case err == nil:
-			_ = a.idx.MarkManifestVerified(runCtx, id, time.Now())
+			if err := a.idx.MarkManifestVerified(runCtx, id, time.Now()); err != nil {
+				a.logger().Warn("scrub: failed to record manifest verification", "artifact_id", id, "err", err)
+			}
 		case errors.Is(err, errs.ErrArtifactNotFound):
 			// raced with Delete — skip.
 		case isCtxErr(err):
@@ -346,13 +354,17 @@ func (a *scrubAgent) cascadeStampConsumers(ctx context.Context, blobRef string) 
 	// queries the index (loadManifest), which must not run while the
 	// ManifestsByBlobRef cursor is open (see Phase A note).
 	var ids []domain.ArtifactID
-	_ = a.idx.ManifestsByBlobRef(ctx, blobRef, func(m domain.Manifest) error {
+	if err := a.idx.ManifestsByBlobRef(ctx, blobRef, func(m domain.Manifest) error {
 		ids = append(ids, m.ArtifactID)
 		return nil
-	})
+	}); err != nil {
+		a.logger().Warn("scrub: failed to enumerate blob consumers", "blob_ref", blobRef, "err", err)
+	}
 	for _, id := range ids {
 		if a.store.VerifyManifest(ctx, id) == nil {
-			_ = a.idx.MarkManifestVerified(ctx, id, time.Now())
+			if err := a.idx.MarkManifestVerified(ctx, id, time.Now()); err != nil {
+				a.logger().Warn("scrub: failed to record manifest verification (cascade)", "artifact_id", id, "err", err)
+			}
 		}
 		// A corrupt consumer manifest already emitted EventScrubFailed
 		// inside VerifyManifest; the cascade does not abort on it.

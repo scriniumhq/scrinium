@@ -12,5 +12,5 @@
 // test-only tool, never used in production.
 //
 // DAG: faulty imports driver and the standard library. It does not
-// import core or higher layers.
+// import store or higher layers.
 package faulty
