@@ -117,5 +117,5 @@
 //
 // store imports domain, driver, event, index, and pipeline (plus the
 // engine/internal and store/internal helper packages). It does not import
-// agent, curator, maintenance, or projection.
+// agent or projection.
 package store

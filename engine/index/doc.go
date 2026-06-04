@@ -1,5 +1,6 @@
-// Package index contains implementations of store.StoreIndex and
-// curator.MultistoreIndex.
+// Package index defines the StoreIndex contract (index.StoreIndex) and
+// hosts its implementations. The MultistoreIndex contract and its
+// implementation live in engine/wrapper/multistore.
 //
 // Subpackages:
 //   - index/sqlite — the primary StoreIndex implementation for the
@@ -7,13 +8,11 @@
 //   - index/postgres — a shared StoreIndex for multi-host deployments.
 //     Lands when needed.
 //   - index/memory — an in-memory implementation for tests.
-//   - index/multistore — a curator.MultistoreIndex implementation.
-//     (M4.1)
 //
 // In M0 this package contains only a stub doc and the shared
 // types/options used across implementations.
 //
-// DAG: index imports core (the StoreIndex contract), driver (for
-// access to Capabilities when picking optimisations), and event
-// (for emitting metric events).
+// DAG: index defines the StoreIndex contract and imports domain and
+// event (for emitting metric events). Implementations that need driver
+// Capabilities (e.g. index/sqlite) import driver themselves.
 package index

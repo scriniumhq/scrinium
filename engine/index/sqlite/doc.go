@@ -28,7 +28,7 @@
 // schema_version table; a mismatch between the embedded current
 // version and the on-disk version returns errs.ErrIndexSchemaMismatch.
 //
-// DAG: this package imports core (the StoreIndex contract), driver
+// DAG: this package imports index (the StoreIndex contract), driver
 // (capabilities — read-only), and event (metric events). It does
-// not import plugin, curator, agent, or higher layers.
+// not import agent or higher layers.
 package sqlite

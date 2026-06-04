@@ -11,9 +11,8 @@ import "errors"
 //
 // Returned (wrapped, with concrete context) by stub bodies of types
 // that exist for compile-time DAG enforcement: agents, the
-// projection layer, chunker / bundler decorators, the curator's
-// constructor — anywhere the M0 contract has a signature but the
-// flesh arrives at M3 or later.
+// projection layer, chunker / bundler decorators — anywhere the M0
+// contract has a signature but the flesh arrives at M3 or later.
 //
 // Tests that exercise stubs match against this with errors.Is.
 var ErrNotImplemented = errors.New("scrinium: not implemented")

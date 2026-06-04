@@ -11,7 +11,7 @@
 // ArtifactID (the TOC manifest), Get returns the reassembled stream,
 // and Walk presents TOC manifests like ordinary artifacts.
 //
-// TODO(M5.2): CDC-based chunker wrapper.
+// TODO(M5): CDC-based chunker wrapper (milestones C3).
 package chunker
 
 import (
@@ -47,7 +47,7 @@ type ChunkerConfig struct {
 // the chunker does not need an explicit Flush, every Put is
 // self-contained.
 //
-// TODO(M5.2): CDC-based chunker wrapper.
+// TODO(M5): CDC-based chunker wrapper (milestones C3).
 func New(cfg ChunkerConfig) multistore.WrapperFactory {
 	return &factory{cfg: cfg}
 }

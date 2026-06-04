@@ -36,5 +36,5 @@
 //     option.
 //
 // DAG: localfs imports driver (the contract) and the standard
-// library. It does not import core, plugin, or higher layers.
+// library. It does not import store or higher layers.
 package localfs

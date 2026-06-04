@@ -29,8 +29,8 @@
 //
 // Seal and Open take a cipher.AEAD (or a list of candidates for key
 // rotation), so the format is independent of the concrete cipher. The
-// AES-GCM plugin (engine/plugin/crypto/aesgcm) is a thin adapter; a
-// future ChaCha20-Poly1305 plugin can reuse this package unchanged.
+// AES-GCM stage (engine/pipeline/stage/aesgcm) is a thin adapter; a
+// future ChaCha20-Poly1305 stage can reuse this package unchanged.
 // Both use a 12-byte nonce (IVLen), which the format assumes.
 //
 // # Memory and pooling

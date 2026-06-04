@@ -8,7 +8,7 @@
 // store. Packing is transparent to the client: Put returns a regular
 // ArtifactID, and Get knows how to range-read out of the pack.
 //
-// TODO(M3): blob bundling for many-small-files workloads.
+// TODO(M4): blob bundling for many-small-files workloads (milestones S4).
 package bundler
 
 import (
@@ -62,7 +62,7 @@ type Wrapper interface {
 // New returns a WrapperFactory for registration as a Target decorator
 // through WithStore/WithBackup.
 //
-// TODO(M3): bundling read path.
+// TODO(M4): bundling read path (milestones S4).
 func New(cfg BundlerConfig) multistore.WrapperFactory {
 	return &factory{cfg: cfg}
 }

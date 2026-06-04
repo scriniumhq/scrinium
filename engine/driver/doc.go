@@ -11,6 +11,6 @@
 // live in subpackages. This package contains only the interface
 // contract and shared types.
 //
-// DAG: driver imports event and the standard library. It does not
-// import core, plugin, index, curator, agent.
+// DAG: driver imports the standard library only. It does not import
+// index, agent, or higher layers.
 package driver
