@@ -86,6 +86,7 @@ func NewGCAgent(
 	hostID string,
 	storeID string,
 	cfg GCConfig,
+	opts ...AgentOption,
 ) (GCAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
 		return nil, fmt.Errorf("agent.NewGCAgent: store, driver, index and bus are required")
@@ -95,7 +96,8 @@ func NewGCAgent(
 	}
 	cfg = applyGCDefaults(cfg)
 	return &gcAgent{
-		store: st, drv: drv, idx: idx, bus: bus,
+		baseState: baseState{log: resolveAgentLogger(opts)},
+		store:     st, drv: drv, idx: idx, bus: bus,
 		hostID: hostID, storeID: storeID, cfg: cfg,
 	}, nil
 }
@@ -149,7 +151,7 @@ func (gcFactory) Name() string { return "gc" }
 
 func (gcFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
 	c, _ := cfg.(GCConfig) // zero value on mismatch -> defaults
-	return NewGCAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c)
+	return NewGCAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, WithAgentLogger(deps.Logger))
 }
 
 func init() { Register(gcFactory{}) }
@@ -237,7 +239,9 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 		hbErr = ch
 		defer func() {
 			cancel()
-			_ = l.Release(context.WithoutCancel(ctx))
+			if err := l.Release(context.WithoutCancel(ctx)); err != nil {
+				a.logger().Warn("lease release failed; lease will expire via TTL", "err", err)
+			}
 		}()
 	}
 

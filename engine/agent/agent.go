@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sync"
 
@@ -37,6 +38,7 @@ type baseState struct {
 	mu    sync.Mutex
 	state State
 	err   error
+	log   *slog.Logger
 }
 
 // Status returns the current state and the last error. Safe for
@@ -52,6 +54,46 @@ func (b *baseState) setState(s State, err error) {
 	b.mu.Lock()
 	b.state, b.err = s, err
 	b.mu.Unlock()
+}
+
+// logger returns the agent's diagnostic logger, never nil. Following
+// ADR-60 the default is silence: an agent built without a logger uses
+// slog.DiscardHandler and pays nothing (Enabled == false). Logs explain;
+// they never replace a returned error (no log-and-return).
+func (b *baseState) logger() *slog.Logger {
+	if b.log == nil {
+		return discardLogger
+	}
+	return b.log
+}
+
+// discardLogger is the shared no-op logger (ADR-60: default is silence,
+// no slog.Default() reach-through).
+var discardLogger = slog.New(slog.DiscardHandler)
+
+// AgentOption tunes an agent at construction. The variadic form keeps
+// existing constructor call sites source-compatible; the assembler
+// passes WithAgentLogger(deps.Logger) through Factory.Build.
+type AgentOption func(*agentOptions)
+
+type agentOptions struct{ logger *slog.Logger }
+
+// WithAgentLogger sets the agent's diagnostic logger (ADR-60).
+func WithAgentLogger(l *slog.Logger) AgentOption {
+	return func(o *agentOptions) { o.logger = l }
+}
+
+// resolveAgentLogger folds options and defaults a missing logger to
+// silence.
+func resolveAgentLogger(opts []AgentOption) *slog.Logger {
+	var o agentOptions
+	for _, fn := range opts {
+		fn(&o)
+	}
+	if o.logger == nil {
+		return discardLogger
+	}
+	return o.logger
 }
 
 // Agent is the single lifecycle contract of a Scrinium agent (ADR-68).
@@ -97,6 +139,7 @@ type AgentDeps struct {
 	Index     index.StoreIndex // the same object the Store holds
 	HostID    string           // per-process UUID v4, for lease takeover events
 	StoreID   string           // tags the agent's events; from the descriptor
+	Logger    *slog.Logger     // diagnostics; nil = silence (ADR-60)
 }
 
 // Factory builds an agent of one kind from declarative config and the

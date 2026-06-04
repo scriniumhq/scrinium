@@ -92,6 +92,7 @@ func NewSnapshotAgent(
 	hostID string,
 	storeID string,
 	cfg SnapshotConfig,
+	opts ...AgentOption,
 ) (SnapshotAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
 		return nil, fmt.Errorf("agent.NewSnapshotAgent: store, driver, index and bus are required")
@@ -101,7 +102,8 @@ func NewSnapshotAgent(
 	}
 	cfg = applySnapshotDefaults(cfg)
 	return &snapshotAgent{
-		store: st, drv: drv, idx: idx, bus: bus,
+		baseState: baseState{log: resolveAgentLogger(opts)},
+		store:     st, drv: drv, idx: idx, bus: bus,
 		hostID: hostID, storeID: storeID, cfg: cfg,
 	}, nil
 }
@@ -137,7 +139,7 @@ func (snapshotFactory) Name() string { return "snapshot" }
 
 func (snapshotFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
 	c, _ := cfg.(SnapshotConfig) // zero value on mismatch -> defaults
-	return NewSnapshotAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c)
+	return NewSnapshotAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, WithAgentLogger(deps.Logger))
 }
 
 func init() { Register(snapshotFactory{}) }
@@ -210,7 +212,9 @@ func (a *snapshotAgent) TakeSnapshot(ctx context.Context) (SnapshotStats, error)
 	go func() { hbErr <- l.Heartbeat(runCtx) }()
 	defer func() {
 		cancel()
-		_ = l.Release(context.WithoutCancel(ctx))
+		if err := l.Release(context.WithoutCancel(ctx)); err != nil {
+			a.logger().Warn("lease release failed; lease will expire via TTL", "err", err)
+		}
 	}()
 
 	stats, err := a.snapshotOnce(runCtx)
