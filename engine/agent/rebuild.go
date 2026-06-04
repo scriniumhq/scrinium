@@ -125,9 +125,12 @@ type RebuildIndexAgent interface {
 // and Target) — the only manifest types that exist before M4 (Pack) and
 // M5 (TOC/chunking). Encrypted manifests need a KeyProvider the agent is
 // not yet wired with; the Snapshot fast-path needs a snapshot read-back
-// the Snapshot Agent (A4) has not introduced; descriptor/pointer
-// recovery from the Recovery Kit is M3.4. Each of those is reported as
-// an explicit, non-silent boundary rather than faked.
+// the Snapshot Agent (A4) has not introduced. Descriptor recovery from
+// the Recovery Kit (rewriting a lost store.json) is implemented and runs
+// before the scan when RecoveryKit is set; recovering a dangling
+// system.config/current pointer is still out of scope (the kit carries
+// no config). The remaining gaps are reported as explicit, non-silent
+// boundaries rather than faked.
 func NewRebuildIndexAgent(
 	st store.Store,
 	drv driver.Driver,
@@ -222,12 +225,6 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 		AgentType: "rebuild", StoreID: a.storeID, StartedAt: start,
 	}})
 
-	if a.cfg.RecoveryKit != nil {
-		// Descriptor (store.json) and system.config/current recovery
-		// from the Recovery Kit is M3.4 and depends on the Kit format.
-		return nil, fmt.Errorf("agent.Rebuild.Run: Recovery Kit restore: %w", errs.ErrNotImplemented)
-	}
-
 	l, prev, err := lease.Acquire(ctx, a.drv, lease.Config{
 		Path:      rebuildLeasePath,
 		HostID:    a.hostID,
@@ -253,6 +250,19 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 			a.logger().Warn("lease release failed; lease will expire via TTL", "err", err)
 		}
 	}()
+
+	// Catastrophic recovery: rewrite store.json from the Recovery Kit
+	// before the scan, under the maintenance lease, when every
+	// descriptor replica was lost. The scan then repopulates the index
+	// from the manifests that survived alongside the blobs.
+	if a.cfg.RecoveryKit != nil {
+		if err := a.restoreDescriptor(runCtx); err != nil {
+			a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
+				AgentType: "rebuild", StoreID: a.storeID, Err: err,
+			}})
+			return nil, fmt.Errorf("agent.Rebuild.Run: recovery kit restore: %w", err)
+		}
+	}
 
 	a.setSource(RebuildSourceFullScan)
 	if err := a.fullScan(runCtx); err != nil {
@@ -288,6 +298,24 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 	}
 	a.bus.Publish(event.Event{Type: event.EventAgentCompleted, Payload: *res})
 	return res, nil
+}
+
+// restoreDescriptor rewrites store.json (and its L1 shadow) from the
+// Recovery Kit in the config, for the catastrophic case where every
+// on-disk descriptor replica was lost. It records the outcome in stats
+// (DescriptorRewrote). The kit-to-descriptor mapping and the two-replica
+// write live in the store package (RestoreDescriptorFromRecoveryKit),
+// which owns the descriptor and kit formats; the agent only sequences it
+// under the maintenance lease ahead of the scan.
+func (a *rebuildAgent) restoreDescriptor(ctx context.Context) error {
+	info, err := store.RestoreDescriptorFromRecoveryKit(ctx, a.drv, a.cfg.RecoveryKit)
+	if err != nil {
+		return err
+	}
+	a.mu.Lock()
+	a.stats.DescriptorRewrote = info.DescriptorWritten
+	a.mu.Unlock()
+	return nil
 }
 
 // Stats returns a snapshot of progress (safe to call concurrently).

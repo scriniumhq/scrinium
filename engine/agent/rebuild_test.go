@@ -3,6 +3,8 @@ package agent_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/eventfx"
 	"scrinium.dev/testutil/indexfx"
 	"scrinium.dev/testutil/storefx"
@@ -168,12 +171,75 @@ func TestRebuild_Validate_AutoSourcePasses(t *testing.T) {
 	}
 }
 
-func TestRebuild_RecoveryKitUnsupported(t *testing.T) {
+func TestRebuild_RecoveryKit_CorruptedFails(t *testing.T) {
 	f := newRebuildFixture(t)
-	a := newRebuild(t, f, agent.RebuildConfig{RecoveryKit: []byte("kit")})
-	if _, err := a.Run(context.Background()); !errors.Is(err, errs.ErrNotImplemented) {
-		t.Fatalf("Run(RecoveryKit) = %v, want ErrNotImplemented", err)
+	a := newRebuild(t, f, agent.RebuildConfig{RecoveryKit: []byte("not a valid kit")})
+	if _, err := a.Run(context.Background()); !errors.Is(err, errs.ErrRecoveryKitCorrupted) {
+		t.Fatalf("Run(corrupted kit) = %v, want ErrRecoveryKitCorrupted", err)
 	}
+}
+
+// TestRebuild_RecoveryKit_RestoresDescriptor drives the catastrophic
+// recovery path: an encrypted Store's descriptor replicas are deleted,
+// then the agent rewrites store.json from the kit before scanning. The
+// scan itself reindexes nothing here (a Sealed Store's manifests are not
+// decodable without a KeyProvider on M3) — the assertion is on the
+// descriptor restore.
+func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
+	ctx := context.Background()
+	drv := driverfx.LocalFS(t)
+	idx := indexfx.Memory(t)
+	rec := eventfx.New()
+
+	st, kit, err := store.InitStore(ctx, drv,
+		store.WithHashRegistry(storefx.Hashes()),
+		store.WithStoreIndex(idx),
+		store.WithPassphrase(storefx.StaticPP("pw")),
+		store.WithPublisher(rec),
+	)
+	if err != nil {
+		t.Fatalf("InitStore (encrypted): %v", err)
+	}
+	if len(kit) == 0 {
+		t.Fatal("empty recovery kit for an encrypted store")
+	}
+	if _, err := st.Put(ctx, artifactfx.Payload("payload that lands as a manifest file on the location"),
+		domain.WithNamespace("r")); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	// Simulate catastrophic descriptor loss.
+	root := drv.Root()
+	for _, name := range []string{"store.json", ".store.backup.json"} {
+		if err := os.Remove(filepath.Join(root, name)); err != nil {
+			t.Fatalf("remove %s: %v", name, err)
+		}
+	}
+
+	rebuilt := indexfx.Memory(t)
+	a, err := agent.NewRebuildIndexAgent(st, drv, rebuilt, rec, rebuildHostID, "store-rebuild",
+		agent.RebuildConfig{RecoveryKit: kit})
+	if err != nil {
+		t.Fatalf("NewRebuildIndexAgent: %v", err)
+	}
+
+	res, err := a.Run(ctx)
+	if err != nil {
+		t.Fatalf("Run(valid kit) = %v, want nil", err)
+	}
+	if res == nil {
+		t.Fatal("nil AgentResult")
+	}
+	if !a.Stats().DescriptorRewrote {
+		t.Error("DescriptorRewrote = false, want true")
+	}
+
+	// store.json is back on the Location.
+	rc, err := drv.Get(ctx, "store.json")
+	if err != nil {
+		t.Fatalf("descriptor not restored on disk: %v", err)
+	}
+	_ = rc.Close()
 }
 
 func TestRebuild_BlockedByForeignLease(t *testing.T) {
