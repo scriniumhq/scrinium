@@ -6,7 +6,7 @@ import (
 )
 
 // MaintenanceAgent is the contract of a one-shot administrative
-// operation (rebuild index, migrate schema, snapshot index, …).
+// operation (rebuild index, migrate schema, checkpoint index, …).
 //
 // It lives in domain — the leaf package every layer imports — because
 // it is shared vocabulary between the layer that *runs* an agent

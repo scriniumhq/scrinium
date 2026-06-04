@@ -7,7 +7,7 @@ import "errors"
 // built-ins (Ingester, GC, Scrub, Snapshot, Sync, Ejector).
 
 // ErrAgentNotRunning — command-style methods (ForceCommit, Eject,
-// Trigger, TakeSnapshot, ...) called on an agent whose Run is not
+// Trigger, TakeCheckpoint, ...) called on an agent whose Run is not
 // active.
 var ErrAgentNotRunning = errors.New("scrinium: agent not running")
 
