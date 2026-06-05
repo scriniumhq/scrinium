@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -34,22 +36,36 @@ const (
 	modeOpenOrInit
 )
 
+// standardSchedulerTick is how often the built-in scheduler goroutine
+// (WithStandardScheduler) ticks the interval primitive. It bounds the
+// latency between an agent becoming due and running, not the configured
+// intervals themselves; 1s is ample for maintenance cadences.
+const standardSchedulerTick = time.Second
+
+// agentWiring carries the build-time agent/scheduler options into the
+// single-store assembler, so the signatures stay stable as options grow.
+type agentWiring struct {
+	handlers   []func(event.Event)
+	stdSched   bool
+	cronParser agent.CronParser
+}
+
 // build turns a validated, defaulted Config into an assembled stack. It
 // assembles the single-store path (the one the engine fully supports
 // today); everything that depends on not-yet-wired components returns
 // errs.ErrNotImplemented with a pointer to the milestone chunk that
 // lands it.
-func build(ctx context.Context, c *Config, mode buildMode, handlers []func(event.Event)) (Assembly, error) {
+func build(ctx context.Context, c *Config, mode buildMode, aw agentWiring) (Assembly, error) {
 	if len(c.Stores) > 0 {
 		return nil, fmt.Errorf("scrinium: multistore assembly is not wired yet (M4/S1): %w", errs.ErrNotImplemented)
 	}
 	if c.Store == nil {
 		return nil, fmt.Errorf("scrinium: no store to build")
 	}
-	return buildSingle(ctx, c, mode, handlers)
+	return buildSingle(ctx, c, mode, aw)
 }
 
-func buildSingle(ctx context.Context, c *Config, mode buildMode, handlers []func(event.Event)) (_ Assembly, retErr error) {
+func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring) (_ Assembly, retErr error) {
 	spec := c.Store
 	if err := guardUnsupportedPolicy(spec.Policy); err != nil {
 		return nil, err
@@ -113,7 +129,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, handlers []func
 	// handlers (WithEventHandler) are attached now, before anything
 	// publishes, so they observe events emitted during assembly.
 	bus := event.NewEventBus()
-	for _, h := range handlers {
+	for _, h := range aw.handlers {
 		bus.Subscribe(h)
 	}
 
@@ -159,6 +175,40 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, handlers []func
 		// it only tags agent events (diagnostics), not lease identity.
 	}
 
+	// Standard scheduler (ADR-69 level 2), opt-in. One goroutine ticks the
+	// interval-based primitive on real time; the primitive itself owns no
+	// clock. The ticker is stopped and in-flight runs are drained before
+	// the store closes (see closeFn). standardSchedulerTick bounds the
+	// scheduling granularity, not the agents' own intervals.
+	var sched agent.Scheduler
+	var stopTicker func() = func() {}
+	if aw.stdSched {
+		s, serr := agent.NewScheduler(st, agentDeps)
+		if serr != nil {
+			return nil, fmt.Errorf("scrinium: scheduler: %w", serr)
+		}
+		sched = s
+		done := make(chan struct{})
+		var once sync.Once
+		stopTicker = func() { once.Do(func() { close(done) }) }
+		go func() {
+			tk := time.NewTicker(standardSchedulerTick)
+			defer tk.Stop()
+			for {
+				select {
+				case <-done:
+					return
+				case now := <-tk.C:
+					_ = sched.Tick(now)
+				}
+			}
+		}()
+		cleanups = append(cleanups, func() {
+			stopTicker()
+			_ = sched.Stop(context.Background())
+		})
+	}
+
 	// 6. Read-side View + read/write FSOps from the projection section.
 	effProj := c.Projection
 	mountSession := domain.NewMountSessionID()
@@ -187,6 +237,12 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, handlers []func
 	// closeFn unwinds in LIFO order; idempotency is the assembly's job.
 	closeFn := func() error {
 		var firstErr error
+		if sched != nil {
+			stopTicker()
+			if err := sched.Stop(context.Background()); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
 		if proj != nil {
 			if err := proj.Close(); err != nil && firstErr == nil {
 				firstErr = err
@@ -208,7 +264,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, handlers []func
 		info.ReadOnly = effProj.ReadOnly
 	}
 
-	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus), nil
+	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus, sched, aw.cronParser), nil
 }
 
 // guardUnsupportedPolicy rejects policy features whose components are

@@ -225,3 +225,73 @@ func TestScheduler_TickAndAddAfterStop(t *testing.T) {
 		t.Error("Add after Stop = nil, want error")
 	}
 }
+func TestScheduler_CronGateFiresAtScheduledMoment(t *testing.T) {
+	atomic.StoreInt64(&schedRunCount, 0)
+	s, _ := newSchedFixture(t)
+	hourly := func(prev time.Time) time.Time { return prev.Truncate(time.Hour).Add(time.Hour) }
+	if err := s.Add(Schedule{Agent: "sched-test", Next: hourly}); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// 00:30 — establishes the schedule (next moment 01:00); no fire, and
+	// notably no fire-on-add.
+	if err := s.Tick(base.Add(30 * time.Minute)); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if n := atomic.LoadInt64(&schedRunCount); n != 0 {
+		t.Fatalf("before scheduled moment ran %d times, want 0", n)
+	}
+	// 01:00 — fires.
+	if err := s.Tick(base.Add(time.Hour)); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	waitRunCount(t, 1, time.Second)
+	// 01:30 — before the next scheduled moment (02:00): no further fire.
+	if err := s.Tick(base.Add(90 * time.Minute)); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if n := atomic.LoadInt64(&schedRunCount); n != 1 {
+		t.Fatalf("between scheduled moments ran %d times, want 1", n)
+	}
+	// 02:00 — fires again.
+	if err := s.Tick(base.Add(2 * time.Hour)); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	waitRunCount(t, 2, time.Second)
+}
+
+func TestScheduler_CronGateDriftFree(t *testing.T) {
+	atomic.StoreInt64(&schedRunCount, 0)
+	s, _ := newSchedFixture(t)
+	hourly := func(prev time.Time) time.Time { return prev.Truncate(time.Hour).Add(time.Hour) }
+	if err := s.Add(Schedule{Agent: "sched-test", Next: hourly}); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// Establish next moment = 01:00.
+	if err := s.Tick(base.Add(30 * time.Minute)); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	// Ticker "slept" past 01:00 and wakes at 01:00:02 — fires late (once).
+	if err := s.Tick(base.Add(time.Hour + 2*time.Second)); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	waitRunCount(t, 1, time.Second)
+	// The next moment must be the scheduled 02:00, not 02:00:02: a tick
+	// just before 02:00 must not fire.
+	if err := s.Tick(base.Add(2*time.Hour - time.Second)); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if n := atomic.LoadInt64(&schedRunCount); n != 1 {
+		t.Fatalf("before 02:00 ran %d times, want 1 (a drifted schedule would have fired)", n)
+	}
+	if err := s.Tick(base.Add(2 * time.Hour)); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	waitRunCount(t, 2, time.Second)
+}

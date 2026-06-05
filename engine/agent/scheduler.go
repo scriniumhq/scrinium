@@ -22,11 +22,23 @@ import (
 type Schedule struct {
 	// Agent is the AgentType of a registered agent (agent.Lookup).
 	Agent string
-	// Interval is the minimum period between runs of this entry.
+	// Interval is the minimum period between runs of this entry. Ignored
+	// when Next is set.
 	Interval time.Duration
 	// Config is the kind-specific config for the agent's factory.
 	Config any
+	// Next, when non-nil, overrides interval gating: it returns the next
+	// run time strictly after prev (wall-clock, e.g. cron), and the
+	// scheduler fires when that moment passes. The scheduler stays
+	// expression-syntax agnostic — it only calls Next. nil = interval.
+	Next func(prev time.Time) time.Time
 }
+
+// CronParser turns a schedule expression into a Schedule.Next function,
+// or an error if the expression is invalid. The scheduler primitive does
+// not depend on any cron library; an adapter package
+// (scrinium.dev/engine/agent/cron) supplies the implementation.
+type CronParser func(expr string) (next func(prev time.Time) time.Time, err error)
 
 // Scheduler is the time-driven launch primitive (ADR-69). It does not
 // own time: the owner calls Tick(now) from its own loop, so an embedding
@@ -56,6 +68,7 @@ type Scheduler interface {
 type schedEntry struct {
 	sched   Schedule
 	lastRun time.Time
+	nextDue time.Time // for Next-driven (cron) entries: next scheduled fire
 	running bool
 }
 
@@ -98,7 +111,7 @@ func (s *scheduler) Add(sc Schedule) error {
 	if _, ok := Lookup(sc.Agent); !ok {
 		return fmt.Errorf("%w: no agent registered for %q", errs.ErrInvalidAgentType, sc.Agent)
 	}
-	if sc.Interval <= 0 {
+	if sc.Next == nil && sc.Interval <= 0 {
 		return fmt.Errorf("agent.Scheduler.Add: interval must be positive for %q", sc.Agent)
 	}
 	s.mu.Lock()
@@ -121,7 +134,28 @@ func (s *scheduler) Tick(now time.Time) error {
 		if e.running {
 			continue // skip, don't queue (ADR-69)
 		}
-		if e.lastRun.IsZero() || now.Sub(e.lastRun) >= e.sched.Interval {
+		fire := false
+		if e.sched.Next != nil {
+			// Wall-clock (cron) gating, drift-free: nextDue advances from
+			// the scheduled moment, not from the actual run time.
+			if e.nextDue.IsZero() {
+				e.nextDue = e.sched.Next(now) // first scheduled moment after now
+			}
+			if !e.nextDue.IsZero() && !now.Before(e.nextDue) {
+				fire = true
+				// Advance to the first scheduled moment strictly after now:
+				// one catch-up run for moments missed while the ticker
+				// slept, not one run per missed moment.
+				next := e.sched.Next(e.nextDue)
+				for !next.IsZero() && !next.After(now) {
+					next = e.sched.Next(next)
+				}
+				e.nextDue = next
+			}
+		} else if e.lastRun.IsZero() || now.Sub(e.lastRun) >= e.sched.Interval {
+			fire = true
+		}
+		if fire {
 			e.running = true
 			e.lastRun = now
 			due = append(due, e)

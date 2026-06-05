@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -49,6 +50,26 @@ func CountFailed(rec *eventfx.Recorder, agentType string) int {
 	return n
 }
 
+// terminalSeen reports whether rec has captured a terminal event for
+// agentType: a successful result (EventAgentCompleted or EventAgentCycle,
+// whose payload is a domain.AgentResult) or any failure. It lets a test
+// wait for a scheduled run to finish on its own instead of cancelling it
+// mid-run via Stop — the latter races slow agents (e.g. rebuild under
+// -race) and turns an interrupted run into a spurious failure event.
+func terminalSeen(rec *eventfx.Recorder, agentType string) bool {
+	for _, e := range rec.ByType(event.EventAgentCompleted) {
+		if r, ok := e.Payload.(domain.AgentResult); ok && r.AgentType == agentType {
+			return true
+		}
+	}
+	for _, e := range rec.ByType(event.EventAgentCycle) {
+		if r, ok := e.Payload.(domain.AgentResult); ok && r.AgentType == agentType {
+			return true
+		}
+	}
+	return CountFailed(rec, agentType) > 0
+}
+
 // Harness drives a real agent.Scheduler over a test store and observes
 // runs through rec — the same recorder the store (and therefore the
 // scheduled agents, via AgentDeps.Publisher) publish to.
@@ -84,17 +105,6 @@ func (h *Harness) MustAdd(t *testing.T, s agent.Schedule) {
 	}
 }
 
-// StopAndWait stops the scheduler and blocks until in-flight runs drain,
-// so callers can assert on terminal events (e.g. CountFailed) without
-// racing the async run. Safe to call before the cleanup Stop (which is
-// idempotent).
-func (h *Harness) StopAndWait(t *testing.T) {
-	t.Helper()
-	if err := h.Sched.Stop(context.Background()); err != nil {
-		t.Fatalf("schedfx Stop: %v", err)
-	}
-}
-
 // TickAndWaitStarted ticks at now, then polls until agentType has at
 // least want Started events (agents run asynchronously) or fails after
 // timeout.
@@ -112,4 +122,26 @@ func (h *Harness) TickAndWaitStarted(t *testing.T, now time.Time, agentType stri
 	}
 	t.Fatalf("agent %q started %d times, want >= %d within %s",
 		agentType, CountStarted(h.Rec, agentType), want, timeout)
+}
+
+// TickAndWaitDone ticks once at now and waits until the scheduled agent
+// has finished — a terminal event (success result or failure) appeared.
+// It does not assert success: callers check CountFailed afterwards. By
+// waiting for natural completion rather than cancelling, it removes the
+// race where Stop interrupts a still-running agent and turns it into a
+// spurious failure.
+func (h *Harness) TickAndWaitDone(t *testing.T, now time.Time, agentType string, timeout time.Duration) {
+	t.Helper()
+	if err := h.Sched.Tick(now); err != nil {
+		t.Fatalf("schedfx Tick: %v", err)
+	}
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if terminalSeen(h.Rec, agentType) {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("agent %q did not finish within %s (started=%d, failed=%d)",
+		agentType, timeout, CountStarted(h.Rec, agentType), CountFailed(h.Rec, agentType))
 }

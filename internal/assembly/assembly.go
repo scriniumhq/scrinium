@@ -2,6 +2,8 @@ package assembly
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
@@ -69,6 +71,19 @@ type Assembly interface {
 	// which a post-build Subscribe cannot.
 	Subscribe(fn func(event.Event)) func()
 
+	// ScheduleEvery registers agent kind to run every interval through the
+	// built-in scheduler. Requires WithStandardScheduler; without it there
+	// is no scheduler to drive the schedule and it returns an error. The
+	// agent is built fresh from the registry on each run.
+	ScheduleEvery(kind string, every time.Duration, cfg any) error
+
+	// ScheduleCron registers agent kind to run on a cron expression
+	// through the built-in scheduler. Requires WithStandardScheduler and a
+	// cron adapter (cron.Enable from scrinium.dev/engine/agent/cron);
+	// without either it returns an error. The expression is parsed once
+	// here; an invalid expression is reported immediately.
+	ScheduleCron(kind string, expr string, cfg any) error
+
 	// Close releases the store, index, and view, idempotently.
 	Close() error
 }
@@ -97,8 +112,10 @@ type asm struct {
 	info         Info
 	recoveryKit  []byte
 	closeFn      func() error
-	agentDeps    agent.AgentDeps // Driver/Index/Publisher the assembler hands agents
-	bus          event.EventBus  // the store+agent event channel; Subscribe taps it
+	agentDeps    agent.AgentDeps  // Driver/Index/Publisher the assembler hands agents
+	bus          event.EventBus   // the store+agent event channel; Subscribe taps it
+	sched        agent.Scheduler  // built-in scheduler; nil unless WithStandardScheduler
+	cronParser   agent.CronParser // nil unless a cron adapter was enabled
 }
 
 var _ Assembly = (*asm)(nil)
@@ -117,6 +134,8 @@ func New(
 	closeFn func() error,
 	agentDeps agent.AgentDeps,
 	bus event.EventBus,
+	sched agent.Scheduler,
+	cronParser agent.CronParser,
 ) Assembly {
 	return &asm{
 		store:        st,
@@ -128,6 +147,8 @@ func New(
 		closeFn:      closeFn,
 		agentDeps:    agentDeps,
 		bus:          bus,
+		sched:        sched,
+		cronParser:   cronParser,
 	}
 }
 
@@ -167,6 +188,27 @@ func (a *asm) RunMaintenance(ctx context.Context, kind string, cfg any) (*domain
 
 func (a *asm) Subscribe(fn func(event.Event)) func() {
 	return a.bus.Subscribe(fn)
+}
+
+func (a *asm) ScheduleEvery(kind string, every time.Duration, cfg any) error {
+	if a.sched == nil {
+		return fmt.Errorf("scrinium: standard scheduler not enabled (pass WithStandardScheduler)")
+	}
+	return a.sched.Add(agent.Schedule{Agent: kind, Interval: every, Config: cfg})
+}
+
+func (a *asm) ScheduleCron(kind string, expr string, cfg any) error {
+	if a.sched == nil {
+		return fmt.Errorf("scrinium: standard scheduler not enabled (pass WithStandardScheduler)")
+	}
+	if a.cronParser == nil {
+		return fmt.Errorf("scrinium: cron support not enabled (use cron.Enable from scrinium.dev/engine/agent/cron)")
+	}
+	next, err := a.cronParser(expr)
+	if err != nil {
+		return fmt.Errorf("scrinium: cron %q: %w", expr, err)
+	}
+	return a.sched.Add(agent.Schedule{Agent: kind, Next: next, Config: cfg})
 }
 
 func (a *asm) Close() error {

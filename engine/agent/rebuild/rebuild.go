@@ -288,7 +288,11 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 	a.mu.Unlock()
 
 	res := &domain.AgentResult{
-		AgentType:   "RebuildIndex",
+		// AgentType matches the registered kind and the agent's other
+		// events (started/failed/stale-lease) so consumers can correlate a
+		// rebuild's events by a single type. ("RebuildIndex" remains the
+		// lease owner tag, a separate concern.)
+		AgentType:   "rebuild",
 		StoreID:     a.storeID,
 		CompletedAt: time.Now(),
 		Stats: map[string]int64{
