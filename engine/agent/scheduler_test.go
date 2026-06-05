@@ -196,3 +196,32 @@ func TestScheduler_NilStore(t *testing.T) {
 		t.Fatal("NewScheduler(nil store) = nil, want error")
 	}
 }
+
+func TestScheduler_MultipleDueInOneTick(t *testing.T) {
+	atomic.StoreInt64(&schedRunCount, 0)
+	s, _ := newSchedFixture(t)
+	// Two independent entries, both due on the first Tick (lastRun zero);
+	// a single Tick must dispatch both, not just the first.
+	for i := 0; i < 2; i++ {
+		if err := s.Add(Schedule{Agent: "sched-test", Interval: time.Minute}); err != nil {
+			t.Fatalf("Add #%d: %v", i, err)
+		}
+	}
+	if err := s.Tick(time.Now()); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	waitRunCount(t, 2, time.Second)
+}
+
+func TestScheduler_TickAndAddAfterStop(t *testing.T) {
+	s, _ := newSchedFixture(t)
+	if err := s.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	if err := s.Tick(time.Now()); err == nil {
+		t.Error("Tick after Stop = nil, want error")
+	}
+	if err := s.Add(Schedule{Agent: "sched-test", Interval: time.Minute}); err == nil {
+		t.Error("Add after Stop = nil, want error")
+	}
+}

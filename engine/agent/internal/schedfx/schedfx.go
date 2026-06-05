@@ -36,6 +36,19 @@ func CountStarted(rec *eventfx.Recorder, agentType string) int {
 	return n
 }
 
+// CountFailed returns how many EventAgentFailed events rec captured for
+// agentType. Paired with CountStarted it turns a scheduled run into a
+// "started and did not fail" assertion.
+func CountFailed(rec *eventfx.Recorder, agentType string) int {
+	n := 0
+	for _, e := range rec.ByType(event.EventAgentFailed) {
+		if p, ok := e.Payload.(event.AgentFailedPayload); ok && p.AgentType == agentType {
+			n++
+		}
+	}
+	return n
+}
+
 // Harness drives a real agent.Scheduler over a test store and observes
 // runs through rec — the same recorder the store (and therefore the
 // scheduled agents, via AgentDeps.Publisher) publish to.
@@ -68,6 +81,17 @@ func (h *Harness) MustAdd(t *testing.T, s agent.Schedule) {
 	t.Helper()
 	if err := h.Sched.Add(s); err != nil {
 		t.Fatalf("schedfx Add(%q): %v", s.Agent, err)
+	}
+}
+
+// StopAndWait stops the scheduler and blocks until in-flight runs drain,
+// so callers can assert on terminal events (e.g. CountFailed) without
+// racing the async run. Safe to call before the cleanup Stop (which is
+// idempotent).
+func (h *Harness) StopAndWait(t *testing.T) {
+	t.Helper()
+	if err := h.Sched.Stop(context.Background()); err != nil {
+		t.Fatalf("schedfx Stop: %v", err)
 	}
 }
 

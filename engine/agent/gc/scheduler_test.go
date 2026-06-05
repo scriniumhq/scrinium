@@ -13,15 +13,20 @@ import (
 
 // TestGC_Scheduled verifies the Scheduler builds the registered gc agent
 // from the registry (with the kind-specific Config) and invokes it on a
-// due Tick. Agent-internal behaviour is covered by gc's own tests; here
-// we assert only the scheduler -> registry -> RunMaintenance wiring.
+// due Tick, and that the scheduled run completes without failure.
+// Agent-internal behaviour is covered by gc's own tests.
 func TestGC_Scheduled(t *testing.T) {
 	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
+	f.putAndOrphan(t, "data")
 
 	h := schedfx.New(t, f.store, f.drv, f.idx, f.rec, "store-gc")
 	h.MustAdd(t, agent.Schedule{Agent: "gc", Interval: time.Minute, Config: gc.GCConfig{}})
 
 	h.TickAndWaitStarted(t, time.Now(), "gc", 1, time.Second)
+	h.StopAndWait(t)
+	if n := schedfx.CountFailed(h.Rec, "gc"); n != 0 {
+		t.Errorf("gc emitted %d failure events during scheduled run, want 0", n)
+	}
 }
 
 // TestGC_CustomSchedulerUsesRunMaintenance demonstrates the always-on
