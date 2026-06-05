@@ -27,6 +27,7 @@ package scrinium
 
 import (
 	"context"
+	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/index/extension"
@@ -175,6 +176,29 @@ func (c *ScriniumClient) Subscribe(fn func(Event)) func() {
 	return c.asm.Subscribe(fn)
 }
 
+// ScheduleEvery registers agent kind to run every interval through the
+// built-in scheduler, which the client ticks on real time. Requires
+// WithStandardScheduler at Open/Build; without it there is no resident
+// scheduler and this returns an error. The agent is rebuilt from the
+// registry on each run, so kind must be registered (blank import).
+//
+//	c, _ := scrinium.Open(ctx, uri, scrinium.WithStandardScheduler())
+//	c.ScheduleEvery("gc", time.Hour, gc.GCConfig{})
+func (c *ScriniumClient) ScheduleEvery(kind string, every time.Duration, cfg any) error {
+	return c.asm.ScheduleEvery(kind, every, cfg)
+}
+
+// ScheduleCron registers agent kind to run on a cron expression through
+// the built-in scheduler. Requires WithStandardScheduler at Open/Build
+// and a cron adapter enabled with cron.Enable (from
+// scrinium.dev/engine/agent/cron); without either it returns an error.
+//
+//	c, _ := scrinium.Open(ctx, uri, scrinium.WithStandardScheduler(), cron.Enable())
+//	c.ScheduleCron("scrub", "0 3 * * *", scrub.ScrubConfig{})
+func (c *ScriniumClient) ScheduleCron(kind string, expr string, cfg any) error {
+	return c.asm.ScheduleCron(kind, expr, cfg)
+}
+
 // Open assembles a store from a single driver URI, creating it if
 // absent (ModeOpenOrInit). The simplest entry point — no config
 // document, no projection.
@@ -204,6 +228,13 @@ func WithMode(m Mode) BuildOption { return assembly.WithMode(m) }
 // store and agent event. For subscriptions added after Open, use
 // (*ScriniumClient).Subscribe. A nil handler is ignored.
 func WithEventHandler(fn func(Event)) BuildOption { return assembly.WithEventHandler(fn) }
+
+// WithStandardScheduler runs the built-in scheduler: one goroutine ticks
+// it on real time and runs due agents, stopped on Close. Without it the
+// client keeps no resident goroutine — agents run only via RunMaintenance.
+// Add schedules with ScheduleEvery / ScheduleCron. Hosts that want to own
+// the clock build on the primitives (agent.Scheduler) directly.
+func WithStandardScheduler() BuildOption { return assembly.WithStandardScheduler() }
 
 // LoadYAML / LoadInitYAML / LoadOrInitYAML assemble from a YAML
 // configuration document. JSON variants mirror them.
