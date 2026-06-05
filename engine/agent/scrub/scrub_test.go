@@ -1,4 +1,4 @@
-package agent_test
+package scrub_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/scrub"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
@@ -103,9 +104,9 @@ func (f scrubFixture) tamperBlob(t *testing.T, blobRef string) {
 	}
 }
 
-func newScrub(t *testing.T, f scrubFixture, cfg agent.ScrubConfig) agent.ScrubAgent {
+func newScrub(t *testing.T, f scrubFixture, cfg scrub.ScrubConfig) scrub.ScrubAgent {
 	t.Helper()
-	a, err := agent.NewScrubAgent(f.store, f.drv, f.idx, f.rec, scrubHostID, "store-scrub", cfg)
+	a, err := scrub.NewScrubAgent(f.store, f.drv, f.idx, f.rec, scrubHostID, "store-scrub", cfg)
 	if err != nil {
 		t.Fatalf("NewScrubAgent: %v", err)
 	}
@@ -114,27 +115,27 @@ func newScrub(t *testing.T, f scrubFixture, cfg agent.ScrubConfig) agent.ScrubAg
 
 // forceCfg verifies everything regardless of last_verified_at, so a
 // freshly-written artifact is eligible within the same test.
-func forceCfg() agent.ScrubConfig {
-	return agent.ScrubConfig{Force: true}
+func forceCfg() scrub.ScrubConfig {
+	return scrub.ScrubConfig{Force: true}
 }
 
 func TestNewScrub_RequiresDeps(t *testing.T) {
 	f := newScrubFixture(t)
-	cases := map[string]func() (agent.ScrubAgent, error){
-		"nil store": func() (agent.ScrubAgent, error) {
-			return agent.NewScrubAgent(nil, f.drv, f.idx, f.rec, scrubHostID, "", agent.ScrubConfig{})
+	cases := map[string]func() (scrub.ScrubAgent, error){
+		"nil store": func() (scrub.ScrubAgent, error) {
+			return scrub.NewScrubAgent(nil, f.drv, f.idx, f.rec, scrubHostID, "", scrub.ScrubConfig{})
 		},
-		"nil driver": func() (agent.ScrubAgent, error) {
-			return agent.NewScrubAgent(f.store, nil, f.idx, f.rec, scrubHostID, "", agent.ScrubConfig{})
+		"nil driver": func() (scrub.ScrubAgent, error) {
+			return scrub.NewScrubAgent(f.store, nil, f.idx, f.rec, scrubHostID, "", scrub.ScrubConfig{})
 		},
-		"nil index": func() (agent.ScrubAgent, error) {
-			return agent.NewScrubAgent(f.store, f.drv, nil, f.rec, scrubHostID, "", agent.ScrubConfig{})
+		"nil index": func() (scrub.ScrubAgent, error) {
+			return scrub.NewScrubAgent(f.store, f.drv, nil, f.rec, scrubHostID, "", scrub.ScrubConfig{})
 		},
-		"nil bus": func() (agent.ScrubAgent, error) {
-			return agent.NewScrubAgent(f.store, f.drv, f.idx, nil, scrubHostID, "", agent.ScrubConfig{})
+		"nil bus": func() (scrub.ScrubAgent, error) {
+			return scrub.NewScrubAgent(f.store, f.drv, f.idx, nil, scrubHostID, "", scrub.ScrubConfig{})
 		},
-		"empty host": func() (agent.ScrubAgent, error) {
-			return agent.NewScrubAgent(f.store, f.drv, f.idx, f.rec, "", "", agent.ScrubConfig{})
+		"empty host": func() (scrub.ScrubAgent, error) {
+			return scrub.NewScrubAgent(f.store, f.drv, f.idx, f.rec, "", "", scrub.ScrubConfig{})
 		},
 	}
 	for name, mk := range cases {
@@ -280,7 +281,7 @@ func TestScrub_CancelledContext(t *testing.T) {
 
 func TestScrub_RunStopsOnContextCancel(t *testing.T) {
 	f := newScrubFixture(t)
-	a := newScrub(t, f, agent.ScrubConfig{ScanInterval: time.Hour, Force: true})
+	a := newScrub(t, f, scrub.ScrubConfig{ScanInterval: time.Hour, Force: true})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // one-shot agent: a cancelled context must abort Run promptly
 	_, err := a.Run(ctx)

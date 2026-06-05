@@ -1,4 +1,4 @@
-package agent
+package checkpoint
 
 import (
 	"context"
@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
 )
@@ -59,7 +60,7 @@ type CheckpointStats struct {
 // uses a fresh checkpoint as the starting point and reads in the
 // new manifests through ListObjectsWithModTime.
 type CheckpointAgent interface {
-	Agent
+	agent.Agent
 
 	// TakeCheckpoint forces a checkpoint regardless of Interval and
 	// ArtifactThreshold. Used before critical maintenance
@@ -92,7 +93,7 @@ func NewCheckpointAgent(
 	hostID string,
 	storeID string,
 	cfg CheckpointConfig,
-	opts ...AgentOption,
+	opts ...agent.AgentOption,
 ) (CheckpointAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
 		return nil, fmt.Errorf("agent.NewCheckpointAgent: store, driver, index and bus are required")
@@ -102,7 +103,7 @@ func NewCheckpointAgent(
 	}
 	cfg = applyCheckpointDefaults(cfg)
 	return &checkpointAgent{
-		baseState: baseState{log: resolveAgentLogger(opts)},
+		BaseState: agent.NewBaseState(agent.ResolveLogger(opts...)),
 		store:     st, drv: drv, idx: idx, bus: bus,
 		hostID: hostID, storeID: storeID, cfg: cfg,
 	}, nil
@@ -127,7 +128,7 @@ type checkpointAgent struct {
 	storeID string
 	cfg     CheckpointConfig
 
-	baseState
+	agent.BaseState
 }
 
 var _ CheckpointAgent = (*checkpointAgent)(nil)
@@ -137,12 +138,12 @@ type checkpointFactory struct{}
 
 func (checkpointFactory) Name() string { return "checkpoint" }
 
-func (checkpointFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
+func (checkpointFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (agent.Agent, error) {
 	c, _ := cfg.(CheckpointConfig) // zero value on mismatch -> defaults
-	return NewCheckpointAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, WithAgentLogger(deps.Logger))
+	return NewCheckpointAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
 
-func init() { Register(checkpointFactory{}) }
+func init() { agent.Register(checkpointFactory{}) }
 
 // AgentType is the short registry/event identifier.
 func (a *checkpointAgent) AgentType() string { return "checkpoint" }
@@ -155,7 +156,7 @@ func (a *checkpointAgent) Validate(ctx context.Context) error { return ctx.Err()
 // Run takes one checkpoint and returns its AgentResult. A one-shot
 // operation: the scheduler decides cadence (ADR-69).
 func (a *checkpointAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
-	a.setState(StateRunning, nil)
+	a.SetState(agent.StateRunning, nil)
 	stats, err := a.TakeCheckpoint(ctx)
 	res := &domain.AgentResult{
 		AgentType:   "checkpoint",
@@ -164,8 +165,8 @@ func (a *checkpointAgent) Run(ctx context.Context) (*domain.AgentResult, error) 
 		Stats:       map[string]int64{"db_bytes": stats.DBBytes},
 	}
 	if err != nil {
-		a.setState(StateFaulted, err)
-		if isCtxErr(err) {
+		a.SetState(agent.StateFaulted, err)
+		if agent.IsCtxErr(err) {
 			res.Partial = true
 			a.bus.Publish(event.Event{Type: event.EventAgentCancelled})
 			return res, err
@@ -175,7 +176,7 @@ func (a *checkpointAgent) Run(ctx context.Context) (*domain.AgentResult, error) 
 		}})
 		return res, err
 	}
-	a.setState(StateIdle, nil)
+	a.SetState(agent.StateIdle, nil)
 	return res, nil
 }
 
@@ -213,7 +214,7 @@ func (a *checkpointAgent) TakeCheckpoint(ctx context.Context) (CheckpointStats, 
 	defer func() {
 		cancel()
 		if err := l.Release(context.WithoutCancel(ctx)); err != nil {
-			a.logger().Warn("lease release failed; lease will expire via TTL", "err", err)
+			a.Logger().Warn("lease release failed; lease will expire via TTL", "err", err)
 		}
 	}()
 
@@ -325,7 +326,7 @@ func (a *checkpointAgent) pruneOldCheckpoints(ctx context.Context) error {
 func drainHeartbeat(hbErr <-chan error) error {
 	select {
 	case herr := <-hbErr:
-		if herr != nil && !isCtxErr(herr) {
+		if herr != nil && !agent.IsCtxErr(herr) {
 			return herr
 		}
 	default:

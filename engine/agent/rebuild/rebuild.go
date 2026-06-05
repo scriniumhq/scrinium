@@ -1,4 +1,4 @@
-package agent
+package rebuild
 
 import (
 	"context"
@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -106,7 +107,7 @@ type RebuildStats struct {
 // restore store.json (when lost) and the system.config/current
 // pointer (when dangling).
 type RebuildIndexAgent interface {
-	Agent
+	agent.Agent
 
 	// Stats returns a progress snapshot during execution (safe to
 	// call from another goroutine). After Run, returns the final
@@ -139,7 +140,7 @@ func NewRebuildIndexAgent(
 	hostID string,
 	storeID string,
 	cfg RebuildConfig,
-	opts ...AgentOption,
+	opts ...agent.AgentOption,
 ) (RebuildIndexAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
 		return nil, fmt.Errorf("agent.NewRebuildIndexAgent: store, driver, index and bus are required")
@@ -149,7 +150,7 @@ func NewRebuildIndexAgent(
 	}
 	cfg = applyRebuildDefaults(cfg)
 	return &rebuildAgent{
-		baseState: baseState{log: resolveAgentLogger(opts)},
+		BaseState: agent.NewBaseState(agent.ResolveLogger(opts...)),
 		store:     st, drv: drv, idx: idx, bus: bus,
 		hostID: hostID, storeID: storeID, cfg: cfg,
 	}, nil
@@ -192,7 +193,7 @@ type rebuildAgent struct {
 	mu    sync.Mutex
 	stats RebuildStats
 
-	baseState
+	agent.BaseState
 }
 
 var _ RebuildIndexAgent = (*rebuildAgent)(nil)
@@ -247,7 +248,7 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 	defer func() {
 		cancel()
 		if err := l.Release(context.WithoutCancel(ctx)); err != nil {
-			a.logger().Warn("lease release failed; lease will expire via TTL", "err", err)
+			a.Logger().Warn("lease release failed; lease will expire via TTL", "err", err)
 		}
 	}()
 
@@ -275,7 +276,7 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 	// Surface a lease loss that aborted the scan.
 	select {
 	case herr := <-hbErr:
-		if herr != nil && !isCtxErr(herr) {
+		if herr != nil && !agent.IsCtxErr(herr) {
 			return nil, fmt.Errorf("agent.Rebuild.Run: lease lost: %w", herr)
 		}
 	default:
@@ -339,7 +340,7 @@ func (a *rebuildAgent) fullScan(ctx context.Context) error {
 			paths = append(paths, om.Path)
 			return nil
 		})
-	if listErr != nil && !isCtxErr(listErr) {
+	if listErr != nil && !agent.IsCtxErr(listErr) {
 		return fmt.Errorf("list manifests: %w", listErr)
 	}
 
@@ -348,7 +349,7 @@ func (a *rebuildAgent) fullScan(ctx context.Context) error {
 			return err
 		}
 		if err := a.reindexManifestFile(ctx, p); err != nil {
-			if isCtxErr(err) {
+			if agent.IsCtxErr(err) {
 				return err
 			}
 			// A single unreadable/unsupported manifest must not abort
@@ -377,7 +378,7 @@ func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string) err
 	}
 	data, err := io.ReadAll(rc)
 	if cerr := rc.Close(); cerr != nil {
-		a.logger().Debug("rebuild: manifest reader close failed", "path", path, "err", cerr)
+		a.Logger().Debug("rebuild: manifest reader close failed", "path", path, "err", cerr)
 	}
 	if err != nil {
 		return fmt.Errorf("read manifest %q: %w", path, err)
@@ -456,13 +457,13 @@ func (a *rebuildAgent) AgentType() string { return "rebuild" }
 // Run is the contract entry point: it tracks lifecycle State around the
 // rebuild core (which owns lease handling and event emission).
 func (a *rebuildAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
-	a.setState(StateRunning, nil)
+	a.SetState(agent.StateRunning, nil)
 	res, err := a.run(ctx)
 	if err != nil {
-		a.setState(StateFaulted, err)
+		a.SetState(agent.StateFaulted, err)
 		return res, err
 	}
-	a.setState(StateIdle, nil)
+	a.SetState(agent.StateIdle, nil)
 	return res, nil
 }
 
@@ -471,9 +472,9 @@ type rebuildFactory struct{}
 
 func (rebuildFactory) Name() string { return "rebuild" }
 
-func (rebuildFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
+func (rebuildFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (agent.Agent, error) {
 	c, _ := cfg.(RebuildConfig) // zero value on mismatch -> defaults
-	return NewRebuildIndexAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, WithAgentLogger(deps.Logger))
+	return NewRebuildIndexAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
 
-func init() { Register(rebuildFactory{}) }
+func init() { agent.Register(rebuildFactory{}) }

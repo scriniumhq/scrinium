@@ -1,4 +1,4 @@
-package agent_test
+package checkpoint_test
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/checkpoint"
+	"scrinium.dev/engine/agent/scrub"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
@@ -54,9 +56,9 @@ func (f checkpointFixture) checkpointNames(t *testing.T) []string {
 	return names
 }
 
-func newCheckpoint(t *testing.T, f checkpointFixture, cfg agent.CheckpointConfig) agent.CheckpointAgent {
+func newCheckpoint(t *testing.T, f checkpointFixture, cfg checkpoint.CheckpointConfig) checkpoint.CheckpointAgent {
 	t.Helper()
-	a, err := agent.NewCheckpointAgent(f.store, f.drv, f.idx, f.rec, checkpointHostID, "store-snap", cfg)
+	a, err := checkpoint.NewCheckpointAgent(f.store, f.drv, f.idx, f.rec, checkpointHostID, "store-snap", cfg)
 	if err != nil {
 		t.Fatalf("NewCheckpointAgent: %v", err)
 	}
@@ -65,21 +67,21 @@ func newCheckpoint(t *testing.T, f checkpointFixture, cfg agent.CheckpointConfig
 
 func TestNewCheckpoint_RequiresDeps(t *testing.T) {
 	f := newCheckpointFixture(t)
-	cases := map[string]func() (agent.CheckpointAgent, error){
-		"nil store": func() (agent.CheckpointAgent, error) {
-			return agent.NewCheckpointAgent(nil, f.drv, f.idx, f.rec, checkpointHostID, "", agent.CheckpointConfig{})
+	cases := map[string]func() (checkpoint.CheckpointAgent, error){
+		"nil store": func() (checkpoint.CheckpointAgent, error) {
+			return checkpoint.NewCheckpointAgent(nil, f.drv, f.idx, f.rec, checkpointHostID, "", checkpoint.CheckpointConfig{})
 		},
-		"nil driver": func() (agent.CheckpointAgent, error) {
-			return agent.NewCheckpointAgent(f.store, nil, f.idx, f.rec, checkpointHostID, "", agent.CheckpointConfig{})
+		"nil driver": func() (checkpoint.CheckpointAgent, error) {
+			return checkpoint.NewCheckpointAgent(f.store, nil, f.idx, f.rec, checkpointHostID, "", checkpoint.CheckpointConfig{})
 		},
-		"nil index": func() (agent.CheckpointAgent, error) {
-			return agent.NewCheckpointAgent(f.store, f.drv, nil, f.rec, checkpointHostID, "", agent.CheckpointConfig{})
+		"nil index": func() (checkpoint.CheckpointAgent, error) {
+			return checkpoint.NewCheckpointAgent(f.store, f.drv, nil, f.rec, checkpointHostID, "", checkpoint.CheckpointConfig{})
 		},
-		"nil bus": func() (agent.CheckpointAgent, error) {
-			return agent.NewCheckpointAgent(f.store, f.drv, f.idx, nil, checkpointHostID, "", agent.CheckpointConfig{})
+		"nil bus": func() (checkpoint.CheckpointAgent, error) {
+			return checkpoint.NewCheckpointAgent(f.store, f.drv, f.idx, nil, checkpointHostID, "", checkpoint.CheckpointConfig{})
 		},
-		"empty host": func() (agent.CheckpointAgent, error) {
-			return agent.NewCheckpointAgent(f.store, f.drv, f.idx, f.rec, "", "", agent.CheckpointConfig{})
+		"empty host": func() (checkpoint.CheckpointAgent, error) {
+			return checkpoint.NewCheckpointAgent(f.store, f.drv, f.idx, f.rec, "", "", checkpoint.CheckpointConfig{})
 		},
 	}
 	for name, mk := range cases {
@@ -96,7 +98,7 @@ func TestCheckpoint_TakeCheckpoint_PublishesToCAS(t *testing.T) {
 	f.put(t, "artifact one")
 	f.put(t, "artifact two")
 
-	a := newCheckpoint(t, f, agent.CheckpointConfig{})
+	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{})
 	stats, err := a.TakeCheckpoint(context.Background())
 	if err != nil {
 		t.Fatalf("TakeCheckpoint: %v", err)
@@ -132,7 +134,7 @@ func TestCheckpoint_TakeCheckpoint_PublishesToCAS(t *testing.T) {
 func TestCheckpoint_RetentionPrunesOldest(t *testing.T) {
 	f := newCheckpointFixture(t)
 
-	a := newCheckpoint(t, f, agent.CheckpointConfig{Retention: 2})
+	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{Retention: 2})
 	// Three checkpoints, each preceded by a fresh Put so the index — and
 	// therefore the vacuumed bytes and the checkpoint's ArtifactID —
 	// differ. Identical checkpoints would dedup onto one CAS artifact
@@ -165,12 +167,12 @@ func TestCheckpoint_BlockedByForeignLease(t *testing.T) {
 	f := newCheckpointFixture(t)
 	f.put(t, "payload")
 	now := time.Now()
-	rec := leaseRecordJSON("other-host", now, now.Add(time.Hour), "Checkpoint")
+	rec := scrub.leaseRecordJSON("other-host", now, now.Add(time.Hour), "Checkpoint")
 	if err := f.drv.Put(context.Background(),
 		"system.state/checkpoint/lease", strings.NewReader(rec)); err != nil {
 		t.Fatalf("stage lease: %v", err)
 	}
-	a := newCheckpoint(t, f, agent.CheckpointConfig{})
+	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{})
 	if _, err := a.TakeCheckpoint(context.Background()); err == nil {
 		t.Fatal("TakeCheckpoint with a live foreign lease = nil, want lease-held failure")
 	}
@@ -179,7 +181,7 @@ func TestCheckpoint_BlockedByForeignLease(t *testing.T) {
 func TestCheckpoint_CancelledContext(t *testing.T) {
 	f := newCheckpointFixture(t)
 	f.put(t, "payload")
-	a := newCheckpoint(t, f, agent.CheckpointConfig{})
+	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := a.TakeCheckpoint(ctx); err == nil {
@@ -189,7 +191,7 @@ func TestCheckpoint_CancelledContext(t *testing.T) {
 
 func TestCheckpoint_RunStopsOnContextCancel(t *testing.T) {
 	f := newCheckpointFixture(t)
-	a := newCheckpoint(t, f, agent.CheckpointConfig{Interval: time.Hour})
+	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{Interval: time.Hour})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // one-shot agent: a cancelled context must abort Run promptly
 	_, err := a.Run(ctx)

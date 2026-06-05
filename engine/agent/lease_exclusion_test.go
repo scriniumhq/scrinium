@@ -7,7 +7,11 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/internal/lease"
+	"scrinium.dev/engine/agent/checkpoint"
+	"scrinium.dev/engine/agent/gc"
+	"scrinium.dev/engine/agent/internal/lease"
+	"scrinium.dev/engine/agent/rebuild"
+	"scrinium.dev/engine/agent/scrub"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/eventfx"
@@ -31,14 +35,14 @@ func TestGC_LeaseExclusion(t *testing.T) {
 	ctx := context.Background()
 
 	held, _, err := lease.Acquire(ctx, drv, lease.Config{
-		Path: gcLeasePath, HostID: exclHostSquatter, AgentType: "gc", TTL: time.Hour,
+		Path: gc.gcLeasePath, HostID: exclHostSquatter, AgentType: "gc", TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatalf("pre-acquire gc lease: %v", err)
 	}
 	t.Cleanup(func() { _ = held.Release(context.WithoutCancel(ctx)) })
 
-	a, err := NewGCAgent(st, drv, idx, rec, exclHostAgent, "store-gc", GCConfig{})
+	a, err := gc.NewGCAgent(st, drv, idx, rec, exclHostAgent, "store-gc", gc.GCConfig{})
 	if err != nil {
 		t.Fatalf("NewGCAgent: %v", err)
 	}
@@ -56,14 +60,14 @@ func TestScrub_LeaseExclusion(t *testing.T) {
 	ctx := context.Background()
 
 	held, _, err := lease.Acquire(ctx, drv, lease.Config{
-		Path: scrubLeasePath, HostID: exclHostSquatter, AgentType: "scrub", TTL: time.Hour,
+		Path: scrub.scrubLeasePath, HostID: exclHostSquatter, AgentType: "scrub", TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatalf("pre-acquire scrub lease: %v", err)
 	}
 	t.Cleanup(func() { _ = held.Release(context.WithoutCancel(ctx)) })
 
-	a, err := NewScrubAgent(st, drv, idx, rec, exclHostAgent, "store-scrub", ScrubConfig{Force: true})
+	a, err := scrub.NewScrubAgent(st, drv, idx, rec, exclHostAgent, "store-scrub", scrub.ScrubConfig{Force: true})
 	if err != nil {
 		t.Fatalf("NewScrubAgent: %v", err)
 	}
@@ -81,14 +85,14 @@ func TestCheckpoint_LeaseExclusion(t *testing.T) {
 	ctx := context.Background()
 
 	held, _, err := lease.Acquire(ctx, drv, lease.Config{
-		Path: checkpointLeasePath, HostID: exclHostSquatter, AgentType: "checkpoint", TTL: time.Hour,
+		Path: checkpoint.checkpointLeasePath, HostID: exclHostSquatter, AgentType: "checkpoint", TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatalf("pre-acquire checkpoint lease: %v", err)
 	}
 	t.Cleanup(func() { _ = held.Release(context.WithoutCancel(ctx)) })
 
-	a, err := NewCheckpointAgent(st, drv, idx, rec, exclHostAgent, "store-snap", CheckpointConfig{})
+	a, err := checkpoint.NewCheckpointAgent(st, drv, idx, rec, exclHostAgent, "store-snap", checkpoint.CheckpointConfig{})
 	if err != nil {
 		t.Fatalf("NewCheckpointAgent: %v", err)
 	}
@@ -106,14 +110,14 @@ func TestRebuild_LeaseExclusion(t *testing.T) {
 	ctx := context.Background()
 
 	held, _, err := lease.Acquire(ctx, drv, lease.Config{
-		Path: rebuildLeasePath, HostID: exclHostSquatter, AgentType: "rebuild", TTL: time.Hour,
+		Path: rebuild.rebuildLeasePath, HostID: exclHostSquatter, AgentType: "rebuild", TTL: time.Hour,
 	})
 	if err != nil {
 		t.Fatalf("pre-acquire maintenance lease: %v", err)
 	}
 	t.Cleanup(func() { _ = held.Release(context.WithoutCancel(ctx)) })
 
-	a, err := NewRebuildIndexAgent(st, drv, idx, rec, exclHostAgent, "store-rebuild", RebuildConfig{})
+	a, err := rebuild.NewRebuildIndexAgent(st, drv, idx, rec, exclHostAgent, "store-rebuild", rebuild.RebuildConfig{})
 	if err != nil {
 		t.Fatalf("NewRebuildIndexAgent: %v", err)
 	}

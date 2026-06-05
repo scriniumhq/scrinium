@@ -9,6 +9,9 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/checkpoint"
+	"scrinium.dev/engine/agent/gc"
+	"scrinium.dev/engine/agent/scrub"
 )
 
 // TestGC_RunIdempotentNoop verifies that a second Run over an
@@ -21,9 +24,9 @@ func TestGC_RunIdempotentNoop(t *testing.T) {
 	// Aging is done with Chtimes (deterministic, no sleeping) — the same
 	// technique the standalone removal test uses.
 	grace := time.Hour
-	f := newGCFixture(t, grace, domain.GCLeaseSingleHost)
+	f := gc.newGCFixture(t, grace, domain.GCLeaseSingleHost)
 	_, ref := f.putAndOrphan(t, "idempotent")
-	a := newGC(t, f, agent.GCConfig{})
+	a := gc.newGC(t, f, gc.GCConfig{})
 
 	// Cycle 1 — Mark only.
 	if _, err := a.Run(context.Background()); err != nil {
@@ -69,9 +72,9 @@ func TestGC_RunResumesAfterCancel(t *testing.T) {
 	// live context must process the remainder. Progress lives in the
 	// Store (the aged tombstone), not the agent.
 	grace := time.Hour
-	f := newGCFixture(t, grace, domain.GCLeaseSingleHost)
+	f := gc.newGCFixture(t, grace, domain.GCLeaseSingleHost)
 	_, ref := f.putAndOrphan(t, "resume me")
-	a := newGC(t, f, agent.GCConfig{})
+	a := gc.newGC(t, f, gc.GCConfig{})
 
 	// Mark, then age the marker so it is sweep-eligible.
 	if _, err := a.Run(context.Background()); err != nil {
@@ -114,8 +117,8 @@ func TestGC_RunResumesAfterCancel(t *testing.T) {
 }
 
 func TestScrub_RunRepeatable(t *testing.T) {
-	f := newScrubFixture(t)
-	a := newScrub(t, f, agent.ScrubConfig{Force: true})
+	f := scrub.newScrubFixture(t)
+	a := scrub.newScrub(t, f, scrub.ScrubConfig{Force: true})
 
 	for i, label := range []string{"first", "second"} {
 		res, err := a.Run(context.Background())
@@ -135,8 +138,8 @@ func TestScrub_RunRepeatable(t *testing.T) {
 // Run faults without producing a checkpoint, and a fresh Run then
 // completes — the one-shot operation is re-runnable after interruption.
 func TestCheckpoint_RunResumesAfterCancel(t *testing.T) {
-	f := newCheckpointFixture(t)
-	a := newCheckpoint(t, f, agent.CheckpointConfig{Interval: time.Hour})
+	f := checkpoint.newCheckpointFixture(t)
+	a := checkpoint.newCheckpoint(t, f, checkpoint.CheckpointConfig{Interval: time.Hour})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

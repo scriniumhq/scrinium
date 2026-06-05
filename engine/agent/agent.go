@@ -208,3 +208,30 @@ func Build(kind string, st store.Store, cfg any, deps AgentDeps) (Agent, error) 
 	}
 	return f.Build(st, cfg, deps)
 }
+
+// --- Exported SPI helpers for agents that live in subpackages ---
+
+// BaseState is the shared lifecycle-state helper an agent embeds to get
+// Status, SetState, and Logger for free. It is exported so agents in
+// subpackages (engine/agent/gc, .../scrub, ...) and host-defined custom
+// agents can embed it, not only the built-ins that used to share this
+// package.
+type BaseState = baseState
+
+// NewBaseState builds a BaseState with the given logger. A constructor is
+// needed because the underlying log field is unexported, so subpackages
+// cannot set it through a struct literal.
+func NewBaseState(log *slog.Logger) BaseState { return baseState{log: log} }
+
+// SetState records a new state and error. Exported wrapper over the
+// embedded helper, for agents outside this package.
+func (b *baseState) SetState(s State, err error) { b.setState(s, err) }
+
+// Logger returns the agent's diagnostic logger, never nil. Exported
+// wrapper for agents outside this package.
+func (b *baseState) Logger() *slog.Logger { return b.logger() }
+
+// ResolveLogger folds AgentOptions into a logger (silence by default, per
+// ADR-60). Exported so subpackage constructors resolve options the same
+// way the built-ins do.
+func ResolveLogger(opts ...AgentOption) *slog.Logger { return resolveAgentLogger(opts) }

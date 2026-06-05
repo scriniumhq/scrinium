@@ -1,4 +1,4 @@
-package agent_test
+package rebuild_test
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/rebuild"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
@@ -60,9 +61,9 @@ func (f rebuildFixture) put(t *testing.T, ns, data string) domain.ArtifactID {
 	return id
 }
 
-func newRebuild(t *testing.T, f rebuildFixture, cfg agent.RebuildConfig) agent.RebuildIndexAgent {
+func newRebuild(t *testing.T, f rebuildFixture, cfg rebuild.RebuildConfig) rebuild.RebuildIndexAgent {
 	t.Helper()
-	a, err := agent.NewRebuildIndexAgent(f.store, f.drv, f.rebuilt, f.rec, rebuildHostID, "store-rebuild", cfg)
+	a, err := rebuild.NewRebuildIndexAgent(f.store, f.drv, f.rebuilt, f.rec, rebuildHostID, "store-rebuild", cfg)
 	if err != nil {
 		t.Fatalf("NewRebuildIndexAgent: %v", err)
 	}
@@ -71,21 +72,21 @@ func newRebuild(t *testing.T, f rebuildFixture, cfg agent.RebuildConfig) agent.R
 
 func TestNewRebuild_RequiresDeps(t *testing.T) {
 	f := newRebuildFixture(t)
-	cases := map[string]func() (agent.RebuildIndexAgent, error){
-		"nil store": func() (agent.RebuildIndexAgent, error) {
-			return agent.NewRebuildIndexAgent(nil, f.drv, f.rebuilt, f.rec, rebuildHostID, "", agent.RebuildConfig{})
+	cases := map[string]func() (rebuild.RebuildIndexAgent, error){
+		"nil store": func() (rebuild.RebuildIndexAgent, error) {
+			return rebuild.NewRebuildIndexAgent(nil, f.drv, f.rebuilt, f.rec, rebuildHostID, "", rebuild.RebuildConfig{})
 		},
-		"nil driver": func() (agent.RebuildIndexAgent, error) {
-			return agent.NewRebuildIndexAgent(f.store, nil, f.rebuilt, f.rec, rebuildHostID, "", agent.RebuildConfig{})
+		"nil driver": func() (rebuild.RebuildIndexAgent, error) {
+			return rebuild.NewRebuildIndexAgent(f.store, nil, f.rebuilt, f.rec, rebuildHostID, "", rebuild.RebuildConfig{})
 		},
-		"nil index": func() (agent.RebuildIndexAgent, error) {
-			return agent.NewRebuildIndexAgent(f.store, f.drv, nil, f.rec, rebuildHostID, "", agent.RebuildConfig{})
+		"nil index": func() (rebuild.RebuildIndexAgent, error) {
+			return rebuild.NewRebuildIndexAgent(f.store, f.drv, nil, f.rec, rebuildHostID, "", rebuild.RebuildConfig{})
 		},
-		"nil bus": func() (agent.RebuildIndexAgent, error) {
-			return agent.NewRebuildIndexAgent(f.store, f.drv, f.rebuilt, nil, rebuildHostID, "", agent.RebuildConfig{})
+		"nil bus": func() (rebuild.RebuildIndexAgent, error) {
+			return rebuild.NewRebuildIndexAgent(f.store, f.drv, f.rebuilt, nil, rebuildHostID, "", rebuild.RebuildConfig{})
 		},
-		"empty host": func() (agent.RebuildIndexAgent, error) {
-			return agent.NewRebuildIndexAgent(f.store, f.drv, f.rebuilt, f.rec, "", "", agent.RebuildConfig{})
+		"empty host": func() (rebuild.RebuildIndexAgent, error) {
+			return rebuild.NewRebuildIndexAgent(f.store, f.drv, f.rebuilt, f.rec, "", "", rebuild.RebuildConfig{})
 		},
 	}
 	for name, mk := range cases {
@@ -108,7 +109,7 @@ func TestRebuild_FullScan_RecoversTargetManifests(t *testing.T) {
 		}
 	}
 
-	a := newRebuild(t, f, agent.RebuildConfig{Source: agent.RebuildSourceFullScan})
+	a := newRebuild(t, f, rebuild.RebuildConfig{Source: rebuild.RebuildSourceFullScan})
 	res, err := a.Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -130,7 +131,7 @@ func TestRebuild_FullScan_RecoversTargetManifests(t *testing.T) {
 	if st.ManifestsIndexed < 2 {
 		t.Errorf("ManifestsIndexed = %d, want >= 2", st.ManifestsIndexed)
 	}
-	if st.Source != agent.RebuildSourceFullScan {
+	if st.Source != rebuild.RebuildSourceFullScan {
 		t.Errorf("Source = %q, want FullScan", st.Source)
 	}
 }
@@ -142,7 +143,7 @@ func TestRebuild_FullScan_RecoversInlineManifests(t *testing.T) {
 	}))
 	id := f.put(t, "r", "x")
 
-	a := newRebuild(t, f, agent.RebuildConfig{})
+	a := newRebuild(t, f, rebuild.RebuildConfig{})
 	if _, err := a.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestRebuild_FullScan_RecoversInlineManifests(t *testing.T) {
 
 func TestRebuild_Validate_SnapshotSourceUnavailable(t *testing.T) {
 	f := newRebuildFixture(t)
-	a := newRebuild(t, f, agent.RebuildConfig{Source: agent.RebuildSourceSnapshot})
+	a := newRebuild(t, f, rebuild.RebuildConfig{Source: rebuild.RebuildSourceSnapshot})
 	if err := a.Validate(context.Background()); !errors.Is(err, errs.ErrNoSnapshot) {
 		t.Fatalf("Validate(Snapshot) = %v, want ErrNoSnapshot", err)
 	}
@@ -165,7 +166,7 @@ func TestRebuild_Validate_SnapshotSourceUnavailable(t *testing.T) {
 
 func TestRebuild_Validate_AutoSourcePasses(t *testing.T) {
 	f := newRebuildFixture(t)
-	a := newRebuild(t, f, agent.RebuildConfig{Source: agent.RebuildSourceAuto})
+	a := newRebuild(t, f, rebuild.RebuildConfig{Source: rebuild.RebuildSourceAuto})
 	if err := a.Validate(context.Background()); err != nil {
 		t.Fatalf("Validate(Auto) = %v, want nil", err)
 	}
@@ -173,7 +174,7 @@ func TestRebuild_Validate_AutoSourcePasses(t *testing.T) {
 
 func TestRebuild_RecoveryKit_CorruptedFails(t *testing.T) {
 	f := newRebuildFixture(t)
-	a := newRebuild(t, f, agent.RebuildConfig{RecoveryKit: []byte("not a valid kit")})
+	a := newRebuild(t, f, rebuild.RebuildConfig{RecoveryKit: []byte("not a valid kit")})
 	if _, err := a.Run(context.Background()); !errors.Is(err, errs.ErrRecoveryKitCorrupted) {
 		t.Fatalf("Run(corrupted kit) = %v, want ErrRecoveryKitCorrupted", err)
 	}
@@ -217,8 +218,8 @@ func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
 	}
 
 	rebuilt := indexfx.Memory(t)
-	a, err := agent.NewRebuildIndexAgent(st, drv, rebuilt, rec, rebuildHostID, "store-rebuild",
-		agent.RebuildConfig{RecoveryKit: kit})
+	a, err := rebuild.NewRebuildIndexAgent(st, drv, rebuilt, rec, rebuildHostID, "store-rebuild",
+		rebuild.RebuildConfig{RecoveryKit: kit})
 	if err != nil {
 		t.Fatalf("NewRebuildIndexAgent: %v", err)
 	}
@@ -246,12 +247,12 @@ func TestRebuild_BlockedByForeignLease(t *testing.T) {
 	f := newRebuildFixture(t)
 	f.put(t, "r", "data large enough to be a target blob payload")
 	now := time.Now()
-	rec := leaseRecordJSON("other-host", now, now.Add(time.Hour), "RebuildIndex")
+	rec := agent.leaseRecordJSON("other-host", now, now.Add(time.Hour), "RebuildIndex")
 	if err := f.drv.Put(context.Background(),
 		"system.state/maintenance/lease", strings.NewReader(rec)); err != nil {
 		t.Fatalf("stage lease: %v", err)
 	}
-	a := newRebuild(t, f, agent.RebuildConfig{})
+	a := newRebuild(t, f, rebuild.RebuildConfig{})
 	if _, err := a.Run(context.Background()); err == nil {
 		t.Fatal("Run with a live foreign maintenance lease = nil, want lease-held failure")
 	}
@@ -260,7 +261,7 @@ func TestRebuild_BlockedByForeignLease(t *testing.T) {
 func TestRebuild_CancelledContext(t *testing.T) {
 	f := newRebuildFixture(t)
 	f.put(t, "r", "data large enough to be a target blob payload")
-	a := newRebuild(t, f, agent.RebuildConfig{})
+	a := newRebuild(t, f, rebuild.RebuildConfig{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := a.Run(ctx); err == nil {

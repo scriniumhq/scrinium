@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/internal/lease"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/driverfx"
 )

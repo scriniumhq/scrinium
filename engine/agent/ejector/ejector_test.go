@@ -1,4 +1,4 @@
-package agent
+package ejector
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -245,7 +246,7 @@ func TestEjector_EjectNotFound(t *testing.T) {
 }
 
 func TestEjector_Registered(t *testing.T) {
-	if _, ok := Lookup("ejector"); !ok {
+	if _, ok := agent.Lookup("ejector"); !ok {
 		t.Error(`Lookup("ejector") = false, want registered`)
 	}
 }
