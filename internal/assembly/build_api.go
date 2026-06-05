@@ -2,6 +2,8 @@ package assembly
 
 import (
 	"context"
+
+	"scrinium.dev/event"
 )
 
 // Mode selects what Build does when the described store does or does
@@ -54,17 +56,31 @@ func Build(ctx context.Context, cfg Config, opts ...BuildOption) (Assembly, erro
 	if err := prepare(&cfg); err != nil {
 		return nil, err
 	}
-	return build(ctx, &cfg, o.mode.internal())
+	return build(ctx, &cfg, o.mode.internal(), o.eventHandlers)
 }
 
 // BuildOption tunes a Build call.
 type BuildOption func(*buildOptions)
 
 type buildOptions struct {
-	mode Mode
+	mode          Mode
+	eventHandlers []func(event.Event)
 }
 
 // WithMode sets the open/init behaviour (default ModeOpenOrInit).
 func WithMode(m Mode) BuildOption {
 	return func(o *buildOptions) { o.mode = m }
+}
+
+// WithEventHandler registers an event handler before assembly begins, so
+// it observes events emitted during Build/Init as well as every later
+// store and agent event. Pass it more than once to register several. For
+// subscriptions added after the client exists, use the client's Subscribe
+// (which returns an unsubscribe). A nil handler is ignored.
+func WithEventHandler(fn func(event.Event)) BuildOption {
+	return func(o *buildOptions) {
+		if fn != nil {
+			o.eventHandlers = append(o.eventHandlers, fn)
+		}
+	}
 }

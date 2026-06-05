@@ -106,3 +106,44 @@ func TestEventBus_ConcurrentSubscribeAndPublish(t *testing.T) {
 	// verify there are no races (under `go test -race`).
 	_ = counter.Load()
 }
+func TestEventBus_UnsubscribeStopsDelivery(t *testing.T) {
+	bus := NewEventBus()
+	var n int
+	unsub := bus.Subscribe(func(Event) { n++ })
+
+	bus.Publish(Event{Type: "x"})
+	if n != 1 {
+		t.Fatalf("before unsubscribe got %d deliveries, want 1", n)
+	}
+	unsub()
+	bus.Publish(Event{Type: "x"})
+	if n != 1 {
+		t.Fatalf("after unsubscribe got %d deliveries, want 1 (no further)", n)
+	}
+}
+
+func TestEventBus_UnsubscribeIdempotent(t *testing.T) {
+	bus := NewEventBus()
+	unsub := bus.Subscribe(func(Event) {})
+	unsub()
+	unsub() // second call must be a no-op, not a panic
+}
+
+func TestEventBus_NilSubscriberUnsubUsable(t *testing.T) {
+	bus := NewEventBus()
+	unsub := bus.Subscribe(nil)
+	unsub() // unsubscribe of a nil subscription must not panic
+}
+
+func TestEventBus_UnsubscribeRemovesOnlyItsOwn(t *testing.T) {
+	bus := NewEventBus()
+	var a, b int
+	unsubA := bus.Subscribe(func(Event) { a++ })
+	bus.Subscribe(func(Event) { b++ })
+
+	unsubA()
+	bus.Publish(Event{Type: "x"})
+	if a != 0 || b != 1 {
+		t.Fatalf("after unsubscribing A: a=%d b=%d, want a=0 b=1", a, b)
+	}
+}

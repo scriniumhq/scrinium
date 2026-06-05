@@ -32,8 +32,9 @@ func (r *Recorder) Publish(e event.Event) {
 	r.events = append(r.events, e)
 }
 
-// Subscribe is a no-op. The Recorder is not a forwarding bus.
-func (r *Recorder) Subscribe(fn func(event.Event)) {}
+// Subscribe is a no-op; the unsubscribe it returns is also a no-op.
+// The Recorder records via Publish, it does not forward to subscribers.
+func (r *Recorder) Subscribe(fn func(event.Event)) func() { return func() {} }
 
 // All returns a snapshot of every recorded event in publish order.
 // Modifying the returned slice has no effect on the Recorder.

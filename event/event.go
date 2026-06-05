@@ -16,7 +16,10 @@ type Event struct {
 // not receive that event.
 type EventBus interface {
 	Publish(e Event)
-	Subscribe(fn func(Event))
+	// Subscribe registers fn and returns a function that removes it.
+	// The returned unsubscribe is idempotent and safe to call from any
+	// goroutine. A nil fn is ignored; its unsubscribe is a no-op.
+	Subscribe(fn func(Event)) func()
 }
 
 // NewEventBus returns an event bus with the following guarantees:
@@ -25,9 +28,8 @@ type EventBus interface {
 //   - Subscribers are invoked in registration order.
 //   - A panic from a subscriber is recovered; delivery to the
 //     remaining subscribers continues.
-//   - Registering a new subscriber concurrently with Publish is
-//     race-free; the new subscriber starts receiving events from the
-//     next Publish onward.
+//   - Registering or removing a subscriber concurrently with Publish is
+//     race-free; the change takes effect from the next Publish onward.
 func NewEventBus() EventBus {
 	return &syncBus{}
 }
@@ -39,33 +41,69 @@ type Publisher interface {
 	Publish(e Event)
 }
 
+// subscription pairs a handler with the id its unsubscribe closure
+// captures, so removal is by identity (not by comparing func values,
+// which Go does not allow).
+type subscription struct {
+	id int
+	fn func(Event)
+}
+
 type syncBus struct {
-	mu          sync.RWMutex
-	subscribers []func(Event)
+	mu     sync.RWMutex
+	subs   []subscription
+	nextID int
 }
 
 func (b *syncBus) Publish(e Event) {
 	b.mu.RLock()
-	subs := b.subscribers
+	subs := b.subs
 	b.mu.RUnlock()
 
-	for _, fn := range subs {
-		safeCall(fn, e)
+	for _, s := range subs {
+		safeCall(s.fn, e)
 	}
 }
 
-func (b *syncBus) Subscribe(fn func(Event)) {
+func (b *syncBus) Subscribe(fn func(Event)) func() {
 	if fn == nil {
-		return
+		return func() {}
 	}
 	b.mu.Lock()
+	id := b.nextID
+	b.nextID++
 	// Copy on append, so a concurrent Publish reading the previous
-	// snapshot of subscribers does not race against this append.
-	next := make([]func(Event), len(b.subscribers)+1)
-	copy(next, b.subscribers)
-	next[len(b.subscribers)] = fn
-	b.subscribers = next
+	// snapshot does not race against this registration.
+	next := make([]subscription, len(b.subs)+1)
+	copy(next, b.subs)
+	next[len(b.subs)] = subscription{id: id, fn: fn}
+	b.subs = next
 	b.mu.Unlock()
+
+	return func() { b.unsubscribe(id) }
+}
+
+// unsubscribe removes the subscription with the given id. Idempotent:
+// removing an id that is already gone is a no-op.
+func (b *syncBus) unsubscribe(id int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	idx := -1
+	for i, s := range b.subs {
+		if s.id == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return
+	}
+	// Copy without the removed entry, preserving order; a concurrent
+	// Publish keeps iterating its own prior snapshot safely.
+	next := make([]subscription, 0, len(b.subs)-1)
+	next = append(next, b.subs[:idx]...)
+	next = append(next, b.subs[idx+1:]...)
+	b.subs = next
 }
 
 func safeCall(fn func(Event), e Event) {

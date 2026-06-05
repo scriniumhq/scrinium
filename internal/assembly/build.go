@@ -11,7 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
@@ -19,6 +22,7 @@ import (
 	"scrinium.dev/engine/index/fsindex"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
+	"scrinium.dev/event"
 	"scrinium.dev/projection"
 )
 
@@ -35,20 +39,17 @@ const (
 // today); everything that depends on not-yet-wired components returns
 // errs.ErrNotImplemented with a pointer to the milestone chunk that
 // lands it.
-func build(ctx context.Context, c *Config, mode buildMode) (Assembly, error) {
+func build(ctx context.Context, c *Config, mode buildMode, handlers []func(event.Event)) (Assembly, error) {
 	if len(c.Stores) > 0 {
 		return nil, fmt.Errorf("scrinium: multistore assembly is not wired yet (M4/S1): %w", errs.ErrNotImplemented)
-	}
-	if len(c.Agents) > 0 {
-		return nil, fmt.Errorf("scrinium: user agents are wired in M3: %w", errs.ErrNotImplemented)
 	}
 	if c.Store == nil {
 		return nil, fmt.Errorf("scrinium: no store to build")
 	}
-	return buildSingle(ctx, c, mode)
+	return buildSingle(ctx, c, mode, handlers)
 }
 
-func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, retErr error) {
+func buildSingle(ctx context.Context, c *Config, mode buildMode, handlers []func(event.Event)) (_ Assembly, retErr error) {
 	spec := c.Store
 	if err := guardUnsupportedPolicy(spec.Policy); err != nil {
 		return nil, err
@@ -107,10 +108,20 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 		return nil, fmt.Errorf("scrinium: passphrase: %w", err)
 	}
 
+	// Event bus: shared by the store and the agents the assembler wires,
+	// so a host can subscribe to both through one channel. Build-time
+	// handlers (WithEventHandler) are attached now, before anything
+	// publishes, so they observe events emitted during assembly.
+	bus := event.NewEventBus()
+	for _, h := range handlers {
+		bus.Subscribe(h)
+	}
+
 	storeOpts := []store.StoreOption{
 		store.WithStoreIndex(idx),
 		store.WithHashRegistry(hashRegistry()),
 		store.WithConfig(cfg),
+		store.WithPublisher(bus),
 	}
 	if pp != nil {
 		storeOpts = append(storeOpts, store.WithPassphrase(pp), store.WithAutoUnlock())
@@ -127,6 +138,25 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 	})
 	if st.State() == domain.StateLocked {
 		return nil, fmt.Errorf("scrinium: store is locked; check the encryption passphrase")
+	}
+
+	// Agents. Validate configured kinds against the registry (fail fast,
+	// like an unknown driver scheme) and assemble the deps the assembler
+	// hands agents directly: Driver and StoreIndex never leave the
+	// assembler (see Assembly.Extensions doc). No scheduler and no
+	// goroutine here — scheduling is opt-in (ADR-69 level 1 default).
+	for _, ag := range c.Agents {
+		if _, ok := agent.Lookup(ag.Kind); !ok {
+			return nil, fmt.Errorf("scrinium: no agent registered for kind %q (blank-import the agent package, as with drivers)", ag.Kind)
+		}
+	}
+	agentDeps := agent.AgentDeps{
+		Publisher: bus,
+		Driver:    drv,
+		Index:     idx,
+		HostID:    uuid.NewString(), // per-process actor id for lease/takeover events
+		// StoreID is left empty until the store exposes its descriptor id;
+		// it only tags agent events (diagnostics), not lease identity.
 	}
 
 	// 6. Read-side View + read/write FSOps from the projection section.
@@ -178,7 +208,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode) (_ Assembly, re
 		info.ReadOnly = effProj.ReadOnly
 	}
 
-	return New(st, idx, proj, mountSession, info, kit, closeFn), nil
+	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus), nil
 }
 
 // guardUnsupportedPolicy rejects policy features whose components are
