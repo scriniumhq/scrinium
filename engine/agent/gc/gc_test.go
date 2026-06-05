@@ -5,13 +5,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/gc"
+	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
@@ -237,11 +237,7 @@ func TestGC_SingleHostTakesNoLease(t *testing.T) {
 	// never looks at the lease).
 	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
 	f.putAndOrphan(t, "data")
-	now := time.Now()
-	rec := agent.leaseRecordJSON("other-host", now, now.Add(time.Hour), "GC")
-	if err := f.drv.Put(context.Background(), "system.state/gc/lease", strings.NewReader(rec)); err != nil {
-		t.Fatalf("stage lease: %v", err)
-	}
+	leasefx.StageForeign(t, f.drv, "system.state/gc/lease", "other-host", "GC", time.Hour)
 	a := newGC(t, f, gc.GCConfig{})
 	if _, err := a.RunOnce(context.Background()); err != nil {
 		t.Fatalf("SingleHost RunOnce must ignore the lease, got %v", err)
@@ -251,11 +247,7 @@ func TestGC_SingleHostTakesNoLease(t *testing.T) {
 func TestGC_LeaderElectionBlockedByForeignLease(t *testing.T) {
 	f := newGCFixture(t, time.Hour, domain.GCLeaseLeaderElection)
 	f.putAndOrphan(t, "data")
-	now := time.Now()
-	rec := agent.leaseRecordJSON("other-host", now, now.Add(time.Hour), "GC")
-	if err := f.drv.Put(context.Background(), "system.state/gc/lease", strings.NewReader(rec)); err != nil {
-		t.Fatalf("stage lease: %v", err)
-	}
+	leasefx.StageForeign(t, f.drv, "system.state/gc/lease", "other-host", "GC", time.Hour)
 	a := newGC(t, f, gc.GCConfig{LeaseTTL: time.Minute})
 	if _, err := a.RunOnce(context.Background()); err == nil {
 		t.Fatal("LeaderElection RunOnce with a live foreign lease = nil, want lease-held failure")

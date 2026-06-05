@@ -5,12 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/agent/rebuild"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -246,12 +245,7 @@ func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
 func TestRebuild_BlockedByForeignLease(t *testing.T) {
 	f := newRebuildFixture(t)
 	f.put(t, "r", "data large enough to be a target blob payload")
-	now := time.Now()
-	rec := agent.leaseRecordJSON("other-host", now, now.Add(time.Hour), "RebuildIndex")
-	if err := f.drv.Put(context.Background(),
-		"system.state/maintenance/lease", strings.NewReader(rec)); err != nil {
-		t.Fatalf("stage lease: %v", err)
-	}
+	leasefx.StageForeign(t, f.drv, "system.state/maintenance/lease", "other-host", "RebuildIndex", time.Hour)
 	a := newRebuild(t, f, rebuild.RebuildConfig{})
 	if _, err := a.Run(context.Background()); err == nil {
 		t.Fatal("Run with a live foreign maintenance lease = nil, want lease-held failure")

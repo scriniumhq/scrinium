@@ -8,17 +8,18 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/agent/internal/lease"
+	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/eventfx"
 	"scrinium.dev/testutil/storefx"
 )
 
-const (
-	exclHostAgent    = "host-a-agent-0001"
-	exclHostSquatter = "host-b-squatter-0002"
-)
+// Internal (gc) test: it references the unexported gcLeasePath. A
+// foreign host holds the lease (staged via leasefx); the agent runs on
+// the local host and must refuse with ErrLeaseHeld rather than run
+// concurrently.
+const exclHostAgent = "host-a-agent-0001"
 
 func TestGC_LeaseExclusion(t *testing.T) {
 	rec := eventfx.New()
@@ -26,13 +27,7 @@ func TestGC_LeaseExclusion(t *testing.T) {
 		store.WithConfig(domain.StoreConfig{GCLeasePolicy: domain.GCLeaseLeaderElection}))
 	ctx := context.Background()
 
-	held, _, err := lease.Acquire(ctx, drv, lease.Config{
-		Path: gcLeasePath, HostID: exclHostSquatter, AgentType: "gc", TTL: time.Hour,
-	})
-	if err != nil {
-		t.Fatalf("pre-acquire gc lease: %v", err)
-	}
-	t.Cleanup(func() { _ = held.Release(context.WithoutCancel(ctx)) })
+	leasefx.StageForeign(t, drv, gcLeasePath, "host-b-squatter-0002", "gc", time.Hour)
 
 	a, err := NewGCAgent(st, drv, idx, rec, exclHostAgent, "store-gc", GCConfig{})
 	if err != nil {

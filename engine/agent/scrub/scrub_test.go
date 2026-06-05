@@ -3,15 +3,14 @@ package scrub_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/agent/scrub"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver/localfs"
@@ -256,11 +255,7 @@ func TestScrub_BlockedByForeignLease(t *testing.T) {
 	f := newScrubFixture(t)
 	f.put(t, "v", "data")
 	// Stage a live foreign scrub lease.
-	now := time.Now()
-	rec := leaseRecordJSON("other-host", now, now.Add(time.Hour), "Scrub")
-	if err := f.drv.Put(context.Background(), "system.state/scrub/lease", strings.NewReader(rec)); err != nil {
-		t.Fatalf("stage lease: %v", err)
-	}
+	leasefx.StageForeign(t, f.drv, "system.state/scrub/lease", "other-host", "Scrub", time.Hour)
 
 	a := newScrub(t, f, forceCfg())
 	if _, err := a.RunOnce(context.Background()); err == nil {
@@ -291,13 +286,4 @@ func TestScrub_RunStopsOnContextCancel(t *testing.T) {
 	if st, _ := a.Status(); st != agent.StateFaulted {
 		t.Errorf("state after cancel = %v, want StateFaulted", st)
 	}
-}
-
-// leaseRecordJSON builds a lease body matching engine/internal/lease's
-// on-disk shape (timefmt-second strings). Kept local so the test does
-// not import the internal lease package.
-func leaseRecordJSON(host string, acquired, expires time.Time, agentType string) string {
-	const f = `{"host_id":%q,"acquired_at":%q,"expires_at":%q,"agent_type":%q,"nonce":"dGVzdC1ub25jZS0wMDAwMDA=="}`
-	ts := func(t time.Time) string { return t.UTC().Format(time.RFC3339) }
-	return fmt.Sprintf(f, host, ts(acquired), ts(expires), agentType)
 }

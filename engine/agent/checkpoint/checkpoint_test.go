@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/checkpoint"
-	"scrinium.dev/engine/agent/scrub"
+	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
@@ -166,12 +166,7 @@ func TestCheckpoint_RetentionPrunesOldest(t *testing.T) {
 func TestCheckpoint_BlockedByForeignLease(t *testing.T) {
 	f := newCheckpointFixture(t)
 	f.put(t, "payload")
-	now := time.Now()
-	rec := scrub.leaseRecordJSON("other-host", now, now.Add(time.Hour), "Checkpoint")
-	if err := f.drv.Put(context.Background(),
-		"system.state/checkpoint/lease", strings.NewReader(rec)); err != nil {
-		t.Fatalf("stage lease: %v", err)
-	}
+	leasefx.StageForeign(t, f.drv, "system.state/checkpoint/lease", "other-host", "Checkpoint", time.Hour)
 	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{})
 	if _, err := a.TakeCheckpoint(context.Background()); err == nil {
 		t.Fatal("TakeCheckpoint with a live foreign lease = nil, want lease-held failure")
