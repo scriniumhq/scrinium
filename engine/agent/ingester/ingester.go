@@ -72,7 +72,7 @@ type Ingester interface {
 func NewIngester(
 	source driver.Driver,
 	target store.DataStore,
-	bus event.EventBus,
+	bus event.Publisher,
 	cfg IngesterConfig,
 ) (Ingester, error) {
 	if cfg.Mode == IngestModeWatch && cfg.StateFile == "" {

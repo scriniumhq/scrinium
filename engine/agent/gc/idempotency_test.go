@@ -1,4 +1,4 @@
-package agent_test
+package gc_test
 
 import (
 	"context"
@@ -9,9 +9,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/agent/checkpoint"
 	"scrinium.dev/engine/agent/gc"
-	"scrinium.dev/engine/agent/scrub"
 )
 
 // TestGC_RunIdempotentNoop verifies that a second Run over an
@@ -19,16 +17,11 @@ import (
 // single-modality contract is safe to call repeatedly (the scheduler
 // does exactly that).
 func TestGC_RunIdempotentNoop(t *testing.T) {
-	// GC deletion is two-phase: cycle 1 Marks (tombstone younger than
-	// grace stays), cycle 2 Sweeps once the marker has aged past grace.
-	// Aging is done with Chtimes (deterministic, no sleeping) — the same
-	// technique the standalone removal test uses.
 	grace := time.Hour
-	f := gc.newGCFixture(t, grace, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, grace, domain.GCLeaseSingleHost)
 	_, ref := f.putAndOrphan(t, "idempotent")
-	a := gc.newGC(t, f, gc.GCConfig{})
+	a := newGC(t, f, gc.GCConfig{})
 
-	// Cycle 1 — Mark only.
 	if _, err := a.Run(context.Background()); err != nil {
 		t.Fatalf("Run #1 (mark): %v", err)
 	}
@@ -38,7 +31,6 @@ func TestGC_RunIdempotentNoop(t *testing.T) {
 		t.Fatalf("Chtimes: %v", err)
 	}
 
-	// Cycle 2 — Sweep: removes the now-eligible orphan.
 	res, err := a.Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run #2 (sweep): %v", err)
@@ -53,7 +45,6 @@ func TestGC_RunIdempotentNoop(t *testing.T) {
 		t.Errorf("state after Run #2 = %v, want StateIdle", st)
 	}
 
-	// Cycle 3 — idempotent no-op: nothing left to collect.
 	res3, err := a.Run(context.Background())
 	if err != nil {
 		t.Fatalf("Run #3 (no-op): %v", err)
@@ -67,16 +58,11 @@ func TestGC_RunIdempotentNoop(t *testing.T) {
 }
 
 func TestGC_RunResumesAfterCancel(t *testing.T) {
-	// Interrupt-then-resume: with a sweep-eligible orphan staged, a
-	// cancelled Run must abort without sweeping, and a later Run with a
-	// live context must process the remainder. Progress lives in the
-	// Store (the aged tombstone), not the agent.
 	grace := time.Hour
-	f := gc.newGCFixture(t, grace, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, grace, domain.GCLeaseSingleHost)
 	_, ref := f.putAndOrphan(t, "resume me")
-	a := gc.newGC(t, f, gc.GCConfig{})
+	a := newGC(t, f, gc.GCConfig{})
 
-	// Mark, then age the marker so it is sweep-eligible.
 	if _, err := a.Run(context.Background()); err != nil {
 		t.Fatalf("mark Run: %v", err)
 	}
@@ -86,7 +72,6 @@ func TestGC_RunResumesAfterCancel(t *testing.T) {
 		t.Fatalf("Chtimes: %v", err)
 	}
 
-	// A cancelled Run aborts before doing any sweep work.
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	res, err := a.Run(ctx)
@@ -103,59 +88,12 @@ func TestGC_RunResumesAfterCancel(t *testing.T) {
 		t.Errorf("state after cancel = %v, want StateFaulted", st)
 	}
 
-	// Resume with a live context: the remainder is swept.
 	res2, err := a.Run(context.Background())
 	if err != nil {
 		t.Fatalf("resume Run: %v", err)
 	}
 	if res2.Stats["removed_blobs"] < 1 {
 		t.Errorf("resume removed_blobs = %d, want >= 1 (the remainder)", res2.Stats["removed_blobs"])
-	}
-	if st, _ := a.Status(); st != agent.StateIdle {
-		t.Errorf("state after resume = %v, want StateIdle", st)
-	}
-}
-
-func TestScrub_RunRepeatable(t *testing.T) {
-	f := scrub.newScrubFixture(t)
-	a := scrub.newScrub(t, f, scrub.ScrubConfig{Force: true})
-
-	for i, label := range []string{"first", "second"} {
-		res, err := a.Run(context.Background())
-		if err != nil {
-			t.Fatalf("%s Run: %v", label, err)
-		}
-		if res == nil || res.Partial {
-			t.Errorf("%s Run: want non-nil non-Partial result, got %+v", label, res)
-		}
-		if st, _ := a.Status(); st != agent.StateIdle {
-			t.Errorf("state after %s Run (i=%d) = %v, want StateIdle", label, i, st)
-		}
-	}
-}
-
-// TestCheckpoint_RunResumesAfterCancel verifies that a cancelled Checkpoint
-// Run faults without producing a checkpoint, and a fresh Run then
-// completes — the one-shot operation is re-runnable after interruption.
-func TestCheckpoint_RunResumesAfterCancel(t *testing.T) {
-	f := checkpoint.newCheckpointFixture(t)
-	a := checkpoint.newCheckpoint(t, f, checkpoint.CheckpointConfig{Interval: time.Hour})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if _, err := a.Run(ctx); !errors.Is(err, context.Canceled) {
-		t.Fatalf("cancelled Run err = %v, want context.Canceled", err)
-	}
-	if st, _ := a.Status(); st != agent.StateFaulted {
-		t.Errorf("state after cancel = %v, want StateFaulted", st)
-	}
-
-	res, err := a.Run(context.Background())
-	if err != nil {
-		t.Fatalf("resume Run: %v", err)
-	}
-	if res == nil {
-		t.Fatal("resume Run: nil AgentResult")
 	}
 	if st, _ := a.Status(); st != agent.StateIdle {
 		t.Errorf("state after resume = %v, want StateIdle", st)

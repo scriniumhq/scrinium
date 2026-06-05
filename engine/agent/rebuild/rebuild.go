@@ -143,10 +143,10 @@ func NewRebuildIndexAgent(
 	opts ...agent.AgentOption,
 ) (RebuildIndexAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
-		return nil, fmt.Errorf("agent.NewRebuildIndexAgent: store, driver, index and bus are required")
+		return nil, fmt.Errorf("rebuild.NewRebuildIndexAgent: store, driver, index and bus are required")
 	}
 	if hostID == "" {
-		return nil, fmt.Errorf("agent.NewRebuildIndexAgent: hostID is required for the maintenance lease")
+		return nil, fmt.Errorf("rebuild.NewRebuildIndexAgent: hostID is required for the maintenance lease")
 	}
 	cfg = applyRebuildDefaults(cfg)
 	return &rebuildAgent{
@@ -209,7 +209,7 @@ func (a *rebuildAgent) Validate(ctx context.Context) error {
 		return err
 	}
 	if a.cfg.Source == RebuildSourceSnapshot {
-		return fmt.Errorf("agent.Rebuild.Validate: Source=Snapshot: %w", errs.ErrNoSnapshot)
+		return fmt.Errorf("rebuild.Rebuild.Validate: Source=Snapshot: %w", errs.ErrNoSnapshot)
 	}
 	return nil
 }
@@ -233,7 +233,7 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 		TTL:       a.cfg.LeaseTTL,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("agent.Rebuild.Run: acquire lease: %w", err)
+		return nil, fmt.Errorf("rebuild.Rebuild.Run: acquire lease: %w", err)
 	}
 	if prev != nil {
 		a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
@@ -261,7 +261,7 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 			a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
 				AgentType: "rebuild", StoreID: a.storeID, Err: err,
 			}})
-			return nil, fmt.Errorf("agent.Rebuild.Run: recovery kit restore: %w", err)
+			return nil, fmt.Errorf("rebuild.Rebuild.Run: recovery kit restore: %w", err)
 		}
 	}
 
@@ -270,14 +270,14 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
 			AgentType: "rebuild", StoreID: a.storeID, Err: err,
 		}})
-		return nil, fmt.Errorf("agent.Rebuild.Run: %w", err)
+		return nil, fmt.Errorf("rebuild.Rebuild.Run: %w", err)
 	}
 
 	// Surface a lease loss that aborted the scan.
 	select {
 	case herr := <-hbErr:
 		if herr != nil && !agent.IsCtxErr(herr) {
-			return nil, fmt.Errorf("agent.Rebuild.Run: lease lost: %w", herr)
+			return nil, fmt.Errorf("rebuild.Rebuild.Run: lease lost: %w", herr)
 		}
 	default:
 	}
@@ -476,5 +476,3 @@ func (rebuildFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (agen
 	c, _ := cfg.(RebuildConfig) // zero value on mismatch -> defaults
 	return NewRebuildIndexAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
-
-func init() { agent.Register(rebuildFactory{}) }

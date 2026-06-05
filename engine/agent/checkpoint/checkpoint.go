@@ -96,10 +96,10 @@ func NewCheckpointAgent(
 	opts ...agent.AgentOption,
 ) (CheckpointAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
-		return nil, fmt.Errorf("agent.NewCheckpointAgent: store, driver, index and bus are required")
+		return nil, fmt.Errorf("checkpoint.NewCheckpointAgent: store, driver, index and bus are required")
 	}
 	if hostID == "" {
-		return nil, fmt.Errorf("agent.NewCheckpointAgent: hostID is required for the checkpoint lease")
+		return nil, fmt.Errorf("checkpoint.NewCheckpointAgent: hostID is required for the checkpoint lease")
 	}
 	cfg = applyCheckpointDefaults(cfg)
 	return &checkpointAgent{
@@ -142,8 +142,6 @@ func (checkpointFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (a
 	c, _ := cfg.(CheckpointConfig) // zero value on mismatch -> defaults
 	return NewCheckpointAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
-
-func init() { agent.Register(checkpointFactory{}) }
 
 // AgentType is the short registry/event identifier.
 func (a *checkpointAgent) AgentType() string { return "checkpoint" }
@@ -199,7 +197,7 @@ func (a *checkpointAgent) TakeCheckpoint(ctx context.Context) (CheckpointStats, 
 		TTL:       defaultCheckpointLeaseTTL,
 	})
 	if err != nil {
-		return CheckpointStats{}, fmt.Errorf("agent.Checkpoint.TakeCheckpoint: acquire lease: %w", err)
+		return CheckpointStats{}, fmt.Errorf("checkpoint.Checkpoint.TakeCheckpoint: acquire lease: %w", err)
 	}
 	if prev != nil {
 		a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
@@ -220,10 +218,10 @@ func (a *checkpointAgent) TakeCheckpoint(ctx context.Context) (CheckpointStats, 
 
 	stats, err := a.checkpointOnce(runCtx)
 	if err != nil {
-		return CheckpointStats{}, fmt.Errorf("agent.Checkpoint.TakeCheckpoint: %w", err)
+		return CheckpointStats{}, fmt.Errorf("checkpoint.Checkpoint.TakeCheckpoint: %w", err)
 	}
 	if herr := drainHeartbeat(hbErr); herr != nil {
-		return CheckpointStats{}, fmt.Errorf("agent.Checkpoint.TakeCheckpoint: lease lost: %w", herr)
+		return CheckpointStats{}, fmt.Errorf("checkpoint.Checkpoint.TakeCheckpoint: lease lost: %w", herr)
 	}
 
 	a.bus.Publish(event.Event{Type: event.EventAgentCompleted, Payload: domain.AgentResult{

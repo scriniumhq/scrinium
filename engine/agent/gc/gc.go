@@ -90,10 +90,10 @@ func NewGCAgent(
 	opts ...agent.AgentOption,
 ) (GCAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
-		return nil, fmt.Errorf("agent.NewGCAgent: store, driver, index and bus are required")
+		return nil, fmt.Errorf("gc.NewGCAgent: store, driver, index and bus are required")
 	}
 	if hostID == "" {
-		return nil, fmt.Errorf("agent.NewGCAgent: hostID is required for the gc lease")
+		return nil, fmt.Errorf("gc.NewGCAgent: hostID is required for the gc lease")
 	}
 	cfg = applyGCDefaults(cfg)
 	return &gcAgent{
@@ -154,8 +154,6 @@ func (gcFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (agent.Age
 	c, _ := cfg.(GCConfig) // zero value on mismatch -> defaults
 	return NewGCAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
-
-func init() { agent.Register(gcFactory{}) }
 
 // AgentType is the short registry/event identifier.
 func (a *gcAgent) AgentType() string { return "gc" }
@@ -225,7 +223,7 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 			TTL:       a.cfg.LeaseTTL,
 		})
 		if err != nil {
-			return GCStats{}, fmt.Errorf("agent.GC.RunOnce: acquire lease: %w", err)
+			return GCStats{}, fmt.Errorf("gc.GC.RunOnce: acquire lease: %w", err)
 		}
 		if prev != nil {
 			a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
@@ -263,13 +261,13 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 	}})
 
 	if err := agent.FirstNonCtxErr(markErr, sweepErr); err != nil {
-		return stats, fmt.Errorf("agent.GC.RunOnce: %w", err)
+		return stats, fmt.Errorf("gc.GC.RunOnce: %w", err)
 	}
 	if hbErr != nil {
 		select {
 		case herr := <-hbErr:
 			if herr != nil && !agent.IsCtxErr(herr) {
-				return stats, fmt.Errorf("agent.GC.RunOnce: lease lost: %w", herr)
+				return stats, fmt.Errorf("gc.GC.RunOnce: lease lost: %w", herr)
 			}
 		default:
 		}

@@ -88,10 +88,10 @@ func NewScrubAgent(
 	opts ...agent.AgentOption,
 ) (ScrubAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
-		return nil, fmt.Errorf("agent.NewScrubAgent: store, driver, index and bus are required")
+		return nil, fmt.Errorf("scrub.NewScrubAgent: store, driver, index and bus are required")
 	}
 	if hostID == "" {
-		return nil, fmt.Errorf("agent.NewScrubAgent: hostID is required for the scrub lease")
+		return nil, fmt.Errorf("scrub.NewScrubAgent: hostID is required for the scrub lease")
 	}
 	cfg = applyScrubDefaults(cfg)
 	return &scrubAgent{
@@ -152,8 +152,6 @@ func (scrubFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (agent.
 	return NewScrubAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
 
-func init() { agent.Register(scrubFactory{}) }
-
 // AgentType is the short registry/event identifier.
 func (a *scrubAgent) AgentType() string { return "scrub" }
 
@@ -212,7 +210,7 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 		TTL:       defaultScrubLeaseTTL,
 	})
 	if err != nil {
-		return ScrubStats{}, fmt.Errorf("agent.Scrub.RunOnce: acquire lease: %w", err)
+		return ScrubStats{}, fmt.Errorf("scrub.Scrub.RunOnce: acquire lease: %w", err)
 	}
 	if prev != nil {
 		a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
@@ -316,13 +314,13 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 	}})
 
 	if err := agent.FirstNonCtxErr(blobErr, manErr); err != nil {
-		return stats, fmt.Errorf("agent.Scrub.RunOnce: %w", err)
+		return stats, fmt.Errorf("scrub.Scrub.RunOnce: %w", err)
 	}
 	// Surface lease loss if the heartbeat aborted mid-pass.
 	select {
 	case herr := <-hbErr:
 		if herr != nil && !agent.IsCtxErr(herr) {
-			return stats, fmt.Errorf("agent.Scrub.RunOnce: lease lost: %w", herr)
+			return stats, fmt.Errorf("scrub.Scrub.RunOnce: lease lost: %w", herr)
 		}
 	default:
 	}

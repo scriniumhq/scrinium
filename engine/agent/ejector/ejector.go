@@ -156,25 +156,25 @@ var _ Ejector = (*ejectorAgent)(nil)
 // and swept (crash leftovers removed) on open.
 func NewEjector(st store.Store, bus event.Publisher, storeID string, cfg EjectorConfig, opts ...agent.AgentOption) (Ejector, error) {
 	if st == nil {
-		return nil, fmt.Errorf("agent.NewEjector: nil store")
+		return nil, fmt.Errorf("ejector.NewEjector: nil store")
 	}
 	if cfg.TempDir == "" {
-		return nil, fmt.Errorf("agent.NewEjector: TempDir is required")
+		return nil, fmt.Errorf("ejector.NewEjector: TempDir is required")
 	}
 	cfg.applyDefaults()
 	if err := os.MkdirAll(cfg.TempDir, 0o700); err != nil {
-		return nil, fmt.Errorf("agent.NewEjector: temp dir: %w", err)
+		return nil, fmt.Errorf("ejector.NewEjector: temp dir: %w", err)
 	}
 	a := &ejectorAgent{
-		st:      st,
-		bus:     bus,
-		storeID: storeID,
-		cfg:     cfg,
-		sem:     make(chan struct{}, cfg.MaxConcurrent),
-		byHash:  make(map[string]*entry),
-		byReq:   make(map[reqKey]string),
+		BaseState: agent.NewBaseState(agent.ResolveLogger(opts...)),
+		st:        st,
+		bus:       bus,
+		storeID:   storeID,
+		cfg:       cfg,
+		sem:       make(chan struct{}, cfg.MaxConcurrent),
+		byHash:    make(map[string]*entry),
+		byReq:     make(map[reqKey]string),
 	}
-	a.BaseState = agent.NewBaseState(agent.ResolveLogger(opts...))
 	a.sweepOnOpen()
 	return a, nil
 }
@@ -185,11 +185,9 @@ type ejectorFactory struct{}
 func (ejectorFactory) Name() string { return "ejector" }
 
 func (ejectorFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (agent.Agent, error) {
-	c, _ := cfg.(EjectorConfig)
+	c, _ := cfg.(EjectorConfig) // zero value on mismatch -> defaults
 	return NewEjector(st, deps.Publisher, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
-
-func init() { agent.Register(ejectorFactory{}) }
 
 func (a *ejectorAgent) AgentType() string { return "ejector" }
 
@@ -389,7 +387,7 @@ func (a *ejectorAgent) EjectFragment(ctx context.Context, id domain.ArtifactID, 
 func (a *ejectorAgent) writeFragment(ctx context.Context, rh domain.ReadHandle, start, end int64) (ch, final, vh string, err error) {
 	suffix, err := randHex()
 	if err != nil {
-		return "", "", "", fmt.Errorf("agent.Ejector: temp name: %w", err)
+		return "", "", "", fmt.Errorf("ejector.Ejector: temp name: %w", err)
 	}
 	tmp := filepath.Join(a.cfg.TempDir, ".tmp-"+suffix)
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
@@ -470,7 +468,7 @@ func copyRangeAt(ctx context.Context, w io.Writer, rh domain.ReadHandle, start, 
 func (a *ejectorAgent) atomicWrite(final string, fill func(w io.Writer) error) (string, error) {
 	suffix, err := randHex()
 	if err != nil {
-		return "", fmt.Errorf("agent.Ejector: temp name: %w", err)
+		return "", fmt.Errorf("ejector.Ejector: temp name: %w", err)
 	}
 	tmp := filepath.Join(a.cfg.TempDir, ".tmp-"+suffix)
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
@@ -709,7 +707,7 @@ func mapDiskErr(err error) error {
 		return nil
 	}
 	if errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT) {
-		return fmt.Errorf("agent.Ejector: %w", errs.ErrEjectorTempDirFull)
+		return fmt.Errorf("ejector.Ejector: %w", errs.ErrEjectorTempDirFull)
 	}
-	return fmt.Errorf("agent.Ejector: %w", err)
+	return fmt.Errorf("ejector.Ejector: %w", err)
 }
