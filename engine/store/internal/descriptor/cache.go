@@ -18,6 +18,12 @@ const (
 	metaKeyDescriptorChecksum = "descriptor_checksum"
 )
 
+// MetaKeyBlob is the store_meta key holding the descriptor JSON blob, exported
+// so checkpoint-identity verification can read the store identity straight
+// from a checkpoint's store_meta (via Unmarshal) without loading the full L2
+// cache (which also needs the sequence and checksum keys).
+const MetaKeyBlob = metaKeyDescriptorBlob
+
 // MetaStore is the narrow store_meta surface the cache needs. The
 // engine's StoreIndex satisfies it implicitly.
 type MetaStore interface {

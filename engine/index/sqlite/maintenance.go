@@ -254,6 +254,34 @@ func (i *Index) RestoreCheckpoint(ctx context.Context, srcPath string) error {
 	})
 }
 
+// CheckpointMeta reads one store_meta value from a checkpoint file without
+// restoring it — used by the Store layer to verify a checkpoint's identity
+// before a restore. The source is opened (migrating its schema forward, and
+// refusing one newer than the code) and closed; an absent key returns
+// ("", nil) so the caller can tell "no such metadata" from a read error.
+func (i *Index) CheckpointMeta(ctx context.Context, srcPath, key string) (string, error) {
+	if srcPath == "" || srcPath == ":memory:" {
+		return "", fmt.Errorf("sqlite: CheckpointMeta: invalid srcPath %q", srcPath)
+	}
+	if _, err := os.Stat(srcPath); err != nil {
+		return "", fmt.Errorf("sqlite: CheckpointMeta: stat source: %w", err)
+	}
+	src, err := NewStore(ctx, srcPath)
+	if err != nil {
+		return "", fmt.Errorf("sqlite: CheckpointMeta: open source: %w", err)
+	}
+	defer func() { _ = src.Close() }()
+
+	v, err := src.GetMeta(ctx, key)
+	if errors.Is(err, errs.ErrMetaKeyNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("sqlite: CheckpointMeta: read %q: %w", key, err)
+	}
+	return v, nil
+}
+
 // GetMeta reads a value from store_meta. A missing key returns
 // errs.ErrMetaKeyNotFound.
 //

@@ -252,6 +252,8 @@ func TestIndex_ImplementsStoreIndex(t *testing.T) {
 	var _ index.CheckpointWriter = (*Index)(nil)
 	// RestoreCheckpoint is the read side (CheckpointRestorer); sqlite implements it.
 	var _ index.CheckpointRestorer = (*Index)(nil)
+	// CheckpointMeta inspects a checkpoint's store_meta (CheckpointInspector).
+	var _ index.CheckpointInspector = (*Index)(nil)
 	idx := newMemoryIndex(t)
 	var asInterface index.StoreIndex = idx
 	if asInterface == nil {

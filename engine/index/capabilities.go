@@ -34,3 +34,13 @@ type CheckpointWriter interface {
 type CheckpointRestorer interface {
 	RestoreCheckpoint(ctx context.Context, srcPath string) error
 }
+
+// CheckpointInspector is the optional capability of reading a single
+// store_meta value from a checkpoint file WITHOUT restoring it. It lets the
+// Store layer verify a checkpoint's recorded identity (the descriptor blob)
+// before deciding to restore. The value is returned raw; interpreting it is
+// the caller's concern. An absent key yields ("", nil), distinguishing
+// "the checkpoint records no such metadata" from a read failure.
+type CheckpointInspector interface {
+	CheckpointMeta(ctx context.Context, srcPath, key string) (string, error)
+}

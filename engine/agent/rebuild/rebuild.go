@@ -76,6 +76,12 @@ type RebuildConfig struct {
 	// Zero means no overlap (tail starts exactly at the checkpoint
 	// instant); a small positive value (minutes) is recommended.
 	RecoveryOverlap time.Duration
+
+	// IgnoreStoreID, when true, skips the store-identity guard that rejects a
+	// checkpoint recorded for a different Store before restoring it. Use only
+	// to force recovery from a checkpoint whose identity is known-good despite
+	// a mismatch (e.g. a deliberately imported checkpoint).
+	IgnoreStoreID bool
 }
 
 // RebuildStats are the final statistics of the operation and a
@@ -403,6 +409,16 @@ func (a *rebuildAgent) tryCheckpointFastPath(ctx context.Context, keys artifact.
 		return false, fmt.Errorf("fetch checkpoint %q: %w", name, err)
 	}
 	defer cleanup()
+
+	// Guard against restoring a checkpoint recorded for a different Store
+	// (an import, a crossed mount). Skipped when IgnoreStoreID is set. The
+	// check happens before the restore so a foreign checkpoint never touches
+	// the index.
+	if !a.cfg.IgnoreStoreID {
+		if err := store.VerifyCheckpointIdentity(ctx, a.idx, tmpPath, a.storeID); err != nil {
+			return false, fmt.Errorf("checkpoint %q: %w", name, err)
+		}
+	}
 
 	if err := restorer.RestoreCheckpoint(ctx, tmpPath); err != nil {
 		return false, fmt.Errorf("restore checkpoint %q: %w", name, err)

@@ -207,6 +207,10 @@ func TestRebuild_Checkpoint_FastPath(t *testing.T) {
 	a := newRebuild(t, f, rebuild.RebuildConfig{
 		Source:   rebuild.RebuildSourceCheckpoint,
 		LeaseTTL: time.Minute,
+		// The fixture's agent store id ("store-rebuild") is a label, not the
+		// real descriptor StoreID the checkpoint carries; bypass the identity
+		// guard so this test exercises the restore mechanics.
+		IgnoreStoreID: true,
 	})
 	if _, err := a.Run(context.Background()); err != nil {
 		t.Fatalf("Run (checkpoint fast-path): %v", err)
@@ -217,6 +221,22 @@ func TestRebuild_Checkpoint_FastPath(t *testing.T) {
 	}
 	if st.CheckpointUsed != name {
 		t.Errorf("CheckpointUsed = %q, want %q", st.CheckpointUsed, name)
+	}
+}
+
+func TestRebuild_Checkpoint_RejectsForeignIdentity(t *testing.T) {
+	f := newRebuildFixture(t)
+	f.put(t, "ns", "artifact")
+	f.publishCheckpoint(t)
+
+	// Default agent store id ("store-rebuild") differs from the real StoreID
+	// the checkpoint's descriptor carries, so the identity guard must reject.
+	a := newRebuild(t, f, rebuild.RebuildConfig{
+		Source:   rebuild.RebuildSourceCheckpoint,
+		LeaseTTL: time.Minute,
+	})
+	if _, err := a.Run(context.Background()); err == nil {
+		t.Fatal("Run should reject a checkpoint with a foreign store identity")
 	}
 }
 
