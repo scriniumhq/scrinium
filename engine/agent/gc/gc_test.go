@@ -1,16 +1,17 @@
-package agent_test
+package gc_test
 
 import (
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/gc"
+	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
@@ -78,9 +79,9 @@ func (f gcFixture) fileExists(p string) bool {
 	return err == nil
 }
 
-func newGC(t *testing.T, f gcFixture, cfg agent.GCConfig) agent.GCAgent {
+func newGC(t *testing.T, f gcFixture, cfg gc.GCConfig) gc.GCAgent {
 	t.Helper()
-	a, err := agent.NewGCAgent(f.store, f.drv, f.idx, f.rec, gcHostID, "store-gc", cfg)
+	a, err := gc.NewGCAgent(f.store, f.drv, f.idx, f.rec, gcHostID, "store-gc", cfg)
 	if err != nil {
 		t.Fatalf("NewGCAgent: %v", err)
 	}
@@ -89,21 +90,21 @@ func newGC(t *testing.T, f gcFixture, cfg agent.GCConfig) agent.GCAgent {
 
 func TestNewGC_RequiresDeps(t *testing.T) {
 	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
-	cases := map[string]func() (agent.GCAgent, error){
-		"nil store": func() (agent.GCAgent, error) {
-			return agent.NewGCAgent(nil, f.drv, f.idx, f.rec, gcHostID, "", agent.GCConfig{})
+	cases := map[string]func() (gc.GCAgent, error){
+		"nil store": func() (gc.GCAgent, error) {
+			return gc.NewGCAgent(nil, f.drv, f.idx, f.rec, gcHostID, "", gc.GCConfig{})
 		},
-		"nil driver": func() (agent.GCAgent, error) {
-			return agent.NewGCAgent(f.store, nil, f.idx, f.rec, gcHostID, "", agent.GCConfig{})
+		"nil driver": func() (gc.GCAgent, error) {
+			return gc.NewGCAgent(f.store, nil, f.idx, f.rec, gcHostID, "", gc.GCConfig{})
 		},
-		"nil index": func() (agent.GCAgent, error) {
-			return agent.NewGCAgent(f.store, f.drv, nil, f.rec, gcHostID, "", agent.GCConfig{})
+		"nil index": func() (gc.GCAgent, error) {
+			return gc.NewGCAgent(f.store, f.drv, nil, f.rec, gcHostID, "", gc.GCConfig{})
 		},
-		"nil bus": func() (agent.GCAgent, error) {
-			return agent.NewGCAgent(f.store, f.drv, f.idx, nil, gcHostID, "", agent.GCConfig{})
+		"nil bus": func() (gc.GCAgent, error) {
+			return gc.NewGCAgent(f.store, f.drv, f.idx, nil, gcHostID, "", gc.GCConfig{})
 		},
-		"empty host": func() (agent.GCAgent, error) {
-			return agent.NewGCAgent(f.store, f.drv, f.idx, f.rec, "", "", agent.GCConfig{})
+		"empty host": func() (gc.GCAgent, error) {
+			return gc.NewGCAgent(f.store, f.drv, f.idx, f.rec, "", "", gc.GCConfig{})
 		},
 	}
 	for name, mk := range cases {
@@ -124,7 +125,7 @@ func TestGC_MarkTombstonesOrphan(t *testing.T) {
 		t.Fatalf("blob file missing before GC: %s", blob)
 	}
 
-	a := newGC(t, f, agent.GCConfig{})
+	a := newGC(t, f, gc.GCConfig{})
 	stats, err := a.RunOnce(context.Background())
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -159,7 +160,7 @@ func TestGC_SweepRemovesAfterGrace(t *testing.T) {
 	_, ref := f.putAndOrphan(t, "sweep me")
 	blob := f.blobPath(t, ref)
 
-	a := newGC(t, f, agent.GCConfig{})
+	a := newGC(t, f, gc.GCConfig{})
 
 	// Cycle 1 — Mark only (fresh tombstone is younger than grace).
 	if _, err := a.RunOnce(context.Background()); err != nil {
@@ -217,7 +218,7 @@ func TestGC_RevivedBlobSurvivesSweep(t *testing.T) {
 		t.Fatalf("revive Put: %v", err)
 	}
 
-	a := newGC(t, f, agent.GCConfig{})
+	a := newGC(t, f, gc.GCConfig{})
 	stats, err := a.RunOnce(context.Background())
 	if err != nil {
 		t.Fatalf("RunOnce: %v", err)
@@ -236,12 +237,8 @@ func TestGC_SingleHostTakesNoLease(t *testing.T) {
 	// never looks at the lease).
 	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
 	f.putAndOrphan(t, "data")
-	now := time.Now()
-	rec := leaseRecordJSON("other-host", now, now.Add(time.Hour), "GC")
-	if err := f.drv.Put(context.Background(), "system.state/gc/lease", strings.NewReader(rec)); err != nil {
-		t.Fatalf("stage lease: %v", err)
-	}
-	a := newGC(t, f, agent.GCConfig{})
+	leasefx.StageForeign(t, f.drv, "system.state/gc/lease", "other-host", "GC", time.Hour)
+	a := newGC(t, f, gc.GCConfig{})
 	if _, err := a.RunOnce(context.Background()); err != nil {
 		t.Fatalf("SingleHost RunOnce must ignore the lease, got %v", err)
 	}
@@ -250,12 +247,8 @@ func TestGC_SingleHostTakesNoLease(t *testing.T) {
 func TestGC_LeaderElectionBlockedByForeignLease(t *testing.T) {
 	f := newGCFixture(t, time.Hour, domain.GCLeaseLeaderElection)
 	f.putAndOrphan(t, "data")
-	now := time.Now()
-	rec := leaseRecordJSON("other-host", now, now.Add(time.Hour), "GC")
-	if err := f.drv.Put(context.Background(), "system.state/gc/lease", strings.NewReader(rec)); err != nil {
-		t.Fatalf("stage lease: %v", err)
-	}
-	a := newGC(t, f, agent.GCConfig{LeaseTTL: time.Minute})
+	leasefx.StageForeign(t, f.drv, "system.state/gc/lease", "other-host", "GC", time.Hour)
+	a := newGC(t, f, gc.GCConfig{LeaseTTL: time.Minute})
 	if _, err := a.RunOnce(context.Background()); err == nil {
 		t.Fatal("LeaderElection RunOnce with a live foreign lease = nil, want lease-held failure")
 	}
@@ -264,7 +257,7 @@ func TestGC_LeaderElectionBlockedByForeignLease(t *testing.T) {
 func TestGC_CancelledContext(t *testing.T) {
 	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
 	f.putAndOrphan(t, "data")
-	a := newGC(t, f, agent.GCConfig{})
+	a := newGC(t, f, gc.GCConfig{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := a.RunOnce(ctx); err == nil {
@@ -274,7 +267,7 @@ func TestGC_CancelledContext(t *testing.T) {
 
 func TestGC_RunStopsOnContextCancel(t *testing.T) {
 	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
-	a := newGC(t, f, agent.GCConfig{ScanInterval: time.Hour})
+	a := newGC(t, f, gc.GCConfig{ScanInterval: time.Hour})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // one-shot agent: a cancelled context must abort Run promptly
 	_, err := a.Run(ctx)

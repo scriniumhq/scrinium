@@ -1,10 +1,11 @@
-package agent
+package ingester
 
 import (
 	"context"
 	"fmt"
 	"time"
 
+	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -55,7 +56,7 @@ type IngesterConfig struct {
 // Ingester is the agent that captures data from an
 // external source.
 type Ingester interface {
-	Agent
+	agent.Agent
 
 	// ForceCommit immediately commits the accumulated batch
 	// regardless of BatchSize/FlushTimeout. Used before an external
@@ -71,7 +72,7 @@ type Ingester interface {
 func NewIngester(
 	source driver.Driver,
 	target store.DataStore,
-	bus event.EventBus,
+	bus event.Publisher,
 	cfg IngesterConfig,
 ) (Ingester, error) {
 	if cfg.Mode == IngestModeWatch && cfg.StateFile == "" {

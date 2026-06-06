@@ -27,10 +27,12 @@ package scrinium
 
 import (
 	"context"
+	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/index/extension"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/event"
 	"scrinium.dev/internal/assembly"
 	"scrinium.dev/projection"
 )
@@ -67,6 +69,14 @@ type ScriniumClient struct {
 // Artifact is the unit a client stores and reads back. Aliased from the
 // domain package so a hello-world program can stay in one import.
 type Artifact = domain.Artifact
+
+// AgentResult is the outcome of a RunMaintenance call. Aliased from the
+// domain package so single-package programs need not import domain.
+type AgentResult = domain.AgentResult
+
+// Event is a single message on the store/agent event bus. Aliased from
+// the event package so single-package programs need not import it.
+type Event = event.Event
 
 // Data-plane options, re-exported from domain so single-package
 // programs need not import domain directly. Rule: every public domain
@@ -139,6 +149,56 @@ func (c *ScriniumClient) Extensions() []extension.ExtensionInfo { return c.asm.E
 // Info.Created.
 func (c *ScriniumClient) RecoveryKit() ([]byte, bool) { return c.asm.RecoveryKit() }
 
+// RunMaintenance builds the registered agent named kind (decoding cfg
+// via its factory) and runs it once, returning the agent's result. It is
+// the always-available manual trigger (ADR-69 level 1): no resident
+// goroutine and no scheduler — the host calls it on its own cadence.
+//
+// kind must be registered. Agents register by blank import, the same way
+// drivers and indexes do (ADR-63); pull in the ones a deployment uses:
+//
+//	import _ "scrinium.dev/engine/agent/gc"
+//	res, err := c.RunMaintenance(ctx, "gc", gc.GCConfig{})
+func (c *ScriniumClient) RunMaintenance(ctx context.Context, kind string, cfg any) (*AgentResult, error) {
+	return c.asm.RunMaintenance(ctx, kind, cfg)
+}
+
+// Subscribe registers fn to receive every store and agent event and
+// returns a function that removes it (idempotent, safe from any
+// goroutine). The bus is synchronous: fn runs inline on the publishing
+// goroutine, so keep it quick and non-blocking. Events emitted during
+// assembly are missed by a post-build Subscribe; to catch those, pass
+// WithEventHandler at Open/Build time.
+//
+//	unsub := c.Subscribe(func(e scrinium.Event) { … })
+//	defer unsub()
+func (c *ScriniumClient) Subscribe(fn func(Event)) func() {
+	return c.asm.Subscribe(fn)
+}
+
+// ScheduleEvery registers agent kind to run every interval through the
+// built-in scheduler, which the client ticks on real time. Requires
+// WithStandardScheduler at Open/Build; without it there is no resident
+// scheduler and this returns an error. The agent is rebuilt from the
+// registry on each run, so kind must be registered (blank import).
+//
+//	c, _ := scrinium.Open(ctx, uri, scrinium.WithStandardScheduler())
+//	c.ScheduleEvery("gc", time.Hour, gc.GCConfig{})
+func (c *ScriniumClient) ScheduleEvery(kind string, every time.Duration, cfg any) error {
+	return c.asm.ScheduleEvery(kind, every, cfg)
+}
+
+// ScheduleCron registers agent kind to run on a cron expression through
+// the built-in scheduler. Requires WithStandardScheduler at Open/Build
+// and a cron adapter enabled with cron.Enable (from
+// scrinium.dev/engine/agent/cron); without either it returns an error.
+//
+//	c, _ := scrinium.Open(ctx, uri, scrinium.WithStandardScheduler(), cron.Enable())
+//	c.ScheduleCron("scrub", "0 3 * * *", scrub.ScrubConfig{})
+func (c *ScriniumClient) ScheduleCron(kind string, expr string, cfg any) error {
+	return c.asm.ScheduleCron(kind, expr, cfg)
+}
+
 // Open assembles a store from a single driver URI, creating it if
 // absent (ModeOpenOrInit). The simplest entry point — no config
 // document, no projection.
@@ -162,6 +222,19 @@ type BuildOption = assembly.BuildOption
 
 // WithMode sets the open/init behaviour (default ModeOpenOrInit).
 func WithMode(m Mode) BuildOption { return assembly.WithMode(m) }
+
+// WithEventHandler registers an event handler before assembly begins, so
+// it observes events emitted during Open/Init as well as every later
+// store and agent event. For subscriptions added after Open, use
+// (*ScriniumClient).Subscribe. A nil handler is ignored.
+func WithEventHandler(fn func(Event)) BuildOption { return assembly.WithEventHandler(fn) }
+
+// WithStandardScheduler runs the built-in scheduler: one goroutine ticks
+// it on real time and runs due agents, stopped on Close. Without it the
+// client keeps no resident goroutine — agents run only via RunMaintenance.
+// Add schedules with ScheduleEvery / ScheduleCron. Hosts that want to own
+// the clock build on the primitives (agent.Scheduler) directly.
+func WithStandardScheduler() BuildOption { return assembly.WithStandardScheduler() }
 
 // LoadYAML / LoadInitYAML / LoadOrInitYAML assemble from a YAML
 // configuration document. JSON variants mirror them.

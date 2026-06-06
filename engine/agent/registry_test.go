@@ -28,18 +28,10 @@ func (f fakeFactory) Build(_ store.Store, _ any, _ agent.AgentDeps) (agent.Agent
 	return fakeAgent{kind: f.kind}, nil
 }
 
-// TestRegistry_BuiltinsRegistered checks the built-in agents register
-// themselves through their init().
-func TestRegistry_BuiltinsRegistered(t *testing.T) {
-	for _, kind := range []string{"gc", "scrub", "checkpoint", "rebuild"} {
-		if _, ok := agent.Lookup(kind); !ok {
-			t.Errorf("Lookup(%q) = false, want a registered built-in factory", kind)
-		}
-	}
-}
-
 // TestRegistry_RegisterLookupBuild exercises a full round trip with a
-// custom, namespaced agent type.
+// custom, namespaced agent type. (The built-in agents register in their
+// own subpackages now; that they are registered is checked in
+// engine/agent/agenttest via the preset bundle.)
 func TestRegistry_RegisterLookupBuild(t *testing.T) {
 	const kind = "acme.registry-probe"
 	agent.Register(fakeFactory{kind: kind})
@@ -75,7 +67,9 @@ func TestRegistry_UnknownKind(t *testing.T) {
 }
 
 // TestRegistry_RegisterRejectsBadInput checks that Register panics on
-// programmer errors (nil factory, ill-formed name, duplicate).
+// programmer errors (nil factory, ill-formed name, duplicate). The
+// duplicate case registers a unique kind twice so the test is
+// self-contained and does not depend on any built-in being present.
 func TestRegistry_RegisterRejectsBadInput(t *testing.T) {
 	mustPanic := func(name string, f func()) {
 		t.Helper()
@@ -88,5 +82,8 @@ func TestRegistry_RegisterRejectsBadInput(t *testing.T) {
 	}
 	mustPanic("nil factory", func() { agent.Register(nil) })
 	mustPanic("invalid name", func() { agent.Register(fakeFactory{kind: "BadName"}) })
-	mustPanic("duplicate", func() { agent.Register(fakeFactory{kind: "gc"}) })
+
+	const dup = "acme.dup-probe"
+	agent.Register(fakeFactory{kind: dup}) // first registration: ok
+	mustPanic("duplicate", func() { agent.Register(fakeFactory{kind: dup}) })
 }

@@ -1,4 +1,4 @@
-package agent
+package scrub
 
 import (
 	"context"
@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -56,7 +57,7 @@ type ScrubStats struct {
 // Engine-managed: a single Scrub Agent is launched automatically
 // Agent for every registered Target Store.
 type ScrubAgent interface {
-	Agent
+	agent.Agent
 
 	// RunOnce performs one full verification pass over every blob
 	// whose last_verified_at is older than MaxAge and returns. Used
@@ -84,17 +85,17 @@ func NewScrubAgent(
 	hostID string,
 	storeID string,
 	cfg ScrubConfig,
-	opts ...AgentOption,
+	opts ...agent.AgentOption,
 ) (ScrubAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
-		return nil, fmt.Errorf("agent.NewScrubAgent: store, driver, index and bus are required")
+		return nil, fmt.Errorf("scrub.NewScrubAgent: store, driver, index and bus are required")
 	}
 	if hostID == "" {
-		return nil, fmt.Errorf("agent.NewScrubAgent: hostID is required for the scrub lease")
+		return nil, fmt.Errorf("scrub.NewScrubAgent: hostID is required for the scrub lease")
 	}
 	cfg = applyScrubDefaults(cfg)
 	return &scrubAgent{
-		baseState: baseState{log: resolveAgentLogger(opts)},
+		BaseState: agent.NewBaseState(agent.ResolveLogger(opts...)),
 		store:     st, drv: drv, idx: idx, bus: bus,
 		hostID: hostID, storeID: storeID, cfg: cfg,
 	}, nil
@@ -136,7 +137,7 @@ type scrubAgent struct {
 	storeID string
 	cfg     ScrubConfig
 
-	baseState
+	agent.BaseState
 }
 
 var _ ScrubAgent = (*scrubAgent)(nil)
@@ -146,12 +147,10 @@ type scrubFactory struct{}
 
 func (scrubFactory) Name() string { return "scrub" }
 
-func (scrubFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
+func (scrubFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (agent.Agent, error) {
 	c, _ := cfg.(ScrubConfig) // zero value on mismatch -> defaults
-	return NewScrubAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, WithAgentLogger(deps.Logger))
+	return NewScrubAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
-
-func init() { Register(scrubFactory{}) }
 
 // AgentType is the short registry/event identifier.
 func (a *scrubAgent) AgentType() string { return "scrub" }
@@ -165,7 +164,7 @@ func (a *scrubAgent) Validate(ctx context.Context) error { return ctx.Err() }
 // agent is periodically invoked by the scheduler (ADR-69): an
 // interrupted pass resumes from last_verified_at on the next call.
 func (a *scrubAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
-	a.setState(StateRunning, nil)
+	a.SetState(agent.StateRunning, nil)
 	stats, err := a.RunOnce(ctx)
 	res := &domain.AgentResult{
 		AgentType:   "scrub",
@@ -178,8 +177,8 @@ func (a *scrubAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 		},
 	}
 	if err != nil {
-		a.setState(StateFaulted, err)
-		if isCtxErr(err) {
+		a.SetState(agent.StateFaulted, err)
+		if agent.IsCtxErr(err) {
 			res.Partial = true
 			a.bus.Publish(event.Event{Type: event.EventAgentCancelled})
 			return res, err
@@ -189,7 +188,7 @@ func (a *scrubAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 		}})
 		return res, err
 	}
-	a.setState(StateIdle, nil)
+	a.SetState(agent.StateIdle, nil)
 	return res, nil
 }
 
@@ -211,7 +210,7 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 		TTL:       defaultScrubLeaseTTL,
 	})
 	if err != nil {
-		return ScrubStats{}, fmt.Errorf("agent.Scrub.RunOnce: acquire lease: %w", err)
+		return ScrubStats{}, fmt.Errorf("scrub.Scrub.RunOnce: acquire lease: %w", err)
 	}
 	if prev != nil {
 		a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
@@ -227,7 +226,7 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 	defer func() {
 		cancel()
 		if err := l.Release(context.WithoutCancel(ctx)); err != nil {
-			a.logger().Warn("lease release failed; lease will expire via TTL", "err", err)
+			a.Logger().Warn("lease release failed; lease will expire via TTL", "err", err)
 		}
 	}()
 
@@ -261,13 +260,13 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 		case err == nil:
 			stats.VerifiedBlobs++
 			if err := a.idx.MarkVerified(runCtx, blobRef, time.Now()); err != nil {
-				a.logger().Warn("scrub: failed to record blob verification", "blob_ref", blobRef, "err", err)
+				a.Logger().Warn("scrub: failed to record blob verification", "blob_ref", blobRef, "err", err)
 			}
 			a.cascadeStampConsumers(runCtx, blobRef)
 		case errors.Is(err, errs.ErrArtifactNotFound):
 			// No consuming manifest (race vs Delete/GC, or orphan):
 			// skip, not a corruption. GC owns orphan removal.
-		case isCtxErr(err):
+		case agent.IsCtxErr(err):
 			blobErr = err
 		default:
 			// Corruption: VerifyBlobRef already published
@@ -294,11 +293,11 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 		switch err := a.store.VerifyManifest(runCtx, id); {
 		case err == nil:
 			if err := a.idx.MarkManifestVerified(runCtx, id, time.Now()); err != nil {
-				a.logger().Warn("scrub: failed to record manifest verification", "artifact_id", id, "err", err)
+				a.Logger().Warn("scrub: failed to record manifest verification", "artifact_id", id, "err", err)
 			}
 		case errors.Is(err, errs.ErrArtifactNotFound):
 			// raced with Delete — skip.
-		case isCtxErr(err):
+		case agent.IsCtxErr(err):
 			manErr = err
 		default:
 			stats.FailedBlobs++ // manifest corruption counts as a failure too
@@ -314,14 +313,14 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 		},
 	}})
 
-	if err := firstNonCtxErr(blobErr, manErr); err != nil {
-		return stats, fmt.Errorf("agent.Scrub.RunOnce: %w", err)
+	if err := agent.FirstNonCtxErr(blobErr, manErr); err != nil {
+		return stats, fmt.Errorf("scrub.Scrub.RunOnce: %w", err)
 	}
 	// Surface lease loss if the heartbeat aborted mid-pass.
 	select {
 	case herr := <-hbErr:
-		if herr != nil && !isCtxErr(herr) {
-			return stats, fmt.Errorf("agent.Scrub.RunOnce: lease lost: %w", herr)
+		if herr != nil && !agent.IsCtxErr(herr) {
+			return stats, fmt.Errorf("scrub.Scrub.RunOnce: lease lost: %w", herr)
 		}
 	default:
 	}
@@ -358,30 +357,15 @@ func (a *scrubAgent) cascadeStampConsumers(ctx context.Context, blobRef string) 
 		ids = append(ids, m.ArtifactID)
 		return nil
 	}); err != nil {
-		a.logger().Warn("scrub: failed to enumerate blob consumers", "blob_ref", blobRef, "err", err)
+		a.Logger().Warn("scrub: failed to enumerate blob consumers", "blob_ref", blobRef, "err", err)
 	}
 	for _, id := range ids {
 		if a.store.VerifyManifest(ctx, id) == nil {
 			if err := a.idx.MarkManifestVerified(ctx, id, time.Now()); err != nil {
-				a.logger().Warn("scrub: failed to record manifest verification (cascade)", "artifact_id", id, "err", err)
+				a.Logger().Warn("scrub: failed to record manifest verification (cascade)", "artifact_id", id, "err", err)
 			}
 		}
 		// A corrupt consumer manifest already emitted EventScrubFailed
 		// inside VerifyManifest; the cascade does not abort on it.
 	}
-}
-
-// isCtxErr reports whether err is a context cancellation/deadline.
-func isCtxErr(err error) bool {
-	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
-}
-
-// firstNonCtxErr returns the first non-nil, non-context error.
-func firstNonCtxErr(errs ...error) error {
-	for _, e := range errs {
-		if e != nil && !isCtxErr(e) {
-			return e
-		}
-	}
-	return nil
 }

@@ -1,4 +1,4 @@
-package agent
+package gc
 
 import (
 	"context"
@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -60,7 +61,7 @@ type GCStats struct {
 // automatically — the deletion policy is a deployment-specific
 // decision.
 type GCAgent interface {
-	Agent
+	agent.Agent
 
 	// RunOnce executes one full Mark+Sweep cycle and returns. Used
 	// for manual runs and tests; unlike Run it does not block on
@@ -86,17 +87,17 @@ func NewGCAgent(
 	hostID string,
 	storeID string,
 	cfg GCConfig,
-	opts ...AgentOption,
+	opts ...agent.AgentOption,
 ) (GCAgent, error) {
 	if st == nil || drv == nil || idx == nil || bus == nil {
-		return nil, fmt.Errorf("agent.NewGCAgent: store, driver, index and bus are required")
+		return nil, fmt.Errorf("gc.NewGCAgent: store, driver, index and bus are required")
 	}
 	if hostID == "" {
-		return nil, fmt.Errorf("agent.NewGCAgent: hostID is required for the gc lease")
+		return nil, fmt.Errorf("gc.NewGCAgent: hostID is required for the gc lease")
 	}
 	cfg = applyGCDefaults(cfg)
 	return &gcAgent{
-		baseState: baseState{log: resolveAgentLogger(opts)},
+		BaseState: agent.NewBaseState(agent.ResolveLogger(opts...)),
 		store:     st, drv: drv, idx: idx, bus: bus,
 		hostID: hostID, storeID: storeID, cfg: cfg,
 	}, nil
@@ -139,7 +140,7 @@ type gcAgent struct {
 	storeID string
 	cfg     GCConfig
 
-	baseState
+	agent.BaseState
 }
 
 var _ GCAgent = (*gcAgent)(nil)
@@ -149,12 +150,10 @@ type gcFactory struct{}
 
 func (gcFactory) Name() string { return "gc" }
 
-func (gcFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
+func (gcFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (agent.Agent, error) {
 	c, _ := cfg.(GCConfig) // zero value on mismatch -> defaults
-	return NewGCAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, WithAgentLogger(deps.Logger))
+	return NewGCAgent(st, deps.Driver, deps.Index, deps.Publisher, deps.HostID, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
-
-func init() { Register(gcFactory{}) }
 
 // AgentType is the short registry/event identifier.
 func (a *gcAgent) AgentType() string { return "gc" }
@@ -169,7 +168,7 @@ func (a *gcAgent) Validate(ctx context.Context) error { return ctx.Err() }
 // resident loop: an interrupted cycle resumes from the Store-held
 // progress (orphan re-selection) on the next call.
 func (a *gcAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
-	a.setState(StateRunning, nil)
+	a.SetState(agent.StateRunning, nil)
 	stats, err := a.RunOnce(ctx)
 	res := &domain.AgentResult{
 		AgentType:   "gc",
@@ -183,8 +182,8 @@ func (a *gcAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 		},
 	}
 	if err != nil {
-		a.setState(StateFaulted, err)
-		if isCtxErr(err) {
+		a.SetState(agent.StateFaulted, err)
+		if agent.IsCtxErr(err) {
 			res.Partial = true
 			a.bus.Publish(event.Event{Type: event.EventAgentCancelled})
 			return res, err
@@ -194,7 +193,7 @@ func (a *gcAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 		}})
 		return res, err
 	}
-	a.setState(StateIdle, nil)
+	a.SetState(agent.StateIdle, nil)
 	return res, nil
 }
 
@@ -224,7 +223,7 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 			TTL:       a.cfg.LeaseTTL,
 		})
 		if err != nil {
-			return GCStats{}, fmt.Errorf("agent.GC.RunOnce: acquire lease: %w", err)
+			return GCStats{}, fmt.Errorf("gc.GC.RunOnce: acquire lease: %w", err)
 		}
 		if prev != nil {
 			a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
@@ -240,7 +239,7 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 		defer func() {
 			cancel()
 			if err := l.Release(context.WithoutCancel(ctx)); err != nil {
-				a.logger().Warn("lease release failed; lease will expire via TTL", "err", err)
+				a.Logger().Warn("lease release failed; lease will expire via TTL", "err", err)
 			}
 		}()
 	}
@@ -261,14 +260,14 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 		},
 	}})
 
-	if err := firstNonCtxErr(markErr, sweepErr); err != nil {
-		return stats, fmt.Errorf("agent.GC.RunOnce: %w", err)
+	if err := agent.FirstNonCtxErr(markErr, sweepErr); err != nil {
+		return stats, fmt.Errorf("gc.GC.RunOnce: %w", err)
 	}
 	if hbErr != nil {
 		select {
 		case herr := <-hbErr:
-			if herr != nil && !isCtxErr(herr) {
-				return stats, fmt.Errorf("agent.GC.RunOnce: lease lost: %w", herr)
+			if herr != nil && !agent.IsCtxErr(herr) {
+				return stats, fmt.Errorf("gc.GC.RunOnce: lease lost: %w", herr)
 			}
 		default:
 		}
@@ -317,7 +316,7 @@ func (a *gcAgent) mark(ctx context.Context, stats *GCStats) error {
 			continue
 		}
 		if err := a.drv.MarkTombstone(ctx, addr.Path); err != nil {
-			if isCtxErr(err) {
+			if agent.IsCtxErr(err) {
 				return err
 			}
 			continue // transient driver error: next cycle retries
@@ -355,7 +354,7 @@ func (a *gcAgent) sweep(ctx context.Context, grace time.Duration, stats *GCStats
 		}
 		marked, since, err := a.drv.TombstoneInfo(ctx, addr.Path)
 		if err != nil {
-			if isCtxErr(err) {
+			if agent.IsCtxErr(err) {
 				return err
 			}
 			continue
@@ -376,17 +375,17 @@ func (a *gcAgent) sweep(ctx context.Context, grace time.Duration, stats *GCStats
 		// so the original no longer exists). A missing marker means the
 		// blob was Revived; RemoveTombstone treats it as a no-op.
 		if err := a.drv.RemoveTombstone(ctx, addr.Path); err != nil {
-			if isCtxErr(err) {
+			if agent.IsCtxErr(err) {
 				return err
 			}
 			continue
 		}
 		// Drop the index row, but only if still an orphan: a Revive
-		// between TombstoneInfo and here bumps ref_count, and
+		// between TombstorneInfo and here bumps ref_count, and
 		// DeleteOrphanBlob then keeps the row.
 		removed, err := a.idx.DeleteOrphanBlob(ctx, ref)
 		if err != nil {
-			if isCtxErr(err) {
+			if agent.IsCtxErr(err) {
 				return err
 			}
 			continue

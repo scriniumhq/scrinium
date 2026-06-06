@@ -1,4 +1,4 @@
-package agent
+package ejector
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -27,7 +28,7 @@ import (
 // Reserved: interface fixed for API stability, implementation deferred
 // to M4/S3 pending the reconciliation-mechanism decision.
 type SyncAgent interface {
-	Agent
+	agent.Agent
 	Trigger(ctx context.Context, artifactID domain.ArtifactID) error
 }
 
@@ -87,7 +88,7 @@ func (c *EjectorConfig) applyDefaults() {
 
 // Ejector materialises artifacts as host files (ADR-70).
 type Ejector interface {
-	Agent
+	agent.Agent
 
 	// Eject materialises the whole artifact and returns its path.
 	// Fire-and-forget: takes no holder, lives under KeepAliveIdle.
@@ -134,7 +135,7 @@ type reqKey struct {
 }
 
 type ejectorAgent struct {
-	baseState
+	agent.BaseState
 
 	st      store.Store
 	bus     event.Publisher
@@ -153,27 +154,27 @@ var _ Ejector = (*ejectorAgent)(nil)
 
 // NewEjector constructs an Ejector. TempDir is required; it is created
 // and swept (crash leftovers removed) on open.
-func NewEjector(st store.Store, bus event.Publisher, storeID string, cfg EjectorConfig, opts ...AgentOption) (Ejector, error) {
+func NewEjector(st store.Store, bus event.Publisher, storeID string, cfg EjectorConfig, opts ...agent.AgentOption) (Ejector, error) {
 	if st == nil {
-		return nil, fmt.Errorf("agent.NewEjector: nil store")
+		return nil, fmt.Errorf("ejector.NewEjector: nil store")
 	}
 	if cfg.TempDir == "" {
-		return nil, fmt.Errorf("agent.NewEjector: TempDir is required")
+		return nil, fmt.Errorf("ejector.NewEjector: TempDir is required")
 	}
 	cfg.applyDefaults()
 	if err := os.MkdirAll(cfg.TempDir, 0o700); err != nil {
-		return nil, fmt.Errorf("agent.NewEjector: temp dir: %w", err)
+		return nil, fmt.Errorf("ejector.NewEjector: temp dir: %w", err)
 	}
 	a := &ejectorAgent{
-		st:      st,
-		bus:     bus,
-		storeID: storeID,
-		cfg:     cfg,
-		sem:     make(chan struct{}, cfg.MaxConcurrent),
-		byHash:  make(map[string]*entry),
-		byReq:   make(map[reqKey]string),
+		BaseState: agent.NewBaseState(agent.ResolveLogger(opts...)),
+		st:        st,
+		bus:       bus,
+		storeID:   storeID,
+		cfg:       cfg,
+		sem:       make(chan struct{}, cfg.MaxConcurrent),
+		byHash:    make(map[string]*entry),
+		byReq:     make(map[reqKey]string),
 	}
-	a.log = resolveAgentLogger(opts)
 	a.sweepOnOpen()
 	return a, nil
 }
@@ -183,12 +184,10 @@ type ejectorFactory struct{}
 
 func (ejectorFactory) Name() string { return "ejector" }
 
-func (ejectorFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
-	c, _ := cfg.(EjectorConfig)
-	return NewEjector(st, deps.Publisher, deps.StoreID, c, WithAgentLogger(deps.Logger))
+func (ejectorFactory) Build(st store.Store, cfg any, deps agent.AgentDeps) (agent.Agent, error) {
+	c, _ := cfg.(EjectorConfig) // zero value on mismatch -> defaults
+	return NewEjector(st, deps.Publisher, deps.StoreID, c, agent.WithAgentLogger(deps.Logger))
 }
-
-func init() { Register(ejectorFactory{}) }
 
 func (a *ejectorAgent) AgentType() string { return "ejector" }
 
@@ -208,9 +207,9 @@ func (a *ejectorAgent) Validate(ctx context.Context) error {
 // Run performs one reclamation sweep (idle + lifetime). The scheduler
 // (ADR-69) drives periodicity; the Ejector has no background goroutine.
 func (a *ejectorAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
-	a.setState(StateRunning, nil)
+	a.SetState(agent.StateRunning, nil)
 	if err := ctx.Err(); err != nil {
-		a.setState(StateFaulted, err)
+		a.SetState(agent.StateFaulted, err)
 		return &domain.AgentResult{AgentType: "ejector", StoreID: a.storeID, CompletedAt: time.Now(), Partial: true}, err
 	}
 	counts := a.reclaim(time.Now())
@@ -219,7 +218,7 @@ func (a *ejectorAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 	for _, n := range counts {
 		total += int64(n)
 	}
-	a.setState(StateIdle, nil)
+	a.SetState(agent.StateIdle, nil)
 	return &domain.AgentResult{
 		AgentType:   "ejector",
 		StoreID:     a.storeID,
@@ -388,7 +387,7 @@ func (a *ejectorAgent) EjectFragment(ctx context.Context, id domain.ArtifactID, 
 func (a *ejectorAgent) writeFragment(ctx context.Context, rh domain.ReadHandle, start, end int64) (ch, final, vh string, err error) {
 	suffix, err := randHex()
 	if err != nil {
-		return "", "", "", fmt.Errorf("agent.Ejector: temp name: %w", err)
+		return "", "", "", fmt.Errorf("ejector.Ejector: temp name: %w", err)
 	}
 	tmp := filepath.Join(a.cfg.TempDir, ".tmp-"+suffix)
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
@@ -469,7 +468,7 @@ func copyRangeAt(ctx context.Context, w io.Writer, rh domain.ReadHandle, start, 
 func (a *ejectorAgent) atomicWrite(final string, fill func(w io.Writer) error) (string, error) {
 	suffix, err := randHex()
 	if err != nil {
-		return "", fmt.Errorf("agent.Ejector: temp name: %w", err)
+		return "", fmt.Errorf("ejector.Ejector: temp name: %w", err)
 	}
 	tmp := filepath.Join(a.cfg.TempDir, ".tmp-"+suffix)
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY|syscall.O_NOFOLLOW, 0o600)
@@ -539,7 +538,7 @@ func (a *ejectorAgent) Close() error {
 	a.mu.Unlock()
 	for _, p := range paths {
 		if err := os.Remove(p); err != nil {
-			a.logger().Debug("ejector: scratch remove on close failed", "path", p, "err", err)
+			a.Logger().Debug("ejector: scratch remove on close failed", "path", p, "err", err)
 		}
 	}
 	return nil
@@ -567,7 +566,7 @@ func (a *ejectorAgent) reclaim(now time.Time) map[string]int {
 	counts := map[string]int{}
 	for _, v := range vs {
 		if err := os.Remove(v.path); err != nil {
-			a.logger().Debug("ejector: scratch remove on reclaim failed", "path", v.path, "err", err)
+			a.Logger().Debug("ejector: scratch remove on reclaim failed", "path", v.path, "err", err)
 		}
 		counts[v.reason]++
 	}
@@ -608,7 +607,7 @@ func (a *ejectorAgent) sizeCapEvict() {
 	a.mu.Unlock()
 	for _, p := range removed {
 		if err := os.Remove(p); err != nil {
-			a.logger().Debug("ejector: scratch remove under size pressure failed", "path", p, "err", err)
+			a.Logger().Debug("ejector: scratch remove under size pressure failed", "path", p, "err", err)
 		}
 	}
 	if n := len(removed); n > 0 {
@@ -635,7 +634,7 @@ func (a *ejectorAgent) sweepOnOpen() {
 	for _, de := range ents {
 		p := filepath.Join(a.cfg.TempDir, de.Name())
 		if err := os.Remove(p); err != nil {
-			a.logger().Debug("ejector: open-sweep remove failed", "path", p, "err", err)
+			a.Logger().Debug("ejector: open-sweep remove failed", "path", p, "err", err)
 		}
 	}
 }
@@ -708,7 +707,7 @@ func mapDiskErr(err error) error {
 		return nil
 	}
 	if errors.Is(err, syscall.ENOSPC) || errors.Is(err, syscall.EDQUOT) {
-		return fmt.Errorf("agent.Ejector: %w", errs.ErrEjectorTempDirFull)
+		return fmt.Errorf("ejector.Ejector: %w", errs.ErrEjectorTempDirFull)
 	}
-	return fmt.Errorf("agent.Ejector: %w", err)
+	return fmt.Errorf("ejector.Ejector: %w", err)
 }
