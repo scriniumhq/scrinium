@@ -182,9 +182,9 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 
 	// Scheduler (ADR-69, §9.7). It is active if WithStandardScheduler was
 	// passed, or any schedule was declared — config policy blocks
-	// (gc/scrub/snapshot), agents[] triggers, or the WithSchedule option.
+	// (gc/scrub/checkpoint), agents[] triggers, or the WithSchedule option.
 	// Declared schedules are resolved (interval or cron) with replace-by-kind
-	// layering, then registered. When active, gc/scrub/snapshot hygiene
+	// layering, then registered. When active, gc/scrub/checkpoint hygiene
 	// defaults join the set for registered kinds. A cron schedule without a
 	// cron adapter (cron.Enable) is a fail-fast error.
 	scheds, serr := resolveSchedules(spec, c, aw)
@@ -328,7 +328,7 @@ func resolveSchedules(spec *StoreSpec, c *Config, aw agentWiring) (map[string]re
 		return nil
 	}
 
-	// Config policy blocks (gc/scrub/snapshot). applyDefaults has filled the
+	// Config policy blocks (gc/scrub/checkpoint). applyDefaults has filled the
 	// cadence of a present block, so each present block carries a trigger.
 	if spec != nil && spec.Policy != nil {
 		p := spec.Policy
@@ -342,8 +342,8 @@ func resolveSchedules(spec *StoreSpec, c *Config, aw agentWiring) (map[string]re
 				return nil, err
 			}
 		}
-		if p.Snapshot != nil {
-			if err := set("snapshot", p.Snapshot.Every, p.Snapshot.Schedule, agentCfg(aw, "snapshot")); err != nil {
+		if p.Checkpoint != nil {
+			if err := set("checkpoint", p.Checkpoint.Every, p.Checkpoint.Schedule, agentCfg(aw, "checkpoint")); err != nil {
 				return nil, err
 			}
 		}
@@ -379,7 +379,7 @@ func resolveSchedules(spec *StoreSpec, c *Config, aw agentWiring) (map[string]re
 }
 
 // addHygieneDefaults adds the built-in maintenance schedules (gc/scrub/
-// snapshot) to an active scheduler's set, but only for kinds that are
+// checkpoint) to an active scheduler's set, but only for kinds that are
 // registered and not already scheduled. Technical hygiene runs whenever the
 // scheduler is active (§10.2.9); a built-in that was not blank-imported (so
 // not registered) is skipped rather than failing the build.
@@ -390,7 +390,7 @@ func addHygieneDefaults(out map[string]resolvedSchedule, aw agentWiring) {
 	}{
 		{"gc", defaultGCEvery},
 		{"scrub", defaultScrubEvery},
-		{"snapshot", defaultSnapshotEvery},
+		{"checkpoint", defaultCheckpointEvery},
 	}
 	for _, d := range defaults {
 		if _, ok := out[d.kind]; ok {

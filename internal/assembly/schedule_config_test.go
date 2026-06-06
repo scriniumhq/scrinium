@@ -8,9 +8,9 @@ import (
 
 func TestApplyDefaults_FillsIntervalCadence(t *testing.T) {
 	c := &Config{Store: &StoreSpec{Driver: "file:///x", Policy: &Policy{
-		GC:       &Schedule{},
-		Scrub:    &ScrubSchedule{},
-		Snapshot: &Schedule{},
+		GC:         &Schedule{},
+		Scrub:      &ScrubSchedule{},
+		Checkpoint: &Schedule{},
 	}}}
 	applyDefaults(c)
 	p := c.Store.Policy
@@ -20,8 +20,8 @@ func TestApplyDefaults_FillsIntervalCadence(t *testing.T) {
 	if p.Scrub.Every != defaultScrubEvery {
 		t.Errorf("scrub every = %v, want %v", p.Scrub.Every, defaultScrubEvery)
 	}
-	if p.Snapshot.Every != defaultSnapshotEvery {
-		t.Errorf("snapshot every = %v, want %v", p.Snapshot.Every, defaultSnapshotEvery)
+	if p.Checkpoint.Every != defaultCheckpointEvery {
+		t.Errorf("checkpoint every = %v, want %v", p.Checkpoint.Every, defaultCheckpointEvery)
 	}
 }
 

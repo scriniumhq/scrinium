@@ -91,8 +91,8 @@ func (i *Index) DeleteOrphanBlob(ctx context.Context, blobRef string) (bool, err
 	return removed, err
 }
 
-// VacuumInto creates a snapshot copy of the database at destPath.
-// Used by the Snapshot Agent: a snapshot is a full self-contained
+// WriteCheckpoint creates a checkpoint copy of the database at destPath.
+// Used by the Checkpoint Agent: a checkpoint is a full self-contained
 // SQLite file that RebuildIndexAgent can later open and replay.
 //
 // SQLite's `VACUUM INTO` runs in a single transaction and produces
@@ -102,38 +102,38 @@ func (i *Index) DeleteOrphanBlob(ctx context.Context, blobRef string) (bool, err
 //
 // destPath must point to a non-existent file. SQLite's VACUUM INTO
 // refuses to overwrite. We deliberately do not pre-delete: silently
-// overwriting a snapshot would mask an upstream bug where two
+// overwriting a checkpoint would mask an upstream bug where two
 // CheckpointAgents fight over the same path.
 //
 // :memory: source is rejected — there is no on-disk content to
-// snapshot. The Snapshot Agent should never call this on a memory
+// checkpoint. The Checkpoint Agent should never call this on a memory
 // index, but the explicit error is friendlier than a confusing
 // SQLite-level failure.
-func (i *Index) VacuumInto(ctx context.Context, destPath string) error {
+func (i *Index) WriteCheckpoint(ctx context.Context, destPath string) error {
 	if destPath == "" {
-		return fmt.Errorf("sqlite: VacuumInto: empty destPath")
+		return fmt.Errorf("sqlite: WriteCheckpoint: empty destPath")
 	}
 	if destPath == ":memory:" {
-		return fmt.Errorf("sqlite: VacuumInto: in-memory destination not supported")
+		return fmt.Errorf("sqlite: WriteCheckpoint: in-memory destination not supported")
 	}
 
-	// Ensure the parent directory exists. Snapshot Agents usually
+	// Ensure the parent directory exists. Checkpoint Agents usually
 	// pass paths that already exist, but the
 	// guarantee is cheap to provide.
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-		return fmt.Errorf("sqlite: VacuumInto: prepare dest dir: %w", err)
+		return fmt.Errorf("sqlite: WriteCheckpoint: prepare dest dir: %w", err)
 	}
 
 	// Reject existing files explicitly so the error is ours, not
 	// SQLite's. database/sql does not accept parameter binding for
 	// VACUUM INTO; we string-format the path with quoting.
 	if _, err := os.Stat(destPath); err == nil {
-		return fmt.Errorf("sqlite: VacuumInto: destination already exists: %s", destPath)
+		return fmt.Errorf("sqlite: WriteCheckpoint: destination already exists: %s", destPath)
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("sqlite: VacuumInto: stat dest: %w", err)
+		return fmt.Errorf("sqlite: WriteCheckpoint: stat dest: %w", err)
 	}
 
-	return i.observe("VacuumInto", func() error {
+	return i.observe("WriteCheckpoint", func() error {
 		// SQLite string literal: single-quote the path and escape any
 		// embedded single-quote by doubling it. VACUUM INTO accepts a
 		// string literal, not an identifier, so single-quote quoting
@@ -145,7 +145,7 @@ func (i *Index) VacuumInto(ctx context.Context, destPath string) error {
 }
 
 // escapeSQLString doubles single quotes for SQLite string literal
-// safety. Used only by VacuumInto, where the path cannot be
+// safety. Used only by WriteCheckpoint, where the path cannot be
 // passed as a positional parameter.
 func escapeSQLString(s string) string {
 	out := make([]byte, 0, len(s))

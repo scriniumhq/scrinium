@@ -24,7 +24,7 @@ type Assembly interface {
 	// store index, for diagnostics (e.g. a stats page). Empty when the
 	// index backend exposes none. This is the only index detail the
 	// assembly surfaces: the raw StoreIndex (with its mutating
-	// IndexManifest/DeletePacked/VacuumInto) stays internal.
+	// IndexManifest/DeletePacked) stays internal.
 	//
 	// Note: the assembly deliberately exposes no raw Driver either.
 	// Built-in maintenance/background agents receive Driver and

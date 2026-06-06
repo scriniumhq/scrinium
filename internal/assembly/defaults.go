@@ -4,14 +4,14 @@ import "fmt"
 
 // Default sizes/schedules for declarative configuration.
 const (
-	defaultChunkMaxSize   = Size(64 << 20) // 64 MiB
-	defaultBundleMaxSize  = Size(64 << 20) // 64 MiB
-	defaultBundleFlush    = Duration(5 * 60 * 1e9)
-	defaultEncryptionMode = "sealed"
-	defaultEncryptedDedup = "disabled"
-	defaultGCEvery        = Duration(24 * 60 * 60 * 1e9)     // 24h
-	defaultScrubEvery     = Duration(7 * 24 * 60 * 60 * 1e9) // 168h (weekly)
-	defaultSnapshotEvery  = Duration(24 * 60 * 60 * 1e9)     // 24h
+	defaultChunkMaxSize    = Size(64 << 20) // 64 MiB
+	defaultBundleMaxSize   = Size(64 << 20) // 64 MiB
+	defaultBundleFlush     = Duration(5 * 60 * 1e9)
+	defaultEncryptionMode  = "sealed"
+	defaultEncryptedDedup  = "disabled"
+	defaultGCEvery         = Duration(24 * 60 * 60 * 1e9)     // 24h
+	defaultScrubEvery      = Duration(7 * 24 * 60 * 60 * 1e9) // 168h (weekly)
+	defaultCheckpointEvery = Duration(24 * 60 * 60 * 1e9)     // 24h
 )
 
 // applyDefaults fills in the optional fields the spec defaults, in
@@ -81,7 +81,7 @@ func applyPolicyDefaults(p *Policy) {
 			p.Bundling.DirectWriteThreshold = p.Bundling.MaxBundleSize / 2
 		}
 	}
-	// GC, Scrub and Snapshot are technical hygiene; when a block is present
+	// GC, Scrub and Checkpoint are technical hygiene; when a block is present
 	// but no cadence is given, default to an interval (no cron adapter
 	// needed). An explicit cron Schedule, if set, wins and is left as-is.
 	// Absence of the block entirely is handled at agent-wiring time with
@@ -92,8 +92,8 @@ func applyPolicyDefaults(p *Policy) {
 	if p.Scrub != nil && p.Scrub.Every == 0 && p.Scrub.Schedule == "" {
 		p.Scrub.Every = defaultScrubEvery
 	}
-	if p.Snapshot != nil && p.Snapshot.Every == 0 && p.Snapshot.Schedule == "" {
-		p.Snapshot.Every = defaultSnapshotEvery
+	if p.Checkpoint != nil && p.Checkpoint.Every == 0 && p.Checkpoint.Schedule == "" {
+		p.Checkpoint.Every = defaultCheckpointEvery
 	}
 }
 
@@ -147,9 +147,9 @@ func clonePolicy(p *Policy) *Policy {
 		s := *p.Scrub
 		cp.Scrub = &s
 	}
-	if p.Snapshot != nil {
-		s := *p.Snapshot
-		cp.Snapshot = &s
+	if p.Checkpoint != nil {
+		s := *p.Checkpoint
+		cp.Checkpoint = &s
 	}
 	if p.Pipeline != nil {
 		cp.Pipeline = append([]PipelineStage(nil), p.Pipeline...)

@@ -124,14 +124,15 @@ type RebuildIndexAgent interface {
 //
 // Scope on M3: the FullScan path reconstructs Blob manifests (Inline
 // and Target) — the only manifest types that exist before M4 (Pack) and
-// M5 (TOC/chunking). Encrypted manifests need a KeyProvider the agent is
-// not yet wired with; the Snapshot fast-path needs a snapshot read-back
-// the Snapshot Agent (A4) has not introduced. Descriptor recovery from
-// the Recovery Kit (rewriting a lost store.json) is implemented and runs
-// before the scan when RecoveryKit is set; recovering a dangling
-// system.config/current pointer is still out of scope (the kit carries
-// no config). The remaining gaps are reported as explicit, non-silent
-// boundaries rather than faked.
+// M5 (TOC/chunking). Encrypted manifests are decoded with the Store's own
+// key material, obtained at run time (store.ManifestKeyProvider); an
+// unencrypted Store has none and the scan stays Plain-only. The Snapshot
+// fast-path still needs a snapshot read-back the Snapshot Agent (A4) has
+// not introduced. Descriptor recovery from the Recovery Kit (rewriting a
+// lost store.json) is implemented and runs before the scan when
+// RecoveryKit is set; recovering a dangling system.config/current pointer
+// is still out of scope (the kit carries no config). The remaining gaps
+// are reported as explicit, non-silent boundaries rather than faked.
 func NewRebuildIndexAgent(
 	st store.Store,
 	drv driver.Driver,
@@ -266,7 +267,11 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 	}
 
 	a.setSource(RebuildSourceFullScan)
-	if err := a.fullScan(runCtx); err != nil {
+	// Key material for decoding encrypted manifests read straight off the
+	// Location. nil for an unencrypted Store — the scan then handles Plain
+	// manifests only (encrypted ones are skipped, as before).
+	keys := store.ManifestKeyProvider(a.store)
+	if err := a.fullScan(runCtx, keys); err != nil {
 		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
 			AgentType: "rebuild", StoreID: a.storeID, Err: err,
 		}})
@@ -334,7 +339,7 @@ func (a *rebuildAgent) Stats() RebuildStats {
 // Manifest paths are collected first (a streaming List whose callback
 // only appends), then each file is fetched, decoded, and indexed — the
 // per-file index writes must not run inside the List cursor.
-func (a *rebuildAgent) fullScan(ctx context.Context) error {
+func (a *rebuildAgent) fullScan(ctx context.Context, keys artifact.KeyProvider) error {
 	var paths []string
 	listErr := a.drv.ListObjectsWithModTime(ctx, manifestsPrefix, time.Time{},
 		func(om driver.ObjectMeta) error {
@@ -352,14 +357,15 @@ func (a *rebuildAgent) fullScan(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := a.reindexManifestFile(ctx, p); err != nil {
+		if err := a.reindexManifestFile(ctx, p, keys); err != nil {
 			if agent.IsCtxErr(err) {
 				return err
 			}
-			// A single unreadable/unsupported manifest must not abort
-			// the whole rebuild; it is recorded via a failed-style event
-			// and the scan continues. (Encrypted manifests land here on
-			// M3 until the agent is wired with a KeyProvider.)
+			// A single unreadable/unsupported manifest must not abort the
+			// whole rebuild; it is recorded via a progress event and the
+			// scan continues. Encrypted manifests land here only when no
+			// KeyProvider is available (an unencrypted Store, or a Store
+			// whose key material could not be resolved).
 			a.bus.Publish(event.Event{Type: event.EventAgentProgress, Payload: event.AgentProgressPayload{
 				AgentType: "rebuild", StoreID: a.storeID,
 			}})
@@ -371,7 +377,7 @@ func (a *rebuildAgent) fullScan(ctx context.Context) error {
 
 // reindexManifestFile fetches one manifest file, decodes it, and writes
 // the reconstructed index rows.
-func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string) error {
+func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string, keys artifact.KeyProvider) error {
 	id, err := artifact.IDFromManifestPath(path)
 	if err != nil {
 		return fmt.Errorf("parse manifest id from %q: %w", path, err)
@@ -388,10 +394,18 @@ func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string) err
 		return fmt.Errorf("read manifest %q: %w", path, err)
 	}
 
-	m, err := artifact.Decode(data)
+	var m domain.Manifest
+	if keys != nil {
+		// A KeyProvider is wired: DecodeEncrypted forwards Plain files and
+		// decrypts encrypted ones, so both kinds are reconstructed rather
+		// than the encrypted ones being skipped.
+		m, err = artifact.DecodeEncrypted(data, keys)
+	} else {
+		// No key material: Plain only. An encrypted manifest returns
+		// errs.ErrUnsupportedCrypto and is skipped by fullScan.
+		m, err = artifact.Decode(data)
+	}
 	if err != nil {
-		// errs.ErrUnsupportedCrypto here means an encrypted manifest:
-		// FullScan cannot decode it without a KeyProvider (M3.4 wiring).
 		return fmt.Errorf("decode manifest %q: %w", path, err)
 	}
 	a.countScanned()

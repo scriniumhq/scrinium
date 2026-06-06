@@ -52,7 +52,7 @@ type CheckpointStats struct {
 }
 
 // CheckpointAgent is the background creator of StoreIndex checkpoints
-// via VacuumInto + packing into the CAS. Engine-managed: launched
+// via WriteCheckpoint + packing into the CAS. Engine-managed: launched
 // for every Target Store with an available StoreIndex.
 //
 // Checkpoint Agent is creation only. StoreIndex recovery from a
@@ -81,7 +81,7 @@ const (
 )
 
 // NewCheckpointAgent creates a Checkpoint Agent. Constructed by the
-// assembler (Variant B): it needs the StoreIndex to VacuumInto a
+// assembler (Variant B): it needs the StoreIndex to WriteCheckpoint a
 // checkpoint file and the Store to publish that file into the CAS via
 // System().Put (WithoutIndex — a checkpoint is engine state, not a user
 // artifact, and indexing it would make it a rebuild input of itself).
@@ -235,7 +235,7 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 	now := time.Now().UTC()
 	id := now.Format(checkpointTimeLayout)
 
-	// VacuumInto needs an empty destination on an OS path. A temp dir
+	// WriteCheckpoint needs an empty destination on an OS path. A temp dir
 	// keeps the partial vacuum off the Location until it is complete.
 	tmpDir, err := os.MkdirTemp("", "scrinium-checkpoint-")
 	if err != nil {
@@ -244,8 +244,12 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 	defer os.RemoveAll(tmpDir)
 	tmpPath := filepath.Join(tmpDir, id+".db")
 
-	if err := a.idx.VacuumInto(ctx, tmpPath); err != nil {
-		return CheckpointStats{}, fmt.Errorf("vacuum into %q: %w", tmpPath, err)
+	cw, ok := a.idx.(index.CheckpointWriter)
+	if !ok {
+		return CheckpointStats{}, fmt.Errorf("checkpoint: index %T does not support checkpoints (no index.CheckpointWriter)", a.idx)
+	}
+	if err := cw.WriteCheckpoint(ctx, tmpPath); err != nil {
+		return CheckpointStats{}, fmt.Errorf("write checkpoint %q: %w", tmpPath, err)
 	}
 
 	info, err := os.Stat(tmpPath)

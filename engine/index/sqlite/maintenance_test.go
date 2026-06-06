@@ -17,16 +17,18 @@ import (
 // MarkVerified, DeletePacked, and MarkVerified-related listing
 // behaviour live in the conformance suite at
 // internal/testutil/indextest. This file is for sqlite-specific
-// behaviour: VacuumInto (which produces an on-disk SQLite file
-// snapshot — a sqlite-and-postgres concept that does not map to
-// in-memory backends), and the store_meta storage details that
-// rely on SQLite's UPSERT and TEXT encoding.
+// behaviour: WriteCheckpoint (the optional index.CheckpointWriter
+// capability, which sqlite implements via VACUUM INTO — it needs an
+// on-disk source and so does not map to in-memory backends, and other
+// backends such as Postgres need not implement it at all), and the
+// store_meta storage details that rely on SQLite's UPSERT and TEXT
+// encoding.
 
-// --- VacuumInto ---
+// --- WriteCheckpoint ---
 
-func TestVacuumInto_CreatesSnapshot(t *testing.T) {
+func TestWriteCheckpoint_CreatesCheckpoint(t *testing.T) {
 	idx, _ := newDiskIndex(t)
-	// Seed some data so the snapshot is a meaningful copy.
+	// Seed some data so the checkpoint is a meaningful copy.
 	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
 		domain.PhysicalAddress{Path: "p"}, 1)
 	insertManifest(t, idx, domain.Manifest{
@@ -35,70 +37,70 @@ func TestVacuumInto_CreatesSnapshot(t *testing.T) {
 	})
 
 	dest := filepath.Join(t.TempDir(), "snap.db")
-	if err := idx.VacuumInto(context.Background(), dest); err != nil {
-		t.Fatalf("VacuumInto: %v", err)
+	if err := idx.WriteCheckpoint(context.Background(), dest); err != nil {
+		t.Fatalf("WriteCheckpoint: %v", err)
 	}
 
 	// File exists.
 	st, err := os.Stat(dest)
 	if err != nil {
-		t.Fatalf("stat snapshot: %v", err)
+		t.Fatalf("stat checkpoint: %v", err)
 	}
 	if st.Size() == 0 {
-		t.Error("snapshot file is empty")
+		t.Error("checkpoint file is empty")
 	}
 
-	// Snapshot is a self-contained, openable database with the
+	// Checkpoint is a self-contained, openable database with the
 	// same data.
 	snap, err := NewStore(context.Background(), dest)
 	if err != nil {
-		t.Fatalf("NewStore snapshot: %v", err)
+		t.Fatalf("NewStore checkpoint: %v", err)
 	}
 
 	if got := countRows(t, snap, "blobs"); got != 1 {
-		t.Errorf("snapshot blobs: got %d, want 1", got)
+		t.Errorf("checkpoint blobs: got %d, want 1", got)
 	}
 	if got := countRows(t, snap, "manifests"); got != 1 {
-		t.Errorf("snapshot manifests: got %d, want 1", got)
+		t.Errorf("checkpoint manifests: got %d, want 1", got)
 	}
 }
 
-func TestVacuumInto_RejectsExistingFile(t *testing.T) {
+func TestWriteCheckpoint_RejectsExistingFile(t *testing.T) {
 	idx, _ := newDiskIndex(t)
 	dest := filepath.Join(t.TempDir(), "exists.db")
 	if err := os.WriteFile(dest, []byte("placeholder"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := idx.VacuumInto(context.Background(), dest)
+	err := idx.WriteCheckpoint(context.Background(), dest)
 	if err == nil {
 		t.Fatal("expected error on existing destination")
 	}
 }
 
-func TestVacuumInto_RejectsMemoryDest(t *testing.T) {
+func TestWriteCheckpoint_RejectsMemoryDest(t *testing.T) {
 	idx := newMemoryIndex(t)
-	err := idx.VacuumInto(context.Background(), ":memory:")
+	err := idx.WriteCheckpoint(context.Background(), ":memory:")
 	if err == nil {
 		t.Fatal("expected error on :memory: destination")
 	}
 }
 
-func TestVacuumInto_RejectsEmptyPath(t *testing.T) {
+func TestWriteCheckpoint_RejectsEmptyPath(t *testing.T) {
 	idx := newMemoryIndex(t)
-	err := idx.VacuumInto(context.Background(), "")
+	err := idx.WriteCheckpoint(context.Background(), "")
 	if err == nil {
 		t.Fatal("expected error on empty path")
 	}
 }
 
-func TestVacuumInto_CreatesParentDir(t *testing.T) {
+func TestWriteCheckpoint_CreatesParentDir(t *testing.T) {
 	idx, _ := newDiskIndex(t)
 	dest := filepath.Join(t.TempDir(), "deep", "nested", "snap.db")
-	if err := idx.VacuumInto(context.Background(), dest); err != nil {
-		t.Fatalf("VacuumInto with nested parent: %v", err)
+	if err := idx.WriteCheckpoint(context.Background(), dest); err != nil {
+		t.Fatalf("WriteCheckpoint with nested parent: %v", err)
 	}
 	if _, err := os.Stat(dest); err != nil {
-		t.Errorf("snapshot not created: %v", err)
+		t.Errorf("checkpoint not created: %v", err)
 	}
 }
 
@@ -173,6 +175,9 @@ func TestIndex_ImplementsStoreIndex(t *testing.T) {
 	// it at runtime so a regression shows up in test output, not
 	// just a build error.
 	var _ index.StoreIndex = (*Index)(nil)
+	// WriteCheckpoint moved off the mandatory StoreIndex into the optional
+	// CheckpointWriter capability; sqlite implements it.
+	var _ index.CheckpointWriter = (*Index)(nil)
 	idx := newMemoryIndex(t)
 	var asInterface index.StoreIndex = idx
 	if asInterface == nil {
