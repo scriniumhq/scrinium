@@ -48,6 +48,11 @@ type agentWiring struct {
 	handlers   []func(event.Event)
 	stdSched   bool
 	cronParser agent.CronParser
+	// schedules (kind -> cron/interval expr) and agentConfigs (kind ->
+	// config) are build-time overrides from WithSchedule/WithAgentConfig,
+	// applied to the scheduler during assembly (§9.7). Last-wins per kind.
+	schedules    map[string]string
+	agentConfigs map[string]any
 }
 
 // build turns a validated, defaulted Config into an assembled stack. It
@@ -175,19 +180,39 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		// it only tags agent events (diagnostics), not lease identity.
 	}
 
-	// Standard scheduler (ADR-69 level 2), opt-in. One goroutine ticks the
-	// interval-based primitive on real time; the primitive itself owns no
-	// clock. The ticker is stopped and in-flight runs are drained before
-	// the store closes (see closeFn). standardSchedulerTick bounds the
-	// scheduling granularity, not the agents' own intervals.
+	// Scheduler (ADR-69, §9.7). It is active if WithStandardScheduler was
+	// passed, or any schedule was declared — config policy blocks
+	// (gc/scrub/snapshot), agents[] triggers, or the WithSchedule option.
+	// Declared schedules are resolved (interval or cron) with replace-by-kind
+	// layering, then registered. When active, gc/scrub/snapshot hygiene
+	// defaults join the set for registered kinds. A cron schedule without a
+	// cron adapter (cron.Enable) is a fail-fast error.
+	scheds, serr := resolveSchedules(spec, c, aw)
+	if serr != nil {
+		return nil, serr
+	}
+	schedActive := aw.stdSched || len(scheds) > 0
+	if schedActive {
+		addHygieneDefaults(scheds, aw)
+	}
 	var sched agent.Scheduler
 	var stopTicker func() = func() {}
-	if aw.stdSched {
-		s, serr := agent.NewScheduler(st, agentDeps)
-		if serr != nil {
-			return nil, fmt.Errorf("scrinium: scheduler: %w", serr)
+	if schedActive {
+		s, nerr := agent.NewScheduler(st, agentDeps)
+		if nerr != nil {
+			return nil, fmt.Errorf("scrinium: scheduler: %w", nerr)
 		}
 		sched = s
+		for kind, rs := range scheds {
+			if aerr := sched.Add(agent.Schedule{
+				Agent:    kind,
+				Interval: rs.interval,
+				Next:     rs.next,
+				Config:   rs.cfg,
+			}); aerr != nil {
+				return nil, fmt.Errorf("scrinium: schedule %q: %w", kind, aerr)
+			}
+		}
 		done := make(chan struct{})
 		var once sync.Once
 		stopTicker = func() { once.Do(func() { close(done) }) }
@@ -265,6 +290,125 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	}
 
 	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus, sched, aw.cronParser), nil
+}
+
+// resolvedSchedule is a fully-resolved schedule for one kind: either an
+// interval or a parsed cron Next, plus the config to build the agent with.
+type resolvedSchedule struct {
+	interval time.Duration
+	next     func(time.Time) time.Time
+	cfg      any
+}
+
+// resolveSchedules collects declared schedules into a kind->resolved map,
+// replace-by-kind (later sources override earlier): config policy blocks,
+// agents[] triggers, then the WithSchedule option. A cron expression
+// requires the cron adapter (cron.Enable); without it, or on a parse error,
+// resolveSchedules fails fast (§9.7).
+func resolveSchedules(spec *StoreSpec, c *Config, aw agentWiring) (map[string]resolvedSchedule, error) {
+	out := make(map[string]resolvedSchedule)
+	set := func(kind string, every Duration, cron string, cfg any) error {
+		rs := resolvedSchedule{cfg: cfg}
+		switch {
+		case cron != "":
+			if aw.cronParser == nil {
+				return fmt.Errorf("scrinium: agent %q declares a cron schedule %q but cron is not enabled (pass cron.Enable())", kind, cron)
+			}
+			next, err := aw.cronParser(cron)
+			if err != nil {
+				return fmt.Errorf("scrinium: agent %q cron schedule %q: %w", kind, cron, err)
+			}
+			rs.next = next
+		case every > 0:
+			rs.interval = time.Duration(every)
+		default:
+			return nil // no trigger declared
+		}
+		out[kind] = rs // replace-by-kind
+		return nil
+	}
+
+	// Config policy blocks (gc/scrub/snapshot). applyDefaults has filled the
+	// cadence of a present block, so each present block carries a trigger.
+	if spec != nil && spec.Policy != nil {
+		p := spec.Policy
+		if p.GC != nil {
+			if err := set("gc", p.GC.Every, p.GC.Schedule, agentCfg(aw, "gc")); err != nil {
+				return nil, err
+			}
+		}
+		if p.Scrub != nil {
+			if err := set("scrub", p.Scrub.Every, p.Scrub.Schedule, agentCfg(aw, "scrub")); err != nil {
+				return nil, err
+			}
+		}
+		if p.Snapshot != nil {
+			if err := set("snapshot", p.Snapshot.Every, p.Snapshot.Schedule, agentCfg(aw, "snapshot")); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Config agents[] triggers. A WithAgentConfig override wins over the
+	// inline config map.
+	for _, ag := range c.Agents {
+		if ag.Every == 0 && ag.Schedule == "" {
+			continue
+		}
+		cfg := agentCfg(aw, ag.Kind)
+		if cfg == nil && len(ag.Config) > 0 {
+			cfg = ag.Config
+		}
+		if err := set(ag.Kind, ag.Every, ag.Schedule, cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	// WithSchedule options override. expr is an interval (time.ParseDuration)
+	// or, failing that, a cron expression.
+	for kind, expr := range aw.schedules {
+		if d, derr := time.ParseDuration(expr); derr == nil {
+			if err := set(kind, Duration(d), "", agentCfg(aw, kind)); err != nil {
+				return nil, err
+			}
+		} else if err := set(kind, 0, expr, agentCfg(aw, kind)); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// addHygieneDefaults adds the built-in maintenance schedules (gc/scrub/
+// snapshot) to an active scheduler's set, but only for kinds that are
+// registered and not already scheduled. Technical hygiene runs whenever the
+// scheduler is active (§10.2.9); a built-in that was not blank-imported (so
+// not registered) is skipped rather than failing the build.
+func addHygieneDefaults(out map[string]resolvedSchedule, aw agentWiring) {
+	defaults := []struct {
+		kind  string
+		every Duration
+	}{
+		{"gc", defaultGCEvery},
+		{"scrub", defaultScrubEvery},
+		{"snapshot", defaultSnapshotEvery},
+	}
+	for _, d := range defaults {
+		if _, ok := out[d.kind]; ok {
+			continue
+		}
+		if _, registered := agent.Lookup(d.kind); !registered {
+			continue
+		}
+		out[d.kind] = resolvedSchedule{interval: time.Duration(d.every), cfg: agentCfg(aw, d.kind)}
+	}
+}
+
+// agentCfg returns the WithAgentConfig override for kind, or nil.
+func agentCfg(aw agentWiring, kind string) any {
+	if aw.agentConfigs == nil {
+		return nil
+	}
+	return aw.agentConfigs[kind]
 }
 
 // guardUnsupportedPolicy rejects policy features whose components are

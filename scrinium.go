@@ -236,6 +236,17 @@ func WithEventHandler(fn func(Event)) BuildOption { return assembly.WithEventHan
 // the clock build on the primitives (agent.Scheduler) directly.
 func WithStandardScheduler() BuildOption { return assembly.WithStandardScheduler() }
 
+// WithSchedule sets, at build time, the schedule of an agent kind. expr is
+// a cron string ("0 3 * * *"; requires cron.Enable) or an interval string
+// ("6h"). It overrides a schedule declared in config for the kind, and a
+// repeat call for the same kind replaces it (replace-by-kind). Declaring a
+// schedule raises the scheduler even without WithStandardScheduler.
+func WithSchedule(kind, expr string) BuildOption { return assembly.WithSchedule(kind, expr) }
+
+// WithAgentConfig overrides, at build time, the kind-specific config handed
+// to an agent's factory. A repeat call for the same kind replaces it.
+func WithAgentConfig(kind string, cfg any) BuildOption { return assembly.WithAgentConfig(kind, cfg) }
+
 // LoadYAML / LoadInitYAML / LoadOrInitYAML assemble from a YAML
 // configuration document. JSON variants mirror them.
 func LoadYAML(ctx context.Context, data []byte) (*ScriniumClient, error) {
