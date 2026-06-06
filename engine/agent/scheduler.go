@@ -119,6 +119,18 @@ func (s *scheduler) Add(sc Schedule) error {
 	if s.stopped {
 		return fmt.Errorf("agent.Scheduler.Add: scheduler stopped")
 	}
+	// Replace-by-kind: one schedule per agent. A repeat Add replaces the
+	// schedule rather than adding a second (ADR-72, Reference §9.5/§9.7).
+	// We re-arm nextDue so the new form takes effect: cron recomputes from
+	// now on the next tick; an interval measures from lastRun. lastRun and
+	// running are left untouched — the in-flight run is not interrupted.
+	for _, e := range s.entries {
+		if e.sched.Agent == sc.Agent {
+			e.sched = sc
+			e.nextDue = time.Time{}
+			return nil
+		}
+	}
 	s.entries = append(s.entries, &schedEntry{sched: sc})
 	return nil
 }
