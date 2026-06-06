@@ -19,7 +19,7 @@ import (
 // expose.
 
 // countRows returns the number of rows in `table`. Used by
-// vacuum-snapshot tests to verify the snapshot copied data
+// vacuum-checkpoint tests to verify the checkpoint copied data
 // across; the public API does not surface raw row counts.
 func countRows(t *testing.T, idx *Index, table string) int {
 	t.Helper()
@@ -56,8 +56,8 @@ func insertBlob(t *testing.T, idx *Index, ref, contentHash string, size int64, a
 }
 
 // insertManifest inserts a manifest row directly via SQL,
-// bypassing IndexManifest. Used by VacuumInto_CreatesSnapshot to
-// stage data so the snapshot is a meaningful copy without
+// bypassing IndexManifest. Used by WriteCheckpoint_CreatesCheckpoint to
+// stage data so the checkpoint is a meaningful copy without
 // dragging blob-side bookkeeping into the test setup.
 func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	t.Helper()

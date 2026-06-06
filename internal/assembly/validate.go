@@ -124,8 +124,8 @@ func validatePolicy(store string, p *Policy, add func(string, ...any)) {
 	if p.Scrub != nil {
 		validateTrigger(fmt.Sprintf("store %q scrub", store), p.Scrub.Every, p.Scrub.Schedule, add)
 	}
-	if p.Snapshot != nil {
-		validateTrigger(fmt.Sprintf("store %q snapshot", store), p.Snapshot.Every, p.Snapshot.Schedule, add)
+	if p.Checkpoint != nil {
+		validateTrigger(fmt.Sprintf("store %q checkpoint", store), p.Checkpoint.Every, p.Checkpoint.Schedule, add)
 	}
 }
 

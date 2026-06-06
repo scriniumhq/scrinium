@@ -160,10 +160,6 @@ type StoreIndex interface {
 	// pack blob.
 	DeletePacked(ctx context.Context, packBlobRef string) error
 
-	// VacuumInto creates a snapshot of the index at the given path.
-	// Used by the Snapshot Agent.
-	VacuumInto(ctx context.Context, destPath string) error
-
 	// store_meta service table. A singleton key/value store for
 	// Store metadata: schema_version, descriptor cache,
 	// last_orphan_scan_at, etc.

@@ -115,7 +115,7 @@ type Policy struct {
 	MaxArtifactSize     Size            `yaml:"maxArtifactSize,omitempty" json:"maxArtifactSize,omitempty"`
 	GC                  *Schedule       `yaml:"gc,omitempty" json:"gc,omitempty"`
 	Scrub               *ScrubSchedule  `yaml:"scrub,omitempty" json:"scrub,omitempty"`
-	Snapshot            *Schedule       `yaml:"snapshot,omitempty" json:"snapshot,omitempty"`
+	Checkpoint          *Schedule       `yaml:"checkpoint,omitempty" json:"checkpoint,omitempty"`
 }
 
 // Encryption enables manifest+blob encryption. Passphrase is required
@@ -150,7 +150,7 @@ type MultistoreSpec struct {
 	Replication map[string][]string `yaml:"replication,omitempty" json:"replication,omitempty"`
 }
 
-// Schedule is the cadence of a built-in maintenance agent (GC, Snapshot):
+// Schedule is the cadence of a built-in maintenance agent (GC, Checkpoint):
 // an interval (Every) or a cron expression (Schedule), mutually exclusive.
 // Every is the default form and needs no cron adapter; a cron Schedule
 // requires cron.Enable (ADR-71).

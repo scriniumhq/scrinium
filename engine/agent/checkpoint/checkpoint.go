@@ -10,6 +10,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/internal/checkpointfmt"
 	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -52,7 +53,7 @@ type CheckpointStats struct {
 }
 
 // CheckpointAgent is the background creator of StoreIndex checkpoints
-// via VacuumInto + packing into the CAS. Engine-managed: launched
+// via WriteCheckpoint + packing into the CAS. Engine-managed: launched
 // for every Target Store with an available StoreIndex.
 //
 // Checkpoint Agent is creation only. StoreIndex recovery from a
@@ -70,18 +71,13 @@ type CheckpointAgent interface {
 
 const (
 	checkpointLeasePath       = "system.state/checkpoint/lease"
-	checkpointNamePrefix      = "index_checkpoint/"
 	defaultCheckpointIntv     = 6 * time.Hour
 	defaultCheckpointKeep     = 3
 	defaultCheckpointLeaseTTL = 15 * time.Minute
-	// checkpointTimeLayout is path-safe and lexicographically sortable
-	// (no colons, fixed-width nanoseconds) so a name sort is a time
-	// sort — retention drops the lexicographically smallest names.
-	checkpointTimeLayout = "20060102T150405.000000000Z"
 )
 
 // NewCheckpointAgent creates a Checkpoint Agent. Constructed by the
-// assembler (Variant B): it needs the StoreIndex to VacuumInto a
+// assembler (Variant B): it needs the StoreIndex to WriteCheckpoint a
 // checkpoint file and the Store to publish that file into the CAS via
 // System().Put (WithoutIndex — a checkpoint is engine state, not a user
 // artifact, and indexing it would make it a rebuild input of itself).
@@ -233,9 +229,9 @@ func (a *checkpointAgent) TakeCheckpoint(ctx context.Context) (CheckpointStats, 
 
 func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, error) {
 	now := time.Now().UTC()
-	id := now.Format(checkpointTimeLayout)
+	id := checkpointfmt.ID(now)
 
-	// VacuumInto needs an empty destination on an OS path. A temp dir
+	// WriteCheckpoint needs an empty destination on an OS path. A temp dir
 	// keeps the partial vacuum off the Location until it is complete.
 	tmpDir, err := os.MkdirTemp("", "scrinium-checkpoint-")
 	if err != nil {
@@ -244,8 +240,12 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 	defer os.RemoveAll(tmpDir)
 	tmpPath := filepath.Join(tmpDir, id+".db")
 
-	if err := a.idx.VacuumInto(ctx, tmpPath); err != nil {
-		return CheckpointStats{}, fmt.Errorf("vacuum into %q: %w", tmpPath, err)
+	cw, ok := a.idx.(index.CheckpointWriter)
+	if !ok {
+		return CheckpointStats{}, fmt.Errorf("checkpoint: index %T does not support checkpoints (no index.CheckpointWriter)", a.idx)
+	}
+	if err := cw.WriteCheckpoint(ctx, tmpPath); err != nil {
+		return CheckpointStats{}, fmt.Errorf("write checkpoint %q: %w", tmpPath, err)
 	}
 
 	info, err := os.Stat(tmpPath)
@@ -258,7 +258,7 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 	}
 	defer f.Close()
 
-	name := checkpointNamePrefix + id
+	name := checkpointfmt.Prefix + id
 	if err := a.store.System().Put(ctx,
 		store.SystemArtifact{Name: name, Payload: f},
 		store.WithoutIndex(),
@@ -293,7 +293,7 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 // fix belongs to System() artifact sharing semantics, not to retention.
 func (a *checkpointAgent) pruneOldCheckpoints(ctx context.Context) error {
 	var names []string
-	err := a.store.System().Walk(ctx, checkpointNamePrefix, func(name string, _ domain.Manifest) error {
+	err := a.store.System().Walk(ctx, checkpointfmt.Prefix, func(name string, _ domain.Manifest) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}

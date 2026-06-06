@@ -4,7 +4,7 @@ import "errors"
 
 // StoreIndex and maintenance: schema migrations, integrity of the
 // SQLite/Postgres backing store, the maintenance-agent lease,
-// agent-specific preconditions (snapshot availability, recovery
+// agent-specific preconditions (checkpoint availability, recovery
 // kit).
 
 // ErrIndexCorrupted — the StoreIndex is missing or its checksum
@@ -22,9 +22,9 @@ var ErrMaintenanceInProgress = errors.New("scrinium: maintenance in progress")
 // ErrMetaKeyNotFound — the requested key is missing in store_meta.
 var ErrMetaKeyNotFound = errors.New("scrinium: meta key not found")
 
-// ErrNoSnapshot — RebuildIndexAgent.Validate with
-// Source: Snapshot when no valid snapshots are available.
-var ErrNoSnapshot = errors.New("scrinium: no valid snapshot for Source=Snapshot")
+// ErrNoCheckpoint — RebuildIndexAgent.Validate with
+// Source: Checkpoint when no valid checkpoints are available.
+var ErrNoCheckpoint = errors.New("scrinium: no valid checkpoint for Source=Checkpoint")
 
 // ErrRecoveryKitRequired — RebuildIndexAgent.Validate with the
 // Store in Corrupted after every descriptor replica has been lost
