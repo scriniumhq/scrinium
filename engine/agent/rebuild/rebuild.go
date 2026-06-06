@@ -23,22 +23,22 @@ import (
 type RebuildSource string
 
 const (
-	// RebuildSourceAuto — use a snapshot if available; otherwise
+	// RebuildSourceAuto — use a checkpoint if available; otherwise
 	// fall back to a full scan.
 	RebuildSourceAuto RebuildSource = "Auto"
 
-	// RebuildSourceSnapshot — requires a valid snapshot; returns
-	// ErrNoSnapshot when none is available.
-	RebuildSourceSnapshot RebuildSource = "Snapshot"
+	// RebuildSourceCheckpoint — requires a valid checkpoint; returns
+	// ErrNoCheckpoint when none is available.
+	RebuildSourceCheckpoint RebuildSource = "Checkpoint"
 
-	// RebuildSourceFullScan — ignores any snapshots; always does a
+	// RebuildSourceFullScan — ignores any checkpoints; always does a
 	// full Location scan.
 	RebuildSourceFullScan RebuildSource = "FullScan"
 )
 
 // RebuildConfig configures the RebuildIndexAgent.
 type RebuildConfig struct {
-	// Source is the strategy: Auto (default), Snapshot, or
+	// Source is the strategy: Auto (default), Checkpoint, or
 	// FullScan.
 	Source RebuildSource
 
@@ -71,9 +71,9 @@ type RebuildStats struct {
 	// Source is the path actually taken (relevant for Auto).
 	Source RebuildSource
 
-	// SnapshotUsed is the snapshot ID when Source != FullScan; an
+	// CheckpointUsed is the checkpoint ID when Source != FullScan; an
 	// empty string when starting from scratch.
-	SnapshotUsed string
+	CheckpointUsed string
 
 	// ManifestsScanned — total manifests read from the Location.
 	ManifestsScanned int64
@@ -81,7 +81,7 @@ type RebuildStats struct {
 	// ManifestsIndexed — added to the StoreIndex.
 	ManifestsIndexed int64
 
-	// ManifestsSkipped — already in the snapshot, not re-read.
+	// ManifestsSkipped — already in the checkpoint, not re-read.
 	ManifestsSkipped int64
 
 	// BlobsRegistered — rows in the blobs table (regular + chunks).
@@ -102,7 +102,7 @@ type RebuildStats struct {
 }
 
 // RebuildIndexAgent rebuilds the StoreIndex from manifests. It
-// supports a fast path through a recent snapshot with read-in of
+// supports a fast path through a recent checkpoint with read-in of
 // new objects and a full fallback Location scan. It is also used to
 // restore store.json (when lost) and the system.config/current
 // pointer (when dangling).
@@ -126,9 +126,10 @@ type RebuildIndexAgent interface {
 // and Target) — the only manifest types that exist before M4 (Pack) and
 // M5 (TOC/chunking). Encrypted manifests are decoded with the Store's own
 // key material, obtained at run time (store.ManifestKeyProvider); an
-// unencrypted Store has none and the scan stays Plain-only. The Snapshot
-// fast-path still needs a snapshot read-back the Snapshot Agent (A4) has
-// not introduced. Descriptor recovery from the Recovery Kit (rewriting a
+// unencrypted Store has none and the scan stays Plain-only. The checkpoint
+// fast-path (restoring a checkpoint produced by the checkpoint agent, then
+// reading in the tail) is not yet wired into rebuild. Descriptor recovery
+// from the Recovery Kit (rewriting a
 // lost store.json) is implemented and runs before the scan when
 // RecoveryKit is set; recovering a dangling system.config/current pointer
 // is still out of scope (the kit carries no config). The remaining gaps
@@ -200,23 +201,23 @@ type rebuildAgent struct {
 var _ RebuildIndexAgent = (*rebuildAgent)(nil)
 
 // Validate checks the operation is applicable without doing irreversible
-// work. A Snapshot-source request needs a snapshot to exist; on M3 none
-// can, since the Snapshot Agent (A4) that would produce one is not yet
-// built. The maintenance-mode gate is enforced by the Store's
+// work. A Checkpoint-source request needs a checkpoint to restore from; the
+// restore/fast-path is not yet wired into rebuild, so it currently returns
+// ErrNoCheckpoint. The maintenance-mode gate is enforced by the Store's
 // RunMaintenance entry point (the sanctioned caller), not here — the
 // current mode is not exposed on the read surface.
 func (a *rebuildAgent) Validate(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if a.cfg.Source == RebuildSourceSnapshot {
-		return fmt.Errorf("rebuild.Rebuild.Validate: Source=Snapshot: %w", errs.ErrNoSnapshot)
+	if a.cfg.Source == RebuildSourceCheckpoint {
+		return fmt.Errorf("rebuild.Rebuild.Validate: Source=Checkpoint: %w", errs.ErrNoCheckpoint)
 	}
 	return nil
 }
 
 // Run acquires the maintenance lease and rebuilds the index. On M3 the
-// only path is FullScan (Auto resolves to it, since Snapshot has no
+// only path is FullScan (Auto resolves to it, since Checkpoint has no
 // source yet).
 func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 	if err := ctx.Err(); err != nil {

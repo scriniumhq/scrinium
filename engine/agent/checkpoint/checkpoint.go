@@ -10,6 +10,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/internal/checkpointfmt"
 	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -70,14 +71,9 @@ type CheckpointAgent interface {
 
 const (
 	checkpointLeasePath       = "system.state/checkpoint/lease"
-	checkpointNamePrefix      = "index_checkpoint/"
 	defaultCheckpointIntv     = 6 * time.Hour
 	defaultCheckpointKeep     = 3
 	defaultCheckpointLeaseTTL = 15 * time.Minute
-	// checkpointTimeLayout is path-safe and lexicographically sortable
-	// (no colons, fixed-width nanoseconds) so a name sort is a time
-	// sort — retention drops the lexicographically smallest names.
-	checkpointTimeLayout = "20060102T150405.000000000Z"
 )
 
 // NewCheckpointAgent creates a Checkpoint Agent. Constructed by the
@@ -233,7 +229,7 @@ func (a *checkpointAgent) TakeCheckpoint(ctx context.Context) (CheckpointStats, 
 
 func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, error) {
 	now := time.Now().UTC()
-	id := now.Format(checkpointTimeLayout)
+	id := checkpointfmt.ID(now)
 
 	// WriteCheckpoint needs an empty destination on an OS path. A temp dir
 	// keeps the partial vacuum off the Location until it is complete.
@@ -262,7 +258,7 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 	}
 	defer f.Close()
 
-	name := checkpointNamePrefix + id
+	name := checkpointfmt.Prefix + id
 	if err := a.store.System().Put(ctx,
 		store.SystemArtifact{Name: name, Payload: f},
 		store.WithoutIndex(),
@@ -297,7 +293,7 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 // fix belongs to System() artifact sharing semantics, not to retention.
 func (a *checkpointAgent) pruneOldCheckpoints(ctx context.Context) error {
 	var names []string
-	err := a.store.System().Walk(ctx, checkpointNamePrefix, func(name string, _ domain.Manifest) error {
+	err := a.store.System().Walk(ctx, checkpointfmt.Prefix, func(name string, _ domain.Manifest) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}

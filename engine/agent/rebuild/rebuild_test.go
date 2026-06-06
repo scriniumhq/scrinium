@@ -155,11 +155,11 @@ func TestRebuild_FullScan_RecoversInlineManifests(t *testing.T) {
 	}
 }
 
-func TestRebuild_Validate_SnapshotSourceUnavailable(t *testing.T) {
+func TestRebuild_Validate_CheckpointSourceUnavailable(t *testing.T) {
 	f := newRebuildFixture(t)
-	a := newRebuild(t, f, rebuild.RebuildConfig{Source: rebuild.RebuildSourceSnapshot})
-	if err := a.Validate(context.Background()); !errors.Is(err, errs.ErrNoSnapshot) {
-		t.Fatalf("Validate(Snapshot) = %v, want ErrNoSnapshot", err)
+	a := newRebuild(t, f, rebuild.RebuildConfig{Source: rebuild.RebuildSourceCheckpoint})
+	if err := a.Validate(context.Background()); !errors.Is(err, errs.ErrNoCheckpoint) {
+		t.Fatalf("Validate(Checkpoint) = %v, want ErrNoCheckpoint", err)
 	}
 }
 
