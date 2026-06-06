@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/agent/internal/checkpointfmt"
 	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
@@ -63,6 +66,16 @@ type RebuildConfig struct {
 	// it makes sense to extend it — losing the lease aborts the
 	// operation.
 	LeaseTTL time.Duration
+
+	// RecoveryOverlap widens the tail re-scan when restoring from a
+	// checkpoint: the scan re-reads manifests modified since
+	// (checkpoint time − RecoveryOverlap) rather than exactly the
+	// checkpoint instant. The overlap absorbs clock skew and manifests
+	// written concurrently with the vacuum. IndexManifest is idempotent,
+	// so re-reading a handful of already-present manifests is harmless.
+	// Zero means no overlap (tail starts exactly at the checkpoint
+	// instant); a small positive value (minutes) is recommended.
+	RecoveryOverlap time.Duration
 }
 
 // RebuildStats are the final statistics of the operation and a
@@ -201,8 +214,8 @@ type rebuildAgent struct {
 var _ RebuildIndexAgent = (*rebuildAgent)(nil)
 
 // Validate checks the operation is applicable without doing irreversible
-// work. A Checkpoint-source request needs a checkpoint to restore from; the
-// restore/fast-path is not yet wired into rebuild, so it currently returns
+// work. A Checkpoint-source request needs an index that can restore a
+// checkpoint and at least one checkpoint to exist; otherwise it returns
 // ErrNoCheckpoint. The maintenance-mode gate is enforced by the Store's
 // RunMaintenance entry point (the sanctioned caller), not here — the
 // current mode is not exposed on the read surface.
@@ -211,14 +224,24 @@ func (a *rebuildAgent) Validate(ctx context.Context) error {
 		return err
 	}
 	if a.cfg.Source == RebuildSourceCheckpoint {
-		return fmt.Errorf("rebuild.Rebuild.Validate: Source=Checkpoint: %w", errs.ErrNoCheckpoint)
+		if _, ok := a.idx.(index.CheckpointRestorer); !ok {
+			return fmt.Errorf("rebuild.Rebuild.Validate: Source=Checkpoint: index cannot restore checkpoints: %w", errs.ErrNoCheckpoint)
+		}
+		_, _, ok, err := checkpointfmt.Latest(ctx, a.store.System())
+		if err != nil {
+			return fmt.Errorf("rebuild.Rebuild.Validate: Source=Checkpoint: %w", err)
+		}
+		if !ok {
+			return fmt.Errorf("rebuild.Rebuild.Validate: Source=Checkpoint: %w", errs.ErrNoCheckpoint)
+		}
 	}
 	return nil
 }
 
-// Run acquires the maintenance lease and rebuilds the index. On M3 the
-// only path is FullScan (Auto resolves to it, since Checkpoint has no
-// source yet).
+// Run acquires the maintenance lease and rebuilds the index. Auto and
+// Checkpoint take the checkpoint fast-path when a checkpoint exists and the
+// index can restore one; Auto otherwise falls back to a full Location scan,
+// and FullScan always scans.
 func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -267,12 +290,11 @@ func (a *rebuildAgent) run(ctx context.Context) (*domain.AgentResult, error) {
 		}
 	}
 
-	a.setSource(RebuildSourceFullScan)
 	// Key material for decoding encrypted manifests read straight off the
 	// Location. nil for an unencrypted Store — the scan then handles Plain
 	// manifests only (encrypted ones are skipped, as before).
 	keys := store.ManifestKeyProvider(a.store)
-	if err := a.fullScan(runCtx, keys); err != nil {
+	if err := a.rebuildIndex(runCtx, keys); err != nil {
 		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
 			AgentType: "rebuild", StoreID: a.storeID, Err: err,
 		}})
@@ -336,13 +358,108 @@ func (a *rebuildAgent) Stats() RebuildStats {
 	return a.stats
 }
 
-// fullScan walks every manifest file on the Location and reindexes it.
-// Manifest paths are collected first (a streaming List whose callback
-// only appends), then each file is fetched, decoded, and indexed — the
-// per-file index writes must not run inside the List cursor.
-func (a *rebuildAgent) fullScan(ctx context.Context, keys artifact.KeyProvider) error {
+// rebuildIndex selects the strategy. Auto and Checkpoint attempt the
+// checkpoint fast-path first; Auto falls back to a full scan when no
+// checkpoint is available, Checkpoint errors, and FullScan always scans.
+func (a *rebuildAgent) rebuildIndex(ctx context.Context, keys artifact.KeyProvider) error {
+	if a.cfg.Source != RebuildSourceFullScan {
+		used, err := a.tryCheckpointFastPath(ctx, keys)
+		if err != nil {
+			return err
+		}
+		if used {
+			return nil
+		}
+		if a.cfg.Source == RebuildSourceCheckpoint {
+			return fmt.Errorf("rebuild: Source=Checkpoint but no checkpoint is available: %w", errs.ErrNoCheckpoint)
+		}
+		// Auto: fall through to a full scan.
+	}
+	a.setSource(RebuildSourceFullScan)
+	return a.scanManifests(ctx, keys, time.Time{})
+}
+
+// tryCheckpointFastPath restores the newest checkpoint into the index and
+// replays the tail of manifests written since. It returns used=false (nil
+// error) when the index cannot restore checkpoints or none exists, leaving
+// the caller to fall back. The checkpoint is fetched from the Store's own
+// System() namespace, so it is by construction a checkpoint of this Store.
+func (a *rebuildAgent) tryCheckpointFastPath(ctx context.Context, keys artifact.KeyProvider) (used bool, err error) {
+	restorer, ok := a.idx.(index.CheckpointRestorer)
+	if !ok {
+		return false, nil
+	}
+	name, createdAt, ok, err := checkpointfmt.Latest(ctx, a.store.System())
+	if err != nil {
+		return false, fmt.Errorf("find latest checkpoint: %w", err)
+	}
+	if !ok {
+		return false, nil
+	}
+
+	// RestoreCheckpoint needs an on-disk path; stream the artifact to a temp.
+	tmpPath, cleanup, err := a.fetchCheckpoint(ctx, name)
+	if err != nil {
+		return false, fmt.Errorf("fetch checkpoint %q: %w", name, err)
+	}
+	defer cleanup()
+
+	if err := restorer.RestoreCheckpoint(ctx, tmpPath); err != nil {
+		return false, fmt.Errorf("restore checkpoint %q: %w", name, err)
+	}
+	a.setSource(RebuildSourceCheckpoint)
+	a.setCheckpointUsed(name)
+
+	// Replay the tail: manifests modified since (checkpoint time − overlap).
+	// IndexManifest is idempotent, so any overlap re-reads are harmless.
+	since := createdAt.Add(-a.cfg.RecoveryOverlap)
+	return true, a.scanManifests(ctx, keys, since)
+}
+
+// fetchCheckpoint streams the named checkpoint artifact from System() to a
+// fresh temp file, returning its path and a cleanup that removes the temp
+// directory. The caller must invoke cleanup.
+func (a *rebuildAgent) fetchCheckpoint(ctx context.Context, name string) (path string, cleanup func(), err error) {
+	noop := func() {}
+	rh, err := a.store.System().Get(ctx, name)
+	if err != nil {
+		return "", noop, fmt.Errorf("get: %w", err)
+	}
+	defer rh.Close()
+
+	tmpDir, err := os.MkdirTemp("", "scrinium-restore-")
+	if err != nil {
+		return "", noop, fmt.Errorf("temp dir: %w", err)
+	}
+	cleanup = func() { _ = os.RemoveAll(tmpDir) }
+
+	tmpPath := filepath.Join(tmpDir, "checkpoint.db")
+	f, err := os.Create(tmpPath)
+	if err != nil {
+		cleanup()
+		return "", noop, fmt.Errorf("create temp: %w", err)
+	}
+	if _, err := io.Copy(f, rh); err != nil {
+		_ = f.Close()
+		cleanup()
+		return "", noop, fmt.Errorf("copy: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		cleanup()
+		return "", noop, fmt.Errorf("close temp: %w", err)
+	}
+	return tmpPath, cleanup, nil
+}
+
+// scanManifests walks manifest files on the Location and reindexes them.
+// since filters by modification time: the zero time scans everything (full
+// rebuild); a non-zero time scans only the tail (checkpoint fast-path).
+// Manifest paths are collected first (a streaming List whose callback only
+// appends), then each file is fetched, decoded, and indexed — the per-file
+// index writes must not run inside the List cursor.
+func (a *rebuildAgent) scanManifests(ctx context.Context, keys artifact.KeyProvider, since time.Time) error {
 	var paths []string
-	listErr := a.drv.ListObjectsWithModTime(ctx, manifestsPrefix, time.Time{},
+	listErr := a.drv.ListObjectsWithModTime(ctx, manifestsPrefix, since,
 		func(om driver.ObjectMeta) error {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -403,7 +520,7 @@ func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string, key
 		m, err = artifact.DecodeEncrypted(data, keys)
 	} else {
 		// No key material: Plain only. An encrypted manifest returns
-		// errs.ErrUnsupportedCrypto and is skipped by fullScan.
+		// errs.ErrUnsupportedCrypto and is skipped by scanManifests.
 		m, err = artifact.Decode(data)
 	}
 	if err != nil {
@@ -452,6 +569,12 @@ func (a *rebuildAgent) indexBlob(ctx context.Context, m domain.Manifest) error {
 func (a *rebuildAgent) setSource(s RebuildSource) {
 	a.mu.Lock()
 	a.stats.Source = s
+	a.mu.Unlock()
+}
+
+func (a *rebuildAgent) setCheckpointUsed(name string) {
+	a.mu.Lock()
+	a.stats.CheckpointUsed = name
 	a.mu.Unlock()
 }
 

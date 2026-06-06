@@ -104,6 +104,78 @@ func TestWriteCheckpoint_CreatesParentDir(t *testing.T) {
 	}
 }
 
+// --- RestoreCheckpoint ---
+
+func TestRestoreCheckpoint_RoundTrip(t *testing.T) {
+	// Seed a source index, checkpoint it, restore into a fresh target.
+	src, _ := newDiskIndex(t)
+	insertBlob(t, src, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
+		domain.PhysicalAddress{Path: "p"}, 1)
+	insertManifest(t, src, domain.Manifest{
+		ArtifactID: "art-1", Type: domain.ManifestTypeBlob, Namespace: "ns",
+		BlobRef: "blob-1", CreatedAt: time.Now(),
+	})
+
+	cp := filepath.Join(t.TempDir(), "cp.db")
+	if err := src.WriteCheckpoint(context.Background(), cp); err != nil {
+		t.Fatalf("WriteCheckpoint: %v", err)
+	}
+
+	dst, _ := newDiskIndex(t)
+	if err := dst.RestoreCheckpoint(context.Background(), cp); err != nil {
+		t.Fatalf("RestoreCheckpoint: %v", err)
+	}
+	if got := countRows(t, dst, "blobs"); got != 1 {
+		t.Errorf("restored blobs: got %d, want 1", got)
+	}
+	if got := countRows(t, dst, "manifests"); got != 1 {
+		t.Errorf("restored manifests: got %d, want 1", got)
+	}
+
+	// The pinned connection must return to the pool clean: a follow-up query
+	// on dst must not see a lingering "ckpt" attachment.
+	if got := countRows(t, dst, "manifests"); got != 1 {
+		t.Errorf("post-restore query: got %d, want 1", got)
+	}
+}
+
+func TestRestoreCheckpoint_Idempotent(t *testing.T) {
+	src, _ := newDiskIndex(t)
+	insertBlob(t, src, "blob-1", "sha256-"+strings.Repeat("b", 64), 512,
+		domain.PhysicalAddress{Path: "p"}, 1)
+	cp := filepath.Join(t.TempDir(), "cp.db")
+	if err := src.WriteCheckpoint(context.Background(), cp); err != nil {
+		t.Fatalf("WriteCheckpoint: %v", err)
+	}
+	dst, _ := newDiskIndex(t)
+	for i := 0; i < 2; i++ {
+		if err := dst.RestoreCheckpoint(context.Background(), cp); err != nil {
+			t.Fatalf("RestoreCheckpoint pass %d: %v", i, err)
+		}
+	}
+	if got := countRows(t, dst, "blobs"); got != 1 {
+		t.Errorf("after double restore: got %d blobs, want 1", got)
+	}
+}
+
+func TestRestoreCheckpoint_RejectsMissingSource(t *testing.T) {
+	dst, _ := newDiskIndex(t)
+	err := dst.RestoreCheckpoint(context.Background(), filepath.Join(t.TempDir(), "nope.db"))
+	if err == nil {
+		t.Fatal("expected error for missing source")
+	}
+}
+
+func TestRestoreCheckpoint_RejectsEmptyAndMemory(t *testing.T) {
+	dst, _ := newDiskIndex(t)
+	if err := dst.RestoreCheckpoint(context.Background(), ""); err == nil {
+		t.Error("expected error for empty srcPath")
+	}
+	if err := dst.RestoreCheckpoint(context.Background(), ":memory:"); err == nil {
+		t.Error("expected error for :memory: source")
+	}
+}
+
 // --- GetMeta / SetMeta ---
 
 func TestSetMeta_GetMeta_RoundTrip(t *testing.T) {
@@ -178,6 +250,8 @@ func TestIndex_ImplementsStoreIndex(t *testing.T) {
 	// WriteCheckpoint moved off the mandatory StoreIndex into the optional
 	// CheckpointWriter capability; sqlite implements it.
 	var _ index.CheckpointWriter = (*Index)(nil)
+	// RestoreCheckpoint is the read side (CheckpointRestorer); sqlite implements it.
+	var _ index.CheckpointRestorer = (*Index)(nil)
 	idx := newMemoryIndex(t)
 	var asInterface index.StoreIndex = idx
 	if asInterface == nil {

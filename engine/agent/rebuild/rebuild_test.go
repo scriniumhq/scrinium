@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/agent/internal/checkpointfmt"
 	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/agent/rebuild"
 	"scrinium.dev/engine/driver"
@@ -58,6 +59,32 @@ func (f rebuildFixture) put(t *testing.T, ns, data string) domain.ArtifactID {
 		t.Fatalf("Put: %v", err)
 	}
 	return id
+}
+
+// publishCheckpoint vacuums the populated original index into a temp file and
+// publishes it under the checkpoint prefix in the Store's System() namespace,
+// exactly as the checkpoint agent would. Returns the checkpoint name.
+func (f rebuildFixture) publishCheckpoint(t *testing.T) string {
+	t.Helper()
+	cw, ok := f.origIdx.(index.CheckpointWriter)
+	if !ok {
+		t.Fatal("origIdx does not implement index.CheckpointWriter")
+	}
+	tmp := filepath.Join(t.TempDir(), "cp.db")
+	if err := cw.WriteCheckpoint(context.Background(), tmp); err != nil {
+		t.Fatalf("WriteCheckpoint: %v", err)
+	}
+	rc, err := os.Open(tmp)
+	if err != nil {
+		t.Fatalf("open checkpoint: %v", err)
+	}
+	defer rc.Close()
+	name := checkpointfmt.Name(time.Now())
+	if err := f.store.System().Put(context.Background(),
+		store.SystemArtifact{Name: name, Payload: rc}, store.WithoutIndex()); err != nil {
+		t.Fatalf("publish checkpoint: %v", err)
+	}
+	return name
 }
 
 func newRebuild(t *testing.T, f rebuildFixture, cfg rebuild.RebuildConfig) rebuild.RebuildIndexAgent {
@@ -160,6 +187,51 @@ func TestRebuild_Validate_CheckpointSourceUnavailable(t *testing.T) {
 	a := newRebuild(t, f, rebuild.RebuildConfig{Source: rebuild.RebuildSourceCheckpoint})
 	if err := a.Validate(context.Background()); !errors.Is(err, errs.ErrNoCheckpoint) {
 		t.Fatalf("Validate(Checkpoint) = %v, want ErrNoCheckpoint", err)
+	}
+}
+
+func TestRebuild_Validate_CheckpointAvailable(t *testing.T) {
+	f := newRebuildFixture(t)
+	f.publishCheckpoint(t) // now a checkpoint exists under the prefix
+	a := newRebuild(t, f, rebuild.RebuildConfig{Source: rebuild.RebuildSourceCheckpoint})
+	if err := a.Validate(context.Background()); err != nil {
+		t.Fatalf("Validate(Checkpoint) with a checkpoint present: %v", err)
+	}
+}
+
+func TestRebuild_Checkpoint_FastPath(t *testing.T) {
+	f := newRebuildFixture(t)
+	f.put(t, "ns", "artifact written before the checkpoint")
+	name := f.publishCheckpoint(t)
+
+	a := newRebuild(t, f, rebuild.RebuildConfig{
+		Source:   rebuild.RebuildSourceCheckpoint,
+		LeaseTTL: time.Minute,
+	})
+	if _, err := a.Run(context.Background()); err != nil {
+		t.Fatalf("Run (checkpoint fast-path): %v", err)
+	}
+	st := a.Stats()
+	if st.Source != rebuild.RebuildSourceCheckpoint {
+		t.Errorf("Source = %q, want %q", st.Source, rebuild.RebuildSourceCheckpoint)
+	}
+	if st.CheckpointUsed != name {
+		t.Errorf("CheckpointUsed = %q, want %q", st.CheckpointUsed, name)
+	}
+}
+
+func TestRebuild_Auto_FallsBackToFullScanWithoutCheckpoint(t *testing.T) {
+	f := newRebuildFixture(t)
+	f.put(t, "ns", "artifact on the location")
+	a := newRebuild(t, f, rebuild.RebuildConfig{
+		Source:   rebuild.RebuildSourceAuto,
+		LeaseTTL: time.Minute,
+	})
+	if _, err := a.Run(context.Background()); err != nil {
+		t.Fatalf("Run (auto, no checkpoint): %v", err)
+	}
+	if st := a.Stats(); st.Source != rebuild.RebuildSourceFullScan {
+		t.Errorf("Source = %q, want FullScan fallback", st.Source)
 	}
 }
 

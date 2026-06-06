@@ -20,3 +20,17 @@ import "context"
 type CheckpointWriter interface {
 	WriteCheckpoint(ctx context.Context, destPath string) error
 }
+
+// CheckpointRestorer is the optional capability of a StoreIndex that can load
+// a checkpoint file (produced by a CheckpointWriter) back into itself. The
+// rebuild fast-path uses it to populate a fresh index from a recent
+// checkpoint before replaying the tail of manifests written since. Backends
+// that do not implement CheckpointWriter do not implement this either.
+//
+// srcPath must name an existing checkpoint file on a local filesystem. The
+// restore targets a freshly created, empty index; the implementation migrates
+// the checkpoint forward to the running schema and refuses one written by
+// newer code than the running binary.
+type CheckpointRestorer interface {
+	RestoreCheckpoint(ctx context.Context, srcPath string) error
+}
