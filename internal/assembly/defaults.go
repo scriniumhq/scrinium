@@ -9,8 +9,9 @@ const (
 	defaultBundleFlush    = Duration(5 * 60 * 1e9)
 	defaultEncryptionMode = "sealed"
 	defaultEncryptedDedup = "disabled"
-	defaultGCSchedule     = "0 3 * * *"
-	defaultScrubSchedule  = "0 4 * * 0"
+	defaultGCEvery        = Duration(24 * 60 * 60 * 1e9)     // 24h
+	defaultScrubEvery     = Duration(7 * 24 * 60 * 60 * 1e9) // 168h (weekly)
+	defaultSnapshotEvery  = Duration(24 * 60 * 60 * 1e9)     // 24h
 )
 
 // applyDefaults fills in the optional fields the spec defaults, in
@@ -80,14 +81,19 @@ func applyPolicyDefaults(p *Policy) {
 			p.Bundling.DirectWriteThreshold = p.Bundling.MaxBundleSize / 2
 		}
 	}
-	// GC and Scrub run by default; fill schedules when the block is
-	// present but the schedule omitted. Absence of the block entirely
-	// is handled at agent-wiring time (M3) with the same defaults.
-	if p.GC != nil && p.GC.Schedule == "" {
-		p.GC.Schedule = defaultGCSchedule
+	// GC, Scrub and Snapshot are technical hygiene; when a block is present
+	// but no cadence is given, default to an interval (no cron adapter
+	// needed). An explicit cron Schedule, if set, wins and is left as-is.
+	// Absence of the block entirely is handled at agent-wiring time with
+	// the same defaults.
+	if p.GC != nil && p.GC.Every == 0 && p.GC.Schedule == "" {
+		p.GC.Every = defaultGCEvery
 	}
-	if p.Scrub != nil && p.Scrub.Schedule == "" {
-		p.Scrub.Schedule = defaultScrubSchedule
+	if p.Scrub != nil && p.Scrub.Every == 0 && p.Scrub.Schedule == "" {
+		p.Scrub.Every = defaultScrubEvery
+	}
+	if p.Snapshot != nil && p.Snapshot.Every == 0 && p.Snapshot.Schedule == "" {
+		p.Snapshot.Every = defaultSnapshotEvery
 	}
 }
 
@@ -140,6 +146,10 @@ func clonePolicy(p *Policy) *Policy {
 	if p.Scrub != nil {
 		s := *p.Scrub
 		cp.Scrub = &s
+	}
+	if p.Snapshot != nil {
+		s := *p.Snapshot
+		cp.Snapshot = &s
 	}
 	if p.Pipeline != nil {
 		cp.Pipeline = append([]PipelineStage(nil), p.Pipeline...)

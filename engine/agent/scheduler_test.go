@@ -55,6 +55,28 @@ func (schedTestFactory) Build(st store.Store, cfg any, deps AgentDeps) (Agent, e
 
 func init() { Register(schedTestFactory{}) }
 
+// schedTestAgent2 is a second registered kind. With replace-by-kind a
+// scheduler holds one schedule per kind, so "multiple due in one tick"
+// must be exercised with distinct kinds, not two entries of one kind.
+type schedTestAgent2 struct{}
+
+func (a *schedTestAgent2) AgentType() string                  { return "sched-test-2" }
+func (a *schedTestAgent2) Validate(ctx context.Context) error { return ctx.Err() }
+func (a *schedTestAgent2) Status() (State, error)             { return StateIdle, nil }
+func (a *schedTestAgent2) Run(ctx context.Context) (*domain.AgentResult, error) {
+	atomic.AddInt64(&schedRunCount, 1)
+	return &domain.AgentResult{AgentType: "sched-test-2"}, nil
+}
+
+type schedTestFactory2 struct{}
+
+func (schedTestFactory2) Name() string { return "sched-test-2" }
+func (schedTestFactory2) Build(st store.Store, cfg any, deps AgentDeps) (Agent, error) {
+	return &schedTestAgent2{}, nil
+}
+
+func init() { Register(schedTestFactory2{}) }
+
 // waitRunCount polls schedRunCount until it reaches want or the deadline
 // elapses. Polling (not real timers in the code under test) keeps the
 // Scheduler itself time-agnostic; only the assertion waits.
@@ -200,12 +222,14 @@ func TestScheduler_NilStore(t *testing.T) {
 func TestScheduler_MultipleDueInOneTick(t *testing.T) {
 	atomic.StoreInt64(&schedRunCount, 0)
 	s, _ := newSchedFixture(t)
-	// Two independent entries, both due on the first Tick (lastRun zero);
-	// a single Tick must dispatch both, not just the first.
-	for i := 0; i < 2; i++ {
-		if err := s.Add(Schedule{Agent: "sched-test", Interval: time.Minute}); err != nil {
-			t.Fatalf("Add #%d: %v", i, err)
-		}
+	// Two DISTINCT agents, both due on the first Tick (lastRun zero); one
+	// Tick must dispatch both, not just the first. (Replace-by-kind: one
+	// schedule per kind, so "multiple due" means multiple kinds.)
+	if err := s.Add(Schedule{Agent: "sched-test", Interval: time.Minute}); err != nil {
+		t.Fatalf("Add sched-test: %v", err)
+	}
+	if err := s.Add(Schedule{Agent: "sched-test-2", Interval: time.Minute}); err != nil {
+		t.Fatalf("Add sched-test-2: %v", err)
 	}
 	if err := s.Tick(time.Now()); err != nil {
 		t.Fatalf("Tick: %v", err)
@@ -294,4 +318,49 @@ func TestScheduler_CronGateDriftFree(t *testing.T) {
 		t.Fatalf("Tick: %v", err)
 	}
 	waitRunCount(t, 2, time.Second)
+}
+
+func TestScheduler_AddReplacesByKind(t *testing.T) {
+	atomic.StoreInt64(&schedRunCount, 0)
+	s, _ := newSchedFixture(t)
+	// Two Adds for one agent: the second REPLACES it, no second entry.
+	if err := s.Add(Schedule{Agent: "sched-test", Interval: time.Hour}); err != nil {
+		t.Fatalf("Add #1: %v", err)
+	}
+	if err := s.Add(Schedule{Agent: "sched-test", Interval: time.Hour}); err != nil {
+		t.Fatalf("Add #2: %v", err)
+	}
+	// One tick → exactly one run. If there were two entries, both would be
+	// due on the first tick (lastRun.IsZero()) and produce two runs.
+	if err := s.Tick(time.Now()); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	waitRunCount(t, 1, time.Second)
+	time.Sleep(30 * time.Millisecond) // give a wrong second run a chance to register
+	if n := atomic.LoadInt64(&schedRunCount); n != 1 {
+		t.Fatalf("replace-by-kind: one tick produced %d runs, want 1 (duplicate entry?)", n)
+	}
+}
+
+func TestScheduler_AddReplaceTakesNewSchedule(t *testing.T) {
+	atomic.StoreInt64(&schedRunCount, 0)
+	s, _ := newSchedFixture(t)
+	// A rare schedule, then replaced with a frequent one — the last one applies.
+	if err := s.Add(Schedule{Agent: "sched-test", Interval: time.Hour}); err != nil {
+		t.Fatalf("Add (rare): %v", err)
+	}
+	if err := s.Add(Schedule{Agent: "sched-test", Interval: time.Millisecond}); err != nil {
+		t.Fatalf("Add (frequent): %v", err)
+	}
+	// First tick — record the run and wait for it to complete.
+	if err := s.Tick(time.Now()); err != nil {
+		t.Fatalf("Tick #1: %v", err)
+	}
+	waitRunCount(t, 1, time.Second)
+	// Second tick shortly after: the new (1ms) form is due again; the old (1h) is not.
+	time.Sleep(5 * time.Millisecond)
+	if err := s.Tick(time.Now()); err != nil {
+		t.Fatalf("Tick #2: %v", err)
+	}
+	waitRunCount(t, 2, time.Second) // had the 1h form still applied, no second run
 }

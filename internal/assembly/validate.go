@@ -59,6 +59,7 @@ func validate(c *Config) error {
 		if strings.TrimSpace(ag.Kind) == "" {
 			add("agents[%d]: empty `kind:`", i)
 		}
+		validateTrigger(fmt.Sprintf("agents[%d]", i), ag.Every, ag.Schedule, add)
 	}
 
 	validateProjection(c.Projection, add)
@@ -116,6 +117,28 @@ func validatePolicy(store string, p *Policy, add func(string, ...any)) {
 	case "", "free", "retention", "noDelete":
 	default:
 		add("store %q: deletionPolicy %q is not one of {free, retention, noDelete}", store, p.DeletionPolicy)
+	}
+	if p.GC != nil {
+		validateTrigger(fmt.Sprintf("store %q gc", store), p.GC.Every, p.GC.Schedule, add)
+	}
+	if p.Scrub != nil {
+		validateTrigger(fmt.Sprintf("store %q scrub", store), p.Scrub.Every, p.Scrub.Schedule, add)
+	}
+	if p.Snapshot != nil {
+		validateTrigger(fmt.Sprintf("store %q snapshot", store), p.Snapshot.Every, p.Snapshot.Schedule, add)
+	}
+}
+
+// validateTrigger enforces the one-trigger rule shared by built-in
+// maintenance schedules and user agents: an interval (Every) and a cron
+// expression (Schedule) are mutually exclusive, and an interval, if set,
+// must be positive.
+func validateTrigger(label string, every Duration, schedule string, add func(string, ...any)) {
+	if every != 0 && schedule != "" {
+		add("%s: set either `every:` or `schedule:`, not both", label)
+	}
+	if every < 0 {
+		add("%s: `every:` must be positive", label)
 	}
 }
 

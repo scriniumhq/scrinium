@@ -58,9 +58,11 @@ func Build(ctx context.Context, cfg Config, opts ...BuildOption) (Assembly, erro
 		return nil, err
 	}
 	return build(ctx, &cfg, o.mode.internal(), agentWiring{
-		handlers:   o.eventHandlers,
-		stdSched:   o.standardScheduler,
-		cronParser: o.cronParser,
+		handlers:     o.eventHandlers,
+		stdSched:     o.standardScheduler,
+		cronParser:   o.cronParser,
+		schedules:    o.schedules,
+		agentConfigs: o.agentConfigs,
 	})
 }
 
@@ -78,6 +80,13 @@ type Options struct {
 	eventHandlers     []func(event.Event)
 	standardScheduler bool
 	cronParser        agent.CronParser
+	// schedules and agentConfigs are build-time, per-kind overrides
+	// (Reference §9.5 stage 2). schedules maps an agent kind to a schedule
+	// expression (cron string or interval string); agentConfigs maps a kind
+	// to its config. Both are last-wins per kind (replace-by-kind). They are
+	// applied to the scheduler during assembly (§9.7).
+	schedules    map[string]string
+	agentConfigs map[string]any
 }
 
 // SetCronParser installs the cron expression parser used by ScheduleCron.
@@ -113,4 +122,38 @@ func WithEventHandler(fn func(event.Event)) BuildOption {
 // primitives, not through the client (level 3).
 func WithStandardScheduler() BuildOption {
 	return func(o *Options) { o.standardScheduler = true }
+}
+
+// WithSchedule sets, at build time, the schedule of an agent kind: expr is
+// either a cron string ("0 3 * * *", requires a cron adapter) or an
+// interval string parseable by time.ParseDuration ("6h"). It overrides any
+// schedule the config declared for the kind, and a repeat call for the same
+// kind replaces it (replace-by-kind, Reference §9.5/§9.7). Declaring a
+// schedule raises the scheduler even without WithStandardScheduler. An empty
+// kind or expr is ignored; the kind is validated during assembly.
+func WithSchedule(kind, expr string) BuildOption {
+	return func(o *Options) {
+		if kind == "" || expr == "" {
+			return
+		}
+		if o.schedules == nil {
+			o.schedules = make(map[string]string)
+		}
+		o.schedules[kind] = expr
+	}
+}
+
+// WithAgentConfig overrides, at build time, the kind-specific config handed
+// to an agent's factory. A repeat call for the same kind replaces it. An
+// empty kind is ignored.
+func WithAgentConfig(kind string, cfg any) BuildOption {
+	return func(o *Options) {
+		if kind == "" {
+			return
+		}
+		if o.agentConfigs == nil {
+			o.agentConfigs = make(map[string]any)
+		}
+		o.agentConfigs[kind] = cfg
+	}
 }

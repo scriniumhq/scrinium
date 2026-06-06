@@ -115,6 +115,7 @@ type Policy struct {
 	MaxArtifactSize     Size            `yaml:"maxArtifactSize,omitempty" json:"maxArtifactSize,omitempty"`
 	GC                  *Schedule       `yaml:"gc,omitempty" json:"gc,omitempty"`
 	Scrub               *ScrubSchedule  `yaml:"scrub,omitempty" json:"scrub,omitempty"`
+	Snapshot            *Schedule       `yaml:"snapshot,omitempty" json:"snapshot,omitempty"`
 }
 
 // Encryption enables manifest+blob encryption. Passphrase is required
@@ -149,23 +150,33 @@ type MultistoreSpec struct {
 	Replication map[string][]string `yaml:"replication,omitempty" json:"replication,omitempty"`
 }
 
-// Schedule is a cron schedule (GC).
+// Schedule is the cadence of a built-in maintenance agent (GC, Snapshot):
+// an interval (Every) or a cron expression (Schedule), mutually exclusive.
+// Every is the default form and needs no cron adapter; a cron Schedule
+// requires cron.Enable (ADR-71).
 type Schedule struct {
-	Schedule string `yaml:"schedule,omitempty" json:"schedule,omitempty"`
+	Every    Duration `yaml:"every,omitempty" json:"every,omitempty"`
+	Schedule string   `yaml:"schedule,omitempty" json:"schedule,omitempty"`
 }
 
-// ScrubSchedule is a cron schedule plus per-stage verification (Scrub).
+// ScrubSchedule is a Schedule (interval Every or cron Schedule, mutually
+// exclusive) plus per-stage verification (Scrub).
 type ScrubSchedule struct {
-	Schedule             string `yaml:"schedule,omitempty" json:"schedule,omitempty"`
-	PerStageVerification bool   `yaml:"perStageVerification,omitempty" json:"perStageVerification,omitempty"`
+	Every                Duration `yaml:"every,omitempty" json:"every,omitempty"`
+	Schedule             string   `yaml:"schedule,omitempty" json:"schedule,omitempty"`
+	PerStageVerification bool     `yaml:"perStageVerification,omitempty" json:"perStageVerification,omitempty"`
 }
 
 // ComponentSpec is a generic kind+config block, used for user
 // agents. Config is left as a raw map for the registered factory
-// to decode into its own typed struct.
+// to decode into its own typed struct. Every (interval) or Schedule
+// (cron) is an optional, mutually-exclusive trigger that puts the agent
+// on the scheduler at build time (§9.7).
 type ComponentSpec struct {
-	Kind   string         `yaml:"kind" json:"kind"`
-	Config map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
+	Kind     string         `yaml:"kind" json:"kind"`
+	Config   map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
+	Every    Duration       `yaml:"every,omitempty" json:"every,omitempty"`
+	Schedule string         `yaml:"schedule,omitempty" json:"schedule,omitempty"`
 }
 
 // PipelineStage is one entry of an explicit pipeline. In YAML it is
