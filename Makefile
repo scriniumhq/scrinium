@@ -298,7 +298,7 @@ fuzz-clean:
 # Usage:
 #   make bench                  # run -> bench-new.txt (+ full log)
 #   make bench BENCH=Manifest   # restrict to matching benchmark names
-#   make bench BENCHPKG=./store/artifact/   # one package
+#   make bench BENCHPKG=./engine/artifact/   # one package
 #   make bench-cmp              # run + benchstat diff vs bench-baseline.txt
 #   make bench-baseline         # seed/refresh bench-baseline.txt from a run
 #

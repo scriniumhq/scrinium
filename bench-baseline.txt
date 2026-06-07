@@ -1,0 +1,78 @@
+goos: darwin
+goarch: arm64
+pkg: scrinium.dev/engine/artifact
+cpu: Apple M5
+BenchmarkManifestCodec/Encode-10         	 2624362	       434.2 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Encode-10         	 2768148	       434.9 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Encode-10         	 2764587	       434.5 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Encode-10         	 2763217	       437.1 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Encode-10         	 2752606	       437.4 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Encode-10         	 2717272	       440.6 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Encode-10         	 2634999	       442.4 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Encode-10         	 2728138	       440.6 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Encode-10         	 2700328	       445.5 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Encode-10         	 2522260	       448.1 ns/op	    1048 B/op	       6 allocs/op
+BenchmarkManifestCodec/Decode-10         	  631898	      1922 ns/op	    1640 B/op	      23 allocs/op
+BenchmarkManifestCodec/Decode-10         	  616360	      1931 ns/op	    1640 B/op	      23 allocs/op
+BenchmarkManifestCodec/Decode-10         	  624007	      2002 ns/op	    1640 B/op	      23 allocs/op
+BenchmarkManifestCodec/Decode-10         	  607800	      1909 ns/op	    1640 B/op	      23 allocs/op
+BenchmarkManifestCodec/Decode-10         	  621738	      1901 ns/op	    1640 B/op	      23 allocs/op
+BenchmarkManifestCodec/Decode-10         	  620700	      1840 ns/op	    1640 B/op	      23 allocs/op
+BenchmarkManifestCodec/Decode-10         	  644982	      1849 ns/op	    1640 B/op	      23 allocs/op
+BenchmarkManifestCodec/Decode-10         	  633772	      1862 ns/op	    1640 B/op	      23 allocs/op
+BenchmarkManifestCodec/Decode-10         	  638719	      1870 ns/op	    1640 B/op	      23 allocs/op
+BenchmarkManifestCodec/Decode-10         	  639313	      1865 ns/op	    1640 B/op	      23 allocs/op
+goos: darwin
+goarch: arm64
+pkg: scrinium.dev/engine/store
+cpu: Apple M5
+BenchmarkPut_64B-10      	    2772	    449934 ns/op	   0.14 MB/s	   45200 B/op	     169 allocs/op
+BenchmarkPut_64B-10      	    2587	    444352 ns/op	   0.14 MB/s	   45198 B/op	     169 allocs/op
+BenchmarkPut_64B-10      	    2596	    444847 ns/op	   0.14 MB/s	   45181 B/op	     169 allocs/op
+BenchmarkPut_64B-10      	    2582	    442817 ns/op	   0.14 MB/s	   45198 B/op	     169 allocs/op
+BenchmarkPut_64B-10      	    2592	    448292 ns/op	   0.14 MB/s	   45197 B/op	     169 allocs/op
+BenchmarkPut_64B-10      	    2594	    454556 ns/op	   0.14 MB/s	   45183 B/op	     169 allocs/op
+BenchmarkPut_64B-10      	    2784	    440855 ns/op	   0.15 MB/s	   45181 B/op	     169 allocs/op
+BenchmarkPut_64B-10      	    2590	    447672 ns/op	   0.14 MB/s	   45193 B/op	     169 allocs/op
+BenchmarkPut_64B-10      	    2566	    445545 ns/op	   0.14 MB/s	   45191 B/op	     169 allocs/op
+BenchmarkPut_64B-10      	    2526	    449829 ns/op	   0.14 MB/s	   45199 B/op	     169 allocs/op
+BenchmarkPut_4KiB-10     	    2529	    461759 ns/op	   8.87 MB/s	   45349 B/op	     171 allocs/op
+BenchmarkPut_4KiB-10     	    2449	    453913 ns/op	   9.02 MB/s	   45358 B/op	     171 allocs/op
+BenchmarkPut_4KiB-10     	    2503	    457956 ns/op	   8.94 MB/s	   45236 B/op	     171 allocs/op
+BenchmarkPut_4KiB-10     	    2510	    460355 ns/op	   8.90 MB/s	   45357 B/op	     171 allocs/op
+BenchmarkPut_4KiB-10     	    2538	    456066 ns/op	   8.98 MB/s	   45355 B/op	     171 allocs/op
+BenchmarkPut_4KiB-10     	    2451	    457150 ns/op	   8.96 MB/s	   45358 B/op	     171 allocs/op
+BenchmarkPut_4KiB-10     	    2538	    455938 ns/op	   8.98 MB/s	   45368 B/op	     171 allocs/op
+BenchmarkPut_4KiB-10     	    2498	    456403 ns/op	   8.97 MB/s	   45227 B/op	     171 allocs/op
+BenchmarkPut_4KiB-10     	    2469	    459243 ns/op	   8.92 MB/s	   45352 B/op	     171 allocs/op
+BenchmarkPut_4KiB-10     	    2463	    469030 ns/op	   8.73 MB/s	   45231 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2194	    529981 ns/op	 123.66 MB/s	   45398 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2248	    511739 ns/op	 128.07 MB/s	   45398 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2283	    504091 ns/op	 130.01 MB/s	   45402 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2294	    515317 ns/op	 127.18 MB/s	   45401 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2233	    510476 ns/op	 128.38 MB/s	   45389 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2316	    510241 ns/op	 128.44 MB/s	   45391 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2305	    511324 ns/op	 128.17 MB/s	   45393 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2271	    503045 ns/op	 130.28 MB/s	   45380 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2265	    510295 ns/op	 128.43 MB/s	   45399 B/op	     171 allocs/op
+BenchmarkPut_64KiB-10    	    2244	    508309 ns/op	 128.93 MB/s	   45401 B/op	     171 allocs/op
+BenchmarkPut_1MiB-10     	     933	   1347312 ns/op	 778.27 MB/s	   45490 B/op	     172 allocs/op
+BenchmarkPut_1MiB-10     	     962	   1219277 ns/op	 860.00 MB/s	   45377 B/op	     172 allocs/op
+BenchmarkPut_1MiB-10     	     966	   1223074 ns/op	 857.33 MB/s	   45490 B/op	     172 allocs/op
+BenchmarkPut_1MiB-10     	     968	   1232468 ns/op	 850.79 MB/s	   45477 B/op	     172 allocs/op
+BenchmarkPut_1MiB-10     	     963	   1220110 ns/op	 859.41 MB/s	   45495 B/op	     172 allocs/op
+BenchmarkPut_1MiB-10     	     990	   1229984 ns/op	 852.51 MB/s	   45483 B/op	     172 allocs/op
+BenchmarkPut_1MiB-10     	     949	   1231772 ns/op	 851.27 MB/s	   45489 B/op	     172 allocs/op
+BenchmarkPut_1MiB-10     	     960	   1213766 ns/op	 863.90 MB/s	   45492 B/op	     172 allocs/op
+BenchmarkPut_1MiB-10     	     954	   1214476 ns/op	 863.40 MB/s	   45485 B/op	     172 allocs/op
+BenchmarkPut_1MiB-10     	     946	   1211269 ns/op	 865.68 MB/s	   45360 B/op	     172 allocs/op
+BenchmarkPut_16MiB-10    	      93	  13498931 ns/op	1242.86 MB/s	   45978 B/op	     176 allocs/op
+BenchmarkPut_16MiB-10    	      80	  12782077 ns/op	1312.56 MB/s	   46093 B/op	     177 allocs/op
+BenchmarkPut_16MiB-10    	      90	  13436814 ns/op	1248.60 MB/s	   46084 B/op	     177 allocs/op
+BenchmarkPut_16MiB-10    	      92	  13559822 ns/op	1237.27 MB/s	   45999 B/op	     176 allocs/op
+BenchmarkPut_16MiB-10    	      91	  13335751 ns/op	1258.06 MB/s	   45918 B/op	     177 allocs/op
+BenchmarkPut_16MiB-10    	      91	  13369851 ns/op	1254.85 MB/s	   46032 B/op	     177 allocs/op
+BenchmarkPut_16MiB-10    	      91	  13336620 ns/op	1257.98 MB/s	   46040 B/op	     177 allocs/op
+BenchmarkPut_16MiB-10    	      91	  13260857 ns/op	1265.17 MB/s	   45971 B/op	     176 allocs/op
+BenchmarkPut_16MiB-10    	      91	  13377461 ns/op	1254.14 MB/s	   45897 B/op	     177 allocs/op
+BenchmarkPut_16MiB-10    	      91	  13496296 ns/op	1243.10 MB/s	   46026 B/op	     177 allocs/op
