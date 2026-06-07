@@ -3,17 +3,23 @@ package artifact
 // manifest.go — the public codec facade. Ties together the header
 // (header.go), the deterministic JSON body (body.go), and the Sealed/
 // Paranoid AEAD modes (crypto.go) into the operations the rest of the
-// system uses: Encode / Decode / DecodeEncrypted / ComputeArtifactID /
-// VerifyArtifactID.
+// system uses: Encode / Decode / DecodeEncrypted / ComputeHandle /
+// ComputeManifestDigest / VerifyManifestDigest.
 //
-// ArtifactID is the hash of the *entire file bytes*, header included. A
-// manifest's serialised form is therefore stable: the same manifest plus
-// the same key produces the same bytes and the same ID every time.
+// Two distinct identifiers (ADR-73):
+//   - ArtifactID (handle) = PRF(NK, cd‖md): the floating external identity,
+//     SERIALISED in the body, stable across form changes. Set by
+//     ComputeHandle before encoding.
+//   - ManifestDigest = hash of the entire file bytes (header included):
+//     the on-disk filename and form-verifier, NOT serialised (it is the
+//     hash of the body), recomputed by ComputeManifestDigest. Changes on
+//     repack.
 
 import (
 	"fmt"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/errs"
 )
@@ -26,13 +32,21 @@ type KeyProvider interface {
 	GetKeys(keyID string) ([][]byte, error)
 }
 
+// identityMetaCanonEmpty is the canonical encoding of an empty identity
+// partition — the v1 default (no fields are opted into identity). md =
+// H(identityMetaCanonEmpty) is then a fixed token. The real canonical
+// codec and the opt-in identity-field mechanism are deferred to the
+// format-ADR; treat this marker as versioned and immutable.
+var identityMetaCanonEmpty = []byte("scrinium/identity-meta/v1:{}")
+
 // Encode produces the full file bytes (header + body) for a Plain
-// manifest. Non-Plain crypto is rejected — use ComputeArtifactID (which
-// dispatches to the encrypted path) or the encrypted encode entrypoint.
+// manifest. Non-Plain crypto is rejected — use ComputeManifestDigest
+// (which dispatches to the encrypted path) or the encrypted encode
+// entrypoint.
 //
-// The manifest's ArtifactID is NOT an input: it is the result of hashing
-// these bytes. Encode is for tests, for re-encoding after ID assignment,
-// and for round-trip verification.
+// The handle (m.ArtifactID) IS part of the body and must already be set
+// (ComputeHandle) before encoding. The ManifestDigest is NOT an input: it
+// is the hash of these bytes.
 func Encode(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.ManifestCrypto) ([]byte, error) {
 	if crypto != "" && crypto != domain.ManifestCryptoPlain {
 		return nil, errs.ErrUnsupportedCrypto
@@ -57,9 +71,11 @@ func Encode(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.M
 }
 
 // Decode parses full manifest bytes (Plain only), validates the header,
-// and returns the manifest with body fields populated. The ArtifactID is
-// NOT set — the caller decides whether to re-derive and verify it. An
-// encrypted file returns ErrUnsupportedCrypto here; use DecodeEncrypted.
+// and returns the manifest with body fields populated — including the
+// handle (m.ArtifactID), which now lives in the body. The ManifestDigest
+// is NOT set — the caller derives and verifies it from the file bytes /
+// path. An encrypted file returns ErrUnsupportedCrypto here; use
+// DecodeEncrypted.
 func Decode(data []byte) (domain.Manifest, error) {
 	header, bodyOffset, err := readHeader(data)
 	if err != nil {
@@ -116,19 +132,55 @@ func DecodeEncrypted(data []byte, keys KeyProvider) (domain.Manifest, error) {
 	return decodeEncryptedBody(header.Crypto, body, candidates, headerBytes)
 }
 
-// ComputeArtifactID encodes a manifest, hashes the resulting file bytes,
-// and returns the assigned ArtifactID, the final file bytes (already
-// carrying the ID-bearing manifest, ready for driver.Put), and the
-// in-memory manifest with ArtifactID populated.
+// ComputeHandle computes the floating ArtifactID (handle) for a manifest
+// and populates m.ArtifactID, m.IdentityMetaHash (md) and m.IdentityNonce.
 //
-// Encoding dispatches on crypto: Plain → Encode (dek/keyID ignored);
-// Sealed/Paranoid → the encrypted encode entrypoint with dek+keyID (an
-// empty dek under non-Plain crypto is rejected there).
+// md = H(canon(identity-meta)); in v1 the identity partition is empty, so
+// md is a fixed token. handle = H(nk ‖ cd ‖ md ‖ nonce) (hashing.Handle).
+// nk is the naming key (hashing.NamingKeyPublic in Plain/Sealed); nonce is
+// fresh 16 random bytes in IdentityMode=Unique, nil in Coalesced. The
+// caller (store) generates the nonce.
 //
-// ArtifactID = hash(file bytes), and the bytes include the body (which
-// never contains ArtifactID itself — that field is in-memory only). One
-// pass yields both the bytes and the ID.
-func ComputeArtifactID(
+// Call ComputeHandle BEFORE encoding: the handle is part of the body, and
+// the ManifestDigest is then the hash of the body that already carries it.
+func ComputeHandle(
+	m domain.Manifest,
+	hashAlgo string,
+	registry domain.HashRegistry,
+	nk []byte,
+	nonce []byte,
+) (domain.Manifest, error) {
+	h, err := registry.NewHasher(hashAlgo)
+	if err != nil {
+		return domain.Manifest{}, fmt.Errorf("artifact: hasher: %w", err)
+	}
+	if _, err := h.Write(identityMetaCanonEmpty); err != nil {
+		return domain.Manifest{}, err
+	}
+	md := registry.Format(hashAlgo, h.Sum(nil))
+
+	handle, err := hashing.Handle(registry, hashAlgo, nk, m.ContentHash, md, nonce)
+	if err != nil {
+		return domain.Manifest{}, fmt.Errorf("artifact: handle: %w", err)
+	}
+	m.ArtifactID = handle
+	m.IdentityMetaHash = md
+	m.IdentityNonce = nonce
+	return m, nil
+}
+
+// ComputeManifestDigest encodes a manifest, hashes the resulting file
+// bytes, and returns the ManifestDigest, the final file bytes (ready for
+// driver.Put), and the in-memory manifest with Digest populated.
+//
+// The manifest must already carry its handle (ComputeHandle) — the handle
+// is part of the body. Encoding dispatches on crypto: Plain → Encode
+// (dek/keyID ignored); Sealed/Paranoid → the encrypted encode entrypoint
+// with dek+keyID (an empty dek under non-Plain crypto is rejected there).
+//
+// ManifestDigest = hash(file bytes). One pass yields both the bytes and
+// the digest.
+func ComputeManifestDigest(
 	m domain.Manifest,
 	hashAlgo string,
 	registry domain.HashRegistry,
@@ -136,7 +188,7 @@ func ComputeArtifactID(
 	crypto domain.ManifestCrypto,
 	dek []byte,
 	keyID string,
-) (domain.ArtifactID, []byte, domain.Manifest, error) {
+) (domain.ManifestDigest, []byte, domain.Manifest, error) {
 	var bytesEncoded []byte
 	var err error
 
@@ -157,19 +209,20 @@ func ComputeArtifactID(
 	if _, err := h.Write(bytesEncoded); err != nil {
 		return "", nil, domain.Manifest{}, err
 	}
-	id := domain.ArtifactID(registry.Format(hashAlgo, h.Sum(nil)))
-	m.ArtifactID = id
-	return id, bytesEncoded, m, nil
+	digest := domain.ManifestDigest(registry.Format(hashAlgo, h.Sum(nil)))
+	m.Digest = digest
+	return digest, bytesEncoded, m, nil
 }
 
-// VerifyArtifactID re-hashes file bytes and checks the digest against id.
-// The algorithm is taken from id's prefix, so a manifest can travel
-// between Stores with different default hashers without losing its
-// identity. A mismatch is ErrCorruptedManifest.
-func VerifyArtifactID(id domain.ArtifactID, fileBytes []byte, registry domain.HashRegistry) error {
-	algo, _, err := registry.Parse(string(id))
+// VerifyManifestDigest re-hashes file bytes and checks the digest against
+// the expected ManifestDigest. The algorithm is taken from the digest's
+// prefix, so a manifest can travel between Stores with different default
+// hashers without losing form-verification. A mismatch is
+// ErrCorruptedManifest.
+func VerifyManifestDigest(digest domain.ManifestDigest, fileBytes []byte, registry domain.HashRegistry) error {
+	algo, _, err := registry.Parse(string(digest))
 	if err != nil {
-		return fmt.Errorf("artifact: parse id: %w", err)
+		return fmt.Errorf("artifact: parse digest: %w", err)
 	}
 	h, err := registry.NewHasher(algo)
 	if err != nil {
@@ -178,8 +231,8 @@ func VerifyArtifactID(id domain.ArtifactID, fileBytes []byte, registry domain.Ha
 	if _, err := h.Write(fileBytes); err != nil {
 		return err
 	}
-	got := domain.ArtifactID(registry.Format(algo, h.Sum(nil)))
-	if got != id {
+	got := domain.ManifestDigest(registry.Format(algo, h.Sum(nil)))
+	if got != digest {
 		return errs.ErrCorruptedManifest
 	}
 	return nil

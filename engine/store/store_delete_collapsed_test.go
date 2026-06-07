@@ -50,12 +50,16 @@ func TestDelete_RemovesManifest(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// Capture the on-disk digest (the manifest filename) before the
+			// delete removes the artifact — afterwards the handle no longer
+			// resolves.
+			digest := mustDigest(t, s, id)
 			if err := s.Delete(context.Background(), id); err != nil {
 				t.Fatalf("Delete: %v", err)
 			}
 
 			disk := storefx2.OnDiskAt(root)
-			if disk.ManifestExists(id) {
+			if disk.ManifestExists(digest) {
 				t.Errorf("manifest file should be gone")
 			}
 

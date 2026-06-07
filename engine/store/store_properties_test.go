@@ -275,7 +275,7 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 			}
 
 			// Inspect the raw manifest file on disk.
-			mp := storefx2.OnDiskAt(r.Root()).ManifestPath(id)
+			mp := storefx2.OnDiskAt(r.Root()).ManifestPath(mustDigest(t, s, id))
 			if mp == "" {
 				t.Fatalf("ManifestPath returned empty for %s", id)
 			}

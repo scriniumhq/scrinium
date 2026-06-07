@@ -18,10 +18,10 @@ func TestRefFromBlobPath_RejectsTooShortHex(t *testing.T) {
 	}
 }
 
-// IDFromManifestPath had a round-trip and a malformed-segment test, but no
+// DigestFromManifestPath had a round-trip and a malformed-segment test, but no
 // explicit empty-path case.
-func TestIDFromManifestPath_RejectsEmpty(t *testing.T) {
-	if _, err := artifact.IDFromManifestPath(""); err == nil {
+func TestDigestFromManifestPath_RejectsEmpty(t *testing.T) {
+	if _, err := artifact.DigestFromManifestPath(""); err == nil {
 		t.Fatal("expected error on empty manifest path")
 	}
 }

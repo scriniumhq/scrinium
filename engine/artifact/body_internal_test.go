@@ -90,18 +90,21 @@ func TestMarshalBodyJSON_OmitsKeyIDWhenEmpty(t *testing.T) {
 	}
 }
 
-func TestMarshalBodyJSON_ArtifactIDNotInBody(t *testing.T) {
+// The floating ArtifactID (handle) IS serialised in the body now (ADR-73):
+// it is the external identity and must survive index loss. The form
+// digest, by contrast, is the file's hash and is never in the body.
+func TestMarshalBodyJSON_ArtifactIDInBody(t *testing.T) {
 	m := localManifest()
 	m.ArtifactID = domain.ArtifactID("sha256-deadbeef")
 
 	bs, _ := marshalBodyJSON(m)
-	if bytes.Contains(bs, []byte("artifact_id")) || bytes.Contains(bs, []byte("deadbeef")) {
-		t.Error("ArtifactID leaked into manifest body")
+	if !bytes.Contains(bs, []byte("artifact_id")) || !bytes.Contains(bs, []byte("deadbeef")) {
+		t.Errorf("ArtifactID (floating handle) must be serialised in the body:\n%s", bs)
 	}
 
 	got, _ := unmarshalBodyJSON(bs)
-	if got.ArtifactID != "" {
-		t.Errorf("unmarshal populated ArtifactID from body: got %q, want empty", got.ArtifactID)
+	if got.ArtifactID != m.ArtifactID {
+		t.Errorf("round-trip ArtifactID: got %q, want %q", got.ArtifactID, m.ArtifactID)
 	}
 }
 

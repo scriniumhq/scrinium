@@ -18,9 +18,24 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	storefx2 "scrinium.dev/testutil/storefx"
 )
+
+// mustDigest resolves an artifact's on-disk ManifestDigest (the manifest
+// filename) from its floating handle, via Get. Tests that inspect the
+// physical manifest file need the digest, not the handle — the file is
+// named by its digest and the index maps handle → digest.
+func mustDigest(t *testing.T, s store.Store, id domain.ArtifactID) domain.ManifestDigest {
+	t.Helper()
+	rh, err := s.Get(context.Background(), id)
+	if err != nil {
+		t.Fatalf("mustDigest: Get %s: %v", id, err)
+	}
+	defer rh.Close()
+	return rh.Manifest().Digest
+}
 
 // TestPut_OnDiskLayout is the single physical-layout sanity check: a
 // fresh Put lands a manifest under manifests/, exactly one blob under
@@ -40,8 +55,9 @@ func TestPut_OnDiskLayout(t *testing.T) {
 	}
 
 	disk := storefx2.OnDiskAt(root)
-	if !disk.ManifestExists(id) {
-		t.Errorf("manifest not on disk at %s", disk.ManifestPath(id))
+	digest := mustDigest(t, s, id)
+	if !disk.ManifestExists(digest) {
+		t.Errorf("manifest not on disk at %s", disk.ManifestPath(digest))
 	}
 	if n := disk.BlobCount(); n != 1 {
 		t.Errorf("blobs on disk: got %d, want 1", n)
@@ -180,7 +196,7 @@ func TestPut_InlinePolicy(t *testing.T) {
 			if n := disk.BlobCount(); n != tc.wantBlobs {
 				t.Errorf("blob files: got %d, want %d", n, tc.wantBlobs)
 			}
-			m := disk.ReadManifest(t, id)
+			m := disk.ReadManifest(t, mustDigest(t, s, id))
 			if m.LayoutHeader.BlobStorage != tc.wantLayout {
 				t.Errorf("LayoutHeader: got %q, want %q", m.LayoutHeader.BlobStorage, tc.wantLayout)
 			}

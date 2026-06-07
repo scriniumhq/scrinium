@@ -10,14 +10,14 @@ import (
 
 // FuzzPathParsers hardens the on-disk path parsers against arbitrary
 // path strings. Contract (TESTING.md category 1): neither
-// RefFromBlobPath nor IDFromManifestPath may panic on any input;
+// RefFromBlobPath nor DigestFromManifestPath may panic on any input;
 // malformed paths must be rejected with an error. Return values on
 // error are unspecified, so we only assert the no-panic contract here.
 //
 // Seeds include real ManifestPath output so the fuzzer explores
 // near-valid shapes around the shard/segment structure.
 func FuzzPathParsers(f *testing.F) {
-	if p, err := artifact.ManifestPath(domain.ArtifactID("sha256-" + strings.Repeat("a", 64))); err == nil {
+	if p, err := artifact.ManifestPath(domain.ManifestDigest("sha256-" + strings.Repeat("a", 64))); err == nil {
 		f.Add(p)
 	}
 	f.Add("")
@@ -29,6 +29,6 @@ func FuzzPathParsers(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, p string) {
 		_, _ = artifact.RefFromBlobPath(p)
-		_, _ = artifact.IDFromManifestPath(p)
+		_, _ = artifact.DigestFromManifestPath(p)
 	})
 }

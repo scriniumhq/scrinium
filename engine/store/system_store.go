@@ -24,7 +24,7 @@ const maxSystemPointerSize = 256
 // system artifacts.
 const systemSessionID = domain.SessionID("init")
 
-// ArtifactWriter persists a system artifact and returns its ArtifactID.
+// ArtifactWriter persists a system artifact and returns its ManifestDigest.
 // skipIndex selects the unindexed write path (see WithoutIndex).
 type ArtifactWriter func(
 	ctx context.Context,
@@ -33,7 +33,7 @@ type ArtifactWriter func(
 	payload []byte,
 	hashAlgo string,
 	skipIndex bool,
-) (domain.ArtifactID, error)
+) (domain.ManifestDigest, error)
 
 // InlineHandleFactory builds a ReadHandle over an inline manifest's payload.
 type InlineHandleFactory func(domain.Manifest) domain.ReadHandle

@@ -76,17 +76,37 @@ type ManifestSystemFlags struct {
 
 // Manifest is the logical passport of an Artifact.
 type Manifest struct {
-	// ArtifactID is the in-memory identity of the manifest. It is
-	// NOT serialised: ArtifactID is computed as the hash of the full
-	// file bytes (including the header), so it cannot live inside the
-	// body. The field is set at two places only:
-	//   - artifact.ComputeArtifactID, after writing the body
-	//     and hashing the result;
-	//   - store.loadManifest, from the id used to fetch the file.
-	// On the wire (engine/artifact) the field is invisible; in the
-	// index (sqlite) it is the primary key. See codec_test.go for
-	// the "ArtifactID does not appear in JSON" invariant.
+	// ArtifactID is the floating external identity (handle):
+	// PRF(NK, cd‖md). It is what the outside world holds and what
+	// Put returns. Unlike the old model, it is SERIALISED in the
+	// body — it is an input computed from cd‖md (+ nonce in Unique
+	// mode), not the hash of the file, so it must be stored to be
+	// reproducible and to survive index loss (rebuild reads it from
+	// the manifest). Stable across form changes; changes only on
+	// content (cd) or naming-key-domain change.
 	ArtifactID ArtifactID
+
+	// Digest is the manifest digest — hash of the full serialised
+	// file bytes (header included). In-memory ONLY: it is the hash
+	// of the body, so it cannot live inside the body. It is the
+	// on-disk filename and the form-verifier; it CHANGES on repack.
+	// Set at two places only:
+	//   - artifact.ComputeManifestDigest, after encoding;
+	//   - store.loadManifest, from the path used to fetch the file.
+	// The index maps ArtifactID (handle) → Digest.
+	Digest ManifestDigest
+
+	// IdentityMetaHash is md = H(canon(identity-meta)), an input to
+	// ArtifactID. SERIALISED. The identity partition is empty by
+	// default → md is a constant token; an application may opt
+	// specific fields into identity. Descriptive metadata
+	// (CreatedAt, Namespace, Usr) and per-run fields are never in md.
+	IdentityMetaHash string
+
+	// IdentityNonce is 16 random bytes mixed into ArtifactID in
+	// IdentityMode=Unique (makes the handle unique per Put); absent
+	// in Coalesced. SERIALISED, so the handle stays reproducible.
+	IdentityNonce []byte
 
 	Type      ManifestType
 	Namespace string

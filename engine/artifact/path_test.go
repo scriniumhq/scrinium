@@ -132,12 +132,12 @@ func TestBlobPath_RejectsUnknownBlobType(t *testing.T) {
 // --- ManifestPath ---
 
 func TestManifestPath_Sharded(t *testing.T) {
-	id := domain.ArtifactID(ref("cafe1234"))
-	got, err := artifact.ManifestPath(id)
+	digest := domain.ManifestDigest(ref("cafe1234"))
+	got, err := artifact.ManifestPath(digest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "manifests/ca/fe/" + string(id)
+	want := "manifests/ca/fe/" + string(digest)
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -145,13 +145,13 @@ func TestManifestPath_Sharded(t *testing.T) {
 
 func TestManifestPath_RejectsEmpty(t *testing.T) {
 	if _, err := artifact.ManifestPath(""); err == nil {
-		t.Fatal("expected error on empty id")
+		t.Fatal("expected error on empty digest")
 	}
 }
 
 func TestManifestPath_RejectsShort(t *testing.T) {
-	if _, err := artifact.ManifestPath(domain.ArtifactID("sha256-ab")); err == nil {
-		t.Fatal("expected error on too-short id")
+	if _, err := artifact.ManifestPath(domain.ManifestDigest("sha256-ab")); err == nil {
+		t.Fatal("expected error on too-short digest")
 	}
 }
 
@@ -199,22 +199,22 @@ func TestRefFromBlobPath_RejectsNonHex(t *testing.T) {
 	}
 }
 
-// --- IDFromManifestPath: round-trip ---
+// --- DigestFromManifestPath: round-trip ---
 
-func TestIDFromManifestPath_RoundTrip(t *testing.T) {
-	id := domain.ArtifactID(ref("cafe1234"))
-	p, _ := artifact.ManifestPath(id)
-	got, err := artifact.IDFromManifestPath(p)
+func TestDigestFromManifestPath_RoundTrip(t *testing.T) {
+	digest := domain.ManifestDigest(ref("cafe1234"))
+	p, _ := artifact.ManifestPath(digest)
+	got, err := artifact.DigestFromManifestPath(p)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != id {
-		t.Errorf("round-trip: got %q, want %q", got, id)
+	if got != digest {
+		t.Errorf("round-trip: got %q, want %q", got, digest)
 	}
 }
 
-func TestIDFromManifestPath_RejectsBad(t *testing.T) {
-	if _, err := artifact.IDFromManifestPath("manifests/aa/bb/garbage"); err == nil {
+func TestDigestFromManifestPath_RejectsBad(t *testing.T) {
+	if _, err := artifact.DigestFromManifestPath("manifests/aa/bb/garbage"); err == nil {
 		t.Fatal("expected error on bad manifest segment")
 	}
 }

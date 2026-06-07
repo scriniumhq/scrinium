@@ -32,19 +32,28 @@ type jsonBody struct {
 // jsonSys is the on-disk shape of the sys block — every system-level
 // field. Optional fields use omitempty (+ pointer where a zero value is
 // meaningful) so unset values do not appear in output.
+//
+// artifact_id is the floating handle (the external identity); it IS
+// serialised here (unlike the manifest digest, which is the hash of these
+// bytes and lives only in-memory / as the filename). identity_meta_hash
+// (md) and identity_nonce are the other handle inputs and are serialised
+// so the handle stays reproducible and survives index loss.
 type jsonSys struct {
-	BlobRef       string              `json:"blob_ref"`
-	ContentHash   string              `json:"content_hash,omitempty"`
-	CreatedAt     string              `json:"created_at"`
-	LayoutHeader  jsonLayoutHeader    `json:"layout_header"`
-	Namespace     string              `json:"namespace"`
-	OriginalSize  *int64              `json:"original_size,omitempty"`
-	Pipeline      []jsonPipelineStage `json:"pipeline"`
-	RetentionTime string              `json:"retention_until,omitempty"`
-	SchemaVersion int                 `json:"schema_version"`
-	SessionID     string              `json:"session_id"`
-	System        *jsonSystemFlags    `json:"system,omitempty"`
-	Type          string              `json:"type"`
+	ArtifactID       string              `json:"artifact_id,omitempty"`
+	BlobRef          string              `json:"blob_ref"`
+	ContentHash      string              `json:"content_hash,omitempty"`
+	CreatedAt        string              `json:"created_at"`
+	IdentityMetaHash string              `json:"identity_meta_hash,omitempty"`
+	IdentityNonce    string              `json:"identity_nonce,omitempty"` // base64
+	LayoutHeader     jsonLayoutHeader    `json:"layout_header"`
+	Namespace        string              `json:"namespace"`
+	OriginalSize     *int64              `json:"original_size,omitempty"`
+	Pipeline         []jsonPipelineStage `json:"pipeline"`
+	RetentionTime    string              `json:"retention_until,omitempty"`
+	SchemaVersion    int                 `json:"schema_version"`
+	SessionID        string              `json:"session_id"`
+	System           *jsonSystemFlags    `json:"system,omitempty"`
+	Type             string              `json:"type"`
 }
 
 type jsonLayoutHeader struct {
@@ -72,16 +81,21 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 		Ext: m.Ext,
 		Usr: m.Usr,
 		Sys: jsonSys{
-			BlobRef:       string(m.BlobRef),
-			ContentHash:   string(m.ContentHash),
-			CreatedAt:     timefmt.Format(m.CreatedAt),
-			LayoutHeader:  jsonLayoutHeader{BlobStorage: m.LayoutHeader.BlobStorage},
-			Namespace:     m.Namespace,
-			Pipeline:      pipelineToJSON(m.Pipeline),
-			SchemaVersion: SchemaVersion,
-			SessionID:     string(m.SessionID),
-			Type:          string(m.Type),
+			ArtifactID:       string(m.ArtifactID),
+			BlobRef:          string(m.BlobRef),
+			ContentHash:      string(m.ContentHash),
+			CreatedAt:        timefmt.Format(m.CreatedAt),
+			IdentityMetaHash: m.IdentityMetaHash,
+			LayoutHeader:     jsonLayoutHeader{BlobStorage: m.LayoutHeader.BlobStorage},
+			Namespace:        m.Namespace,
+			Pipeline:         pipelineToJSON(m.Pipeline),
+			SchemaVersion:    SchemaVersion,
+			SessionID:        string(m.SessionID),
+			Type:             string(m.Type),
 		},
+	}
+	if len(m.IdentityNonce) > 0 {
+		body.Sys.IdentityNonce = base64.StdEncoding.EncodeToString(m.IdentityNonce)
 	}
 	if m.OriginalSize != 0 {
 		body.Sys.OriginalSize = new(m.OriginalSize)
@@ -122,17 +136,26 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 	}
 
 	m := domain.Manifest{
-		Type:        domain.ManifestType(b.Sys.Type),
-		Namespace:   b.Sys.Namespace,
-		SessionID:   domain.SessionID(b.Sys.SessionID),
-		ContentHash: domain.ContentHash(b.Sys.ContentHash),
-		BlobRef:     domain.BlobRef(b.Sys.BlobRef),
-		Ext:         b.Ext,
-		Usr:         b.Usr,
+		ArtifactID:       domain.ArtifactID(b.Sys.ArtifactID),
+		IdentityMetaHash: b.Sys.IdentityMetaHash,
+		Type:             domain.ManifestType(b.Sys.Type),
+		Namespace:        b.Sys.Namespace,
+		SessionID:        domain.SessionID(b.Sys.SessionID),
+		ContentHash:      domain.ContentHash(b.Sys.ContentHash),
+		BlobRef:          domain.BlobRef(b.Sys.BlobRef),
+		Ext:              b.Ext,
+		Usr:              b.Usr,
 		LayoutHeader: domain.LayoutHeader{
 			BlobStorage: b.Sys.LayoutHeader.BlobStorage,
 		},
 		Pipeline: pipelineFromJSON(b.Sys.Pipeline),
+	}
+	if b.Sys.IdentityNonce != "" {
+		raw, err := base64.StdEncoding.DecodeString(b.Sys.IdentityNonce)
+		if err != nil {
+			return domain.Manifest{}, fmt.Errorf("artifact: identity_nonce base64: %w", err)
+		}
+		m.IdentityNonce = raw
 	}
 	if b.Sys.OriginalSize != nil {
 		m.OriginalSize = *b.Sys.OriginalSize
@@ -207,7 +230,7 @@ func pipelineFromJSON(stages []jsonPipelineStage) []domain.PipelineStage {
 			}
 			// Decode failures are silent here: the format guarantees IV is
 			// base64 if present, so a decode error means the manifest is
-			// corrupt — caught upstream by VerifyArtifactID. We keep the
+			// corrupt — caught upstream by VerifyManifestDigest. We keep the
 			// partial result and let that check surface the corruption.
 		}
 		out = append(out, ps)

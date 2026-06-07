@@ -31,7 +31,7 @@ func writeInlineSystemArtifact(
 	sessionID domain.SessionID,
 	payload []byte,
 	hashAlgo string,
-) (domain.ArtifactID, error) {
+) (domain.ManifestDigest, error) {
 	// ContentHash == BlobRef: the Pipeline is empty for system artifacts.
 	contentHasher, err := hashes.NewHasher(hashAlgo)
 	if err != nil {
@@ -54,7 +54,7 @@ func writeInlineSystemArtifact(
 		CreatedAt:    time.Now().UTC(),
 	}
 
-	id, fileBytes, manifest, err := artifact.ComputeArtifactID(
+	digest, fileBytes, manifest, err := artifact.ComputeManifestDigest(
 		manifest, hashAlgo, hashes,
 		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain,
 		nil, "")
@@ -62,7 +62,7 @@ func writeInlineSystemArtifact(
 		return "", fmt.Errorf("system artifact: compute id: %w", err)
 	}
 
-	manifestPath, err := artifact.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(digest)
 	if err != nil {
 		return "", fmt.Errorf("system artifact: path: %w", err)
 	}
@@ -76,7 +76,7 @@ func writeInlineSystemArtifact(
 		return "", fmt.Errorf("system artifact: index: %w", err)
 	}
 
-	return id, nil
+	return digest, nil
 }
 
 // writeInlineSystemArtifactUnindexed is writeInlineSystemArtifact without
@@ -89,7 +89,7 @@ func writeInlineSystemArtifactUnindexed(
 	sessionID domain.SessionID,
 	payload []byte,
 	hashAlgo string,
-) (domain.ArtifactID, error) {
+) (domain.ManifestDigest, error) {
 	contentHasher, err := hashes.NewHasher(hashAlgo)
 	if err != nil {
 		return "", fmt.Errorf("system artifact (no-index): content hasher: %w", err)
@@ -111,7 +111,7 @@ func writeInlineSystemArtifactUnindexed(
 		CreatedAt:    time.Now().UTC(),
 	}
 
-	id, fileBytes, _, err := artifact.ComputeArtifactID(
+	digest, fileBytes, _, err := artifact.ComputeManifestDigest(
 		manifest, hashAlgo, hashes,
 		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain,
 		nil, "")
@@ -119,7 +119,7 @@ func writeInlineSystemArtifactUnindexed(
 		return "", fmt.Errorf("system artifact (no-index): compute id: %w", err)
 	}
 
-	manifestPath, err := artifact.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(digest)
 	if err != nil {
 		return "", fmt.Errorf("system artifact (no-index): path: %w", err)
 	}
@@ -127,5 +127,5 @@ func writeInlineSystemArtifactUnindexed(
 		return "", fmt.Errorf("system artifact (no-index): put manifest: %w", err)
 	}
 
-	return id, nil
+	return digest, nil
 }

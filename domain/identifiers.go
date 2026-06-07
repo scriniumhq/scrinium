@@ -2,17 +2,35 @@ package domain
 
 import "github.com/google/uuid"
 
-// ArtifactID is the public identifier of an Artifact. It is a
-// cryptographic hash of the final serialised manifest file (header
-// included). Format: "<algo>-<hex>" (for example,
-// "sha256-abc..."). Any change to the metadata produces a new
-// Manifest and a new ArtifactID.
+// ArtifactID is the public, stable identity of an Artifact — a
+// *floating handle*: ArtifactID = PRF(NK, cd ‖ md), where cd =
+// H(content), md = H(canon(identity-meta)), and NK is the store's
+// naming key (a public domain constant in Plain/Sealed, a secret
+// naming key in Paranoid). Format: "<algo>-<hex>".
+//
+// The handle is what the outside world holds (business DB, pointers)
+// and what Put returns. It is STABLE across form changes —
+// repack, re-key with the same key, rebundle, layout change — and
+// changes only when the content (cd) or the naming-key domain
+// changes (e.g. crossing into Paranoid). Unlike ManifestDigest, it
+// is serialised inside the manifest body (it is an input computed
+// from cd‖md, not derivable from the file bytes).
 type ArtifactID string
+
+// ManifestDigest is the hash of the *full serialised manifest file*
+// (header included). Format: "<algo>-<hex>". It is the physical
+// on-disk filename and the form-verifier for a manifest: it CHANGES
+// whenever the manifest is repacked. The index maps ArtifactID
+// (handle) → current ManifestDigest. Distinct type from ArtifactID
+// on purpose: the compiler then rejects passing a handle where a
+// physical digest (filename, storage key) is required, and vice
+// versa.
+type ManifestDigest string
 
 // ContentHash is the hash of the original payload before any
 // transformation. The global deduplication key: two files with the
 // same content share a ContentHash regardless of Pipeline
-// configuration.
+// configuration. Also serves as cd, the content input to ArtifactID.
 type ContentHash string
 
 // BlobRef is the hash of the final transformed blob stream (after
@@ -55,4 +73,25 @@ type ContentHashAlgorithm string
 const (
 	HashSHA256 ContentHashAlgorithm = "sha256"
 	HashBLAKE3 ContentHashAlgorithm = "blake3"
+)
+
+// IdentityMode is an immutable Store property controlling whether
+// identical content+identity-meta coalesce to one handle.
+//
+//   - IdentityModeUnique (default): a fresh per-Put nonce is mixed
+//     into the handle, so every Put yields a distinct ArtifactID.
+//     WithIdempotent() opts a single call back into coalescing.
+//   - IdentityModeCoalesced (WORM archive): no nonce; the handle is
+//     deterministic (PRF(NK, cd‖md)), so identical artifacts share
+//     one ArtifactID. WithUnique() opts a single call back out.
+//
+// Coalescing implies WORM (no deletion): a deduplicated manifest is
+// referenced by the outside world invisibly to the store, so refcount
+// is impossible. Coalescing is forbidden in Paranoid (a deterministic
+// handle would leak content equality).
+type IdentityMode string
+
+const (
+	IdentityModeUnique    IdentityMode = "unique"
+	IdentityModeCoalesced IdentityMode = "coalesced"
 )
