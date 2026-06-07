@@ -172,22 +172,33 @@ func registerBlob(
 }
 
 // insertManifestRow writes a row into the manifests table.
-// Idempotency: ON CONFLICT(artifact_id) DO NOTHING. The same
-// artifact registered twice (after a crash, for instance) is a
-// no-op rather than an error — the content is by definition
-// identical because ArtifactID is its hash.
+// Idempotency: ON CONFLICT(artifact_id) DO NOTHING. The same artifact
+// registered twice (after a crash, for instance) is a no-op rather than
+// an error — re-indexing identical content lands the identical row.
+//
+// Primary-key derivation: user artifacts key on their floating handle
+// (m.ArtifactID). System artifacts have no handle (ADR-73) and are
+// addressed by their ManifestDigest, so they key on the digest — stored
+// in the artifact_id column per the documented "system artifact_id =
+// digest" rule. An empty artifact_id would otherwise collapse every
+// system artifact under ON CONFLICT(artifact_id) DO NOTHING, leaving
+// only the first one ever written.
 func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error {
 	const stmt = `
 		INSERT INTO manifests (
-			artifact_id, type, namespace, session_id,
+			artifact_id, manifest_digest, type, namespace, session_id,
 			blob_ref, created_at, retention_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(artifact_id) DO NOTHING`
 
-	// blob_ref is NULL for Inline manifests per §9.1.2 — Inline
-	// blobs do not have a row in `blobs`, and the routing layer
-	// uses the absence of a JOIN partner as the "this is inline,
-	// read the file for content" signal.
+	pk := string(m.ArtifactID)
+	if pk == "" {
+		pk = string(m.Digest)
+	}
+
+	// blob_ref is NULL for Inline manifests per §9.1.2 — Inline blobs do
+	// not have a row in `blobs`, and the routing layer uses the absence
+	// of a JOIN partner as the "this is inline, read the file" signal.
 	var blobRefArg any
 	if m.LayoutHeader.BlobStorage == domain.LayoutInline {
 		blobRefArg = nil
@@ -195,11 +206,10 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 		blobRefArg = string(m.BlobRef)
 	}
 
-	// retention_until is NULL when no retention was set. Stored
-	// alongside the manifest row (rather than read from the
-	// manifest file at Delete-time) so that RollbackSession can
-	// do its atomic retention check in one indexed query instead
-	// of N file reads.
+	// retention_until is NULL when no retention was set. Stored alongside
+	// the manifest row (rather than read from the file at Delete-time) so
+	// RollbackSession can do its atomic retention check in one indexed
+	// query instead of N file reads.
 	var retentionArg any
 	if m.RetentionUntil.IsZero() {
 		retentionArg = nil
@@ -213,7 +223,8 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	}
 
 	_, err := tx.ExecContext(ctx, stmt,
-		string(m.ArtifactID),
+		pk,
+		string(m.Digest),
 		string(m.Type),
 		m.Namespace,
 		m.SessionID,
@@ -498,6 +509,34 @@ func (i *Index) ManifestExists(ctx context.Context, id domain.ArtifactID) (bool,
 	const stmt = `SELECT 1 FROM manifests WHERE artifact_id = ? LIMIT 1`
 	var one int
 	err := i.db.QueryRowContext(ctx, stmt, string(id)).Scan(&one)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, classifyError(err)
+	}
+	return true, nil
+}
+
+// ResolveManifestDigest returns the current on-disk digest for a handle.
+func (i *Index) ResolveManifestDigest(ctx context.Context, id domain.ArtifactID) (domain.ManifestDigest, bool, error) {
+	const stmt = `SELECT manifest_digest FROM manifests WHERE artifact_id = ? LIMIT 1`
+	var d string
+	err := i.db.QueryRowContext(ctx, stmt, string(id)).Scan(&d)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return "", false, nil
+	case err != nil:
+		return "", false, classifyError(err)
+	}
+	return domain.ManifestDigest(d), true, nil
+}
+
+// ManifestExistsByDigest reports whether a manifest row carries digest.
+func (i *Index) ManifestExistsByDigest(ctx context.Context, digest domain.ManifestDigest) (bool, error) {
+	const stmt = `SELECT 1 FROM manifests WHERE manifest_digest = ? LIMIT 1`
+	var one int
+	err := i.db.QueryRowContext(ctx, stmt, string(digest)).Scan(&one)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return false, nil

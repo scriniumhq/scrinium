@@ -171,15 +171,15 @@ func (i *Index) LookupPacked(ctx context.Context, artifactID domain.ArtifactID) 
 // Inline manifests have no blobs row (bytes live in the manifest).
 func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	var (
-		artifactID, mtype, namespace string
-		sessionID                    domain.SessionID
-		createdAt                    string
-		blobRef, retentionUntil      sql.NullString
-		contentHash                  sql.NullString
-		originalSize                 sql.NullInt64
+		artifactID, manifestDigest, mtype, namespace string
+		sessionID                                    domain.SessionID
+		createdAt                                    string
+		blobRef, retentionUntil                      sql.NullString
+		contentHash                                  sql.NullString
+		originalSize                                 sql.NullInt64
 	)
 	if err := rows.Scan(
-		&artifactID, &mtype, &namespace, &sessionID,
+		&artifactID, &manifestDigest, &mtype, &namespace, &sessionID,
 		&blobRef, &createdAt, &retentionUntil,
 		&contentHash, &originalSize,
 	); err != nil {
@@ -187,6 +187,7 @@ func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	}
 	m := domain.Manifest{
 		ArtifactID: domain.ArtifactID(artifactID),
+		Digest:     domain.ManifestDigest(manifestDigest),
 		Type:       domain.ManifestType(mtype),
 		Namespace:  namespace,
 		SessionID:  sessionID,

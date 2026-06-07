@@ -48,6 +48,17 @@ type StoreIndex interface {
 	// Resolve returns the physical address for a BlobRef.
 	Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error)
 
+	// ResolveManifestDigest returns the current ManifestDigest (the
+	// on-disk filename) for a floating ArtifactID (handle). The read
+	// path uses it to find the manifest file. (false, nil) when the
+	// handle is unknown.
+	ResolveManifestDigest(ctx context.Context, id domain.ArtifactID) (domain.ManifestDigest, bool, error)
+
+	// ManifestExistsByDigest reports whether a manifest row references
+	// the given ManifestDigest. The Orphan Scan uses it: manifest files
+	// are named by digest, so this maps a listed file back to a row.
+	ManifestExistsByDigest(ctx context.Context, digest domain.ManifestDigest) (bool, error)
+
 	// ExistsByContent is an exact check by the composite dedup key
 	// (ContentHash, OriginalSize, CryptoIdentity) for regular blobs.
 	// CryptoIdentity is empty for Plain blobs, in which case the key

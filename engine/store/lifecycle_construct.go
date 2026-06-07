@@ -52,7 +52,7 @@ func buildStore(
 		// ArtifactWriter: the inline-artifact write primitive lives in
 		// store (shared with the config writer); systemstore calls it
 		// through this closure, branching on skipIndex.
-		func(ctx context.Context, ns string, sid domain.SessionID, payload []byte, hashAlgo string, skipIndex bool) (domain.ArtifactID, error) {
+		func(ctx context.Context, ns string, sid domain.SessionID, payload []byte, hashAlgo string, skipIndex bool) (domain.ManifestDigest, error) {
 			if skipIndex {
 				return writeInlineSystemArtifactUnindexed(ctx, drv, o.hashRegistry, ns, sid, payload, hashAlgo)
 			}

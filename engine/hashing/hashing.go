@@ -3,6 +3,7 @@ package hashing
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash"
 	"strings"
 	"sync"
@@ -68,4 +69,42 @@ func (r *registry) Register(algo string, fn func() hash.Hash) domain.HashRegistr
 	defer r.mu.Unlock()
 	r.hashers[algo] = fn
 	return r
+}
+
+// NamingKeyPublic is the public domain-separation constant used as the
+// naming key (NK) for Plain/Sealed stores, so the handle is publicly
+// reproducible and self-verifiable. Paranoid uses a secret naming key
+// instead (deferred). Treat as a versioned, immutable constant: changing
+// it re-identifies every artifact.
+var NamingKeyPublic = []byte("scrinium/artifact-id/v1")
+
+// Handle computes the floating ArtifactID = H(NK ‖ cd ‖ md ‖ nonce).
+//
+// cd and md are "<algo>-<hex>" digests sharing the store's hash algo;
+// their raw bytes are fixed-length within a store, so the concatenation
+// is unambiguous (nonce is a fixed 16 bytes in Unique mode, empty in
+// Coalesced — the mode is an immutable store property). nk is the naming
+// key: NamingKeyPublic in Plain/Sealed.
+//
+// Hashing the concatenation is mandatory: with an empty identity
+// partition md is a constant token, so a raw cd‖md would expose cd. H
+// keeps the output indistinguishable from random.
+func Handle(reg domain.HashRegistry, algo string, nk []byte, cd domain.ContentHash, md string, nonce []byte) (domain.ArtifactID, error) {
+	_, cdRaw, err := reg.Parse(string(cd))
+	if err != nil {
+		return "", fmt.Errorf("hashing: parse cd: %w", err)
+	}
+	_, mdRaw, err := reg.Parse(md)
+	if err != nil {
+		return "", fmt.Errorf("hashing: parse md: %w", err)
+	}
+	h, err := reg.NewHasher(algo)
+	if err != nil {
+		return "", err
+	}
+	h.Write(nk)
+	h.Write(cdRaw)
+	h.Write(mdRaw)
+	h.Write(nonce)
+	return domain.ArtifactID(reg.Format(algo, h.Sum(nil))), nil
 }

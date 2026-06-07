@@ -53,49 +53,49 @@ func TestDecode_RejectsEncrypted(t *testing.T) {
 	}
 }
 
-// --- ComputeArtifactID: stability + uniqueness + assignment ---
+// --- ComputeManifestDigest: stability + uniqueness + assignment ---
 
-func TestComputeArtifactID_StableAndAssigned(t *testing.T) {
+func TestComputeManifestDigest_StableAndAssigned(t *testing.T) {
 	m := artifactfx.Manifest()
-	id1, b1, sm, err := artifact.ComputeArtifactID(m, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
+	dg1, b1, sm, err := artifact.ComputeManifestDigest(m, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id1 == "" {
-		t.Fatal("empty ArtifactID")
+	if dg1 == "" {
+		t.Fatal("empty ManifestDigest")
 	}
-	if sm.ArtifactID != id1 {
-		t.Errorf("returned manifest ArtifactID=%q, want %q", sm.ArtifactID, id1)
+	if sm.Digest != dg1 {
+		t.Errorf("returned manifest Digest=%q, want %q", sm.Digest, dg1)
 	}
-	id2, b2, _, _ := artifact.ComputeArtifactID(m, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
-	if id1 != id2 || !bytes.Equal(b1, b2) {
-		t.Error("ComputeArtifactID not stable across calls")
+	dg2, b2, _, _ := artifact.ComputeManifestDigest(m, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
+	if dg1 != dg2 || !bytes.Equal(b1, b2) {
+		t.Error("ComputeManifestDigest not stable across calls")
 	}
 }
 
-func TestComputeArtifactID_DifferentManifestsDifferentIDs(t *testing.T) {
+func TestComputeManifestDigest_DifferentManifestsDifferentIDs(t *testing.T) {
 	m1 := artifactfx.Manifest()
 	m2 := artifactfx.Manifest(func(m *domain.Manifest) { m.Namespace = "other" })
-	id1, _, _, _ := artifact.ComputeArtifactID(m1, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
-	id2, _, _, _ := artifact.ComputeArtifactID(m2, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
-	if id1 == id2 {
-		t.Error("different manifests produced the same ArtifactID")
+	dg1, _, _, _ := artifact.ComputeManifestDigest(m1, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
+	dg2, _, _, _ := artifact.ComputeManifestDigest(m2, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
+	if dg1 == dg2 {
+		t.Error("different manifests produced the same ManifestDigest")
 	}
 }
 
-// --- VerifyArtifactID: tamper detection ---
+// --- VerifyManifestDigest: tamper detection ---
 
-func TestVerifyArtifactID_AcceptsUntampered(t *testing.T) {
+func TestVerifyManifestDigest_AcceptsUntampered(t *testing.T) {
 	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoPlain)
-	if err := artifact.VerifyArtifactID(id, b, artifactfx.Hashes()); err != nil {
+	if err := artifact.VerifyManifestDigest(id, b, artifactfx.Hashes()); err != nil {
 		t.Fatalf("verify untampered: %v", err)
 	}
 }
 
-func TestVerifyArtifactID_DetectsTampering(t *testing.T) {
+func TestVerifyManifestDigest_DetectsTampering(t *testing.T) {
 	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoPlain)
 	b[len(b)-1] ^= 0xff
-	if err := artifact.VerifyArtifactID(id, b, artifactfx.Hashes()); !errors.Is(err, errs.ErrCorruptedManifest) {
+	if err := artifact.VerifyManifestDigest(id, b, artifactfx.Hashes()); !errors.Is(err, errs.ErrCorruptedManifest) {
 		t.Fatalf("want ErrCorruptedManifest, got %v", err)
 	}
 }

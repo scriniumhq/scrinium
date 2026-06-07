@@ -44,7 +44,7 @@ FUZZTIME ?= 30s
 
 # Benchmark knobs (see the Benchmarks section for details).
 BENCH      ?= .
-BENCHPKG   ?= ./store/artifact/ ./store/
+BENCHPKG   ?= ./engine/artifact/ ./engine/store/
 BENCHCOUNT ?= 10
 
 # Default target.
@@ -176,9 +176,9 @@ endif
 .PHONY: smoke-encrypted
 smoke-encrypted:
 ifdef N
-	SCRINIUM_SMOKE_ENCRYPTED=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./store/
+	SCRINIUM_SMOKE_ENCRYPTED=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./engine/store/
 else
-	SCRINIUM_SMOKE_ENCRYPTED=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./store/
+	SCRINIUM_SMOKE_ENCRYPTED=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_EncryptedRoundTrip ./engine/store/
 endif
 
 # --- Fuzzing ---

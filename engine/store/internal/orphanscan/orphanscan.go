@@ -111,16 +111,16 @@ func RecoverOrphans(ctx context.Context, drv driver.Driver, idx index.StoreIndex
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			id, err := artifact.IDFromManifestPath(om.Path)
+			digest, err := artifact.DigestFromManifestPath(om.Path)
 			if err != nil {
 				report.Errors = append(report.Errors,
 					fmt.Errorf("recoverOrphans: manifests parse: %w", err))
 				return nil
 			}
-			exists, err := idx.ManifestExists(ctx, id)
+			exists, err := idx.ManifestExistsByDigest(ctx, digest)
 			if err != nil {
 				report.Errors = append(report.Errors,
-					fmt.Errorf("recoverOrphans: manifests exists %q: %w", id, err))
+					fmt.Errorf("recoverOrphans: manifests exists %q: %w", digest, err))
 				return nil
 			}
 			if exists {

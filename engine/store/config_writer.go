@@ -26,7 +26,7 @@ func configWriter(drv driver.Driver, idx index.StoreIndex, hashes domain.HashReg
 		sessionID domain.SessionID,
 		payload []byte,
 		hashAlgo string,
-	) (domain.ArtifactID, error) {
+	) (domain.ManifestDigest, error) {
 		return writeInlineSystemArtifact(ctx, drv, idx, hashes, namespace, sessionID, payload, hashAlgo)
 	}
 }

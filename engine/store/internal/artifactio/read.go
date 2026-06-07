@@ -20,11 +20,16 @@ import (
 	"scrinium.dev/errs"
 )
 
-// Load reads, verifies, and decodes the manifest file for id. It reads the
-// file at artifact.ManifestPath, confirms ArtifactID == hash(file bytes)
-// via artifact.VerifyArtifactID, then decodes (Plain bypasses the
-// resolver; Sealed/Paranoid consult keys). A missing file is
-// ErrArtifactNotFound; a hash mismatch is ErrCorruptedManifest.
+// Load reads, verifies, and decodes the manifest for the floating
+// ArtifactID (handle) id.
+//
+// The manifest file is named by its ManifestDigest, not by the handle, so
+// Load first resolves id → current digest through the index, reads the
+// file at artifact.ManifestPath(digest), confirms digest == hash(file
+// bytes) via artifact.VerifyManifestDigest, then decodes (Plain bypasses
+// the resolver; Sealed/Paranoid consult keys). An unknown handle or a
+// missing file is ErrArtifactNotFound; a hash mismatch is
+// ErrCorruptedManifest.
 //
 // keys is the manifest key provider (store passes its KeyResolver adapted
 // to artifact.KeyProvider; nil means "no resolver" — Plain decodes, an
@@ -33,7 +38,14 @@ func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 	if id == "" {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
 	}
-	manifestPath, err := artifact.ManifestPath(id)
+	digest, ok, err := x.index.ResolveManifestDigest(ctx, id)
+	if err != nil {
+		return domain.Manifest{}, fmt.Errorf("artifactio.Load: resolve digest: %w", err)
+	}
+	if !ok {
+		return domain.Manifest{}, errs.ErrArtifactNotFound
+	}
+	manifestPath, err := artifact.ManifestPath(digest)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("artifactio.Load: path: %w", err)
 	}
@@ -49,13 +61,16 @@ func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("artifactio.Load: read body: %w", err)
 	}
-	if err := artifact.VerifyArtifactID(id, raw, x.hashes); err != nil {
+	if err := artifact.VerifyManifestDigest(digest, raw, x.hashes); err != nil {
 		return domain.Manifest{}, err
 	}
 	m, err := artifact.DecodeEncrypted(raw, keys)
 	if err != nil {
 		return domain.Manifest{}, err
 	}
+	// The handle is also carried in the body; set both the physical digest
+	// (the form we read) and the requested handle so callers have both.
+	m.Digest = digest
 	m.ArtifactID = id
 	return m, nil
 }

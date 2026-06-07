@@ -3,6 +3,7 @@ package artifactio
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
@@ -212,15 +214,22 @@ func (x *IO) dedupProbe(
 	return string(blobRef), true, nil
 }
 
-// AssembleManifest builds the manifest from the blob result and computes
-// its ArtifactID. LayoutHeader records how this blob is laid out,
-// independent of the current config — the read path trusts the header,
-// which keeps manifests stable across config changes.
+// AssembleManifest builds the manifest from the blob result, computes its
+// floating ArtifactID (handle) and then its ManifestDigest. LayoutHeader
+// records how this blob is laid out, independent of the current config —
+// the read path trusts the header, which keeps manifests stable across
+// config changes.
+//
+// Identity (ADR-73): in IdentityMode=Unique a fresh 16-byte nonce is mixed
+// into the handle (every Put is distinct); in Coalesced the handle is
+// deterministic (no nonce). The naming key is the public domain constant
+// (Plain/Sealed v1). ComputeHandle must run before ComputeManifestDigest,
+// because the handle is part of the body the digest hashes.
 //
 // dek and keyID come from the caller: for a Plain config dek is nil and
 // keyID is empty; for an encrypting config the caller borrows the DEK
 // under the crypto lock and wipes it after this returns. The DEK is used
-// only for ComputeArtifactID and is never retained.
+// only for ComputeManifestDigest and is never retained.
 func (x *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions, blob Result, dek []byte, keyID string) (domain.Manifest, []byte, error) {
 	layout := domain.LayoutTarget
 	if blob.InlineBytes != nil {
@@ -243,8 +252,18 @@ func (x *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 	}
 
 	hashAlgo := string(cfg.ContentHasher)
-	id, fileBytes, sm, err := artifact.ComputeArtifactID(
-		manifest, hashAlgo, x.hashes,
+
+	nonce, err := identityNonce(cfg.IdentityMode)
+	if err != nil {
+		return domain.Manifest{}, nil, fmt.Errorf("artifactio: identity nonce: %w", err)
+	}
+	withHandle, err := artifact.ComputeHandle(manifest, hashAlgo, x.hashes, hashing.NamingKeyPublic, nonce)
+	if err != nil {
+		return domain.Manifest{}, nil, fmt.Errorf("artifactio: compute handle: %w", err)
+	}
+
+	_, fileBytes, sm, err := artifact.ComputeManifestDigest(
+		withHandle, hashAlgo, x.hashes,
 		cfg.ManifestEncoding, cfg.ManifestCrypto, dek, keyID,
 	)
 	if err != nil {
@@ -252,18 +271,33 @@ func (x *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 		// orphan blob is harmless — ref_count stays 0 and GC reaps it —
 		// whereas an inverse Rename could race a parallel dedup on the same
 		// content.
-		return domain.Manifest{}, nil, fmt.Errorf("artifactio: compute artifact id: %w", err)
+		return domain.Manifest{}, nil, fmt.Errorf("artifactio: compute manifest digest: %w", err)
 	}
-	sm.ArtifactID = id
 	return sm, fileBytes, nil
 }
 
-// PersistManifest writes the manifest file and indexes it. For inline
-// manifests addr is the zero PhysicalAddress; IndexManifest skips the
-// blobs-table insert but still indexes the manifest so Walk and
-// GetBySession find it.
+// identityNonce returns a fresh 16-byte nonce for IdentityMode=Unique (the
+// default when unset) and nil for Coalesced, so the handle is unique
+// per-Put or deterministic respectively (ADR-73).
+func identityNonce(mode domain.IdentityMode) ([]byte, error) {
+	if mode == domain.IdentityModeCoalesced {
+		return nil, nil
+	}
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	return nonce, nil
+}
+
+// PersistManifest writes the manifest file and indexes it. The manifest
+// file is named by its ManifestDigest (the physical form); the index row
+// records both the digest and the floating ArtifactID so Load can resolve
+// handle → digest. For inline manifests addr is the zero PhysicalAddress;
+// IndexManifest skips the blobs-table insert but still indexes the
+// manifest so Walk and GetBySession find it.
 func (x *IO) PersistManifest(ctx context.Context, manifest domain.Manifest, manifestBytes []byte, addr domain.PhysicalAddress) error {
-	manifestPath, err := artifact.ManifestPath(manifest.ArtifactID)
+	manifestPath, err := artifact.ManifestPath(manifest.Digest)
 	if err != nil {
 		return fmt.Errorf("artifactio: manifest path: %w", err)
 	}

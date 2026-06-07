@@ -146,7 +146,7 @@ func TestEncode_PlainExtUsrVisibleOnDisk(t *testing.T) {
 
 func TestSealed_RoundTrip_AllFields(t *testing.T) {
 	m := recManifest()
-	_, b, _, err := artifact.ComputeArtifactID(m, "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoSealed, recDEK(), "k1")
+	_, b, _, err := artifact.ComputeManifestDigest(m, "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoSealed, recDEK(), "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestSealed_EmptyExtAndUsr(t *testing.T) {
 		m.Ext = nil
 		m.Usr = nil
 	})
-	_, b, _, err := artifact.ComputeArtifactID(m, "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoSealed, recDEK(), "k1")
+	_, b, _, err := artifact.ComputeManifestDigest(m, "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoSealed, recDEK(), "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestSealed_EmptyExtAndUsr(t *testing.T) {
 
 func TestParanoid_RoundTrip_AllFields(t *testing.T) {
 	m := recManifest()
-	_, b, _, err := artifact.ComputeArtifactID(m, "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoParanoid, recDEK(), "k1")
+	_, b, _, err := artifact.ComputeManifestDigest(m, "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoParanoid, recDEK(), "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestParanoid_HidesExtAndUsr(t *testing.T) {
 		m.Ext = json.RawMessage(`{"m":"EXTMARKER_7f3a"}`)
 		m.Usr = json.RawMessage(`{"m":"USRMARKER_91b2"}`)
 	})
-	_, b, _, err := artifact.ComputeArtifactID(m, "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoParanoid, recDEK(), "k1")
+	_, b, _, err := artifact.ComputeManifestDigest(m, "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoParanoid, recDEK(), "k1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +282,7 @@ func TestEncodeDecode_PipelineMultiStageRoundTrip(t *testing.T) {
 // --- ComputeArtifactID rejects an empty DEK when crypto requires one ---
 
 func TestComputeArtifactID_RejectsEmptyDEKOnEncrypted(t *testing.T) {
-	if _, _, _, err := artifact.ComputeArtifactID(recManifest(), "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoSealed, nil, ""); err == nil {
+	if _, _, _, err := artifact.ComputeManifestDigest(recManifest(), "sha256", recReg(), domain.ManifestEncodingJSON, domain.ManifestCryptoSealed, nil, ""); err == nil {
 		t.Fatal("Sealed encode with empty DEK must be rejected")
 	}
 }

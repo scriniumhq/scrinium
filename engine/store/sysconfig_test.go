@@ -14,10 +14,10 @@ import (
 
 // mustWriteSysConfig writes a known StoreConfig through
 // writeSystemConfig and returns the driver root, the config that
-// was written, the resulting ArtifactID, and the bound index (so
-// the caller can close it). Callers that don't need the index
-// hand it straight to t.Cleanup.
-func mustWriteSysConfig(t *testing.T) (string, domain.StoreConfig, domain.ArtifactID) {
+// was written, and the resulting ManifestDigest (system artifacts are
+// addressed by digest — the on-disk filename — not by a floating handle).
+// The bound index is registered with t.Cleanup.
+func mustWriteSysConfig(t *testing.T) (string, domain.StoreConfig, domain.ManifestDigest) {
 	t.Helper()
 	root := t.TempDir()
 	drv, err := localfs.New(root, localfs.WithFsync(false))
@@ -34,18 +34,18 @@ func mustWriteSysConfig(t *testing.T) (string, domain.StoreConfig, domain.Artifa
 		ManifestCrypto:   domain.ManifestCryptoPlain,
 	}
 
-	id, err := store.WriteSystemConfig(context.Background(), drv, idx, storefx.Hashes(), cfg)
+	digest, err := store.WriteSystemConfig(context.Background(), drv, idx, storefx.Hashes(), cfg)
 	if err != nil {
 		t.Fatalf("WriteSystemConfig: %v", err)
 	}
-	if id == "" {
-		t.Fatal("WriteSystemConfig returned empty ArtifactID")
+	if digest == "" {
+		t.Fatal("WriteSystemConfig returned empty ManifestDigest")
 	}
-	return root, cfg, id
+	return root, cfg, digest
 }
 
 func TestWriteReadSystemConfig_RoundTrip(t *testing.T) {
-	root, cfg, id := mustWriteSysConfig(t)
+	root, cfg, digest := mustWriteSysConfig(t)
 
 	drv, err := localfs.New(root, localfs.WithFsync(false))
 	if err != nil {
@@ -63,7 +63,7 @@ func TestWriteReadSystemConfig_RoundTrip(t *testing.T) {
 		t.Errorf("ContentHasher: got %q, want %q", got.ContentHasher, cfg.ContentHasher)
 	}
 
-	// Pointer file holds exactly the ArtifactID followed by a newline.
+	// Pointer file holds exactly the ManifestDigest followed by a newline.
 	rc, err := drv.Get(context.Background(), store.SysConfigPointer)
 	if err != nil {
 		t.Fatalf("read pointer: %v", err)
@@ -71,7 +71,7 @@ func TestWriteReadSystemConfig_RoundTrip(t *testing.T) {
 	defer rc.Close()
 	buf := make([]byte, 512)
 	n, _ := rc.Read(buf)
-	if got, want := strings.TrimSpace(string(buf[:n])), string(id); got != want {
+	if got, want := strings.TrimSpace(string(buf[:n])), string(digest); got != want {
 		t.Errorf("pointer content: got %q, want %q", got, want)
 	}
 }

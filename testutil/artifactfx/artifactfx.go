@@ -105,10 +105,15 @@ func Manifest(mutators ...func(*domain.Manifest)) domain.Manifest {
 }
 
 // Encoded computes the on-disk file bytes for m under the given crypto
-// mode, returning the assigned ArtifactID and the bytes. Plain ignores
+// mode and returns the ManifestDigest (the file's hash = on-disk name =
+// form-verifier) plus the bytes.
+//
+// The floating handle is computed (deterministically, with a nil identity
+// nonce) and embedded in the body, but the returned id is the digest —
+// that is what verify and path tests assert against. Plain ignores
 // dek/keyID; Sealed/Paranoid use DEK() and a fixed KeyID. It fails the
 // test on any encode error, so call sites stay terse.
-func Encoded(t testing.TB, m domain.Manifest, crypto domain.ManifestCrypto) (domain.ArtifactID, []byte) {
+func Encoded(t testing.TB, m domain.Manifest, crypto domain.ManifestCrypto) (domain.ManifestDigest, []byte) {
 	t.Helper()
 	var dek []byte
 	var keyID string
@@ -116,9 +121,13 @@ func Encoded(t testing.TB, m domain.Manifest, crypto domain.ManifestCrypto) (dom
 		dek = DEK()
 		keyID = "k1"
 	}
-	id, b, _, err := artifact.ComputeArtifactID(m, "sha256", Hashes(), domain.ManifestEncodingJSON, crypto, dek, keyID)
+	wh, err := artifact.ComputeHandle(m, "sha256", Hashes(), hashing.NamingKeyPublic, nil)
+	if err != nil {
+		t.Fatalf("artifactfx.Encoded(%s): handle: %v", crypto, err)
+	}
+	digest, b, _, err := artifact.ComputeManifestDigest(wh, "sha256", Hashes(), domain.ManifestEncodingJSON, crypto, dek, keyID)
 	if err != nil {
 		t.Fatalf("artifactfx.Encoded(%s): %v", crypto, err)
 	}
-	return id, b
+	return digest, b
 }

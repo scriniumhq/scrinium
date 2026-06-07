@@ -131,6 +131,9 @@ type StoreConfig struct {
 	// DefaultSegmentSize (≈1 MiB) for an encrypting store. Bounds:
 	// MinSegmentSize..MaxSegmentSize.
 	SegmentSize int
+	// IdentityMode controls handle coalescing (ADR-73). Immutable.
+	// Empty = IdentityModeUnique.
+	IdentityMode IdentityMode
 
 	DeletionPolicy       DeletionPolicy
 	DeletionPolicyLock   bool

@@ -88,7 +88,7 @@ func (d dataFacet) Delete(ctx context.Context, id domain.ArtifactID) error {
 		return d.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: index: %w", err), artifactIDAttr(id), slog.String("stage", "index"))
 	}
 
-	manifestPath, err := artifact.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(manifest.Digest)
 	if err != nil {
 		return fmt.Errorf("store.Delete: manifest path: %w", err)
 	}
