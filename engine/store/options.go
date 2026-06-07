@@ -56,6 +56,7 @@ type storeOptions struct {
 	keyResolver   pipeline.KeyResolver
 	passphrase    PassphraseProvider
 	autoUnlock    bool
+	identityMode  domain.IdentityMode
 	logger        *slog.Logger
 }
 
@@ -123,4 +124,26 @@ func WithPassphrase(provider PassphraseProvider) StoreOption {
 // in StateLocked.
 func WithAutoUnlock() StoreOption {
 	return func(o *storeOptions) { o.autoUnlock = true }
+}
+
+// WithIdentityMode sets the immutable IdentityMode (ADR-73) at InitStore.
+// IdentityModeUnique (default) mixes a fresh nonce into every handle so
+// each Put is distinct; IdentityModeCoalesced omits the nonce so identical
+// content+identity collapses to a single artifact. The mode is fixed at
+// init and validated — not changed — at OpenStore.
+func WithIdentityMode(mode domain.IdentityMode) StoreOption {
+	return func(o *storeOptions) { o.identityMode = mode }
+}
+
+// WithCoalesced is shorthand for WithIdentityMode(IdentityModeCoalesced):
+// identical content+identity coalesces to one artifact (WORM-archive
+// semantics).
+func WithCoalesced() StoreOption {
+	return WithIdentityMode(domain.IdentityModeCoalesced)
+}
+
+// WithUnique is shorthand for WithIdentityMode(IdentityModeUnique), the
+// default: every Put yields a distinct handle.
+func WithUnique() StoreOption {
+	return WithIdentityMode(domain.IdentityModeUnique)
 }

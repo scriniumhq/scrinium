@@ -95,6 +95,13 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		cfg = *o.cfg
 	}
 	cfg = storeconfig.ApplyDefaults(cfg)
+	// WithIdentityMode (and the WithCoalesced/WithUnique shorthands) sets
+	// the immutable IdentityMode at init, overriding the default after
+	// ApplyDefaults so the explicit choice wins. Ignored at OpenStore,
+	// where the persisted value is authoritative.
+	if o.identityMode != "" {
+		cfg.IdentityMode = o.identityMode
+	}
 	if err := storeconfig.ValidateImmutable(cfg); err != nil {
 		return nil, nil, wrap("invalid config", err)
 	}
