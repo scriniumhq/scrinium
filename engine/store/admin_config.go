@@ -104,7 +104,7 @@ func (a adminFacet) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, er
 		return nil, err
 	}
 
-	currentID, err := storeconfig.ReadPointer(ctx, a.drv, a.hashes)
+	currentDigest, err := storeconfig.ReadPointer(ctx, a.drv, a.hashes)
 	if err != nil {
 		return nil, fmt.Errorf("store.ConfigHistory: %w", err)
 	}
@@ -116,18 +116,18 @@ func (a adminFacet) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, er
 	// load the manifest file for its ArtifactID and unmarshal the
 	// embedded StoreConfig payload.
 	type entry struct {
-		id        domain.ArtifactID
+		digest    domain.ManifestDigest
 		cfg       domain.StoreConfig
 		createdAt time.Time
 	}
 	var entries []entry
 	listErr := a.index.ListByNamespace(ctx, domain.NamespaceSystemConfig, func(m domain.Manifest) error {
-		cfg, err := storeconfig.LoadByID(ctx, a.drv, a.hashes, m.ArtifactID)
+		cfg, err := storeconfig.LoadByID(ctx, a.drv, a.hashes, m.Digest)
 		if err != nil {
 			return fmt.Errorf("decode %s: %w", m.ArtifactID, err)
 		}
 		entries = append(entries, entry{
-			id:        m.ArtifactID,
+			digest:    m.Digest,
 			cfg:       storeconfig.ApplyDefaults(cfg),
 			createdAt: m.CreatedAt,
 		})
@@ -144,7 +144,7 @@ func (a adminFacet) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, er
 
 	currentIdx := -1
 	for i := range entries {
-		if entries[i].id == currentID {
+		if entries[i].digest == currentDigest {
 			currentIdx = i
 			break
 		}

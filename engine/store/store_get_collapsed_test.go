@@ -80,7 +80,9 @@ func TestGet_Integrity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		path := storefx2.OnDiskAt(root).ManifestPath(id)
+		// The manifest file is named by its ManifestDigest, resolved from
+		// the floating handle through the store.
+		path := storefx2.OnDiskAt(root).ManifestPath(mustDigest(t, s, id))
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("read manifest: %v", err)

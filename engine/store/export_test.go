@@ -22,14 +22,16 @@ import (
 // SysConfigPointer is the on-disk path of system.config/current.
 const SysConfigPointer = domain.NamespaceSystemConfig + "/current"
 
-// WriteSystemConfig is the test alias for writeSystemConfig.
+// WriteSystemConfig is the test alias for writeSystemConfig. It returns
+// the config artifact's ManifestDigest (system artifacts are addressed by
+// digest, the on-disk filename, not by a floating handle).
 func WriteSystemConfig(
 	ctx context.Context,
 	drv driver.Driver,
 	idx index.StoreIndex,
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
-) (domain.ArtifactID, error) {
+) (domain.ManifestDigest, error) {
 	return storeconfig.Write(ctx, drv, configWriter(drv, idx, hashes), cfg)
 }
 

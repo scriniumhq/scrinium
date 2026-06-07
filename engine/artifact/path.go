@@ -18,7 +18,9 @@ import (
 // Chunk and pack blobs use the same topology with roots "chunks/" and
 // "packs/"; the BlobType argument selects the root. Manifests live under
 // "manifests/" and are always Sharded — even on object stores the manifest
-// directory sees enough churn that two-level sharding pays off.
+// directory sees enough churn that two-level sharding pays off. A manifest
+// file is named by its ManifestDigest (the hash of the file bytes), NOT by
+// the floating ArtifactID (the handle); the index maps handle → digest.
 
 // rootFor returns the directory prefix for a blob type: "blobs",
 // "chunks", "packs". An empty type means Regular. Unknown types error —
@@ -79,18 +81,19 @@ func BlobPath(topology domain.PathTopology, blobType domain.BlobType, ref string
 	return "", fmt.Errorf("artifact: unknown topology %q", topology)
 }
 
-// ManifestPath returns the driver-side path of a manifest file by
-// ArtifactID. Manifests live under "manifests/" and are always Sharded;
-// there is no Flat manifest layout.
-func ManifestPath(id domain.ArtifactID) (string, error) {
-	if id == "" {
-		return "", fmt.Errorf("artifact: empty artifact id")
+// ManifestPath returns the driver-side path of a manifest file by its
+// ManifestDigest. Manifests live under "manifests/" and are always
+// Sharded; there is no Flat manifest layout. The path is keyed by digest
+// (the current physical form), not by the floating ArtifactID.
+func ManifestPath(digest domain.ManifestDigest) (string, error) {
+	if digest == "" {
+		return "", fmt.Errorf("artifact: empty manifest digest")
 	}
-	s1, s2, err := shardOf(string(id))
+	s1, s2, err := shardOf(string(digest))
 	if err != nil {
 		return "", fmt.Errorf("artifact: manifest %w", err)
 	}
-	return "manifests/" + s1 + "/" + s2 + "/" + string(id), nil
+	return "manifests/" + s1 + "/" + s2 + "/" + string(digest), nil
 }
 
 // RefFromBlobPath extracts the blob ref ("<algo>-<hex>") from a
@@ -112,10 +115,11 @@ func RefFromBlobPath(p string) (string, error) {
 	return last, nil
 }
 
-// IDFromManifestPath is the manifests-side counterpart of RefFromBlobPath;
-// manifest paths are always Sharded and the structural validation is
-// identical.
-func IDFromManifestPath(p string) (domain.ArtifactID, error) {
+// DigestFromManifestPath is the manifests-side counterpart of
+// RefFromBlobPath; manifest paths are always Sharded and the structural
+// validation is identical. It returns the ManifestDigest (the file's
+// physical name), not the handle.
+func DigestFromManifestPath(p string) (domain.ManifestDigest, error) {
 	last, err := lastSegment(p)
 	if err != nil {
 		return "", err
@@ -123,7 +127,7 @@ func IDFromManifestPath(p string) (domain.ArtifactID, error) {
 	if err := validateRefShape(last); err != nil {
 		return "", fmt.Errorf("artifact: manifest %w (path %q)", err, p)
 	}
-	return domain.ArtifactID(last), nil
+	return domain.ManifestDigest(last), nil
 }
 
 // lastSegment returns the final '/'-separated component of p, erroring on

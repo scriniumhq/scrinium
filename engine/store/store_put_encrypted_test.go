@@ -150,24 +150,19 @@ func TestPut_Paranoid_NamespaceHiddenOnDisk(t *testing.T) {
 
 func readManifestRaw(t *testing.T, s store.Store, id domain.ArtifactID) []byte {
 	t.Helper()
-	// Reach into the Store's Driver. core/export_test.go has no
-	// helper for this; use Walk to find the index entry, then
-	// read via testutil.
-	//
-	// Simpler: each test creates its own Driver via driverfx, and
-	// the path is well-known. Compute it from id and read directly.
-	// blobpath.ManifestPath produces a "manifests/<x>/<y>/<id>"
-	// pattern; we replicate it minimally by string ops since this
-	// is a test-only helper.
-	idStr := string(id)
-	if !strings.HasPrefix(idStr, "sha256-") {
-		t.Fatalf("unexpected id prefix: %q", idStr)
+	// The manifest file is named by its ManifestDigest, not by the floating
+	// handle. Resolve the digest, then replicate the shard layout
+	// (manifests/<x>/<y>/<digest>) the way blobpath.ManifestPath does.
+	digest := mustDigest(t, s, id)
+	dStr := string(digest)
+	if !strings.HasPrefix(dStr, "sha256-") {
+		t.Fatalf("unexpected digest prefix: %q", dStr)
 	}
-	hex := strings.TrimPrefix(idStr, "sha256-")
+	hex := strings.TrimPrefix(dStr, "sha256-")
 	if len(hex) < 4 {
-		t.Fatal("id too short")
+		t.Fatal("digest too short")
 	}
-	path := "manifests/" + hex[:2] + "/" + hex[2:4] + "/" + idStr
+	path := "manifests/" + hex[:2] + "/" + hex[2:4] + "/" + dStr
 
 	raw, err := store.ReadDriverFile(s, path)
 	if err != nil {
@@ -436,7 +431,7 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	// Read raw manifest from disk, tamper one byte of the KeyID,
 	// write it back. The KeyID starts at byte 6 (magic 4 + flag 1
 	// + length 1).
-	manifestPath := manifestPathFor(t, id)
+	manifestPath := manifestPathFor(t, s, id)
 	raw, err := store.ReadDriverFile(s, manifestPath)
 	if err != nil {
 		t.Fatalf("read manifest: %v", err)
@@ -464,21 +459,18 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	}
 }
 
-// manifestPathFor reproduces blobpath.ManifestPath for tests
-// without exporting the production helper. The path layout
-// is sharded: manifests/<x>/<y>/<id> where <x><y> is the first
-// 4 hex characters of the id past the "sha256-" prefix.
-func manifestPathFor(t *testing.T, id domain.ArtifactID) string {
+func manifestPathFor(t *testing.T, s store.Store, id domain.ArtifactID) string {
 	t.Helper()
-	idStr := string(id)
-	if !strings.HasPrefix(idStr, "sha256-") {
-		t.Fatalf("unexpected id prefix: %q", idStr)
+	// Manifest files are named by their ManifestDigest, not the handle.
+	dStr := string(mustDigest(t, s, id))
+	if !strings.HasPrefix(dStr, "sha256-") {
+		t.Fatalf("unexpected digest prefix: %q", dStr)
 	}
-	hex := strings.TrimPrefix(idStr, "sha256-")
+	hex := strings.TrimPrefix(dStr, "sha256-")
 	if len(hex) < 4 {
-		t.Fatal("id too short")
+		t.Fatal("digest too short")
 	}
-	return "manifests/" + hex[:2] + "/" + hex[2:4] + "/" + idStr
+	return "manifests/" + hex[:2] + "/" + hex[2:4] + "/" + dStr
 }
 
 // --- Walk on Paranoid Store works without decrypting ---

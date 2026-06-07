@@ -512,7 +512,7 @@ func (a *rebuildAgent) scanManifests(ctx context.Context, keys artifact.KeyProvi
 // reindexManifestFile fetches one manifest file, decodes it, and writes
 // the reconstructed index rows.
 func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string, keys artifact.KeyProvider) error {
-	id, err := artifact.IDFromManifestPath(path)
+	digest, err := artifact.DigestFromManifestPath(path)
 	if err != nil {
 		return fmt.Errorf("parse manifest id from %q: %w", path, err)
 	}
@@ -543,9 +543,13 @@ func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string, key
 		return fmt.Errorf("decode manifest %q: %w", path, err)
 	}
 	a.countScanned()
-	// ArtifactID is not serialised; it is the file identity (the id we
-	// parsed from the path). Set it so IndexManifest keys the row right.
-	m.ArtifactID = id
+	// The handle (m.ArtifactID) is serialised in the body and set by
+	// Decode; the digest is the file name. A handle-less (system)
+	// artifact falls back to its digest as ArtifactID.
+	m.Digest = digest
+	if m.ArtifactID == "" {
+		m.ArtifactID = domain.ArtifactID(digest)
+	}
 
 	switch m.Type {
 	case domain.ManifestTypeBlob:

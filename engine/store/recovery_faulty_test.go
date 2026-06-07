@@ -28,7 +28,7 @@ import (
 type faultyIndex struct {
 	index.StoreIndex
 	resolveErr        error // if non-nil, Resolve returns this
-	manifestExistsErr error // if non-nil, ManifestExists returns this
+	manifestExistsErr error // if non-nil, ManifestExistsByDigest returns this
 }
 
 func (f *faultyIndex) Resolve(ctx context.Context, ref string) (domain.PhysicalAddress, error) {
@@ -38,11 +38,11 @@ func (f *faultyIndex) Resolve(ctx context.Context, ref string) (domain.PhysicalA
 	return f.StoreIndex.Resolve(ctx, ref)
 }
 
-func (f *faultyIndex) ManifestExists(ctx context.Context, id domain.ArtifactID) (bool, error) {
+func (f *faultyIndex) ManifestExistsByDigest(ctx context.Context, digest domain.ManifestDigest) (bool, error) {
 	if f.manifestExistsErr != nil {
 		return false, f.manifestExistsErr
 	}
-	return f.StoreIndex.ManifestExists(ctx, id)
+	return f.StoreIndex.ManifestExistsByDigest(ctx, digest)
 }
 
 // --- 1. Resolve returns a non-NotFound error: blob must NOT be removed.

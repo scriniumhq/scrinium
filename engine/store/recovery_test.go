@@ -167,12 +167,13 @@ func blobPathForRef(t *testing.T, ref string) string {
 	return p
 }
 
-// manifestPathForID is the manifest-side counterpart.
-func manifestPathForID(t *testing.T, id domain.ArtifactID) string {
+// manifestPathForID is the manifest-side counterpart. It takes the
+// ManifestDigest, since manifest files are named by their digest.
+func manifestPathForID(t *testing.T, digest domain.ManifestDigest) string {
 	t.Helper()
-	p, err := artifact.ManifestPath(id)
+	p, err := artifact.ManifestPath(digest)
 	if err != nil {
-		t.Fatalf("artifact.ManifestPath(%q): %v", id, err)
+		t.Fatalf("artifact.ManifestPath(%q): %v", digest, err)
 	}
 	return p
 }
@@ -233,7 +234,7 @@ func TestRecovery_RemovesOrphanBlob_AtInit(t *testing.T) {
 func TestRecovery_RemovesOrphanManifest_AtInit(t *testing.T) {
 	f := newRecoveryFixture(t)
 
-	id := domain.ArtifactID(fakeRef('m'))
+	id := domain.ManifestDigest(fakeRef('m'))
 	orphanPath := manifestPathForID(t, id)
 	f.stageFile(t, orphanPath, "{}")
 
@@ -336,6 +337,7 @@ func TestRecovery_OpenStore_RemovesOrphanInjectedAfterInit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
+	liveDigest := mustDigest(t, s, liveID)
 
 	// Plant an orphan blob at a path the index does not know about
 	// — simulates a crash in Put after Driver.Rename(staging→final)
@@ -346,7 +348,7 @@ func TestRecovery_OpenStore_RemovesOrphanInjectedAfterInit(t *testing.T) {
 
 	// Plant an orphan manifest similarly — crash after Driver.Put
 	// on the manifest path but before IndexManifest.
-	orphanID := domain.ArtifactID(fakeRef('y'))
+	orphanID := domain.ManifestDigest(fakeRef('y'))
 	orphanManifest := manifestPathForID(t, orphanID)
 	f.stageFile(t, orphanManifest, "{}")
 
@@ -362,7 +364,7 @@ func TestRecovery_OpenStore_RemovesOrphanInjectedAfterInit(t *testing.T) {
 	if f.fileExists(t, orphanManifest) {
 		t.Errorf("orphan manifest %q must be removed", orphanManifest)
 	}
-	livePath := manifestPathForID(t, liveID)
+	livePath := manifestPathForID(t, liveDigest)
 	if !f.fileExists(t, livePath) {
 		t.Errorf("live manifest %q must NOT be removed", livePath)
 	}
@@ -419,7 +421,7 @@ func TestRecovery_PublishesEvent_PayloadShape(t *testing.T) {
 
 	// Stage one of each to populate every counter.
 	f.stageFile(t, blobPathForRef(t, fakeRef('1')), "x")
-	f.stageFile(t, manifestPathForID(t, domain.ArtifactID(fakeRef('2'))), "{}")
+	f.stageFile(t, manifestPathForID(t, domain.ManifestDigest(fakeRef('2'))), "{}")
 	f.stageFile(t, "system.state/staging/leftover-3", "x")
 
 	_ = f.initStore(t)

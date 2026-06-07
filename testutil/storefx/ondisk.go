@@ -39,8 +39,8 @@ func OnDiskAt(root string) OnDisk {
 //
 // Returns an empty string if blobpath rejects the ID — callers
 // should treat that as a test setup error and fail explicitly.
-func (d OnDisk) ManifestPath(id domain.ArtifactID) string {
-	rel, err := artifact.ManifestPath(id)
+func (d OnDisk) ManifestPath(digest domain.ManifestDigest) string {
+	rel, err := artifact.ManifestPath(digest)
 	if err != nil {
 		return ""
 	}
@@ -49,8 +49,8 @@ func (d OnDisk) ManifestPath(id domain.ArtifactID) string {
 
 // ManifestExists reports whether the manifest file for id is
 // present on disk. Used after Delete to assert physical removal.
-func (d OnDisk) ManifestExists(id domain.ArtifactID) bool {
-	p := d.ManifestPath(id)
+func (d OnDisk) ManifestExists(digest domain.ManifestDigest) bool {
+	p := d.ManifestPath(digest)
 	if p == "" {
 		return false
 	}
@@ -64,11 +64,11 @@ func (d OnDisk) ManifestExists(id domain.ArtifactID) bool {
 // source of truth for manifest content.
 //
 // Calls t.Fatalf on read or decode failure.
-func (d OnDisk) ReadManifest(t testing.TB, id domain.ArtifactID) domain.Manifest {
+func (d OnDisk) ReadManifest(t testing.TB, digest domain.ManifestDigest) domain.Manifest {
 	t.Helper()
-	p := d.ManifestPath(id)
+	p := d.ManifestPath(digest)
 	if p == "" {
-		t.Fatalf("storefx.OnDisk.ReadManifest: invalid id %q", id)
+		t.Fatalf("storefx.OnDisk.ReadManifest: invalid id %q", digest)
 	}
 	raw, err := os.ReadFile(p)
 	if err != nil {

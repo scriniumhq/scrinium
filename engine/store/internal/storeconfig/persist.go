@@ -40,7 +40,7 @@ type ArtifactWriter func(
 	sessionID domain.SessionID,
 	payload []byte,
 	hashAlgo string,
-) (domain.ArtifactID, error)
+) (domain.ManifestDigest, error)
 
 // Write persists the StoreConfig as a system.config inline artifact
 // and atomically updates the system.config/current pointer to its
@@ -54,25 +54,25 @@ func Write(
 	drv driver.Driver,
 	w ArtifactWriter,
 	cfg domain.StoreConfig,
-) (domain.ArtifactID, error) {
+) (domain.ManifestDigest, error) {
 	payload, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("system config: marshal: %w", err)
 	}
 	payload = append(payload, '\n')
 
-	id, err := w(
+	digest, err := w(
 		ctx, namespace, sessionID, payload, string(cfg.ContentHasher),
 	)
 	if err != nil {
 		return "", err
 	}
 
-	pointerBytes := []byte(string(id) + "\n")
+	pointerBytes := []byte(string(digest) + "\n")
 	if err := drv.Put(ctx, pointerPath, bytes.NewReader(pointerBytes)); err != nil {
 		return "", fmt.Errorf("system config: put pointer: %w", err)
 	}
-	return id, nil
+	return digest, nil
 }
 
 // Read follows system.config/current to read the active StoreConfig.
@@ -84,11 +84,11 @@ func Read(
 	drv driver.Driver,
 	hashes domain.HashRegistry,
 ) (domain.StoreConfig, error) {
-	id, err := ReadPointer(ctx, drv, hashes)
+	digest, err := ReadPointer(ctx, drv, hashes)
 	if err != nil {
 		return domain.StoreConfig{}, err
 	}
-	return LoadByID(ctx, drv, hashes, id)
+	return LoadByID(ctx, drv, hashes, digest)
 }
 
 // LoadByID reads the system.config artifact by its ArtifactID and
@@ -99,9 +99,9 @@ func LoadByID(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
-	id domain.ArtifactID,
+	digest domain.ManifestDigest,
 ) (domain.StoreConfig, error) {
-	manifestPath, err := artifact.ManifestPath(id)
+	manifestPath, err := artifact.ManifestPath(digest)
 	if err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("%w: %v", errs.ErrCorruptedConfigPointer, err)
 	}
@@ -118,7 +118,7 @@ func LoadByID(
 		return domain.StoreConfig{}, fmt.Errorf("system config: read manifest: %w", err)
 	}
 
-	if err := artifact.VerifyArtifactID(id, fileBytes, hashes); err != nil {
+	if err := artifact.VerifyManifestDigest(digest, fileBytes, hashes); err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("system config: verify: %w", err)
 	}
 	manifest, err := artifact.Decode(fileBytes)
@@ -138,14 +138,14 @@ func LoadByID(
 	return cfg, nil
 }
 
-// ReadPointer parses the pointer file's content into an ArtifactID.
+// ReadPointer parses the pointer file's content into ManifestDigest.
 // Separated out so tests can probe each failure mode (missing /
 // corrupted / dangling) independently.
 func ReadPointer(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
-) (domain.ArtifactID, error) {
+) (domain.ManifestDigest, error) {
 	rc, err := drv.Get(ctx, pointerPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -166,5 +166,5 @@ func ReadPointer(
 	if _, _, err := hashes.Parse(idStr); err != nil {
 		return "", fmt.Errorf("%w: %v", errs.ErrCorruptedConfigPointer, err)
 	}
-	return domain.ArtifactID(idStr), nil
+	return domain.ManifestDigest(idStr), nil
 }

@@ -35,7 +35,8 @@ func rwHarness(t *testing.T) (*artifactio.IO, *artifactio.IO, driver.Driver, ind
 	return w, r, drv, idx, cfg
 }
 
-// write puts content through the Writer's three phases and returns the id.
+// write puts content through the Writer's three phases and returns the
+// artifact's floating ArtifactID (handle).
 func write(t *testing.T, w *artifactio.IO, cfg domain.StoreConfig, content string) domain.ArtifactID {
 	t.Helper()
 	ctx := context.Background()
@@ -84,28 +85,25 @@ func TestLoad_TamperedManifestCorrupted(t *testing.T) {
 	w, r, drv, _, cfg := rwHarness(t)
 	id := write(t, w, cfg, "tamper me")
 
-	// Precondition: loads cleanly.
-	if _, err := r.Load(context.Background(), id, nil); err != nil {
+	// Precondition: loads cleanly. The loaded manifest also gives us the
+	// on-disk ManifestDigest — the manifest file is named by its digest,
+	// not by the floating handle, so we tamper at the digest path.
+	m, err := r.Load(context.Background(), id, nil)
+	if err != nil {
 		t.Fatalf("precondition Load: %v", err)
 	}
-	// Overwrite the manifest file with garbage at its real path. Load must
-	// reject it (ArtifactID hash check or decode), never silently succeed.
-	mp, err := artifactManifestPath(id)
+	mp, err := artifact.ManifestPath(m.Digest)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Overwrite the manifest file with garbage. Load must reject it
+	// (digest hash check or decode), never silently succeed.
 	if err := drv.Put(context.Background(), mp, bytes.NewReader([]byte("\x00SC1\x00not-json"))); err != nil {
 		t.Fatalf("overwrite manifest: %v", err)
 	}
 	if _, err := r.Load(context.Background(), id, nil); err == nil {
 		t.Fatal("Load must fail on a tampered manifest file")
 	}
-}
-
-// artifactManifestPath mirrors artifact.ManifestPath for the test (kept
-// local to avoid an extra import line in the harness section).
-func artifactManifestPath(id domain.ArtifactID) (string, error) {
-	return artifact.ManifestPath(id)
 }
 
 // --- OpenBlob ---

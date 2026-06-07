@@ -40,7 +40,7 @@ func (i *Index) ListByNamespace(
 		// (the bytes live inside the manifest) — for them the JOIN
 		// yields NULLs and scanManifestRow leaves OriginalSize at zero.
 		queryDefault = `
-			SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+			SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
 			       m.blob_ref, m.created_at, m.retention_until,
 			       b.content_hash, b.original_size
 			FROM manifests m
@@ -48,7 +48,7 @@ func (i *Index) ListByNamespace(
 			WHERE m.namespace = '' AND m.type != ?
 			ORDER BY m.created_at`
 		queryAny = `
-			SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+			SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
 			       m.blob_ref, m.created_at, m.retention_until,
 			       b.content_hash, b.original_size
 			FROM manifests m
@@ -56,7 +56,7 @@ func (i *Index) ListByNamespace(
 			WHERE m.namespace NOT LIKE 'system.%' AND m.type != ?
 			ORDER BY m.namespace, m.created_at`
 		queryExact = `
-			SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+			SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
 			       m.blob_ref, m.created_at, m.retention_until,
 			       b.content_hash, b.original_size
 			FROM manifests m
@@ -202,7 +202,7 @@ func (i *Index) ManifestsByBlobRef(
 	cb func(domain.Manifest) error,
 ) error {
 	const query = `
-		SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+		SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
 		       m.blob_ref, m.created_at, m.retention_until,
 		       b.content_hash, b.original_size
 		FROM manifest_blobs mb
@@ -231,7 +231,7 @@ func (i *Index) ListUnverifiedManifests(
 ) error {
 	cutoff := timefmt.Format(before)
 	const query = `
-		SELECT m.artifact_id, m.type, m.namespace, m.session_id,
+		SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
 		       m.blob_ref, m.created_at, m.retention_until,
 		       b.content_hash, b.original_size
 		FROM manifests m

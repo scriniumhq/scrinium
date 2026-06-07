@@ -61,21 +61,22 @@ func (ss *systemStore) gatherNames(ctx context.Context, namespace, prefix string
 }
 
 // readPointer reads the pointer file at the given driver path and
-// parses its content as an ArtifactID. Returns errs.ErrArtifactNotFound
-// when the pointer file is absent.
-func (ss *systemStore) readPointer(ctx context.Context, ptrPath string) (domain.ArtifactID, error) {
-	id, err := ss.readPointerAt(ctx, ptrPath)
+// parses its content as a ManifestDigest (system artifacts are
+// addressed by their on-disk digest, not a floating handle). Returns
+// errs.ErrArtifactNotFound when the pointer file is absent.
+func (ss *systemStore) readPointer(ctx context.Context, ptrPath string) (domain.ManifestDigest, error) {
+	digest, err := ss.readPointerAt(ctx, ptrPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return "", errs.ErrArtifactNotFound
 		}
 		return "", err
 	}
-	return id, nil
+	return digest, nil
 }
 
 // readPointerAt surfaces os.ErrNotExist directly (Walk relies on it).
-func (ss *systemStore) readPointerAt(ctx context.Context, ptrPath string) (domain.ArtifactID, error) {
+func (ss *systemStore) readPointerAt(ctx context.Context, ptrPath string) (domain.ManifestDigest, error) {
 	rc, err := ss.drv.Get(ctx, ptrPath)
 	if err != nil {
 		return "", err
@@ -85,36 +86,36 @@ func (ss *systemStore) readPointerAt(ctx context.Context, ptrPath string) (domai
 	if err != nil {
 		return "", fmt.Errorf("read pointer: %w", err)
 	}
-	idStr := strings.TrimSpace(string(raw))
-	if idStr == "" {
+	digestStr := strings.TrimSpace(string(raw))
+	if digestStr == "" {
 		return "", errs.ErrCorruptedConfigPointer
 	}
-	if _, _, err := ss.hashes.Parse(idStr); err != nil {
+	if _, _, err := ss.hashes.Parse(digestStr); err != nil {
 		return "", fmt.Errorf("%w: %v", errs.ErrCorruptedConfigPointer, err)
 	}
-	return domain.ArtifactID(idStr), nil
+	return domain.ManifestDigest(digestStr), nil
 }
 
-func (ss *systemStore) writePointer(ctx context.Context, ptrPath string, id domain.ArtifactID) error {
-	body := []byte(string(id) + "\n")
+func (ss *systemStore) writePointer(ctx context.Context, ptrPath string, digest domain.ManifestDigest) error {
+	body := []byte(string(digest) + "\n")
 	return ss.drv.Put(ctx, ptrPath, bytes.NewReader(body))
 }
 
 // readArtifact returns a ReadHandle over the manifest's inline payload.
-func (ss *systemStore) readArtifact(ctx context.Context, id domain.ArtifactID) (domain.ReadHandle, error) {
-	m, err := ss.loadManifest(ctx, id)
+func (ss *systemStore) readArtifact(ctx context.Context, digest domain.ManifestDigest) (domain.ReadHandle, error) {
+	m, err := ss.loadManifest(ctx, digest)
 	if err != nil {
 		return nil, err
 	}
 	if m.LayoutHeader.BlobStorage != domain.LayoutInline {
 		return nil, fmt.Errorf("system store: expected inline layout for %s, got %q",
-			id, m.LayoutHeader.BlobStorage)
+			digest, m.LayoutHeader.BlobStorage)
 	}
 	return ss.makeHandle(m), nil
 }
 
-func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	manifestPath, err := artifact.ManifestPath(id)
+func (ss *systemStore) loadManifest(ctx context.Context, digest domain.ManifestDigest) (domain.Manifest, error) {
+	manifestPath, err := artifact.ManifestPath(digest)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("manifest path: %w", err)
 	}
@@ -130,14 +131,20 @@ func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("read manifest: %w", err)
 	}
-	if err := artifact.VerifyArtifactID(id, fileBytes, ss.hashes); err != nil {
+	if err := artifact.VerifyManifestDigest(digest, fileBytes, ss.hashes); err != nil {
 		return domain.Manifest{}, fmt.Errorf("verify manifest: %w", err)
 	}
 	m, err := artifact.Decode(fileBytes)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("decode manifest: %w", err)
 	}
-	m.ArtifactID = id
+	// The digest is the physical name; the handle (if any) comes from the
+	// body. System artifacts are handle-less — fall back to the digest as
+	// ArtifactID so the index key matches what was written.
+	m.Digest = digest
+	if m.ArtifactID == "" {
+		m.ArtifactID = domain.ArtifactID(digest)
+	}
 	return m, nil
 }
 
@@ -148,21 +155,21 @@ func (ss *systemStore) loadManifest(ctx context.Context, id domain.ArtifactID) (
 // returned success — so they are logged at Warn: the operation is
 // logically complete but left an orphan for GC. No error is returned
 // (that is the "best-effort" contract); the log is the only signal.
-func (ss *systemStore) dropPredecessor(ctx context.Context, id domain.ArtifactID) {
-	m, err := ss.loadManifest(ctx, id)
+func (ss *systemStore) dropPredecessor(ctx context.Context, digest domain.ManifestDigest) {
+	m, err := ss.loadManifest(ctx, digest)
 	if err == nil {
 		blobRefs := []string{string(m.BlobRef)}
-		if delErr := ss.index.DeleteManifest(ctx, id, blobRefs); delErr != nil {
+		if delErr := ss.index.DeleteManifest(ctx, m.ArtifactID, blobRefs); delErr != nil {
 			ss.logger().LogAttrs(ctx, slog.LevelWarn,
 				"superseded artifact left in index (best-effort cleanup failed)",
-				artifactIDAttr(id), slog.String("error", delErr.Error()))
+				artifactIDAttr(m.ArtifactID), slog.String("error", delErr.Error()))
 		}
 	}
-	if manifestPath, pErr := artifact.ManifestPath(id); pErr == nil {
+	if manifestPath, pErr := artifact.ManifestPath(digest); pErr == nil {
 		if rmErr := ss.drv.Remove(ctx, manifestPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
 			ss.logger().LogAttrs(ctx, slog.LevelWarn,
 				"superseded manifest file left on disk (best-effort cleanup failed)",
-				artifactIDAttr(id), slog.String("error", rmErr.Error()))
+				artifactIDAttr(domain.ArtifactID(digest)), slog.String("error", rmErr.Error()))
 		}
 	}
 }
