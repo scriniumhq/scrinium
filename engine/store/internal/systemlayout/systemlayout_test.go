@@ -1,6 +1,7 @@
 package systemlayout
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"crypto/sha256"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/errs"
 )
@@ -146,5 +148,73 @@ func TestClaimResolveRoundTrip(t *testing.T) {
 	}
 	if len(seqs) != 3 || seqs[0] != 1 || seqs[2] != 3 {
 		t.Errorf("ListVersions = %v, want [1 2 3]", seqs)
+	}
+}
+
+// --- VersionPath format ---
+
+// TestVersionPath_Format pins the on-disk path shape: root/name/seq with
+// the seq zero-padded to seqWidth so lexicographic order tracks numeric
+// order. An invalid name propagates ErrInvalidSystemName.
+func TestVersionPath_Format(t *testing.T) {
+	cases := []struct {
+		name string
+		seq  uint64
+		want string
+	}{
+		{"config", 1, "system/config/00000000000000000001"},
+		{"scrub/cursor", 12, "system/scrub/cursor/00000000000000000012"},
+		{"ingester/state/main", 0, "system/ingester/state/main/00000000000000000000"},
+	}
+	for _, c := range cases {
+		got, err := VersionPath(c.name, c.seq)
+		if err != nil {
+			t.Fatalf("VersionPath(%q, %d): %v", c.name, c.seq, err)
+		}
+		if got != c.want {
+			t.Errorf("VersionPath(%q, %d) = %q, want %q", c.name, c.seq, got, c.want)
+		}
+	}
+
+	if _, err := VersionPath("a//b", 1); !errors.Is(err, errs.ErrInvalidSystemName) {
+		t.Errorf("VersionPath(invalid) err = %v, want ErrInvalidSystemName", err)
+	}
+}
+
+// --- verify-on-read ---
+
+// TestLoad_RejectsTamperedPayload covers the integrity anchor: a version
+// file whose inline payload no longer matches its embedded ContentHash
+// must fail Load with ErrCorruptedContent. We build a valid manifest,
+// flip a payload byte, and re-encode WITHOUT recomputing the hash, then
+// write the bytes straight to a version path.
+func TestLoad_RejectsTamperedPayload(t *testing.T) {
+	ctx := context.Background()
+	drv := newDriver(t)
+
+	_, m, err := BuildInlineManifest([]byte("real-payload"), "sha256", testHashes{})
+	if err != nil {
+		t.Fatalf("BuildInlineManifest: %v", err)
+	}
+	m.InlineBlob = append([]byte(nil), m.InlineBlob...)
+	m.InlineBlob[0] ^= 0xff // ContentHash left untouched → now inconsistent
+
+	_, fileBytes, _, err := artifact.ComputeManifestDigest(
+		m, "sha256", testHashes{},
+		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
+	if err != nil {
+		t.Fatalf("encode tampered manifest: %v", err)
+	}
+
+	path, err := VersionPath("scrub/cursor", 1)
+	if err != nil {
+		t.Fatalf("VersionPath: %v", err)
+	}
+	if err := drv.Put(ctx, path, bytes.NewReader(fileBytes)); err != nil {
+		t.Fatalf("seed tampered version: %v", err)
+	}
+
+	if _, err := Load(ctx, drv, testHashes{}, path); !errors.Is(err, errs.ErrCorruptedContent) {
+		t.Fatalf("Load tampered: got %v, want ErrCorruptedContent", err)
 	}
 }
