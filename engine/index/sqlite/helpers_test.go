@@ -2,6 +2,8 @@ package sqlite
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -78,12 +80,21 @@ func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	if !m.RetentionUntil.IsZero() {
 		retentionArg = timefmt.Format(m.RetentionUntil)
 	}
+	// manifest_digest is the PK after the identity axis (ADR-83/92).
+	// Honour a fixture-supplied digest; synthesize a distinct one from
+	// the row's identifying fields otherwise so two staged manifests
+	// never collide on an empty PK.
+	digest := string(m.Digest)
+	if digest == "" {
+		sum := sha256.Sum256([]byte(string(m.ArtifactID) + "|" + m.Namespace + "|" + string(m.SessionID) + "|" + timefmt.Format(createdAt)))
+		digest = "sha256-" + hex.EncodeToString(sum[:])
+	}
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO manifests (
-			artifact_id, type, namespace, session_id,
+			manifest_digest, artifact_id, type, namespace, session_id,
 			blob_ref, created_at, retention_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		string(m.ArtifactID), string(m.Type),
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		digest, string(m.ArtifactID), string(m.Type),
 		m.Namespace, m.SessionID, blobRefArg,
 		timefmt.Format(createdAt), retentionArg,
 	)

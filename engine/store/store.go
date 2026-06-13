@@ -141,13 +141,13 @@ type AdminStore interface {
 	UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error
 
 	// Config returns a snapshot of the active StoreConfig — the
-	// projection persisted in system.config/current, with defaults
-	// applied. Read-only; mutations of the returned value have no
-	// effect on the running Store.
+	// projection persisted as the active system/config version, with
+	// defaults applied. Read-only; mutations of the returned value
+	// have no effect on the running Store.
 	Config() domain.StoreConfig
 
 	// ConfigHistory returns the full history of configuration
-	// versions.
+	// versions, the active version first.
 	ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 
 	// Close releases secrets held by the Store and transitions it
@@ -191,20 +191,22 @@ type AdminStore interface {
 	System() SystemStore
 }
 
-// SystemArtifact is an engine-internal service artifact, addressed by
-// a slash-separated Name (a stable pointer) rather than by content
-// hash. Unlike a data-plane domain.Artifact it carries no Ext/Usr
-// metadata — system payloads are small, opaque service blobs (config
-// versions, agent cursors, index snapshots). The Name is the address:
-// Put writes the payload and flips the name's pointer to it; Get/Delete
-// take the name directly.
+// SystemArtifact is an engine-internal service artifact, addressed by a
+// slash-separated Name rather than by content hash. Unlike a data-plane
+// domain.Artifact it carries no Ext/Usr metadata — system payloads are
+// small, opaque service blobs (config versions, agent cursors, index
+// snapshots). The Name is the address: Put writes the payload as a new
+// version of the name; Get reads the active version; Delete removes the
+// name. Versioning, activation (max seq), exclusive-create publishing,
+// and verify-on-read integrity live in
+// engine/store/internal/systemlayout (ADR-85).
 //
 // Named addressing is a deliberately small facility for the engine's
 // own data — not a general user-facing primitive — which is why it
 // lives behind AdminStore.System() and uses its own type rather than
 // overloading domain.Artifact.
 type SystemArtifact struct {
-	// Name is the slash-separated pointer under which the artifact is
+	// Name is the slash-separated name under which the artifact is
 	// stored and later retrieved (e.g. "scrub/cursor").
 	Name string
 
@@ -215,37 +217,24 @@ type SystemArtifact struct {
 
 // SystemStore is the facade for engine-internal service artifacts:
 // versioned configuration, agent cursors, index snapshots, and the
-// like, each addressed by a slash-separated name.
+// like, each addressed by a slash-separated name. Artifacts are stored
+// outside the content-addressed index, in their own address space, and
+// are invisible to Store.Walk.
 type SystemStore interface {
-	// Put writes a SystemArtifact under its Name. If the name already
-	// has an artifact, the predecessor is dropped after the pointer
-	// flip. The default is to index the manifest in StoreIndex;
-	// WithoutIndex() skips indexing.
-	Put(ctx context.Context, a SystemArtifact, opts ...SystemPutOption) error
+	// Put writes a SystemArtifact as a new version of its Name. The
+	// active version becomes the one just written (max seq); older
+	// versions are retained for a bounded history and otherwise pruned.
+	Put(ctx context.Context, a SystemArtifact) error
 
-	// Get opens the artifact currently pointed at by name. Returns
-	// errs.ErrArtifactNotFound when no pointer exists.
+	// Get opens the active version of name. Returns
+	// errs.ErrArtifactNotFound when the name has never been written.
 	Get(ctx context.Context, name string) (domain.ReadHandle, error)
 
-	// Delete removes the pointer and the artifact it points at.
-	// Idempotent: deleting an absent name returns nil.
+	// Delete removes every version of name. Idempotent: deleting an
+	// absent name returns nil.
 	Delete(ctx context.Context, name string) error
 
 	// Walk iterates over every name with the given prefix in
-	// alphabetical order, yielding the underlying manifests.
+	// alphabetical order, yielding the active manifest for each.
 	Walk(ctx context.Context, prefix string, cb func(name string, m domain.Manifest) error) error
-}
-
-// SystemPutConfig is the resolved set of options for a single
-// SystemStore.Put, populated by SystemPutOption appliers.
-type SystemPutConfig struct {
-	// SkipIndex skips indexing the manifest in StoreIndex.
-	SkipIndex bool
-}
-
-// SystemPutOption configures a single SystemStore.Put. An applier over
-// the exported SystemPutConfig (rather than a func over a private type)
-// so option constructors can live in any package.
-type SystemPutOption interface {
-	ApplySystemPut(*SystemPutConfig)
 }

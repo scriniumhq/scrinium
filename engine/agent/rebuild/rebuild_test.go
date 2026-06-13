@@ -81,7 +81,7 @@ func (f rebuildFixture) publishCheckpoint(t *testing.T) string {
 	defer rc.Close()
 	name := checkpointfmt.Name(time.Now())
 	if err := f.store.System().Put(context.Background(),
-		store.SystemArtifact{Name: name, Payload: rc}, store.WithoutIndex()); err != nil {
+		store.SystemArtifact{Name: name, Payload: rc}); err != nil {
 		t.Fatalf("publish checkpoint: %v", err)
 	}
 	return name

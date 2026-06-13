@@ -1,12 +1,27 @@
 package manifestfx
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
 )
+
+// syntheticDigest derives a stable, valid-shaped ManifestDigest from an
+// artifact id. After the identity axis (ADR-83/92) the manifests table
+// is keyed by manifest_digest, so two fixtures must carry two distinct
+// digests to land two rows — distinct ids give distinct digests, while
+// the same id re-used gives the same digest (idempotent re-index). The
+// index treats the digest as an opaque PK; the production write path
+// computes the real digest via artifact.ComputeManifestDigest, so this
+// fixture value never reaches the store.
+func syntheticDigest(id string) domain.ManifestDigest {
+	sum := sha256.Sum256([]byte("manifestfx:" + id))
+	return domain.ManifestDigest("sha256-" + hex.EncodeToString(sum[:]))
+}
 
 // Synthetic hashes used in fixtures. Cannot be const because
 // strings.Repeat is a runtime call.
@@ -47,6 +62,7 @@ func Sample() domain.Manifest {
 func Blob(id, blobRef string) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   domain.ArtifactID(id),
+		Digest:       syntheticDigest(id),
 		Type:         domain.ManifestTypeBlob,
 		Namespace:    "test",
 		ContentHash:  domain.ContentHash(contentHashAaa),
@@ -66,6 +82,7 @@ func Blob(id, blobRef string) domain.Manifest {
 func BlobWithHash(id, blobRef string, contentHash domain.ContentHash, originalSize int64) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   domain.ArtifactID(id),
+		Digest:       syntheticDigest(id),
 		Type:         domain.ManifestTypeBlob,
 		Namespace:    "test",
 		ContentHash:  contentHash,

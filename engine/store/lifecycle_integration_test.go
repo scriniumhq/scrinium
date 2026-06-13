@@ -12,6 +12,7 @@ import (
 	sqliteindex "scrinium.dev/engine/index/sqlite"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/engine/store/internal/systemlayout"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/storefx"
 )
@@ -20,9 +21,9 @@ import (
 // for the full Store lifecycle. It exercises every public-facing
 // transition through real on-disk artifacts:
 //
-//  1. InitStore creates store.json (descriptor, §10.1.3),
-//     system.config/current (pointer, §10.1.4), the system.config
-//     manifest, and a SQLite index file on a localfs-backed driver.
+//  1. InitStore creates store.json (descriptor, §10.1.3), the first
+//     system/config version (the inline config manifest, ADR-85), and a
+//     SQLite index file on a localfs-backed driver.
 //  2. Capacity, Walk, SetMaintenanceMode work on the open Store.
 //  3. The caller closes the StoreIndex (DI ownership).
 //  4. A fresh session reopens the Location: same StoreID, same
@@ -76,8 +77,12 @@ func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 	if _, err := os.Stat(descPath); err != nil {
 		t.Fatalf("descriptor not on disk after Init: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(location, "system.config", "current")); err != nil {
-		t.Fatalf("system.config/current not on disk after Init: %v", err)
+	cfgVersion, err := systemlayout.VersionPath("config", 1)
+	if err != nil {
+		t.Fatalf("VersionPath: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(location, filepath.FromSlash(cfgVersion))); err != nil {
+		t.Fatalf("system config version not on disk after Init: %v", err)
 	}
 	if _, err := os.Stat(indexPath); err != nil {
 		t.Fatalf("index not on disk after Init: %v", err)

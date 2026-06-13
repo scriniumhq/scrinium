@@ -39,6 +39,15 @@ type ContentHash string
 // chunks and TOC blobs.
 type BlobRef string
 
+// HandleRef is a reference from one artifact to another — an edge in
+// the content-addressed DAG (ADR-92). It carries the target artifact's
+// floating handle, so it lives in the handle address space and converts
+// to ArtifactID for resolution: ResolveManifest(domain.ArtifactID(ref)).
+// Distinct type from ArtifactID on purpose — it marks "an edge to
+// another artifact" versus "this artifact's own identity slot" — and is
+// symmetric to BlobRef for the BlobRefs/HandleRefs reference arrays.
+type HandleRef ArtifactID
+
 // StoreID is the global identifier of a Store. A UUID v4, generated
 // once at InitStore; never changes.
 type StoreID string

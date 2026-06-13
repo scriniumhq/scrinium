@@ -79,8 +79,11 @@ const (
 // NewCheckpointAgent creates a Checkpoint Agent. Constructed by the
 // assembler (Variant B): it needs the StoreIndex to WriteCheckpoint a
 // checkpoint file and the Store to publish that file into the CAS via
-// System().Put (WithoutIndex — a checkpoint is engine state, not a user
-// artifact, and indexing it would make it a rebuild input of itself).
+// System().Put. A checkpoint is engine state, not a user artifact;
+// system artifacts live in their own system/ address space and are
+// never indexed (ADR-85), so a checkpoint can never become a rebuild
+// input of itself — that guarantee is structural now, not an opt-out
+// flag on the write.
 func NewCheckpointAgent(
 	st store.Store,
 	drv driver.Driver,
@@ -261,7 +264,6 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 	name := checkpointfmt.Prefix + id
 	if err := a.store.System().Put(ctx,
 		store.SystemArtifact{Name: name, Payload: f},
-		store.WithoutIndex(),
 	); err != nil {
 		return CheckpointStats{}, fmt.Errorf("publish checkpoint %q: %w", name, err)
 	}

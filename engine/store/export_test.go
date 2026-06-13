@@ -19,20 +19,16 @@ import (
 	"scrinium.dev/engine/store/internal/storeconfig"
 )
 
-// SysConfigPointer is the on-disk path of system.config/current.
-const SysConfigPointer = domain.NamespaceSystemConfig + "/current"
-
-// WriteSystemConfig is the test alias for writeSystemConfig. It returns
-// the config artifact's ManifestDigest (system artifacts are addressed by
-// digest, the on-disk filename, not by a floating handle).
+// WriteSystemConfig is the test alias for storeconfig.Write. Under the
+// seq model (ADR-85) the config is published as a new system/config
+// version; there is no pointer file and no returned handle.
 func WriteSystemConfig(
 	ctx context.Context,
 	drv driver.Driver,
-	idx index.StoreIndex,
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
-) (domain.ManifestDigest, error) {
-	return storeconfig.Write(ctx, drv, configWriter(drv, idx, hashes), cfg)
+) error {
+	return storeconfig.Write(ctx, drv, hashes, cfg)
 }
 
 // ReadSystemConfig is the test alias for readSystemConfig.

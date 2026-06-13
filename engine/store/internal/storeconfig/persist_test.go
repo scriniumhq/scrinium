@@ -1,7 +1,6 @@
 package storeconfig
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -9,6 +8,7 @@ import (
 	"hash"
 	"strings"
 	"testing"
+	"time"
 
 	"crypto/sha256"
 
@@ -17,17 +17,17 @@ import (
 	"scrinium.dev/errs"
 )
 
-// These are white-box unit tests of the system.config pointer/format
-// failure modes — they need no ArtifactWriter, only a seeded driver.
-// The round-trip test (which exercises a real inline-artifact write)
-// lives in engine/core, where the production ArtifactWriter is
-// available; that is an integration test of the core↔storeconfig
-// seam and belongs on the core side.
+// White-box unit tests of the system/config persistence path. Under the
+// seq model (ADR-85) the active config is the highest system/config
+// version and there is no pointer file, so the historical
+// corrupted-pointer / dangling-pointer cases are gone. Write is now
+// self-contained (driver + hash registry, no ArtifactWriter), so the
+// round-trip lives here rather than on the core side.
 
 // testHashes is a minimal sha256-only domain.HashRegistry. Defined
-// locally rather than reusing storefx.Hashes() because storefx
-// imports engine/core, and core imports this package — pulling
-// storefx in would create an import cycle in the test binary.
+// locally rather than reusing storefx.Hashes() because storefx imports
+// engine/core, and core imports this package — pulling storefx in would
+// create an import cycle in the test binary.
 type testHashes struct{}
 
 func (testHashes) Parse(h string) (string, []byte, error) {
@@ -64,6 +64,18 @@ func newDriver(t *testing.T) *localfs.Driver {
 	return drv
 }
 
+// sampleConfig is a fully-specified Plain config; ContentHasher must be
+// set so BuildInlineManifest can resolve a hasher.
+func sampleConfig() domain.StoreConfig {
+	return domain.StoreConfig{
+		PathTopology:     domain.PathTopologyFlat,
+		ContentHasher:    domain.HashSHA256,
+		ManifestEncoding: domain.ManifestEncodingJSON,
+		ManifestCrypto:   domain.ManifestCryptoPlain,
+		RetentionPeriod:  3 * time.Hour,
+	}
+}
+
 func TestRead_Missing(t *testing.T) {
 	drv := newDriver(t)
 	_, err := Read(context.Background(), drv, testHashes{})
@@ -72,61 +84,57 @@ func TestRead_Missing(t *testing.T) {
 	}
 }
 
-func TestRead_CorruptedPointer(t *testing.T) {
-	cases := []struct {
-		name    string
-		content []byte
-	}{
-		{"empty", []byte("")},
-		{"whitespace only", []byte("   \n")},
-		{"garbage", []byte("not-an-artifact-id\n")},
-		{"missing dash", []byte("sha256deadbeef\n")},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			drv := newDriver(t)
-			if err := drv.Put(context.Background(), pointerPath,
-				bytes.NewReader(c.content)); err != nil {
-				t.Fatalf("seed pointer: %v", err)
-			}
-			_, err := Read(context.Background(), drv, testHashes{})
-			if !errors.Is(err, errs.ErrCorruptedConfigPointer) {
-				t.Fatalf("expected ErrCorruptedConfigPointer, got %v", err)
-			}
-		})
-	}
-}
-
-func TestRead_DanglingPointer(t *testing.T) {
+func TestWriteRead_RoundTrip(t *testing.T) {
 	drv := newDriver(t)
-	// Syntactically valid ArtifactID, no manifest behind it.
-	pointer := []byte("sha256-" +
-		"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n")
-	if err := drv.Put(context.Background(), pointerPath,
-		bytes.NewReader(pointer)); err != nil {
-		t.Fatalf("seed pointer: %v", err)
+	cfg := sampleConfig()
+	if err := Write(context.Background(), drv, testHashes{}, cfg); err != nil {
+		t.Fatalf("Write: %v", err)
 	}
-	_, err := Read(context.Background(), drv, testHashes{})
-	if !errors.Is(err, errs.ErrDanglingConfigPointer) {
-		t.Fatalf("expected ErrDanglingConfigPointer, got %v", err)
-	}
-}
-
-// ReadPointer is also exercised directly: a present, well-formed
-// pointer parses to its ArtifactID.
-func TestReadPointer_WellFormed(t *testing.T) {
-	drv := newDriver(t)
-	id := "sha256-" +
-		"deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
-	if err := drv.Put(context.Background(), pointerPath,
-		bytes.NewReader([]byte(id+"\n"))); err != nil {
-		t.Fatalf("seed pointer: %v", err)
-	}
-	got, err := ReadPointer(context.Background(), drv, testHashes{})
+	got, err := Read(context.Background(), drv, testHashes{})
 	if err != nil {
-		t.Fatalf("ReadPointer: %v", err)
+		t.Fatalf("Read: %v", err)
 	}
-	if string(got) != id {
-		t.Errorf("ReadPointer: got %q, want %q", got, id)
+	if got.PathTopology != cfg.PathTopology {
+		t.Errorf("PathTopology: got %q, want %q", got.PathTopology, cfg.PathTopology)
+	}
+	if got.RetentionPeriod != cfg.RetentionPeriod {
+		t.Errorf("RetentionPeriod: got %v, want %v", got.RetentionPeriod, cfg.RetentionPeriod)
+	}
+}
+
+// TestHistory_NewestFirst writes three versions and checks History
+// returns them newest-first, with Read (the active config) equal to the
+// highest version.
+func TestHistory_NewestFirst(t *testing.T) {
+	drv := newDriver(t)
+	cfg := sampleConfig()
+
+	for _, d := range []time.Duration{1 * time.Hour, 2 * time.Hour, 4 * time.Hour} {
+		cfg.RetentionPeriod = d
+		if err := Write(context.Background(), drv, testHashes{}, cfg); err != nil {
+			t.Fatalf("Write %v: %v", d, err)
+		}
+	}
+
+	hist, err := History(context.Background(), drv, testHashes{})
+	if err != nil {
+		t.Fatalf("History: %v", err)
+	}
+	if len(hist) != 3 {
+		t.Fatalf("len: got %d, want 3", len(hist))
+	}
+	if hist[0].RetentionPeriod != 4*time.Hour {
+		t.Errorf("hist[0]: got %v, want 4h (newest)", hist[0].RetentionPeriod)
+	}
+	if hist[len(hist)-1].RetentionPeriod != 1*time.Hour {
+		t.Errorf("hist[last]: got %v, want 1h (oldest)", hist[len(hist)-1].RetentionPeriod)
+	}
+
+	active, err := Read(context.Background(), drv, testHashes{})
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if active.RetentionPeriod != 4*time.Hour {
+		t.Errorf("active: got %v, want 4h", active.RetentionPeriod)
 	}
 }

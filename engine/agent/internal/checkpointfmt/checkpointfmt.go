@@ -4,8 +4,9 @@
 // so the two can never drift on the prefix or the timestamp layout.
 //
 // A checkpoint is a full, self-contained copy of the StoreIndex published as
-// engine state (WithoutIndex) under Prefix. Recovery lists the prefix, picks
-// the newest, restores it, and replays the tail of manifests written since.
+// engine state under Prefix, in the system/ address space that is never
+// indexed (ADR-85). Recovery lists the prefix, picks the newest, restores
+// it, and replays the tail of manifests written since.
 package checkpointfmt
 
 import (

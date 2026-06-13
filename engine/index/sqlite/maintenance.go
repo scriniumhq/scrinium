@@ -173,6 +173,7 @@ var checkpointContentTables = []string{
 	"blobs",
 	"manifests",
 	"manifest_blobs",
+	"manifest_handles",
 	"packed_blobs",
 	"ext_meta",
 	"ext_data",

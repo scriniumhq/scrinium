@@ -18,8 +18,9 @@ const CurrentSchemaVersion = 1
 var migrations = []migration{
 	{
 		Version: 1,
-		Description: "baseline: blobs, manifests, manifest_blobs, " +
-			"packed_blobs, ext_meta, ext_data, store_meta",
+		Description: "baseline: blobs, manifests (digest-PK + identity slots), " +
+			"manifest_blobs, manifest_handles, packed_blobs, ext_meta, " +
+			"ext_data, store_meta",
 		Statements: []string{schemaBaseline},
 	},
 }
@@ -36,23 +37,41 @@ type migration struct {
 // identifiers stay lowercase and snake_case for SQLite ergonomics.
 // Tables:
 //
-//   - blobs:          the deduplication index, one row per unique blob
-//   - manifests:      one row per artifact (manifest file on disk)
-//   - manifest_blobs: M:N edges from a manifest to the blobs it
-//     references (a TOC manifest references many chunk blobs; a
-//     regular manifest references one)
-//   - packed_blobs:   range-read information for blobs inside a .pack
-//     volume; one row per packed artifact
-//   - ext_meta:       per-extension state; stores the schema_version
+//   - blobs:           the deduplication index, one row per unique blob
+//   - manifests:       one row per manifest FILE, keyed by its
+//     ManifestDigest (the hash of the file bytes). Identity is carried
+//     by the nullable artifact_id column (ADR-83/84/92): a user
+//     artifact's floating handle, or NULL for a pack container (the
+//     empty slot — the container is addressed by its volume hash). The
+//     handle→digest lookup is the manifests_artifact index, not the
+//     primary key, because the handle is stable while the digest changes
+//     on repack. System artifacts are NOT indexed (ADR-85: identity is a
+//     name, addressed name→path bypassing the index), so they have no
+//     row here and the table carries no name column; user-Walk
+//     invisibility of containers is the predicate artifact_id IS NULL.
+//   - manifest_blobs:  ordered M:N edges from a manifest to the blobs it
+//     references (BlobRefs — ADR-92), keyed by manifest_digest. A
+//     composite references its chunk list; a pack container references
+//     [toc_blob, pack_blob]; a regular manifest references one blob.
+//   - manifest_handles: ordered edges from a manifest to OTHER artifacts
+//     (HandleRefs, the content-addressed DAG — ADR-92), keyed by
+//     manifest_digest. Populated for pack containers (placement of
+//     members) and any artifact carrying artifact→artifact edges; empty
+//     for a plain blob and a composite.
+//   - packed_blobs:    range-read information for blobs inside a .pack
+//     volume; one row per packed artifact. TRANSITIONAL — ADR-86 moves
+//     pack placement to the bundler Resolver map in ext_data; retained
+//     until the bundler is rebuilt.
+//   - ext_meta:        per-extension state; stores the schema_version
 //     persisted from the last successful Setup so later registrations
 //     can migrate forward
-//   - ext_data:       the universal K/V store index extensions write
+//   - ext_data:        the universal K/V store index extensions write
 //     into; the composite PK (extension, table_name, key) gives each
 //     extension a private namespace plus per-table grouping, and
 //     WITHOUT ROWID keeps entries in PK order for prefix range scans
-//   - store_meta:     singleton key/value table for engine metadata
+//   - store_meta:      singleton key/value table for engine metadata
 //     (schema version, descriptor cache, scan timestamps, etc.)
-//   - schema_version: the running schema version, one row per applied
+//   - schema_version:  the running schema version, one row per applied
 //     migration
 //
 // Notes on types:
@@ -66,6 +85,11 @@ type migration struct {
 //     retention_until NULL = no retention).
 //   - PRIMARY KEY columns are NOT NULL by SQLite definition; the
 //     constraint is repeated for clarity on non-PK NOT NULL columns.
+//   - manifests.artifact_id is NULLABLE — set to the floating handle
+//     for a user artifact, NULL for a pack container (the empty slot,
+//     ADR-92). NULL keeps the index sparse and is the user-Walk
+//     invisibility predicate. System artifacts are not indexed (ADR-85),
+//     so no name column exists.
 //
 // The blobs_content index is intentionally NON-UNIQUE. Physical blob
 // identity is blob_ref (the PRIMARY KEY) — for an encrypted blob that
@@ -99,9 +123,9 @@ CREATE INDEX blobs_orphan  ON blobs(ref_count) WHERE ref_count = 0;
 CREATE INDEX blobs_scrub   ON blobs(last_verified_at);
 
 CREATE TABLE manifests (
-    artifact_id      TEXT    PRIMARY KEY,
-    manifest_digest  TEXT    NOT NULL DEFAULT '',
-    type             TEXT    NOT NULL,
+    manifest_digest  TEXT    PRIMARY KEY,
+    artifact_id      TEXT,
+    type             TEXT    NOT NULL DEFAULT '',
     namespace        TEXT    NOT NULL DEFAULT '',
     session_id       TEXT    NOT NULL DEFAULT '',
     blob_ref         TEXT,
@@ -110,19 +134,28 @@ CREATE TABLE manifests (
     last_verified_at TEXT
 ) WITHOUT ROWID;
 
-CREATE INDEX manifests_digest    ON manifests(manifest_digest);
+CREATE INDEX manifests_artifact  ON manifests(artifact_id);
 CREATE INDEX manifests_namespace ON manifests(namespace);
 CREATE INDEX manifests_session   ON manifests(session_id);
 CREATE INDEX manifests_scrub     ON manifests(last_verified_at);
 
 CREATE TABLE manifest_blobs (
-    artifact_id  TEXT    NOT NULL,
-    blob_ref     TEXT    NOT NULL,
-    position     INTEGER NOT NULL,
-    PRIMARY KEY (artifact_id, position)
+    manifest_digest TEXT    NOT NULL,
+    blob_ref        TEXT    NOT NULL,
+    position        INTEGER NOT NULL,
+    PRIMARY KEY (manifest_digest, position)
 ) WITHOUT ROWID;
 
 CREATE INDEX manifest_blobs_blob ON manifest_blobs(blob_ref);
+
+CREATE TABLE manifest_handles (
+    manifest_digest TEXT    NOT NULL,
+    handle_ref      TEXT    NOT NULL,
+    position        INTEGER NOT NULL,
+    PRIMARY KEY (manifest_digest, position)
+) WITHOUT ROWID;
+
+CREATE INDEX manifest_handles_target ON manifest_handles(handle_ref);
 
 CREATE TABLE packed_blobs (
     artifact_id      TEXT    PRIMARY KEY,

@@ -22,6 +22,15 @@ import (
 //     into packed_blobs for each entry; manifests of packed
 //     artifacts are NOT inserted into the manifests table — packed
 //     artifacts are reachable through LookupPacked, not through Walk.
+//     (TRANSITIONAL: ADR-86 replaces packed_blobs with the bundler
+//     Resolver map; the pack branch goes when the bundler is rebuilt.)
+//
+// Regardless of type, the manifest's HandleRefs (artifact→artifact
+// edges, ADR-92) are linked into manifest_handles after the per-type
+// step. россыпь and composite carry none; pack containers carry their
+// members. The manifests table is keyed by ManifestDigest (the file
+// hash); the floating handle and the system name are nullable slot
+// columns (ADR-83/85/92).
 //
 // All work happens inside a single transaction; partial registration
 // is impossible.
@@ -64,6 +73,18 @@ func (i *Index) indexManifestTx(
 			}
 		default:
 			return fmt.Errorf("sqlite: unknown manifest type: %q", m.Type)
+		}
+
+		// Link the artifact→artifact edges (HandleRefs, ADR-92). Empty
+		// for россыпь and composite; populated for pack containers
+		// (placement of members). Pack volumes in the transitional
+		// packed_blobs model insert no manifests row, so they also carry
+		// no HandleRefs yet — the loop is a no-op until the bundler is
+		// rebuilt to the container model.
+		for pos, hr := range m.HandleRefs {
+			if err := linkManifestToHandle(ctx, tx, m.Digest, hr, pos); err != nil {
+				return err
+			}
 		}
 
 		// Dispatch to subscribed extensions BEFORE commit. An error
@@ -172,37 +193,46 @@ func registerBlob(
 }
 
 // insertManifestRow writes a row into the manifests table.
-// Idempotency: ON CONFLICT(artifact_id) DO NOTHING. The same artifact
-// registered twice (after a crash, for instance) is a no-op rather than
-// an error — re-indexing identical content lands the identical row.
+// Idempotency: ON CONFLICT(manifest_digest) DO NOTHING. The same
+// manifest file registered twice (after a crash, for instance) is a
+// no-op rather than an error — re-indexing identical content lands the
+// identical row.
 //
-// Primary-key derivation: user artifacts key on their floating handle
-// (m.ArtifactID). System artifacts have no handle (ADR-73) and are
-// addressed by their ManifestDigest, so they key on the digest — stored
-// in the artifact_id column per the documented "system artifact_id =
-// digest" rule. An empty artifact_id would otherwise collapse every
-// system artifact under ON CONFLICT(artifact_id) DO NOTHING, leaving
-// only the first one ever written.
+// Primary key: ManifestDigest (the hash of the file bytes, always
+// present). Identity lives in the single nullable slot column
+// artifact_id (ADR-83/84/92):
+//   - a user artifact's floating handle (m.ArtifactID);
+//   - NULL for a pack container — the empty slot; the container is
+//     addressed by its volume hash, not a handle.
+//
+// System artifacts are NOT indexed (ADR-85: identity is a name,
+// addressed name→path bypassing the index), so they never reach this
+// row and the table has no name column.
 func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error {
 	const stmt = `
 		INSERT INTO manifests (
-			artifact_id, manifest_digest, type, namespace, session_id,
+			manifest_digest, artifact_id, type, namespace, session_id,
 			blob_ref, created_at, retention_until
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(artifact_id) DO NOTHING`
+		ON CONFLICT(manifest_digest) DO NOTHING`
 
-	pk := string(m.ArtifactID)
-	if pk == "" {
-		pk = string(m.Digest)
+	// Identity slot. A user artifact fills artifact_id with its floating
+	// handle; a pack container has an empty slot (artifact_id NULL — it is
+	// addressed by its volume hash). System artifacts are NOT indexed
+	// (ADR-85: name→path bypasses the index), so they never reach this
+	// row and the table has no name column.
+	var artifactIDArg any
+	if m.ArtifactID != "" {
+		artifactIDArg = string(m.ArtifactID)
 	}
 
 	// blob_ref is NULL for Inline manifests per §9.1.2 — Inline blobs do
 	// not have a row in `blobs`, and the routing layer uses the absence
 	// of a JOIN partner as the "this is inline, read the file" signal.
+	// It is a transitional single-blob cache; the authoritative blob
+	// list is manifest_blobs (ADR-92).
 	var blobRefArg any
-	if m.LayoutHeader.BlobStorage == domain.LayoutInline {
-		blobRefArg = nil
-	} else {
+	if m.LayoutHeader.BlobStorage != domain.LayoutInline {
 		blobRefArg = string(m.BlobRef)
 	}
 
@@ -211,9 +241,7 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	// RollbackSession can do its atomic retention check in one indexed
 	// query instead of N file reads.
 	var retentionArg any
-	if m.RetentionUntil.IsZero() {
-		retentionArg = nil
-	} else {
+	if !m.RetentionUntil.IsZero() {
 		retentionArg = timefmt.Format(m.RetentionUntil)
 	}
 
@@ -223,8 +251,8 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	}
 
 	_, err := tx.ExecContext(ctx, stmt,
-		pk,
 		string(m.Digest),
+		artifactIDArg,
 		string(m.Type),
 		m.Namespace,
 		m.SessionID,
@@ -235,23 +263,50 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	return err
 }
 
-// linkManifestToBlob inserts an edge row into manifest_blobs.
-// Position is the chunk index for TOC manifests and 0 for blob
-// manifests. Idempotency is provided by the PRIMARY KEY
-// (artifact_id, position) and ON CONFLICT DO NOTHING.
+// linkManifestToBlob inserts an edge row into manifest_blobs, keyed by
+// the manifest digest. Position is the chunk index for TOC manifests
+// and 0 for blob manifests. Idempotency is provided by the PRIMARY KEY
+// (manifest_digest, position) and ON CONFLICT DO NOTHING.
 func linkManifestToBlob(
 	ctx context.Context,
 	tx *sql.Tx,
-	artifactID domain.ArtifactID,
+	digest domain.ManifestDigest,
 	blobRef string,
 	position int,
 ) error {
 	const stmt = `
-		INSERT INTO manifest_blobs (artifact_id, blob_ref, position)
+		INSERT INTO manifest_blobs (manifest_digest, blob_ref, position)
 		VALUES (?, ?, ?)
-		ON CONFLICT(artifact_id, position) DO NOTHING`
+		ON CONFLICT(manifest_digest, position) DO NOTHING`
 	_, err := tx.ExecContext(ctx, stmt,
-		string(artifactID), blobRef, position,
+		string(digest), blobRef, position,
+	)
+	return err
+}
+
+// linkManifestToHandle inserts an edge row into manifest_handles, keyed
+// by the manifest digest (ADR-92). Position preserves array order.
+// Idempotency is provided by the PRIMARY KEY (manifest_digest, position)
+// and ON CONFLICT DO NOTHING.
+//
+// NOTE: this stores the artifact→artifact edge only. Reference-count
+// accounting for HandleRefs (the filled-slot consumption direction,
+// ADR-92) is deferred until a producer exists — no россыпь or composite
+// carries handle edges, and pack containers arrive with the rebuilt
+// bundler.
+func linkManifestToHandle(
+	ctx context.Context,
+	tx *sql.Tx,
+	digest domain.ManifestDigest,
+	handleRef domain.HandleRef,
+	position int,
+) error {
+	const stmt = `
+		INSERT INTO manifest_handles (manifest_digest, handle_ref, position)
+		VALUES (?, ?, ?)
+		ON CONFLICT(manifest_digest, position) DO NOTHING`
+	_, err := tx.ExecContext(ctx, stmt,
+		string(digest), string(handleRef), position,
 	)
 	return err
 }
@@ -286,7 +341,7 @@ func indexBlobManifest(
 	if err := insertManifestRow(ctx, tx, m); err != nil {
 		return err
 	}
-	return linkManifestToBlob(ctx, tx, m.ArtifactID, string(m.BlobRef), 0)
+	return linkManifestToBlob(ctx, tx, m.Digest, string(m.BlobRef), 0)
 }
 
 func indexTOCManifest(
@@ -317,7 +372,7 @@ func indexTOCManifest(
 		// Position starts at 1 for chunks because position 0 is
 		// reserved for the TOC blob itself. This keeps DeleteManifest
 		// logic uniform across blob and toc types.
-		if err := linkManifestToBlob(ctx, tx, m.ArtifactID, chunkRef, pos+1); err != nil {
+		if err := linkManifestToBlob(ctx, tx, m.Digest, chunkRef, pos+1); err != nil {
 			return err
 		}
 	}
@@ -327,7 +382,7 @@ func indexTOCManifest(
 	if err := insertManifestRow(ctx, tx, m); err != nil {
 		return err
 	}
-	return linkManifestToBlob(ctx, tx, m.ArtifactID, string(m.BlobRef), 0)
+	return linkManifestToBlob(ctx, tx, m.Digest, string(m.BlobRef), 0)
 }
 
 // indexPackManifest registers a .pack volume. The pack file itself
@@ -339,6 +394,11 @@ func indexTOCManifest(
 // ref_count semantics for the pack blob: incremented once per
 // packed artifact. When all packed artifacts are deleted, the pack
 // blob's ref_count drops to 0 and it becomes a GC candidate.
+//
+// TRANSITIONAL (ADR-86): the pack volume becomes a headless container
+// manifest whose placement map lives in the bundler Resolver
+// substrate (ext_data), not in packed_blobs. This path is retained
+// until the bundler is rebuilt.
 func indexPackManifest(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -389,10 +449,11 @@ func indexPackManifest(
 
 // DeleteManifest performs the logical deletion of an artifact.
 // Single transaction:
-//  1. Read the (artifact_id, blob_ref) edges from manifest_blobs.
-//  2. Decrement ref_count for each referenced blob.
-//  3. Delete the manifest_blobs edges.
-//  4. Delete the manifests row.
+//  1. Resolve the handle to the manifest digest (the table's PK).
+//  2. Read the (digest, blob_ref) edges from manifest_blobs.
+//  3. Decrement ref_count for each referenced blob.
+//  4. Delete the manifest_blobs and manifest_handles edges.
+//  5. Delete the manifests row.
 //
 // blobRefs argument: the caller passes the same set it intends to
 // be decremented. Mismatches between manifest_blobs and blobRefs
@@ -401,11 +462,11 @@ func indexPackManifest(
 // is the recovery tool.
 //
 // Idempotency: deleting an already-deleted artifact is a no-op
-// (returns nil) — DELETE FROM manifests with rows-affected=0 is
-// not an error. Source-of-truth for "already deleted" is the
-// manifests table, not manifest_blobs: Inline manifests have no
-// edges in manifest_blobs by design (§9.2.1), so checking that
-// table for "exists" gives the wrong answer for them.
+// (returns nil) — an unresolved handle means the manifest is gone.
+// Source-of-truth for "already deleted" is the manifests table, not
+// manifest_blobs: Inline manifests have no edges in manifest_blobs by
+// design (§9.2.1), so checking that table for "exists" gives the wrong
+// answer for them.
 func (i *Index) DeleteManifest(ctx context.Context, artifactID domain.ArtifactID, blobRefs []string) error {
 	return i.observe("DeleteManifest", func() error {
 		return i.deleteManifestTx(ctx, artifactID, blobRefs)
@@ -418,12 +479,26 @@ func (i *Index) deleteManifestTx(
 	blobRefs []string,
 ) error {
 	return i.inTx(ctx, func(tx *sql.Tx) error {
-		// Read the actual edges from the index. Source of truth is
+		// Resolve handle -> digest (the manifests PK). A missing handle
+		// means the artifact is already gone: no-op.
+		var digest string
+		err := tx.QueryRowContext(ctx,
+			`SELECT manifest_digest FROM manifests WHERE artifact_id = ? LIMIT 1`,
+			string(artifactID),
+		).Scan(&digest)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil
+		case err != nil:
+			return err
+		}
+
+		// Read the actual blob edges from the index. Source of truth is
 		// manifest_blobs, not the caller — but if the caller's set
 		// disagrees we want to know.
 		rows, err := tx.QueryContext(ctx,
-			`SELECT blob_ref FROM manifest_blobs WHERE artifact_id = ?`,
-			string(artifactID),
+			`SELECT blob_ref FROM manifest_blobs WHERE manifest_digest = ?`,
+			digest,
 		)
 		if err != nil {
 			return err
@@ -457,14 +532,20 @@ func (i *Index) deleteManifestTx(
 		}
 
 		if _, err := tx.ExecContext(ctx,
-			`DELETE FROM manifest_blobs WHERE artifact_id = ?`,
-			string(artifactID),
+			`DELETE FROM manifest_blobs WHERE manifest_digest = ?`,
+			digest,
 		); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx,
-			`DELETE FROM manifests WHERE artifact_id = ?`,
-			string(artifactID),
+			`DELETE FROM manifest_handles WHERE manifest_digest = ?`,
+			digest,
+		); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM manifests WHERE manifest_digest = ?`,
+			digest,
 		); err != nil {
 			return err
 		}
@@ -501,10 +582,10 @@ func sameSet(a, b []string) bool {
 }
 
 // ManifestExists reports whether a manifest row with the given
-// ArtifactID exists. Cheap point-lookup: SELECT 1 ... LIMIT 1
-// against the primary key. Returns (false, nil) when the row is
-// absent — the caller distinguishes "not present" from
-// "infrastructure error" via the boolean.
+// ArtifactID exists. Cheap point-lookup against the manifests_artifact
+// index. Returns (false, nil) when the row is absent — the caller
+// distinguishes "not present" from "infrastructure error" via the
+// boolean.
 func (i *Index) ManifestExists(ctx context.Context, id domain.ArtifactID) (bool, error) {
 	const stmt = `SELECT 1 FROM manifests WHERE artifact_id = ? LIMIT 1`
 	var one int
@@ -533,6 +614,7 @@ func (i *Index) ResolveManifestDigest(ctx context.Context, id domain.ArtifactID)
 }
 
 // ManifestExistsByDigest reports whether a manifest row carries digest.
+// The digest is the primary key, so this is a direct point-lookup.
 func (i *Index) ManifestExistsByDigest(ctx context.Context, digest domain.ManifestDigest) (bool, error) {
 	const stmt = `SELECT 1 FROM manifests WHERE manifest_digest = ? LIMIT 1`
 	var one int

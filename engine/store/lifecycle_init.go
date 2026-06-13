@@ -268,7 +268,7 @@ func persistInitState(ctx context.Context, drv driver.Driver, idx index.StoreInd
 		return fmt.Errorf(
 			"store.InitStore: WithHashRegistry is required to persist system.config")
 	}
-	if _, err := storeconfig.Write(ctx, drv, configWriter(drv, idx, hashes), cfg); err != nil {
+	if err := storeconfig.Write(ctx, drv, hashes, cfg); err != nil {
 		return wrap("write system.config", err)
 	}
 	return nil

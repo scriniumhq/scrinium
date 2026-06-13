@@ -25,11 +25,12 @@ import (
 // If a genuinely second backend ever lands (in-memory, network), hoist
 // the bodies back into a testutil suite and add a Factory then.
 //
-// Index-routing and Walk assertions are written relative to a
-// baseline captured right after init: a freshly initialised store
-// already carries bootstrap system artifacts (config/current), so the
-// invariant under test is the delta a single operation produces, not
-// an absolute count or set.
+// Walk assertions are written relative to a baseline captured right
+// after init: a freshly initialised store already carries a bootstrap
+// system/config version, so the invariant under test is the delta a
+// single operation produces, not an absolute count or set. System
+// artifacts are never indexed (ADR-85), so the index assertion just
+// checks that a Put leaves the index unchanged.
 
 // newSystemStore builds a fresh Plain store and returns its System()
 // facade plus the same StoreIndex instance (via the Reopener) so
@@ -170,22 +171,22 @@ func TestSystemStore_WalkEmptyPrefixScansAll(t *testing.T) {
 	}
 }
 
-func TestSystemStore_WithoutIndexSkipsIndexing(t *testing.T) {
+func TestSystemStore_PutDoesNotIndex(t *testing.T) {
 	ss, idx := newSystemStore(t)
 	ctx := context.Background()
 	body := []byte("snapshot-payload-1234")
 
 	before := countNamespace(t, idx, domain.NamespaceSystemState)
 
-	if err := ss.Put(ctx, store.SystemArtifact{Name: "index_checkpoint/2026-04-01", Payload: bytes.NewReader(body)}, store.WithoutIndex()); err != nil {
-		t.Fatalf("Put with WithoutIndex: %v", err)
+	if err := ss.Put(ctx, store.SystemArtifact{Name: "index_checkpoint/2026-04-01", Payload: bytes.NewReader(body)}); err != nil {
+		t.Fatalf("Put: %v", err)
 	}
 
-	// Get must still succeed (pointer + manifest file are both
-	// written; the only thing skipped is the index row).
+	// Get round-trips: system artifacts live in their own system/
+	// address space, read back by name → seq → file.
 	rh, err := ss.Get(ctx, "index_checkpoint/2026-04-01")
 	if err != nil {
-		t.Fatalf("Get after WithoutIndex Put: %v", err)
+		t.Fatalf("Get: %v", err)
 	}
 	got, _ := io.ReadAll(rh)
 	_ = rh.Close()
@@ -193,43 +194,9 @@ func TestSystemStore_WithoutIndexSkipsIndexing(t *testing.T) {
 		t.Errorf("payload: got %q, want %q", got, body)
 	}
 
-	// The index must not have grown.
+	// System artifacts are never indexed (ADR-85): the index must not grow.
 	if d := countNamespace(t, idx, domain.NamespaceSystemState) - before; d != 0 {
-		t.Errorf("WithoutIndex artifact appeared in index (delta %d, want 0)", d)
-	}
-}
-
-func TestSystemStore_ConfigPrefixRoutesToSystemConfig(t *testing.T) {
-	ss, idx := newSystemStore(t)
-	ctx := context.Background()
-
-	beforeCfg := countNamespace(t, idx, domain.NamespaceSystemConfig)
-	beforeState := countNamespace(t, idx, domain.NamespaceSystemState)
-
-	if err := ss.Put(ctx, store.SystemArtifact{Name: "config/v1", Payload: bytes.NewReader([]byte(`{"k":"v"}`))}); err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-
-	if d := countNamespace(t, idx, domain.NamespaceSystemConfig) - beforeCfg; d != 1 {
-		t.Errorf("config/v1 not routed to system.config (delta %d, want 1)", d)
-	}
-	if d := countNamespace(t, idx, domain.NamespaceSystemState) - beforeState; d != 0 {
-		t.Errorf("config/v1 leaked into system.state (delta %d, want 0)", d)
-	}
-}
-
-func TestSystemStore_StatePrefixRoutesToSystemState(t *testing.T) {
-	ss, idx := newSystemStore(t)
-	ctx := context.Background()
-
-	before := countNamespace(t, idx, domain.NamespaceSystemState)
-
-	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("timestamp"))}); err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-
-	if d := countNamespace(t, idx, domain.NamespaceSystemState) - before; d != 1 {
-		t.Errorf("scrub/cursor not routed to system.state (delta %d, want 1)", d)
+		t.Errorf("system artifact appeared in index (delta %d, want 0)", d)
 	}
 }
 
