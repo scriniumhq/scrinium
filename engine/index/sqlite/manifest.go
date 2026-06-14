@@ -340,45 +340,41 @@ func indexBlobManifest(
 	return nil
 }
 
-// DeleteManifest performs the logical deletion of an artifact.
-// Single transaction:
-//  1. Resolve the handle to the manifest digest (the table's PK).
-//  2. Read the (digest, blob_ref) edges from manifest_blobs.
-//  3. Decrement ref_count for each referenced blob.
+// DeleteManifest performs the logical deletion of a manifest, keyed
+// by its digest (the manifests PK). Single transaction:
+//  1. Confirm the manifest row exists — source of truth for "already
+//     deleted". A missing row is a no-op. (manifest_blobs is NOT the
+//     existence oracle: Inline manifests have no edges there by design,
+//     §9.2.1.)
+//  2. Read the (digest, blob_ref) edges from manifest_blobs — the
+//     authoritative set of blobs to decrement.
+//  3. Decrement ref_count for each.
 //  4. Delete the manifest_blobs and manifest_handles edges.
 //  5. Delete the manifests row.
 //
-// blobRefs argument: the caller passes the same set it intends to
-// be decremented. Mismatches between manifest_blobs and blobRefs
-// surface as a fatal error: the index has diverged from the
-// caller's view, and continuing would corrupt ref_counts. RebuildIndex
-// is the recovery tool.
+// The decremented set is DERIVED from manifest_blobs, not supplied by
+// the caller: the index stored those edges at IndexManifest time, so it
+// is the authoritative source. RebuildIndex is the recovery tool if the
+// index is suspected corrupt.
 //
-// Idempotency: deleting an already-deleted artifact is a no-op
-// (returns nil) — an unresolved handle means the manifest is gone.
-// Source-of-truth for "already deleted" is the manifests table, not
-// manifest_blobs: Inline manifests have no edges in manifest_blobs by
-// design (§9.2.1), so checking that table for "exists" gives the wrong
-// answer for them.
-func (i *Index) DeleteManifest(ctx context.Context, artifactID domain.ArtifactID, blobRefs []string) error {
+// Idempotency: deleting an already-deleted digest returns nil.
+func (i *Index) DeleteManifest(ctx context.Context, digest domain.ManifestDigest) error {
 	return i.observe("DeleteManifest", func() error {
-		return i.deleteManifestTx(ctx, artifactID, blobRefs)
+		return i.deleteManifestTx(ctx, digest)
 	})
 }
 
-func (i *Index) deleteManifestTx(
-	ctx context.Context,
-	artifactID domain.ArtifactID,
-	blobRefs []string,
-) error {
+func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDigest) error {
 	return i.inTx(ctx, func(tx *sql.Tx) error {
-		// Resolve handle -> digest (the manifests PK). A missing handle
-		// means the artifact is already gone: no-op.
-		var digest string
+		// Existence + artifact_id (for the deletion event). A missing
+		// row means the manifest is already gone: no-op. artifact_id is
+		// NULL for headless containers — COALESCE to "".
+		dg := string(digest)
+		var artifactID string
 		err := tx.QueryRowContext(ctx,
-			`SELECT manifest_digest FROM manifests WHERE artifact_id = ? LIMIT 1`,
-			string(artifactID),
-		).Scan(&digest)
+			`SELECT COALESCE(artifact_id, '') FROM manifests WHERE manifest_digest = ? LIMIT 1`,
+			dg,
+		).Scan(&artifactID)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			return nil
@@ -386,12 +382,10 @@ func (i *Index) deleteManifestTx(
 			return err
 		}
 
-		// Read the actual blob edges from the index. Source of truth is
-		// manifest_blobs, not the caller — but if the caller's set
-		// disagrees we want to know.
+		// Read the blob edges from the index — the authoritative set.
 		rows, err := tx.QueryContext(ctx,
 			`SELECT blob_ref FROM manifest_blobs WHERE manifest_digest = ?`,
-			digest,
+			dg,
 		)
 		if err != nil {
 			return err
@@ -409,12 +403,6 @@ func (i *Index) deleteManifestTx(
 			return err
 		}
 
-		if !sameSet(actual, blobRefs) {
-			return fmt.Errorf("sqlite: DeleteManifest: blobRefs mismatch for %q "+
-				"(index has %d edges, caller passed %d)",
-				artifactID, len(actual), len(blobRefs))
-		}
-
 		for _, ref := range actual {
 			if _, err := tx.ExecContext(ctx,
 				`UPDATE blobs SET ref_count = ref_count - 1 WHERE blob_ref = ? AND ref_count > 0`,
@@ -426,70 +414,32 @@ func (i *Index) deleteManifestTx(
 
 		if _, err := tx.ExecContext(ctx,
 			`DELETE FROM manifest_blobs WHERE manifest_digest = ?`,
-			digest,
+			dg,
 		); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx,
 			`DELETE FROM manifest_handles WHERE manifest_digest = ?`,
-			digest,
+			dg,
 		); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx,
 			`DELETE FROM manifests WHERE manifest_digest = ?`,
-			digest,
+			dg,
 		); err != nil {
 			return err
 		}
 
-		// Dispatch to extensions before commit. EventArgs carries
-		// the actual blob refs we read from manifest_blobs (the
-		// authoritative set), not whatever the caller passed in.
+		// Dispatch to extensions before commit. EventArgs carries the
+		// actual blob refs read from manifest_blobs (authoritative set)
+		// and the artifact id of the deleted row.
 		args := extension.EventArgs{
-			ArtifactID: artifactID,
+			ArtifactID: domain.ArtifactID(artifactID),
 			BlobRefs:   actual,
 		}
 		return i.dispatchExtensions(ctx, tx, extension.EventKindManifestDeleted, args)
 	})
-}
-
-// sameSet returns true iff a and b contain the same elements
-// (multiset equality). O(n+m) via map count; n is small in
-// practice — manifests reference at most a few dozen blobs.
-func sameSet(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	count := make(map[string]int, len(a))
-	for _, s := range a {
-		count[s]++
-	}
-	for _, s := range b {
-		count[s]--
-		if count[s] < 0 {
-			return false
-		}
-	}
-	return true
-}
-
-// ManifestExists reports whether a manifest row with the given
-// ArtifactID exists. Cheap point-lookup against the manifests_artifact
-// index. Returns (false, nil) when the row is absent — the caller
-// distinguishes "not present" from "infrastructure error" via the
-// boolean.
-func (i *Index) ManifestExists(ctx context.Context, id domain.ArtifactID) (bool, error) {
-	const stmt = `SELECT 1 FROM manifests WHERE artifact_id = ? LIMIT 1`
-	var one int
-	err := i.db.QueryRowContext(ctx, stmt, string(id)).Scan(&one)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return false, nil
-	case err != nil:
-		return false, classifyError(err)
-	}
-	return true, nil
 }
 
 // ResolveManifestDigest returns the current on-disk digest for a handle.

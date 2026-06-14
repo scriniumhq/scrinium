@@ -130,7 +130,7 @@ func TestRebuild_FullScan_RecoversTargetManifests(t *testing.T) {
 	id2 := f.put(t, "r", "second artifact payload also target sized")
 
 	for _, id := range []domain.ArtifactID{id1, id2} {
-		if ok, _ := f.rebuilt.ManifestExists(context.Background(), id); ok {
+		if _, ok, _ := f.rebuilt.ResolveManifestDigest(context.Background(), id); ok {
 			t.Fatalf("rebuild target unexpectedly already has %s", id)
 		}
 	}
@@ -145,9 +145,9 @@ func TestRebuild_FullScan_RecoversTargetManifests(t *testing.T) {
 	}
 
 	for _, id := range []domain.ArtifactID{id1, id2} {
-		ok, err := f.rebuilt.ManifestExists(context.Background(), id)
+		_, ok, err := f.rebuilt.ResolveManifestDigest(context.Background(), id)
 		if err != nil {
-			t.Fatalf("ManifestExists(%s): %v", id, err)
+			t.Fatalf("ResolveManifestDigest(%s): %v", id, err)
 		}
 		if !ok {
 			t.Errorf("manifest %s not recovered into the rebuilt index", id)
@@ -173,9 +173,9 @@ func TestRebuild_FullScan_RecoversInlineManifests(t *testing.T) {
 	if _, err := a.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	ok, err := f.rebuilt.ManifestExists(context.Background(), id)
+	_, ok, err := f.rebuilt.ResolveManifestDigest(context.Background(), id)
 	if err != nil {
-		t.Fatalf("ManifestExists: %v", err)
+		t.Fatalf("ResolveManifestDigest: %v", err)
 	}
 	if !ok {
 		t.Errorf("inline manifest %s not recovered", id)

@@ -258,7 +258,7 @@ func TestApply_Deleted_RemovesEntries(t *testing.T) {
 	}
 
 	// Delete via the index. It will dispatch ManifestDeleted.
-	if err := idx.DeleteManifest(ctx, "art-del", []string{string(m.PrimaryBlobRef())}); err != nil {
+	if err := idx.DeleteManifest(ctx, m.Digest); err != nil {
 		t.Fatalf("DeleteManifest: %v", err)
 	}
 
@@ -282,7 +282,7 @@ func TestApply_Deleted_NotIndexed_NoOp(t *testing.T) {
 	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
-	if err := idx.DeleteManifest(ctx, "email-2", []string{string(m.PrimaryBlobRef())}); err != nil {
+	if err := idx.DeleteManifest(ctx, m.Digest); err != nil {
 		t.Errorf("DeleteManifest of un-indexed artifact failed: %v", err)
 	}
 }
@@ -315,9 +315,9 @@ func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
 	}
 
 	// Main write must have rolled back too.
-	exists, err := idx.ManifestExists(ctx, "art-bad")
+	_, exists, err := idx.ResolveManifestDigest(ctx, "art-bad")
 	if err != nil {
-		t.Fatalf("ManifestExists: %v", err)
+		t.Fatalf("ResolveManifestDigest: %v", err)
 	}
 	if exists {
 		t.Error("manifest committed despite fsindex failure (atomicity broken)")

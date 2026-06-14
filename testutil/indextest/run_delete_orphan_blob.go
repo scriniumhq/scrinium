@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/testutil/manifestfx"
 )
@@ -23,7 +22,7 @@ func runDeleteOrphanBlob(t *testing.T, f Factory) {
 		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref)); err != nil {
 			t.Fatalf("seed %s: %v", id, err)
 		}
-		if err := idx.DeleteManifest(ctx, domain.ArtifactID(id), []string{ref}); err != nil {
+		if err := idx.DeleteManifest(ctx, m.Digest); err != nil {
 			t.Fatalf("delete %s: %v", id, err)
 		}
 	}

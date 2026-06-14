@@ -20,7 +20,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 			t.Fatalf("IndexManifest: %v", err)
 		}
 		// Manifest visible.
-		exists, err := idx.ManifestExists(ctx, "art-1")
+		_, exists, err := idx.ResolveManifestDigest(ctx, "art-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -76,7 +76,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatalf("re-indexing same manifest must not fail: %v", err)
 		}
-		exists, err := idx.ManifestExists(ctx, "art-1")
+		_, exists, err := idx.ResolveManifestDigest(ctx, "art-1")
 		if err != nil {
 			t.Fatal(err)
 		}

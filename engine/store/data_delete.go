@@ -64,27 +64,14 @@ func (d dataFacet) Delete(ctx context.Context, id domain.ArtifactID) error {
 		return errs.ErrDeletionForbidden
 	}
 
-	// Collect blobRefs to decrement. Inline = empty list (no row
-	// in `blobs`). Target = the one BlobRef.
-	var blobRefs []string
-	switch manifest.LayoutHeader.BlobStorage {
-	case domain.LayoutInline:
-		// no blobs row — leave blobRefs empty
-	case domain.LayoutTarget:
-		if len(manifest.BlobRefs) == 0 {
-			return fmt.Errorf("store.Delete: Target manifest %q has no BlobRefs", id)
-		}
-		blobRefs = []string{string(manifest.BlobRefs[0])}
-	default:
-		return fmt.Errorf("store.Delete: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
-	}
-
 	// Idempotent at this layer: a re-issued Delete after a crash between
 	// index COMMIT and Driver.Remove would not reach here, because
 	// loadManifest above would already have returned ErrArtifactNotFound
 	// (the manifest file is gone). The "manifest present, index row
-	// absent" window is recovered by an index rebuild.
-	if err := d.index.DeleteManifest(ctx, id, blobRefs); err != nil {
+	// absent" window is recovered by an index rebuild. Deletion is keyed
+	// by digest; the index derives the blobs to decrement from
+	// manifest_blobs (Inline has no edges; Target has its one blob).
+	if err := d.index.DeleteManifest(ctx, manifest.Digest); err != nil {
 		return d.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: index: %w", err), artifactIDAttr(id), slog.String("stage", "index"))
 	}
 

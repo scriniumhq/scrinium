@@ -38,10 +38,13 @@ type StoreIndex interface {
 		addr domain.PhysicalAddress,
 	) error
 
-	// DeleteManifest performs a logical deletion: a single
-	// transaction, DELETE manifest + decrement ref_count for each
-	// blobRef.
-	DeleteManifest(ctx context.Context, artifactID domain.ArtifactID, blobRefs []string) error
+	// DeleteManifest performs a logical deletion keyed by manifest
+	// digest (the table PK): a single transaction that decrements
+	// ref_count for each blob the manifest references (read from
+	// manifest_blobs — the authoritative set) and removes the
+	// manifest row and its edges. Idempotent: deleting an absent
+	// digest is a no-op.
+	DeleteManifest(ctx context.Context, digest domain.ManifestDigest) error
 
 	// Resolution and existence checks.
 
@@ -81,19 +84,6 @@ type StoreIndex interface {
 
 	// GetRefCount returns the current reference count of a blob.
 	GetRefCount(ctx context.Context, blobRef string) (int, error)
-
-	// ManifestExists reports whether a manifest row with the given
-	// ArtifactID is present in the index. It is the manifests-side
-	// counterpart of Resolve: a point-lookup that does not return
-	// the row contents, only its presence. Used by the bootstrap
-	// Orphan Scan to find manifest files on disk that have no
-	// matching index row (the crash window between Driver.Put on
-	// the manifest path and the IndexManifest transaction).
-	//
-	// A false return with a nil error is the normal "not present"
-	// signal. Errors are reserved for index-infrastructure
-	// failures.
-	ManifestExists(ctx context.Context, id domain.ArtifactID) (bool, error)
 
 	// Iteration. Implementations are required to stream through the
 	// callback rather than load the whole result set into memory.

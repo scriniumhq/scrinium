@@ -47,7 +47,7 @@ func runGetRefCount(t *testing.T, f Factory) {
 		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
-		if err := idx.DeleteManifest(ctx, "art-1", []string{"blob-1"}); err != nil {
+		if err := idx.DeleteManifest(ctx, m.Digest); err != nil {
 			t.Fatal(err)
 		}
 
