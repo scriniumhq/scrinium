@@ -14,7 +14,7 @@ import (
 	"scrinium.dev/errs"
 )
 
-// MarkVerified, DeletePacked, and MarkVerified-related listing
+// MarkVerified and MarkVerified-related listing
 // behaviour live in the conformance suite at
 // internal/testutil/indextest. This file is for sqlite-specific
 // behaviour: WriteCheckpoint (the optional index.CheckpointWriter

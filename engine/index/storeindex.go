@@ -26,10 +26,13 @@ type StoreIndex interface {
 
 	// IndexManifest registers an artifact in the index. The strategy
 	// is chosen by the identity slot / structure (ADR-83/92):
-	//   - plain blob: upsert blob, increment ref_count, insert manifest.
+	//   - plain blob OR headless pack container: indexed as an ordinary
+	//     manifest (the container's blob_refs flow through manifest_blobs).
 	//   - composite: + increment ref_count for each chunkRef.
-	//   - pack container (empty slot): transitive registration of every
-	//     packed artifact via packedEntries.
+	// packedEntries is vestigial: pack PLACEMENT is owned by the bundler
+	// index-extension's Resolver (ADR-86), recorded out-of-band via
+	// RecordPack — not here. The parameter is dropped in a later cleanup
+	// once all call sites are updated.
 	IndexManifest(
 		ctx context.Context,
 		m domain.Manifest,
@@ -81,12 +84,6 @@ type StoreIndex interface {
 
 	// GetRefCount returns the current reference count of a blob.
 	GetRefCount(ctx context.Context, blobRef string) (int, error)
-
-	// LookupPacked returns the data needed for a range read by the
-	// ArtifactID of a packed artifact. The second return value is
-	// false when the artifact is not packed (it lives in /blobs/ or
-	// /manifests/ as usual).
-	LookupPacked(ctx context.Context, artifactID domain.ArtifactID) (domain.PackedBlobInfo, bool, error)
 
 	// ManifestExists reports whether a manifest row with the given
 	// ArtifactID is present in the index. It is the manifests-side
@@ -165,11 +162,6 @@ type StoreIndex interface {
 	// after the manifest re-hash; for multi-blob (TOC) artifacts once
 	// every referenced blob is fresh.
 	MarkManifestVerified(ctx context.Context, artifactID domain.ArtifactID, timestamp time.Time) error
-
-	// DeletePacked removes every packed_blobs record of a given
-	// pack volume. Called by the GC Agent before tombstoning the
-	// pack blob.
-	DeletePacked(ctx context.Context, packBlobRef string) error
 
 	// store_meta service table. A singleton key/value store for
 	// Store metadata: schema_version, descriptor cache,

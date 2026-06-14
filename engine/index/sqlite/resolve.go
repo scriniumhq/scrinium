@@ -123,40 +123,6 @@ func (i *Index) GetRefCount(ctx context.Context, blobRef string) (int, error) {
 	return n, nil
 }
 
-// LookupPacked returns the range-read information for an
-// artifact stored inside a .pack volume. The boolean second result
-// is the "found" flag — false (not an error) means the artifact
-// lives outside any pack; the caller should reach for Resolve(BlobRef)
-// instead.
-//
-// On the read path, the engine consults LookupPacked first because
-// it is the only way to know whether to open a sliced range read
-// or a full blob. A missing packed_blobs row is the normal case:
-// most artifacts are not packed.
-//
-// TRANSITIONAL (ADR-86): pack placement moves to the bundler Resolver
-// map in ext_data; this method goes when the bundler is rebuilt.
-func (i *Index) LookupPacked(ctx context.Context, artifactID domain.ArtifactID) (domain.PackedBlobInfo, bool, error) {
-	const stmt = `
-		SELECT pack_blob_ref, manifest_offset, manifest_size,
-		       blob_offset, blob_size, COALESCE(pipeline_params, x'')
-		FROM packed_blobs WHERE artifact_id = ?`
-	var info domain.PackedBlobInfo
-	err := i.db.QueryRowContext(ctx, stmt, string(artifactID)).Scan(
-		&info.PackBlobRef,
-		&info.ManifestOffset, &info.ManifestSize,
-		&info.BlobOffset, &info.BlobSize,
-		&info.PipelineParams,
-	)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return domain.PackedBlobInfo{}, false, nil
-	case err != nil:
-		return domain.PackedBlobInfo{}, false, classifyError(err)
-	}
-	return info, true, nil
-}
-
 // scanManifestRow scans one row produced by the projection
 // `manifests m LEFT JOIN blobs b ON b.blob_ref = m.blob_ref`. The
 // blobs side supplies content_hash and original_size; nullable here

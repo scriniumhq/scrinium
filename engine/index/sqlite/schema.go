@@ -19,7 +19,7 @@ var migrations = []migration{
 	{
 		Version: 1,
 		Description: "baseline: blobs, manifests (digest-PK + identity slots), " +
-			"manifest_blobs, manifest_handles, packed_blobs, ext_meta, " +
+			"manifest_blobs, manifest_handles, ext_meta, " +
 			"ext_data, store_meta",
 		Statements: []string{schemaBaseline},
 	},
@@ -58,10 +58,6 @@ type migration struct {
 //     manifest_digest. Populated for pack containers (placement of
 //     members) and any artifact carrying artifact→artifact edges; empty
 //     for a plain blob and a composite.
-//   - packed_blobs:    range-read information for blobs inside a .pack
-//     volume; one row per packed artifact. TRANSITIONAL — ADR-86 moves
-//     pack placement to the bundler Resolver map in ext_data; retained
-//     until the bundler is rebuilt.
 //   - ext_meta:        per-extension state; stores the schema_version
 //     persisted from the last successful Setup so later registrations
 //     can migrate forward
@@ -101,8 +97,9 @@ type migration struct {
 // blobs_content is therefore a plain lookup index supporting the
 // ExistsByContent probe (LIMIT 1); duplicate-row prevention is the
 // blob_ref PK plus ON CONFLICT(blob_ref) DO NOTHING. The
-// crypto_identity dedup component (mirrored on packed_blobs, where the
-// bundler stores finished ciphertext verbatim) follows ADR-58.
+// crypto_identity dedup component follows ADR-58 (the bundler mirrors
+// it in its own placement map, where it stores finished ciphertext
+// verbatim).
 const schemaBaseline = `
 CREATE TABLE blobs (
     blob_ref          TEXT    PRIMARY KEY,
@@ -155,23 +152,6 @@ CREATE TABLE manifest_handles (
 ) WITHOUT ROWID;
 
 CREATE INDEX manifest_handles_target ON manifest_handles(handle_ref);
-
-CREATE TABLE packed_blobs (
-    artifact_id      TEXT    PRIMARY KEY,
-    pack_blob_ref    TEXT    NOT NULL,
-    blob_ref         TEXT    NOT NULL,
-    manifest_offset  INTEGER NOT NULL,
-    manifest_size    INTEGER NOT NULL,
-    blob_offset      INTEGER NOT NULL,
-    blob_size        INTEGER NOT NULL,
-    content_hash     TEXT    NOT NULL,
-    crypto_identity  TEXT    NOT NULL DEFAULT '',
-    namespace        TEXT    NOT NULL DEFAULT '',
-    session_id       TEXT    NOT NULL DEFAULT '',
-    pipeline_params  BLOB
-) WITHOUT ROWID;
-
-CREATE INDEX packed_blobs_pack ON packed_blobs(pack_blob_ref);
 
 CREATE TABLE ext_meta (
     extension      TEXT    PRIMARY KEY,

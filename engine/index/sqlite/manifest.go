@@ -19,14 +19,14 @@ import (
 //     manifest -> blob.
 //   - composite (chunker "composite" flag in Ext): same as blob plus a
 //     ref_count bump per chunkRef and positional manifest -> chunk links.
-//   - pack container (empty slot): registers the pack as one blob and
-//     inserts a packed_blobs row per entry; the packed artifacts' own
-//     manifests are NOT inserted — they are reached through LookupPacked,
-//     not Walk. (TRANSITIONAL: ADR-86 replaces packed_blobs with the
-//     bundler Resolver map; this branch goes when the bundler is rebuilt.)
+//   - headless pack container (empty slot): indexed exactly like a plain
+//     blob (its body blob_ref flows through manifest_blobs). The pack
+//     PLACEMENT map is owned by the bundler index-extension's Resolver
+//     (ADR-86), not the core — the core holds no pack table and does not
+//     branch on pack-ness.
 //
 // Regardless of strategy, the manifest's HandleRefs (artifact→artifact
-// edges, ADR-92) are linked into manifest_handles after the per-type
+// edges, ADR-92) are linked into manifest_handles after the per-strategy
 // step. россыпь and composite carry none; pack containers carry their
 // members. The manifests table is keyed by ManifestDigest (the file
 // hash); the floating handle and the system name are nullable slot
@@ -59,15 +59,13 @@ func (i *Index) indexManifestTx(
 ) error {
 	return i.inTx(ctx, func(tx *sql.Tx) error {
 		// Registration strategy by identity slot / structure (ADR-83/92),
-		// not a type field: an empty slot is a pack container; a composite
-		// (chunker "composite" flag in Ext) carries a chunk list; otherwise
-		// it is a plain blob. Container and composite are M4/M5 structure
-		// that stays stubbed — only the plain-blob path is live.
+		// not a type field: a composite (chunker "composite" flag in Ext)
+		// carries a chunk list; a plain blob and a headless pack container
+		// (empty slot) both index as an ordinary manifest. Pack PLACEMENT
+		// is owned by the bundler index-extension's Resolver (ADR-86),
+		// recorded out-of-band via RecordPack — the core holds no pack
+		// table and does not branch on pack-ness (closure, ADR-83).
 		switch {
-		case m.IsContainer():
-			if err := indexPackManifest(ctx, tx, m, addr, packedEntries); err != nil {
-				return err
-			}
 		case m.IsComposite():
 			if err := indexTOCManifest(ctx, tx, m, addr, chunkRefs); err != nil {
 				return err
@@ -80,10 +78,8 @@ func (i *Index) indexManifestTx(
 
 		// Link the artifact→artifact edges (HandleRefs, ADR-92). Empty
 		// for россыпь and composite; populated for pack containers
-		// (placement of members). Pack volumes in the transitional
-		// packed_blobs model insert no manifests row, so they also carry
-		// no HandleRefs yet — the loop is a no-op until the bundler is
-		// rebuilt to the container model.
+		// (placement of members). Current fixtures set none, so the loop
+		// is a no-op until the bundler populates HandleRefs.
 		for pos, hr := range m.HandleRefs {
 			if err := linkManifestToHandle(ctx, tx, m.Digest, hr, pos); err != nil {
 				return err
@@ -92,9 +88,9 @@ func (i *Index) indexManifestTx(
 
 		// Dispatch to subscribed extensions BEFORE commit. An error
 		// from any extension rolls back the entire transaction —
-		// strict-consistency guarantee per ADR-49. Pack manifests
-		// are an internal type (not surfaced through Walk) so we
-		// skip dispatch for them; extensions index user-visible
+		// strict-consistency guarantee per ADR-49. A headless pack
+		// container has no handle and is not surfaced through Walk, so
+		// we skip dispatch for it; extensions index user-visible
 		// artifacts only.
 		if !m.IsContainer() {
 			args := extension.EventArgs{Manifest: m, ArtifactID: m.ArtifactID}
@@ -172,14 +168,10 @@ func bumpRefCount(ctx context.Context, tx *sql.Tx, blobRef string) error {
 }
 
 // registerBlob is the upsert+bump pair every blob-bearing manifest
-// path (Blob, TOC, Pack-chunks) needs at index time. The two SQL
-// operations are idempotent individually and idempotent as a pair:
-// re-running on a partially-applied transaction is safe. Pack
-// manifest registration in indexPackManifest deliberately does NOT
-// go through here — it upserts the pack-blob row but never bumps
-// its ref_count, since the bump happens once per packed-blob entry
-// rather than once per pack file (see manifest.go indexPackManifest
-// for the rationale).
+// path (plain blob, composite chunks, headless container body) needs
+// at index time. The two SQL operations are idempotent individually
+// and idempotent as a pair: re-running on a partially-applied
+// transaction is safe.
 func registerBlob(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -385,68 +377,6 @@ func indexTOCManifest(
 		return err
 	}
 	return linkManifestToBlob(ctx, tx, m.Digest, string(m.BlobRef), 0)
-}
-
-// indexPackManifest registers a .pack volume. The pack file itself
-// becomes one blob; every packed artifact is registered in
-// packed_blobs but NOT in manifests — packed artifacts are not
-// reachable through Walk (they live transparently inside the pack)
-// and exist for LookupPacked only.
-//
-// ref_count semantics for the pack blob: incremented once per
-// packed artifact. When all packed artifacts are deleted, the pack
-// blob's ref_count drops to 0 and it becomes a GC candidate.
-//
-// TRANSITIONAL (ADR-86): the pack volume becomes a headless container
-// manifest whose placement map lives in the bundler Resolver
-// substrate (ext_data), not in packed_blobs. This path is retained
-// until the bundler is rebuilt.
-func indexPackManifest(
-	ctx context.Context,
-	tx *sql.Tx,
-	m domain.Manifest,
-	addr domain.PhysicalAddress,
-	entries []domain.PackedEntry,
-) error {
-	if m.BlobRef == "" {
-		return fmt.Errorf("sqlite: pack manifest %q has empty BlobRef", m.ArtifactID)
-	}
-	if err := upsertBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
-		return err
-	}
-
-	const stmt = `
-		INSERT INTO packed_blobs (
-			artifact_id, pack_blob_ref, blob_ref,
-			manifest_offset, manifest_size,
-			blob_offset, blob_size,
-			content_hash, crypto_identity, namespace, session_id, pipeline_params
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(artifact_id) DO NOTHING`
-	for _, e := range entries {
-		// crypto_identity (ADR-58) is transferred from the source blob
-		// at pack time; the bundler does not re-encrypt, so it carries
-		// the identity verbatim. Empty for a Plain packed blob.
-		if _, err := tx.ExecContext(ctx, stmt,
-			string(e.ArtifactID),
-			string(m.BlobRef),
-			e.BlobRef,
-			e.ManifestOffset, e.ManifestSize,
-			e.BlobOffset, e.BlobSize,
-			string(e.ContentHash),
-			string(e.CryptoIdentity),
-			e.Namespace, e.SessionID,
-			e.PipelineParams,
-		); err != nil {
-			return err
-		}
-		// Each packed artifact contributes one reference to the
-		// pack blob. Not bumping ref_count would break GC.
-		if err := bumpRefCount(ctx, tx, string(m.BlobRef)); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // DeleteManifest performs the logical deletion of an artifact.
