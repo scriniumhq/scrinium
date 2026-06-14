@@ -10,6 +10,7 @@ import (
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
 
@@ -66,12 +67,15 @@ func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string, key
 	if err != nil {
 		return fmt.Errorf("get manifest %q: %w", path, err)
 	}
-	data, err := io.ReadAll(rc)
+	data, err := io.ReadAll(io.LimitReader(rc, domain.MaxManifestSize+1))
 	if cerr := rc.Close(); cerr != nil {
 		a.Logger().Debug("rebuild: manifest reader close failed", "path", path, "err", cerr)
 	}
 	if err != nil {
 		return fmt.Errorf("read manifest %q: %w", path, err)
+	}
+	if len(data) > domain.MaxManifestSize {
+		return fmt.Errorf("manifest %q too large: %w", path, errs.ErrManifestTooLarge)
 	}
 
 	var m domain.Manifest

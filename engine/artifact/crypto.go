@@ -100,6 +100,9 @@ func encodeEncrypted(
 	if len(dek) == 0 {
 		return nil, fmt.Errorf("artifact.encodeEncrypted: empty dek")
 	}
+	if err := checkRefLimits(m); err != nil {
+		return nil, err
+	}
 
 	header, err := writeHeader(fileHeader{Encoding: encoding, Crypto: crypto, KeyID: keyID})
 	if err != nil {
@@ -122,9 +125,6 @@ func encodeEncrypted(
 	out := make([]byte, 0, len(header)+len(body))
 	out = append(out, header...)
 	out = append(out, body...)
-	if len(out) > domain.MaxManifestSize {
-		return nil, errs.ErrManifestTooLarge
-	}
 	return out, nil
 }
 

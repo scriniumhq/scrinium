@@ -317,9 +317,12 @@ func Load(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, pa
 	}
 	defer rc.Close()
 
-	fileBytes, err := io.ReadAll(rc)
+	fileBytes, err := io.ReadAll(io.LimitReader(rc, domain.MaxManifestSize+1))
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("system artifact: read %q: %w", path, err)
+	}
+	if len(fileBytes) > domain.MaxManifestSize {
+		return domain.Manifest{}, fmt.Errorf("system artifact %q: %w", path, errs.ErrManifestTooLarge)
 	}
 	m, err := artifact.Decode(fileBytes)
 	if err != nil {

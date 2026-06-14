@@ -52,6 +52,9 @@ func Encode(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.M
 	if crypto != "" && crypto != domain.ManifestCryptoPlain {
 		return nil, errs.ErrUnsupportedCrypto
 	}
+	if err := checkRefLimits(m); err != nil {
+		return nil, err
+	}
 
 	header, err := writeHeader(fileHeader{Encoding: encoding, Crypto: crypto})
 	if err != nil {
@@ -65,10 +68,17 @@ func Encode(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.M
 	out := make([]byte, 0, len(header)+len(body))
 	out = append(out, header...)
 	out = append(out, body...)
-	if len(out) > domain.MaxManifestSize {
-		return nil, errs.ErrManifestTooLarge
-	}
 	return out, nil
+}
+
+// checkRefLimits enforces the per-field reference caps (ADR-93): blob_refs
+// and handle_refs each fit a 16-bit count, so the chunk/member list is
+// bounded at 65535. There is no overall manifest-size cap.
+func checkRefLimits(m domain.Manifest) error {
+	if len(m.BlobRefs) > domain.MaxBlobRefs || len(m.HandleRefs) > domain.MaxHandleRefs {
+		return errs.ErrTooManyRefs
+	}
+	return nil
 }
 
 // Decode parses full manifest bytes (Plain only), validates the header,
@@ -78,6 +88,9 @@ func Encode(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.M
 // path. An encrypted file returns ErrUnsupportedCrypto here; use
 // DecodeEncrypted.
 func Decode(data []byte) (domain.Manifest, error) {
+	if len(data) > domain.MaxManifestSize {
+		return domain.Manifest{}, errs.ErrManifestTooLarge
+	}
 	header, bodyOffset, err := readHeader(data)
 	if err != nil {
 		return domain.Manifest{}, err
@@ -98,6 +111,9 @@ func Decode(data []byte) (domain.Manifest, error) {
 // in Decode); no resolver / zero candidates → ErrKeyNotFound; no candidate
 // decrypts → ErrDecryptionFailed; decrypted-but-invalid JSON → wrapped error.
 func DecodeEncrypted(data []byte, keys KeyProvider) (domain.Manifest, error) {
+	if len(data) > domain.MaxManifestSize {
+		return domain.Manifest{}, errs.ErrManifestTooLarge
+	}
 	header, bodyOffset, err := readHeader(data)
 	if err != nil {
 		return domain.Manifest{}, err

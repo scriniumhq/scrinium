@@ -56,10 +56,13 @@ func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 		}
 		return domain.Manifest{}, fmt.Errorf("artifactio.Load: read: %w", err)
 	}
-	raw, err := io.ReadAll(rc)
+	raw, err := io.ReadAll(io.LimitReader(rc, domain.MaxManifestSize+1))
 	_ = rc.Close()
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("artifactio.Load: read body: %w", err)
+	}
+	if len(raw) > domain.MaxManifestSize {
+		return domain.Manifest{}, errs.ErrManifestTooLarge
 	}
 	if err := artifact.VerifyManifestDigest(digest, raw, hashAlgo, x.hashes); err != nil {
 		return domain.Manifest{}, err

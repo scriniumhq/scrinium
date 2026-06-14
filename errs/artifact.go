@@ -51,5 +51,13 @@ var ErrExtTooLarge = errors.New("scrinium: ext metadata too large")
 // opaque host-application block.
 var ErrUsrTooLarge = errors.New("scrinium: usr metadata too large")
 
-// ErrManifestTooLarge — serialised Manifest > 1 MB.
+// ErrTooManyRefs — a manifest reference array (blob_refs or handle_refs)
+// exceeds MaxBlobRefs/MaxHandleRefs (65535). ADR-93: the on-disk list is
+// 16-bit length-counted, so it cannot hold more.
+var ErrTooManyRefs = errors.New("scrinium: too many references")
+
+// ErrManifestTooLarge — a manifest file read from storage exceeds
+// MaxManifestSize. Read-time allocation guard: a corrupt or hostile file
+// is rejected before it is fully buffered or parsed. The encode path is
+// bounded by the per-field limits, not by this.
 var ErrManifestTooLarge = errors.New("scrinium: manifest too large")
