@@ -21,14 +21,15 @@ import (
 // engine-level "this thing is not here" error; from the StoreIndex
 // perspective there is no separate "blob not found" — the index
 // either knows where to find a blob or it does not.
+//
+// Resolves loose (россыпь) blobs only — blobs.physical_path. Packed
+// placement is owned by index-extension Resolvers (ADR-86), not a column
+// here; the core never branches on pack state.
 func (i *Index) Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error) {
-	const stmt = `
-		SELECT physical_path,
-		       pack_ref, pack_offset, pack_size
-		FROM blobs WHERE blob_ref = ?`
+	const stmt = `SELECT physical_path FROM blobs WHERE blob_ref = ?`
 	var addr domain.PhysicalAddress
 	err := i.db.QueryRowContext(ctx, stmt, blobRef).
-		Scan(&addr.Path, &addr.PackRef, &addr.Offset, &addr.Size)
+		Scan(&addr.Path)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return domain.PhysicalAddress{}, errs.ErrArtifactNotFound

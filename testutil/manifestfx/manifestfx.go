@@ -120,18 +120,6 @@ func PhysAddr(path string) domain.PhysicalAddress {
 	}
 }
 
-// PackedAddr is a Location-workspace address inside a pack volume:
-// physical_path points at the pack file, and pack_ref/offset/size
-// describe the byte range of the embedded blob.
-func PackedAddr(packPath, packRef string, offset, size int64) domain.PhysicalAddress {
-	return domain.PhysicalAddress{
-		Path:    packPath,
-		PackRef: packRef,
-		Offset:  offset,
-		Size:    size,
-	}
-}
-
 // ManifestWithFsmetaPath builds a Blob manifest tagged with an fsmeta
 // virtual path — the common fixture for projection and surface tests
 // that need an artifact placed at a known path in the by-path tree.

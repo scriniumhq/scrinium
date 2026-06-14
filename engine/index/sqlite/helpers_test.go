@@ -35,21 +35,17 @@ func countRows(t *testing.T, idx *Index, table string) int {
 
 // insertBlob inserts a blob row directly into the blobs table,
 // bypassing IndexManifest's blob-side bookkeeping (manifest_blobs
-// links, ref_count from incoming manifest, etc.). Used by the
-// pack-row Resolve test where the row shape (blob_ref with
-// pack_ref/offset/size populated) is not produced by the public
-// IndexManifest path — only direct INSERT can stage it.
+// links, ref_count from incoming manifest, etc.). Used by tests that
+// need to stage a specific blob-row shape directly.
 func insertBlob(t *testing.T, idx *Index, ref, contentHash string, size int64, addr domain.PhysicalAddress, refCount int) {
 	t.Helper()
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO blobs (
-			blob_ref, content_hash, original_size, 
-            crypto_identity, physical_path,
-			pack_ref, pack_offset, pack_size,
+			blob_ref, content_hash, original_size,
+			crypto_identity, physical_path,
 			ref_count, last_verified_at, created_at
-		) VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, NULL, ?)`,
+		) VALUES (?, ?, ?, '', ?, ?, NULL, ?)`,
 		ref, contentHash, size, addr.Path,
-		addr.PackRef, addr.Offset, addr.Size,
 		refCount, timefmt.Format(time.Now()),
 	)
 	if err != nil {

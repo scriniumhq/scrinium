@@ -37,12 +37,4 @@ func runResolve(t *testing.T, f Factory) {
 			t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 		}
 	})
-
-	// Note: the "blob row with pack_ref/offset/size populated"
-	// case is sqlite-specific glass-box behaviour. After
-	// IndexManifest of a pack manifest, only ONE blobs row exists
-	// (the pack blob itself), carrying pack_ref/pack_offset/
-	// pack_size so Resolve returns a sliced PhysicalAddress. The
-	// glass-box column-flow check lives in resolve_test.go
-	// (TestResolve_PackedBlob_FromBlobRow).
 }

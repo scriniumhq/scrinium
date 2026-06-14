@@ -115,11 +115,10 @@ func upsertBlob(
 	// encrypted ones.
 	const stmt = `
 		INSERT INTO blobs (
-			blob_ref, content_hash, original_size, 
-		    crypto_identity, physical_path,
-			pack_ref, pack_offset, pack_size,
+			blob_ref, content_hash, original_size,
+			crypto_identity, physical_path,
 			ref_count, last_verified_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)
+		) VALUES (?, ?, ?, ?, ?, 0, NULL, ?)
 		ON CONFLICT(blob_ref) DO NOTHING`
 	_, err := tx.ExecContext(ctx, stmt,
 		blobRef,
@@ -127,9 +126,6 @@ func upsertBlob(
 		originalSize,
 		string(crypto),
 		addr.Path,
-		addr.PackRef,
-		addr.Offset,
-		addr.Size,
 		timefmt.Format(time.Now()),
 	)
 	return err
