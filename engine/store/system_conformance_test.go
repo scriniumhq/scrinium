@@ -154,7 +154,7 @@ func TestSystemStore_WalkEmptyPrefixScansAll(t *testing.T) {
 	ctx := context.Background()
 
 	// Baseline: a freshly initialised store already exposes
-	// config/current through Walk. Assert on the delta.
+	// its initial config version through Walk. Assert on the delta.
 	before := walkNames(t, ss, "")
 
 	for _, n := range []string{"config/v1", "scrub/cursor", "gc/cursor"} {

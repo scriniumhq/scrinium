@@ -2,24 +2,16 @@ package errs
 
 import "errors"
 
-// Configuration: system.config/current pointer and immutable-param
+// Configuration: active-config resolution (max system/config seq, no pointer) and immutable-param
 // validation. ErrInvalidConfig is produced by the Rules Engine.
 
-// ErrMissingConfigPointer — system.config/current is absent.
-var ErrMissingConfigPointer = errors.New("scrinium: missing config pointer")
-
-// ErrCorruptedConfigPointer — system.config/current exists but is
-// invalid (empty, oversized, malformed ArtifactID).
-var ErrCorruptedConfigPointer = errors.New("scrinium: corrupted config pointer")
-
-// ErrDanglingConfigPointer — the pointer is syntactically valid
-// but the artifact it references does not exist.
-var ErrDanglingConfigPointer = errors.New("scrinium: dangling config pointer")
+// ErrConfigMissing — no system/config version has ever been written.
+var ErrConfigMissing = errors.New("scrinium: config missing")
 
 // ErrConfigMismatch — an attempt to change an immutable parameter
 // through UpdateConfig, or a conflict between the cfg passed to
-// OpenStore and the configuration loaded from
-// system.config/current, or an attempt to remove NoDelete while
+// OpenStore and the active system/config version, or an attempt to
+// remove NoDelete while
 // DeletionPolicyLock is in effect.
 var ErrConfigMismatch = errors.New("scrinium: config mismatch")
 

@@ -79,8 +79,8 @@ func sampleConfig() domain.StoreConfig {
 func TestRead_Missing(t *testing.T) {
 	drv := newDriver(t)
 	_, err := Read(context.Background(), drv, testHashes{})
-	if !errors.Is(err, errs.ErrMissingConfigPointer) {
-		t.Fatalf("expected ErrMissingConfigPointer, got %v", err)
+	if !errors.Is(err, errs.ErrConfigMissing) {
+		t.Fatalf("expected ErrConfigMissing, got %v", err)
 	}
 }
 

@@ -51,7 +51,7 @@ func Write(
 // Read returns the active StoreConfig (the highest system/config
 // version). It bypasses the StoreIndex entirely — config must be
 // readable at store-open before the index is trusted — by reading the
-// version directory directly. Returns errs.ErrMissingConfigPointer when
+// version directory directly. Returns errs.ErrConfigMissing when
 // no config has ever been written; a corrupted version surfaces as
 // errs.ErrCorruptedContent from the verify-on-read in systemlayout.Load.
 func Read(
@@ -64,7 +64,7 @@ func Read(
 		return domain.StoreConfig{}, fmt.Errorf("system config: resolve active: %w", err)
 	}
 	if !found {
-		return domain.StoreConfig{}, errs.ErrMissingConfigPointer
+		return domain.StoreConfig{}, errs.ErrConfigMissing
 	}
 	return loadVersion(ctx, drv, hashes, seq)
 }

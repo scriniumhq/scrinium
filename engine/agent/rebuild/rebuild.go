@@ -18,8 +18,8 @@ import (
 // RebuildIndexAgent rebuilds the StoreIndex from manifests. It
 // supports a fast path through a recent checkpoint with read-in of
 // new objects and a full fallback Location scan. It is also used to
-// restore store.json (when lost) and the system.config/current
-// pointer (when dangling).
+// restore store.json (when lost). Recovering the active StoreConfig
+// (the max system/config version) is out of scope — see below.
 type RebuildIndexAgent interface {
 	agent.Agent
 
@@ -45,8 +45,8 @@ type RebuildIndexAgent interface {
 // reading in the tail) is not yet wired into rebuild. Descriptor recovery
 // from the Recovery Kit (rewriting a
 // lost store.json) is implemented and runs before the scan when
-// RecoveryKit is set; recovering a dangling system.config/current pointer
-// is still out of scope (the kit carries no config). The remaining gaps
+// RecoveryKit is set; recovering the active StoreConfig (max system/config
+// seq) is still out of scope (the kit carries no config). The remaining gaps
 // are reported as explicit, non-silent boundaries rather than faked.
 func NewRebuildIndexAgent(
 	st store.Store,

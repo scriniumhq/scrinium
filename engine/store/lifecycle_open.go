@@ -38,7 +38,7 @@ import (
 //  3. Validate that a StoreIndex was provided via WithStoreIndex.
 //     core never opens an index itself; the caller is responsible
 //     for the dependency. Missing → error.
-//  4. Load the active StoreConfig from system.config/current.
+//  4. Load the active StoreConfig (the max system/config version).
 //     Defaults are applied; immutable parameters are validated.
 //  5. Validate WithConfig (when supplied) against the active
 //     config: immutable mismatch → errs.ErrConfigMismatch.
@@ -246,8 +246,8 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx index.S
 	return desc, nil
 }
 
-// loadActiveConfig reads the active StoreConfig from
-// system.config/current, applies defaults, and validates it. When the
+// loadActiveConfig reads the active StoreConfig (the max system/config
+// version), applies defaults, and validates it. When the
 // caller supplied WithConfig, its immutable fields are checked against
 // the on-disk config (errs.ErrConfigMismatch on divergence); a caller
 // without WithConfig accepts the on-disk config as-is — a legitimate

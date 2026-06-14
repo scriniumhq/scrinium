@@ -73,7 +73,9 @@ func Encode(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.M
 
 // checkRefLimits enforces the per-field reference caps (ADR-93): blob_refs
 // and handle_refs each fit a 16-bit count, so the chunk/member list is
-// bounded at 65535. There is no overall manifest-size cap.
+// bounded at 65535. The encode path has no overall byte cap — it is bounded
+// field-by-field; reads are guarded by MaxManifestSize (32 MiB, checked in
+// Decode/DecodeEncrypted).
 func checkRefLimits(m domain.Manifest) error {
 	if len(m.BlobRefs) > domain.MaxBlobRefs || len(m.HandleRefs) > domain.MaxHandleRefs {
 		return errs.ErrTooManyRefs

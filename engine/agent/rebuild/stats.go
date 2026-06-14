@@ -29,9 +29,6 @@ type RebuildStats struct {
 	// PacksIndexed — pack volume TOCs read and parsed.
 	PacksIndexed int64
 
-	// PointerRecovered — was system.config/current restored?
-	PointerRecovered bool
-
 	// DescriptorRewrote — was store.json rewritten from the
 	// Recovery Kit?
 	DescriptorRewrote bool
