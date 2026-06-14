@@ -34,7 +34,7 @@ func runListUnverifiedBlobs(t *testing.T, f Factory) {
 		}
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref)); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 			if s.everVerified {
@@ -93,7 +93,7 @@ func runListUnverifiedBlobs(t *testing.T, f Factory) {
 		}
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref)); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 			if err := idx.MarkVerified(ctx, s.ref, now.Add(-s.verifiedAgo)); err != nil {

@@ -581,7 +581,7 @@ func (a *rebuildAgent) indexBlob(ctx context.Context, m domain.Manifest) error {
 		addr = domain.PhysicalAddress{Path: p}
 	}
 	// Blob manifests reference no chunks and no packed entries.
-	if err := a.idx.IndexManifest(ctx, m, addr, nil); err != nil {
+	if err := a.idx.IndexManifest(ctx, m, addr); err != nil {
 		return fmt.Errorf("index manifest %q: %w", m.ArtifactID, err)
 	}
 	a.countIndexed(m.LayoutHeader.BlobStorage == domain.LayoutTarget)

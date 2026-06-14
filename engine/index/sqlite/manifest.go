@@ -38,10 +38,9 @@ func (i *Index) IndexManifest(
 	ctx context.Context,
 	m domain.Manifest,
 	addr domain.PhysicalAddress,
-	chunkRefs []string,
 ) error {
 	return i.observe("IndexManifest", func() error {
-		return i.indexManifestTx(ctx, m, addr, chunkRefs)
+		return i.indexManifestTx(ctx, m, addr)
 	})
 }
 
@@ -53,25 +52,18 @@ func (i *Index) indexManifestTx(
 	ctx context.Context,
 	m domain.Manifest,
 	addr domain.PhysicalAddress,
-	chunkRefs []string,
 ) error {
 	return i.inTx(ctx, func(tx *sql.Tx) error {
-		// Registration strategy by identity slot / structure (ADR-83/92),
-		// not a type field: a composite (chunker "composite" flag in Ext)
-		// carries a chunk list; a plain blob and a headless pack container
-		// (empty slot) both index as an ordinary manifest. Pack PLACEMENT
-		// is owned by the bundler index-extension's Resolver (ADR-86),
-		// recorded out-of-band via RecordPack — the core holds no pack
-		// table and does not branch on pack-ness (closure, ADR-83).
-		switch {
-		case m.IsComposite():
-			if err := indexTOCManifest(ctx, tx, m, addr, chunkRefs); err != nil {
-				return err
-			}
-		default:
-			if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
-				return err
-			}
+		// Registration is uniform across kinds (ADR-83/87/92), driven by
+		// structure, not a type field: every blob in blob_refs is
+		// registered + ref-counted + linked positionally — a composite's
+		// chunk list lives in blob_refs (the core keeps its ref_count), a
+		// plain blob has one, a headless pack container [toc, pack]. Pack
+		// PLACEMENT (the per-member slice map) is owned by the bundler
+		// index-extension's Resolver (ADR-86), recorded out-of-band via
+		// RecordPack — the core holds no pack table (closure, ADR-83).
+		if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
+			return err
 		}
 
 		// Link the artifact→artifact edges (HandleRefs, ADR-92). Empty
@@ -325,56 +317,27 @@ func indexBlobManifest(
 		return insertManifestRow(ctx, tx, m)
 	}
 	if len(m.BlobRefs) == 0 {
-		return fmt.Errorf("sqlite: blob manifest %q has no BlobRefs", m.ArtifactID)
+		return fmt.Errorf("sqlite: manifest %q has no BlobRefs", m.ArtifactID)
 	}
-	if err := registerBlob(ctx, tx, string(m.BlobRefs[0]), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
-		return err
-	}
-	if err := insertManifestRow(ctx, tx, m); err != nil {
-		return err
-	}
-	return linkManifestToBlob(ctx, tx, m.Digest, string(m.BlobRefs[0]), 0)
-}
-
-func indexTOCManifest(
-	ctx context.Context,
-	tx *sql.Tx,
-	m domain.Manifest,
-	addr domain.PhysicalAddress,
-	chunkRefs []string,
-) error {
-	if len(m.BlobRefs) == 0 {
-		return fmt.Errorf("sqlite: TOC manifest %q has no BlobRefs", m.ArtifactID)
-	}
-	// Step 1: register the TOC blob itself.
-	if err := registerBlob(ctx, tx, string(m.BlobRefs[0]), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
-		return err
-	}
-
-	// Step 2: bump ref_count for each chunk and link the manifest
-	// to it positionally. The chunk blobs are expected to exist —
-	// the chunker.Wrapper writes them via PutBlob before the TOC
-	// manifest is finalised (otherwise the TOC would point to
-	// nothing). A missing chunk row is therefore an upstream bug
-	// and surfaces as the bumpRefCount "not present" error.
-	for pos, chunkRef := range chunkRefs {
-		if err := bumpRefCount(ctx, tx, chunkRef); err != nil {
-			return fmt.Errorf("toc chunk[%d] %q: %w", pos, chunkRef, err)
-		}
-		// Position starts at 1 for chunks because position 0 is
-		// reserved for the TOC blob itself. This keeps DeleteManifest
-		// logic uniform across blob and toc types.
-		if err := linkManifestToBlob(ctx, tx, m.Digest, chunkRef, pos+1); err != nil {
+	// Every blob in blob_refs is registered + ref-counted (ADR-87/92):
+	// россыпь one, a composite the ordered chunk list, a pack
+	// container [toc_blob, pack_blob]. registerBlob is upsert+bump, so a
+	// blob the chunker or bundler already wrote keeps its own metadata
+	// (ON CONFLICT DO NOTHING) and only gains a ref.
+	for _, ref := range m.BlobRefs {
+		if err := registerBlob(ctx, tx, string(ref), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
 			return err
 		}
 	}
-
-	// Step 3: write the manifest row itself, link to the TOC blob
-	// at position 0.
 	if err := insertManifestRow(ctx, tx, m); err != nil {
 		return err
 	}
-	return linkManifestToBlob(ctx, tx, m.Digest, string(m.BlobRefs[0]), 0)
+	for pos, ref := range m.BlobRefs {
+		if err := linkManifestToBlob(ctx, tx, m.Digest, string(ref), pos); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeleteManifest performs the logical deletion of an artifact.

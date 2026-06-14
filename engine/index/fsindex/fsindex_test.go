@@ -105,7 +105,7 @@ func TestApply_Indexed_FSMetadata_Stored(t *testing.T) {
 	idx, ext := newRegisteredFSIndex(t)
 
 	m := makeFSManifest(t, "art-1", "photos/2024/sunset.jpg")
-	if err := idx.IndexManifest(ctx, m, physAddr(), nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -130,7 +130,7 @@ func TestApply_Indexed_ForeignSchema_Skipped(t *testing.T) {
 	idx, ext := newRegisteredFSIndex(t)
 
 	m := makeForeignManifest(t, "email-1")
-	if err := idx.IndexManifest(ctx, m, physAddr(), nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -157,7 +157,7 @@ func TestApply_Indexed_NoMetadata_Skipped(t *testing.T) {
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
 		// Ext is nil
 	}
-	if err := idx.IndexManifest(ctx, m, physAddr(), nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 	_, ok, _ := ext.GetByID("bare-1")
@@ -173,7 +173,7 @@ func TestLookupByPath_Hit(t *testing.T) {
 	idx, ext := newRegisteredFSIndex(t)
 
 	m := makeFSManifest(t, "art-photo", "photos/2024/sunset.jpg")
-	if err := idx.IndexManifest(ctx, m, physAddr(), nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -213,7 +213,7 @@ func TestWalkAll_VisitsAll(t *testing.T) {
 	}
 	for id, path := range pairs {
 		m := makeFSManifest(t, id, path)
-		if err := idx.IndexManifest(ctx, m, physAddr(), nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
 			t.Fatalf("IndexManifest %q: %v", id, err)
 		}
 	}
@@ -247,7 +247,7 @@ func TestApply_Deleted_RemovesEntries(t *testing.T) {
 	idx, ext := newRegisteredFSIndex(t)
 
 	m := makeFSManifest(t, "art-del", "tmp/file.txt")
-	if err := idx.IndexManifest(ctx, m, physAddr(), nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -279,7 +279,7 @@ func TestApply_Deleted_NotIndexed_NoOp(t *testing.T) {
 	// Index a non-fsmeta manifest then delete; fsindex should
 	// silently no-op since we never indexed it.
 	m := makeForeignManifest(t, "email-2")
-	if err := idx.IndexManifest(ctx, m, physAddr(), nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 	if err := idx.DeleteManifest(ctx, "email-2", []string{string(m.PrimaryBlobRef())}); err != nil {
@@ -309,7 +309,7 @@ func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
 		Ext:          bad,
 	}
-	err := idx.IndexManifest(ctx, m, physAddr(), nil)
+	err := idx.IndexManifest(ctx, m, physAddr())
 	if err == nil {
 		t.Fatal("expected error from broken fsmeta, got nil")
 	}

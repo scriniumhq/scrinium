@@ -152,7 +152,7 @@ func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 		BlobRefs:     []domain.BlobRef{"blob-test"},
 		OriginalSize: 1024,
 	}
-	if err := idx1.IndexManifest(ctx, manifest, addr, nil); err != nil {
+	if err := idx1.IndexManifest(ctx, manifest, addr); err != nil {
 		t.Fatalf("seed index: %v", err)
 	}
 	if err := idx1.Close(); err != nil {

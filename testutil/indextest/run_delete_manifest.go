@@ -13,7 +13,7 @@ func runDeleteManifest(t *testing.T, f Factory) {
 		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
 		if err := idx.DeleteManifest(ctx, "art-1", []string{"blob-1"}); err != nil {
@@ -52,7 +52,7 @@ func runDeleteManifest(t *testing.T, f Factory) {
 		// the index unchanged.
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
 		if err := idx.DeleteManifest(ctx, "art-1", []string{"blob-WRONG"}); err == nil {

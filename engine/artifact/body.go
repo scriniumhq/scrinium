@@ -42,9 +42,8 @@ type jsonBody struct {
 // Reference model (ADR-92/93): blob_refs is the ordered array of blob
 // references (россыпь — one, composite — chunks, pack — [toc, pack]) and
 // handle_refs the ordered array of artifact→artifact edges (the DAG).
-// MIGRATION: namespace/system are still written transitionally —
-// namespace until its readers move to ext (ADR-79), system until the
-// pack model is rewritten (ADR-86).
+// MIGRATION: namespace is still written transitionally — until its
+// readers move to ext (ADR-79).
 type jsonSys struct {
 	ArtifactID       string              `json:"artifact_id,omitempty"`
 	BlobRefs         []string            `json:"blob_refs"`
@@ -60,7 +59,6 @@ type jsonSys struct {
 	RetentionTime    string              `json:"retention_until,omitempty"`
 	SchemaVersion    int                 `json:"schema_version"`
 	SessionID        string              `json:"session_id"`
-	System           *jsonSystemFlags    `json:"system,omitempty"`
 }
 
 type jsonLayoutHeader struct {
@@ -72,11 +70,6 @@ type jsonPipelineStage struct {
 	Hash      string `json:"hash"`
 	IV        string `json:"iv,omitempty"`
 	KeyID     string `json:"key_id,omitempty"`
-}
-
-type jsonSystemFlags struct {
-	TOCOffset int64 `json:"toc_offset"`
-	TOCSize   int64 `json:"toc_size"`
 }
 
 // marshalBodyJSON produces deterministic JSON bytes per §7.5: alphabetical
@@ -112,12 +105,6 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 	}
 	if !m.RetentionUntil.IsZero() {
 		body.Sys.RetentionTime = timefmt.Format(m.RetentionUntil)
-	}
-	if m.SystemFlags.TOCOffset != 0 || m.SystemFlags.TOCSize != 0 {
-		body.Sys.System = &jsonSystemFlags{
-			TOCOffset: m.SystemFlags.TOCOffset,
-			TOCSize:   m.SystemFlags.TOCSize,
-		}
 	}
 
 	return json.Marshal(&body)
@@ -211,12 +198,6 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 			return domain.Manifest{}, fmt.Errorf("artifact: retention_until: %w", err)
 		}
 		m.RetentionUntil = t
-	}
-	if b.Sys.System != nil {
-		m.SystemFlags = domain.ManifestSystemFlags{
-			TOCOffset: b.Sys.System.TOCOffset,
-			TOCSize:   b.Sys.System.TOCSize,
-		}
 	}
 	return m, nil
 }

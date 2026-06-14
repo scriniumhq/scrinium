@@ -23,7 +23,7 @@ func TestResolveManifestDigest_Hit(t *testing.T) {
 		Namespace:    "ns",
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutInline},
 	}
-	if err := idx.IndexManifest(ctx, m, domain.PhysicalAddress{Path: "manifests/x"}, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, domain.PhysicalAddress{Path: "manifests/x"}); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 

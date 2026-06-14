@@ -15,7 +15,7 @@ func runListUnverifiedManifests(t *testing.T, f Factory) {
 	t.Run("FreshlyIndexedManifestIsUnverified", func(t *testing.T) {
 		ctx := t.Context()
 		idx := f.New(t)
-		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
 		got := collectUnverifiedManifests(t, idx, time.Now())
@@ -29,7 +29,7 @@ func runListUnverifiedManifests(t *testing.T, f Factory) {
 		idx := f.New(t)
 		// Inline has no blobs row, so ListUnverified (blob list) can
 		// never see it — the manifest pass is the only way to scrub it.
-		if err := idx.IndexManifest(ctx, inlineManifest("inline-1"), manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, inlineManifest("inline-1"), manifestfx.PhysAddr("p")); err != nil {
 			t.Fatalf("IndexManifest inline: %v", err)
 		}
 		got := collectUnverifiedManifests(t, idx, time.Now())
@@ -41,7 +41,7 @@ func runListUnverifiedManifests(t *testing.T, f Factory) {
 	t.Run("MarkManifestVerifiedRemovesFromList", func(t *testing.T) {
 		ctx := t.Context()
 		idx := f.New(t)
-		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
 		verifiedAt := time.Now().UTC().Truncate(time.Second)
@@ -71,7 +71,7 @@ func runListUnverifiedManifests(t *testing.T, f Factory) {
 	t.Run("PackManifestsExcluded", func(t *testing.T) {
 		ctx := t.Context()
 		idx := f.New(t)
-		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
 		got := collectUnverifiedManifests(t, idx, time.Now())

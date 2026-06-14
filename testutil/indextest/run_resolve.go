@@ -16,7 +16,7 @@ func runResolve(t *testing.T, f Factory) {
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
 		addr := manifestfx.PhysAddr("blobs/aa/bb/blob-1")
-		if err := idx.IndexManifest(ctx, m, addr, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, addr); err != nil {
 			t.Fatalf("IndexManifest: %v", err)
 		}
 

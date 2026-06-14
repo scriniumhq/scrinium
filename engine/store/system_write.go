@@ -71,7 +71,7 @@ func writeInlineSystemArtifact(
 
 	if err := idx.IndexManifest(ctx, manifest, domain.PhysicalAddress{
 		Path: manifestPath,
-	}, nil); err != nil {
+	}); err != nil {
 		return "", fmt.Errorf("system artifact: index: %w", err)
 	}
 

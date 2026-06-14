@@ -16,7 +16,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("blobs/aa/bb/blob-1"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("blobs/aa/bb/blob-1")); err != nil {
 			t.Fatalf("IndexManifest: %v", err)
 		}
 		// Manifest visible.
@@ -47,10 +47,10 @@ func runIndexManifest(t *testing.T, f Factory) {
 		// blob row stays single, ref_count climbs to 2.
 		idx := f.New(t)
 		addr := manifestfx.PhysAddr("blobs/aa/bb/blob-1")
-		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), addr, nil); err != nil {
+		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), addr); err != nil {
 			t.Fatal(err)
 		}
-		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-2", "blob-1"), addr, nil); err != nil {
+		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-2", "blob-1"), addr); err != nil {
 			t.Fatal(err)
 		}
 		n, err := idx.GetRefCount(ctx, "blob-1")
@@ -70,10 +70,10 @@ func runIndexManifest(t *testing.T, f Factory) {
 		// implementation detail covered by the per-backend tests.
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatalf("re-indexing same manifest must not fail: %v", err)
 		}
 		exists, err := idx.ManifestExists(ctx, "art-1")
@@ -85,12 +85,11 @@ func runIndexManifest(t *testing.T, f Factory) {
 		}
 	})
 
-	t.Run("TOC_RegistersChunks", func(t *testing.T) {
+	t.Run("Composite_RegistersChunks", func(t *testing.T) {
 		ctx := t.Context()
-		// A TOC manifest pulls together previously-registered
-		// chunk blobs. Each chunk's ref_count climbs by one; the
-		// TOC's own blob (the manifest body) is also a regular
-		// blob with its own ref_count.
+		// A composite manifest references previously-registered chunk
+		// blobs via blob_refs (ADR-87/92 — no TOC blob). Each chunk's
+		// ref_count climbs by one; the composite has no separate body blob.
 		idx := f.New(t)
 
 		chunks := []struct {
@@ -103,7 +102,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 		}
 		// Register chunks as blobs first, each via its own
 		// IndexManifest call. The manifest is artificial — what
-		// matters for the TOC test below is that the blob row
+		// matters for the composite below is that the blob row
 		// exists.
 		for i, c := range chunks {
 			m := manifestfx.BlobWithHash(
@@ -112,7 +111,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 				c.hash,
 				1024,
 			)
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("chunks/"+c.ref), nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("chunks/"+c.ref)); err != nil {
 				t.Fatalf("seed chunk %d: %v", i, err)
 			}
 		}
@@ -122,17 +121,16 @@ func runIndexManifest(t *testing.T, f Factory) {
 			Ext:          json.RawMessage(`{"composite":true}`),
 			Namespace:    "test",
 			ContentHash:  manifestfx.SyntheticHash('0'),
-			BlobRefs:     []domain.BlobRef{"toc-blob"},
+			BlobRefs:     []domain.BlobRef{domain.BlobRef(chunks[0].ref), domain.BlobRef(chunks[1].ref), domain.BlobRef(chunks[2].ref)},
 			OriginalSize: 3072,
 			CreatedAt:    time.Now(),
 		}
-		chunkRefs := []string{chunks[0].ref, chunks[1].ref, chunks[2].ref}
-		if err := idx.IndexManifest(ctx, toc, manifestfx.PhysAddr("blobs/toc-blob"), chunkRefs); err != nil {
-			t.Fatalf("IndexManifest TOC: %v", err)
+		if err := idx.IndexManifest(ctx, toc, manifestfx.PhysAddr("composite/art-toc")); err != nil {
+			t.Fatalf("IndexManifest composite: %v", err)
 		}
 
 		// Each chunk now ref-counted: 1 (from its own manifest)
-		// + 1 (from the TOC chunkRefs) = 2.
+		// + 1 (from the composite's blob_refs) = 2.
 		for _, c := range chunks {
 			n, err := idx.GetRefCount(ctx, c.ref)
 			if err != nil {
@@ -141,42 +139,6 @@ func runIndexManifest(t *testing.T, f Factory) {
 			if n != 2 {
 				t.Errorf("chunk %s ref_count: got %d, want 2", c.ref, n)
 			}
-		}
-		// TOC blob: 1.
-		n, err := idx.GetRefCount(ctx, "toc-blob")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != 1 {
-			t.Errorf("toc-blob ref_count: got %d, want 1", n)
-		}
-	})
-
-	t.Run("TOC_MissingChunkFails", func(t *testing.T) {
-		ctx := t.Context()
-		// A TOC pointing at a chunk that was never registered
-		// must fail. The manifest must NOT appear in the index
-		// (the call rolls back).
-		idx := f.New(t)
-		toc := domain.Manifest{
-			ArtifactID:   "art-toc",
-			Ext:          json.RawMessage(`{"composite":true}`),
-			Namespace:    "test",
-			ContentHash:  manifestfx.SyntheticHash('0'),
-			BlobRefs:     []domain.BlobRef{"toc-blob"},
-			OriginalSize: 3072,
-			CreatedAt:    time.Now(),
-		}
-		err := idx.IndexManifest(ctx, toc, manifestfx.PhysAddr("p"), []string{"chunk-missing"})
-		if err == nil {
-			t.Fatal("expected error on missing chunk")
-		}
-		exists, qerr := idx.ManifestExists(ctx, "art-toc")
-		if qerr != nil {
-			t.Fatalf("ManifestExists post-rollback: %v", qerr)
-		}
-		if exists {
-			t.Error("manifest leaked into index after a failed TOC IndexManifest")
 		}
 	})
 }

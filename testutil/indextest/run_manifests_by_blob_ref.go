@@ -20,13 +20,13 @@ func runManifestsByBlobRef(t *testing.T, f Factory) {
 		// a manifest_blobs edge per artifact.
 		for _, id := range []string{"art-a", "art-b"} {
 			m := manifestfx.Blob(id, "blob-shared")
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 				t.Fatalf("IndexManifest %s: %v", id, err)
 			}
 		}
 		// A third artifact on a different blob must NOT be returned.
 		other := manifestfx.Blob("art-c", "blob-other")
-		if err := idx.IndexManifest(ctx, other, manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, other, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatalf("IndexManifest art-c: %v", err)
 		}
 
@@ -49,7 +49,7 @@ func runManifestsByBlobRef(t *testing.T, f Factory) {
 		idx := f.New(t)
 		want := manifestfx.SyntheticHash('c')
 		m := manifestfx.BlobWithHash("art-1", "blob-1", want, 2048)
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
 		var seen domain.Manifest

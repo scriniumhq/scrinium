@@ -305,7 +305,7 @@ func (x *IO) PersistManifest(ctx context.Context, manifest domain.Manifest, mani
 	if err := x.drv.Put(ctx, manifestPath, bytes.NewReader(manifestBytes)); err != nil {
 		return fmt.Errorf("artifactio: write manifest: %w", err)
 	}
-	if err := x.index.IndexManifest(ctx, manifest, addr, nil); err != nil {
+	if err := x.index.IndexManifest(ctx, manifest, addr); err != nil {
 		// Manifest is on disk but unindexed; the rebuild agent is the
 		// recovery path. Surface so the caller can retry.
 		return fmt.Errorf("artifactio: index manifest: %w", err)

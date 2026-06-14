@@ -24,19 +24,18 @@ import (
 type StoreIndex interface {
 	// Writes and deletes.
 
-	// IndexManifest registers an artifact in the index. The strategy
-	// is chosen by the identity slot / structure (ADR-83/92):
-	//   - plain blob OR headless pack container: indexed as an ordinary
-	//     manifest (the container's blob_refs flow through manifest_blobs).
-	//   - composite: + increment ref_count for each chunkRef.
-	// Pack PLACEMENT (the per-member slice map) is owned by the bundler
-	// index-extension's Resolver (ADR-86), recorded out-of-band via its
-	// RecordPack API — the core index holds no pack state.
+	// IndexManifest registers an artifact in the index. россыпь,
+	// composite and headless pack container index uniformly (ADR-87/92):
+	// every blob in blob_refs is registered, ref-counted and linked
+	// positionally — a composite's chunk list lives in blob_refs and the
+	// core keeps its ref_count. Pack PLACEMENT (the per-member slice map)
+	// is owned by the bundler index-extension's Resolver (ADR-86),
+	// recorded out-of-band via its RecordPack API — the core index holds
+	// no pack state.
 	IndexManifest(
 		ctx context.Context,
 		m domain.Manifest,
 		addr domain.PhysicalAddress,
-		chunkRefs []string,
 	) error
 
 	// DeleteManifest performs a logical deletion: a single
