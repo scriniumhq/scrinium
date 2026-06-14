@@ -609,7 +609,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 
 	data.Identity = []labelValue{
 		{Label: "ArtifactID", Value: string(m.ArtifactID), Mono: true},
-		{Label: "Type", Value: string(m.Type)},
 		{Label: "Namespace", Value: orDash(m.Namespace)},
 		{Label: "SessionID", Value: orDash(string(m.SessionID)), Mono: m.SessionID != ""},
 		{Label: "CreatedAt", Value: m.CreatedAt.UTC().Format(time.RFC3339)},
@@ -701,7 +700,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	// the wire shape (ArtifactID is intentionally absent — it's
 	// derived, not serialised, per docs §7.4).
 	raw, err := json.MarshalIndent(struct {
-		Type           domain.ManifestType    `json:"type"`
 		Namespace      string                 `json:"namespace,omitempty"`
 		SessionID      string                 `json:"session_id,omitempty"`
 		CreatedAt      time.Time              `json:"created_at"`
@@ -715,7 +713,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		Ext            json.RawMessage        `json:"ext,omitempty"`
 		Usr            json.RawMessage        `json:"usr,omitempty"`
 	}{
-		Type:           m.Type,
 		Namespace:      m.Namespace,
 		SessionID:      string(m.SessionID),
 		CreatedAt:      m.CreatedAt,

@@ -658,7 +658,6 @@ func TestIndex_ListExtensions_Empty(t *testing.T) {
 func makeBlobManifest(id domain.ArtifactID) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   id,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "files",
 		BlobRef:      "sha256-aaaa",
 		ContentHash:  "sha256-aaaa",

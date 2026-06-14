@@ -23,20 +23,6 @@ type Artifact struct {
 	Usr json.RawMessage
 }
 
-// ManifestType is the role of a Manifest.
-//
-// Deprecated (ADR-83/92): the artifact kind is derived from the
-// identity slot and reference direction, not from a type field —
-// see Manifest.IsUser/IsSystem/IsContainer/IsComposite. Retained
-// transitionally while dispatch sites are migrated.
-type ManifestType string
-
-const (
-	ManifestTypeBlob ManifestType = "blob"
-	ManifestTypeTOC  ManifestType = "toc"
-	ManifestTypePack ManifestType = "pack"
-)
-
 // LayoutHeader is a service attribute inside a Manifest that
 // "freezes" the physical-projection rules applied at write time.
 type LayoutHeader struct {
@@ -92,7 +78,7 @@ type ManifestSystemFlags struct {
 // slot: a filled slot consumes its members (top-down, +ref_count); an
 // empty slot (pack container) places them (bottom-up, no ref_count).
 //
-// MIGRATION NOTE: the single BlobRef, Type, Namespace and SystemFlags
+// MIGRATION NOTE: the single BlobRef, Namespace and SystemFlags
 // fields are transitional. The serialiser bridges BlobRef⇄BlobRefs[0]
 // so existing россыпь callers keep working while array/composite/pack
 // support lands; the legacy fields are removed in a later stage.
@@ -136,12 +122,6 @@ type Manifest struct {
 	// IdentityMode=Unique (makes the handle unique per Put); absent
 	// in Coalesced. SERIALISED, so the handle stays reproducible.
 	IdentityNonce []byte
-
-	// Type is the legacy role marker. Deprecated (ADR-83/92): kind is
-	// derived from the slot via IsUser/IsSystem/IsContainer. Retained
-	// transitionally; on decode the serialiser derives it from the
-	// slot/flag so existing dispatch keeps working.
-	Type ManifestType
 
 	// Namespace is the per-store organisational label (nsid).
 	// Deprecated (ADR-79/93): the namespace is a CustomIndex + registry

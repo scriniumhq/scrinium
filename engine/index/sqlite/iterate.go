@@ -17,7 +17,7 @@ import (
 // recovers content_hash/original_size (the dedup key lives on the blob
 // row, not the manifest row); LEFT because Inline manifests have no
 // blobs partner.
-const manifestProjection = `m.manifest_digest, m.artifact_id, m.type, m.namespace, m.session_id,
+const manifestProjection = `m.manifest_digest, m.artifact_id, m.namespace, m.session_id,
 	       m.blob_ref, m.created_at, m.retention_until,
 	       b.content_hash, b.original_size`
 

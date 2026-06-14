@@ -125,7 +125,6 @@ CREATE INDEX blobs_scrub   ON blobs(last_verified_at);
 CREATE TABLE manifests (
     manifest_digest  TEXT    PRIMARY KEY,
     artifact_id      TEXT,
-    type             TEXT    NOT NULL DEFAULT '',
     namespace        TEXT    NOT NULL DEFAULT '',
     session_id       TEXT    NOT NULL DEFAULT '',
     blob_ref         TEXT,

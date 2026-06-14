@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"scrinium.dev/domain"
@@ -39,7 +38,7 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 	if err != nil {
 		return nil, err
 	}
-	if err := dispatchManifestType(manifest, "store.Get"); err != nil {
+	if err := guardHandleless(manifest); err != nil {
 		return nil, err
 	}
 
@@ -86,24 +85,18 @@ func (c *core) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.M
 	return c.artifactIO().Load(ctx, id, asKeyProvider(c.crypto.resolver()))
 }
 
-// dispatchManifestType returns nil for a regular Blob manifest, or the
-// right sentinel otherwise. Get, Delete, and Verify share it: Blob
-// continues, TOC awaits the chunker decorator, Pack is engine-internal
-// (surfaced as not-found), anything else is unknown. op names the
-// operation for the error message.
-func dispatchManifestType(m domain.Manifest, op string) error {
-	switch m.Type {
-	case domain.ManifestTypeBlob:
-		return nil
-	case domain.ManifestTypeTOC:
-		return fmt.Errorf("%w: %s on ManifestTypeTOC requires the chunker decorator", errs.ErrNotImplemented, op)
-	case domain.ManifestTypePack:
-		// Pack manifests are engine-internal; collapse to not-found so
-		// clients need not special-case them.
+// guardHandleless enforces the negative identity invariant (ADR-83): a
+// manifest with an empty identity slot (handle IS NULL) is not a
+// user-visible artifact — a pack container or other engine-internal
+// object — so user-facing Get/Delete/Verify collapse it to not-found
+// rather than leaking it. Structure (chunked/composite bodies) is no
+// longer dispatched here: the owning wrapper handles it (ADR-84), and a
+// body whose layout needs an absent decorator fails in the open path.
+func guardHandleless(m domain.Manifest) error {
+	if !m.IsUser() {
 		return errs.ErrArtifactNotFound
-	default:
-		return fmt.Errorf("%s: unknown manifest type %q", op, m.Type)
 	}
+	return nil
 }
 
 // asKeyProvider adapts a pipeline.KeyResolver to an artifact.KeyProvider,

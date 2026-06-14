@@ -47,8 +47,8 @@ func (d dataFacet) Delete(ctx context.Context, id domain.ArtifactID) error {
 		return err // errs.ErrArtifactNotFound or errs.ErrCorruptedManifest
 	}
 
-	// Type dispatch.
-	if err := dispatchManifestType(manifest, "store.Delete"); err != nil {
+	// Handleless manifests are not user-visible (ADR-83).
+	if err := guardHandleless(manifest); err != nil {
 		return err
 	}
 

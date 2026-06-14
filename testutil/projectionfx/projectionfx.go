@@ -170,7 +170,6 @@ func (f *FakeSource) Put(
 
 	m := domain.Manifest{
 		ArtifactID:   id,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    po.Namespace,
 		SessionID:    po.SessionID,
 		CreatedAt:    time.Now().UTC(),

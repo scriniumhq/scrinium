@@ -12,20 +12,20 @@ import (
 	"scrinium.dev/engine/internal/timefmt"
 )
 
-// IndexManifest registers an artifact in the index. Branches on
-// manifest.Type:
-//   - blob: upserts the blob row, increments ref_count, inserts the
-//     manifest row, links manifest -> blob.
-//   - toc:  same as blob plus increments ref_count for each chunkRef
-//     and links manifest -> chunks (positional).
-//   - pack: registers the pack itself as one blob and inserts a row
-//     into packed_blobs for each entry; manifests of packed
-//     artifacts are NOT inserted into the manifests table — packed
-//     artifacts are reachable through LookupPacked, not through Walk.
-//     (TRANSITIONAL: ADR-86 replaces packed_blobs with the bundler
-//     Resolver map; the pack branch goes when the bundler is rebuilt.)
+// IndexManifest registers an artifact in the index. The strategy is
+// chosen by the identity slot / structure (ADR-83/92), not a type field:
+//   - plain blob (filled handle slot, single blob): upserts the blob
+//     row, increments ref_count, inserts the manifest row, links
+//     manifest -> blob.
+//   - composite (chunker "composite" flag in Ext): same as blob plus a
+//     ref_count bump per chunkRef and positional manifest -> chunk links.
+//   - pack container (empty slot): registers the pack as one blob and
+//     inserts a packed_blobs row per entry; the packed artifacts' own
+//     manifests are NOT inserted — they are reached through LookupPacked,
+//     not Walk. (TRANSITIONAL: ADR-86 replaces packed_blobs with the
+//     bundler Resolver map; this branch goes when the bundler is rebuilt.)
 //
-// Regardless of type, the manifest's HandleRefs (artifact→artifact
+// Regardless of strategy, the manifest's HandleRefs (artifact→artifact
 // edges, ADR-92) are linked into manifest_handles after the per-type
 // step. россыпь and composite carry none; pack containers carry their
 // members. The manifests table is keyed by ManifestDigest (the file
@@ -58,21 +58,24 @@ func (i *Index) indexManifestTx(
 	packedEntries []domain.PackedEntry,
 ) error {
 	return i.inTx(ctx, func(tx *sql.Tx) error {
-		switch m.Type {
-		case domain.ManifestTypeBlob:
-			if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
-				return err
-			}
-		case domain.ManifestTypeTOC:
-			if err := indexTOCManifest(ctx, tx, m, addr, chunkRefs); err != nil {
-				return err
-			}
-		case domain.ManifestTypePack:
+		// Registration strategy by identity slot / structure (ADR-83/92),
+		// not a type field: an empty slot is a pack container; a composite
+		// (chunker "composite" flag in Ext) carries a chunk list; otherwise
+		// it is a plain blob. Container and composite are M4/M5 structure
+		// that stays stubbed — only the plain-blob path is live.
+		switch {
+		case m.IsContainer():
 			if err := indexPackManifest(ctx, tx, m, addr, packedEntries); err != nil {
 				return err
 			}
+		case m.IsComposite():
+			if err := indexTOCManifest(ctx, tx, m, addr, chunkRefs); err != nil {
+				return err
+			}
 		default:
-			return fmt.Errorf("sqlite: unknown manifest type: %q", m.Type)
+			if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
+				return err
+			}
 		}
 
 		// Link the artifact→artifact edges (HandleRefs, ADR-92). Empty
@@ -93,7 +96,7 @@ func (i *Index) indexManifestTx(
 		// are an internal type (not surfaced through Walk) so we
 		// skip dispatch for them; extensions index user-visible
 		// artifacts only.
-		if m.Type != domain.ManifestTypePack {
+		if !m.IsContainer() {
 			args := extension.EventArgs{Manifest: m, ArtifactID: m.ArtifactID}
 			if err := i.dispatchExtensions(ctx, tx, extension.EventKindManifestIndexed, args); err != nil {
 				return err
@@ -211,9 +214,9 @@ func registerBlob(
 func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error {
 	const stmt = `
 		INSERT INTO manifests (
-			manifest_digest, artifact_id, type, namespace, session_id,
+			manifest_digest, artifact_id, namespace, session_id,
 			blob_ref, created_at, retention_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(manifest_digest) DO NOTHING`
 
 	// Identity slot. A user artifact fills artifact_id with its floating
@@ -253,7 +256,6 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	_, err := tx.ExecContext(ctx, stmt,
 		string(m.Digest),
 		artifactIDArg,
-		string(m.Type),
 		m.Namespace,
 		m.SessionID,
 		blobRefArg,

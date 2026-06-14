@@ -255,7 +255,6 @@ func mkManifest(path, namespace, payload string) domain.Manifest {
 	})
 	return domain.Manifest{
 		ArtifactID:   id,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    namespace,
 		Ext:          extMeta,
 		OriginalSize: int64(len(payload)),

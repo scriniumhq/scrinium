@@ -147,7 +147,6 @@ func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 	}
 	manifest := domain.Manifest{
 		ArtifactID:   "art-test",
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "users",
 		ContentHash:  "sha256-" + domain.ContentHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
 		BlobRef:      "blob-test",

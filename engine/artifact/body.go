@@ -61,7 +61,6 @@ type jsonSys struct {
 	SchemaVersion    int                 `json:"schema_version"`
 	SessionID        string              `json:"session_id"`
 	System           *jsonSystemFlags    `json:"system,omitempty"`
-	Type             string              `json:"type"`
 }
 
 type jsonLayoutHeader struct {
@@ -100,7 +99,6 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 			Pipeline:         pipelineToJSON(m.Pipeline),
 			SchemaVersion:    SchemaVersion,
 			SessionID:        string(m.SessionID),
-			Type:             string(m.Type),
 		},
 	}
 	if len(m.IdentityNonce) > 0 {
@@ -179,7 +177,6 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 	m := domain.Manifest{
 		ArtifactID:       domain.ArtifactID(b.Sys.ArtifactID),
 		IdentityMetaHash: b.Sys.IdentityMetaHash,
-		Type:             domain.ManifestType(b.Sys.Type),
 		Namespace:        b.Sys.Namespace,
 		SessionID:        domain.SessionID(b.Sys.SessionID),
 		ContentHash:      domain.ContentHash(b.Sys.ContentHash),

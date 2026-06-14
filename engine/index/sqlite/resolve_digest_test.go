@@ -20,7 +20,6 @@ func TestResolveManifestDigest_Hit(t *testing.T) {
 	m := domain.Manifest{
 		ArtifactID:   handle,
 		Digest:       digest,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "ns",
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutInline},
 	}

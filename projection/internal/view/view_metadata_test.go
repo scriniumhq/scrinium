@@ -45,7 +45,6 @@ func (c *countingExtSource) Ext(id domain.ArtifactID) (json.RawMessage, bool, er
 func strippedManifest(id domain.ArtifactID, namespace string) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   id,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    namespace,
 		BlobRef:      "sha256-" + domain.BlobRef(id),
 		ContentHash:  "sha256-" + domain.ContentHash(id),
@@ -115,7 +114,6 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	idHit := domain.ArtifactID("hit")
 	src.Add(domain.Manifest{
 		ArtifactID:   idHit,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "files",
 		BlobRef:      "sha256-hit",
 		OriginalSize: 1,
@@ -131,7 +129,6 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	idMiss := domain.ArtifactID("miss")
 	src.Add(domain.Manifest{
 		ArtifactID:   idMiss,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "files",
 		BlobRef:      "sha256-miss",
 		OriginalSize: 1,

@@ -36,7 +36,6 @@ func artifactFacetFrom(m domain.Manifest) *ArtifactFacet {
 		Namespace:   m.Namespace,
 		SessionID:   m.SessionID,
 		CreatedAt:   m.CreatedAt,
-		Type:        m.Type,
 		Ext:         m.Ext,
 	}
 }

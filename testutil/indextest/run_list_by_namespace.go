@@ -202,8 +202,6 @@ func runListByNamespace(t *testing.T, f Factory) {
 		}
 
 		pack := domain.Manifest{
-			ArtifactID:   "pack-1",
-			Type:         domain.ManifestTypePack,
 			Namespace:    "ns",
 			ContentHash:  manifestfx.SyntheticHash('p'),
 			BlobRef:      "pack-blob-1",
@@ -220,9 +218,6 @@ func runListByNamespace(t *testing.T, f Factory) {
 		got := collectByNamespace(t, idx, "ns")
 		if len(got) != 1 {
 			t.Fatalf("got %d, want 1 (pack excluded)", len(got))
-		}
-		if got[0].Type != domain.ManifestTypeBlob {
-			t.Errorf("type: got %q, want blob", got[0].Type)
 		}
 	})
 
@@ -259,9 +254,6 @@ func runListByNamespace(t *testing.T, f Factory) {
 		m := got[0]
 		if m.ArtifactID != src.ArtifactID {
 			t.Errorf("ArtifactID: got %q, want %q", m.ArtifactID, src.ArtifactID)
-		}
-		if m.Type != src.Type {
-			t.Errorf("Type: got %q, want %q", m.Type, src.Type)
 		}
 		if m.Namespace != src.Namespace {
 			t.Errorf("Namespace: got %q, want %q", m.Namespace, src.Namespace)

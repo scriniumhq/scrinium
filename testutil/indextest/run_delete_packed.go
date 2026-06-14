@@ -19,8 +19,6 @@ func runDeletePacked(t *testing.T, f Factory) {
 		idx := f.New(t)
 
 		pack1 := domain.Manifest{
-			ArtifactID:   "pack-1",
-			Type:         domain.ManifestTypePack,
 			ContentHash:  manifestfx.SyntheticHash('1'),
 			BlobRef:      "pack-blob-1",
 			OriginalSize: 4096,
@@ -34,8 +32,6 @@ func runDeletePacked(t *testing.T, f Factory) {
 		}
 
 		pack2 := domain.Manifest{
-			ArtifactID:   "pack-2",
-			Type:         domain.ManifestTypePack,
 			ContentHash:  manifestfx.SyntheticHash('2'),
 			BlobRef:      "pack-blob-2",
 			OriginalSize: 4096,

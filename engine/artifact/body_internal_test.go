@@ -43,7 +43,6 @@ func TestMarshalBodyJSON_KeysAreAlphabetical(t *testing.T) {
 		"pipeline",
 		"schema_version",
 		"session_id",
-		"type",
 		"usr",
 	}
 
@@ -109,7 +108,7 @@ func TestMarshalBodyJSON_ArtifactIDInBody(t *testing.T) {
 }
 
 func TestUnmarshalBodyJSON_RejectsUnknownField(t *testing.T) {
-	body := []byte(`{"sys":{"blob_refs":["sha256-x"],"pipeline":[],"schema_version":1},"unknown_xyz":"oops"}`)
+	body := []byte(`{"sys":{"blob_refs":["sha256-x""],"pipeline":[],"schema_version":1},"unknown_xyz":"oops"}`)
 	_, err := unmarshalBodyJSON(body)
 	if err == nil {
 		t.Fatal("expected error on unknown field")

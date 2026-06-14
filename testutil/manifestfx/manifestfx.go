@@ -34,7 +34,6 @@ var (
 // CreatedAt — byte-stable across runs for round-trip tests.
 func Sample() domain.Manifest {
 	return domain.Manifest{
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "users",
 		SessionID:    "sess-1",
 		CreatedAt:    time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC),
@@ -63,7 +62,6 @@ func Blob(id, blobRef string) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   domain.ArtifactID(id),
 		Digest:       syntheticDigest(id),
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "test",
 		ContentHash:  domain.ContentHash(contentHashAaa),
 		BlobRef:      domain.BlobRef(blobRef),
@@ -83,7 +81,6 @@ func BlobWithHash(id, blobRef string, contentHash domain.ContentHash, originalSi
 	return domain.Manifest{
 		ArtifactID:   domain.ArtifactID(id),
 		Digest:       syntheticDigest(id),
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "test",
 		ContentHash:  contentHash,
 		BlobRef:      domain.BlobRef(blobRef),

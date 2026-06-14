@@ -15,8 +15,6 @@ func runLookupPacked(t *testing.T, f Factory) {
 		ctx := t.Context()
 		idx := f.New(t)
 		packManifest := domain.Manifest{
-			ArtifactID:   "pack-1",
-			Type:         domain.ManifestTypePack,
 			ContentHash:  manifestfx.SyntheticHash('p'),
 			BlobRef:      "pack-blob-1",
 			OriginalSize: 65536,

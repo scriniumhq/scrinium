@@ -34,9 +34,9 @@ import (
 // log). artifactio returns ErrCorruptedBlob; the store publishes
 // EventScrubFailed (ADR-60: errors return, events publish, logs explain).
 //
-// Currently supports BlobManifest with Inline and Target layouts. TOC,
-// Pack return explicit "not yet implemented" errors via the
-// dispatchManifestType / layout switch paths.
+// Handleless manifests (empty identity slot) collapse to not-found via
+// guardHandleless; bodies whose layout needs an absent decorator fail in
+// the verify path.
 func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
 	if err := d.enterRead(ctx); err != nil {
 		return err
@@ -49,7 +49,7 @@ func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
 	if err != nil {
 		return err
 	}
-	if err := dispatchManifestType(manifest, "store.Verify"); err != nil {
+	if err := guardHandleless(manifest); err != nil {
 		return err
 	}
 
@@ -118,7 +118,7 @@ func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
 	if err != nil {
 		return err
 	}
-	if err := dispatchManifestType(manifest, "store.VerifyBlobRef"); err != nil {
+	if err := guardHandleless(manifest); err != nil {
 		return err
 	}
 

@@ -281,7 +281,6 @@ func BuildInlineManifest(payload []byte, hashAlgo string, hashes domain.HashRegi
 	contentHash := domain.ContentHash(hashes.Format(hashAlgo, hasher.Sum(nil)))
 
 	m := domain.Manifest{
-		Type:         domain.ManifestTypeBlob,
 		SessionID:    sessionID,
 		ContentHash:  contentHash,
 		BlobRef:      domain.BlobRef(contentHash),

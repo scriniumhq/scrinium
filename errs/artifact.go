@@ -9,8 +9,8 @@ import (
 // deletion.
 
 // ErrArtifactNotFound — no manifest with the given ArtifactID
-// exists in the Store, or it is a ManifestTypePack (an internal
-// type that does not exist for the client). Bridges to
+// exists in the Store, or it is a headless pack container (empty
+// identity slot — not a client-visible artifact). Bridges to
 // fs.ErrNotExist for host code that handles missing artifacts
 // the same way as missing files.
 var ErrArtifactNotFound = newBridgedSentinel(

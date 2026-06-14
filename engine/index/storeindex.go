@@ -24,12 +24,12 @@ import (
 type StoreIndex interface {
 	// Writes and deletes.
 
-	// IndexManifest registers an artifact in the index. It branches
-	// on manifest.Type:
-	//   - blob: upsert blob, increment ref_count, insert manifest.
-	//   - toc:  + increment ref_count for each chunkRef.
-	//   - pack: transitive registration of every packed artifact via
-	//     packedEntries.
+	// IndexManifest registers an artifact in the index. The strategy
+	// is chosen by the identity slot / structure (ADR-83/92):
+	//   - plain blob: upsert blob, increment ref_count, insert manifest.
+	//   - composite: + increment ref_count for each chunkRef.
+	//   - pack container (empty slot): transitive registration of every
+	//     packed artifact via packedEntries.
 	IndexManifest(
 		ctx context.Context,
 		m domain.Manifest,

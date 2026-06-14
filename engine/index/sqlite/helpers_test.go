@@ -91,10 +91,10 @@ func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	}
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO manifests (
-			manifest_digest, artifact_id, type, namespace, session_id,
+			manifest_digest, artifact_id, namespace, session_id,
 			blob_ref, created_at, retention_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		digest, string(m.ArtifactID), string(m.Type),
+		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		digest, string(m.ArtifactID),
 		m.Namespace, m.SessionID, blobRefArg,
 		timefmt.Format(createdAt), retentionArg,
 	)

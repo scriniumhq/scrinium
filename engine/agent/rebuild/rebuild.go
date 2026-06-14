@@ -547,21 +547,23 @@ func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string, key
 	// Decode; the digest is the file name. A handle-less (system)
 	// artifact falls back to its digest as ArtifactID.
 	m.Digest = digest
+
+	// Headless pack containers (empty slot) and chunked composites carry
+	// chunk/packed-entry data absent from domain.Manifest on M3 — there is
+	// nothing to reconstruct yet, so skip them rather than fake an index
+	// row. Detect on the raw decoded manifest, before the handle backfill
+	// below would mask an empty slot (ADR-83/92).
+	if m.IsContainer() || m.IsComposite() {
+		return nil
+	}
+
+	// User artifact: the handle (m.ArtifactID) is serialised in the body
+	// and set by Decode. Fall back to the digest defensively if a
+	// handle-bearing manifest somehow lacks one.
 	if m.ArtifactID == "" {
 		m.ArtifactID = domain.ArtifactID(digest)
 	}
-
-	switch m.Type {
-	case domain.ManifestTypeBlob:
-		return a.indexBlob(ctx, m)
-	case domain.ManifestTypeTOC, domain.ManifestTypePack:
-		// TOC (M5) and Pack (M4) carry chunk/packed-entry data that is
-		// not present in domain.Manifest on M3, so there is nothing to
-		// reconstruct yet. Skip rather than fake.
-		return nil
-	default:
-		return fmt.Errorf("manifest %q: unknown type %q", path, m.Type)
-	}
+	return a.indexBlob(ctx, m)
 }
 
 // indexBlob reconstructs the IndexManifest arguments for a Blob manifest.

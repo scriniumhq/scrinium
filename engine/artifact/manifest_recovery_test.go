@@ -48,7 +48,6 @@ func recHex(b byte, n int) string {
 // the package fixture so the crypto-mode tests have something to hide.
 func recManifest(mut ...func(*domain.Manifest)) domain.Manifest {
 	m := domain.Manifest{
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "ns",
 		SessionID:    "sess-1",
 		ContentHash:  domain.ContentHash(recHex('a', 64)),
@@ -78,9 +77,6 @@ func TestEncodeDecode_PlainRoundTrip_AllFields(t *testing.T) {
 	got, err := artifact.Decode(b)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if got.Type != m.Type {
-		t.Errorf("Type lost: got %q want %q", got.Type, m.Type)
 	}
 	if got.Namespace != m.Namespace || got.SessionID != m.SessionID {
 		t.Errorf("namespace/session lost: %+v", got)

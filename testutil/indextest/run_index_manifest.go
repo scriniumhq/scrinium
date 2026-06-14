@@ -1,6 +1,7 @@
 package indextest
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -118,7 +119,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 
 		toc := domain.Manifest{
 			ArtifactID:   "art-toc",
-			Type:         domain.ManifestTypeTOC,
+			Ext:          json.RawMessage(`{"composite":true}`),
 			Namespace:    "test",
 			ContentHash:  manifestfx.SyntheticHash('0'),
 			BlobRef:      "toc-blob",
@@ -159,7 +160,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 		idx := f.New(t)
 		toc := domain.Manifest{
 			ArtifactID:   "art-toc",
-			Type:         domain.ManifestTypeTOC,
+			Ext:          json.RawMessage(`{"composite":true}`),
 			Namespace:    "test",
 			ContentHash:  manifestfx.SyntheticHash('0'),
 			BlobRef:      "toc-blob",
@@ -188,8 +189,6 @@ func runIndexManifest(t *testing.T, f Factory) {
 		idx := f.New(t)
 
 		packManifest := domain.Manifest{
-			ArtifactID:   "pack-1",
-			Type:         domain.ManifestTypePack,
 			ContentHash:  manifestfx.SyntheticHash('p'),
 			BlobRef:      "pack-blob-1",
 			OriginalSize: 65536,
