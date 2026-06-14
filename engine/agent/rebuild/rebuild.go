@@ -118,15 +118,9 @@ func (a *rebuildAgent) Validate(ctx context.Context) error {
 // AgentType is the short registry/event identifier.
 func (a *rebuildAgent) AgentType() string { return "rebuild" }
 
-// Run is the contract entry point: it tracks lifecycle State around the
-// rebuild core (which owns lease handling and event emission).
+// Run is the contract entry point: it rebuilds the index under the
+// standard maintenance lifecycle (agent.RunLeased, ADR-94 — lease,
+// events, state).
 func (a *rebuildAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
-	a.SetState(agent.StateRunning, nil)
-	res, err := a.run(ctx)
-	if err != nil {
-		a.SetState(agent.StateFaulted, err)
-		return res, err
-	}
-	a.SetState(agent.StateIdle, nil)
-	return res, nil
+	return agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), a.rebuildCore)
 }

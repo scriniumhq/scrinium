@@ -162,74 +162,60 @@ func (a *scrubAgent) Validate(ctx context.Context) error { return ctx.Err() }
 
 // Run performs one verification pass and returns its AgentResult. The
 // agent is periodically invoked by the scheduler (ADR-69): an
-// interrupted pass resumes from last_verified_at on the next call.
+// interrupted pass resumes from last_verified_at on the next call. The
+// maintenance lifecycle (lease, events, state) is agent.RunLeased
+// (ADR-94); Run supplies only the verification pass.
 func (a *scrubAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
-	a.SetState(agent.StateRunning, nil)
-	stats, err := a.RunOnce(ctx)
-	res := &domain.AgentResult{
-		AgentType:   "scrub",
-		StoreID:     a.storeID,
-		CompletedAt: time.Now(),
-		Stats: map[string]int64{
-			"scanned_blobs":  stats.ScannedBlobs,
-			"verified_blobs": stats.VerifiedBlobs,
-			"failed_blobs":   stats.FailedBlobs,
-		},
-	}
-	if err != nil {
-		a.SetState(agent.StateFaulted, err)
-		if agent.IsCtxErr(err) {
-			res.Partial = true
-			a.bus.Publish(event.Event{Type: event.EventAgentCancelled})
-			return res, err
-		}
-		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
-			AgentType: "scrub", StoreID: a.storeID, Err: err,
-		}})
-		return res, err
-	}
-	a.SetState(agent.StateIdle, nil)
-	return res, nil
+	return agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), func(ctx context.Context) (map[string]int64, error) {
+		stats, err := a.verify(ctx)
+		return scrubStatsMap(stats), err
+	})
 }
 
-// RunOnce performs one verification pass under the scrub lease: a blob
-// pass (ListUnverifiedBlobs → VerifyBlobRef → MarkVerified → cascade to
-// consuming manifests) and a manifest pass (ListUnverifiedManifests,
-// covering Inline artifacts the blob pass cannot reach). A blob that
-// fails verification is recorded and the pass continues — one bad blob
-// must not abort the scrub.
+// RunOnce performs one verification pass under the scrub lease and
+// returns the typed stats — the ad-hoc entry of the ScrubAgent
+// interface. Runs the same leased lifecycle as Run (agent.RunLeased,
+// ADR-94).
 func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
-	a.bus.Publish(event.Event{Type: event.EventAgentStarted, Payload: event.AgentStartedPayload{
-		AgentType: "scrub", StoreID: a.storeID, StartedAt: time.Now(),
-	}})
-
-	l, prev, err := lease.Acquire(ctx, a.drv, lease.Config{
-		Path:      scrubLeasePath,
-		HostID:    a.hostID,
-		AgentType: "scrub",
-		TTL:       defaultScrubLeaseTTL,
+	var stats ScrubStats
+	_, err := agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), func(ctx context.Context) (map[string]int64, error) {
+		var werr error
+		stats, werr = a.verify(ctx)
+		return scrubStatsMap(stats), werr
 	})
-	if err != nil {
-		return ScrubStats{}, fmt.Errorf("scrub.Scrub.RunOnce: acquire lease: %w", err)
-	}
-	if prev != nil {
-		a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
-			LeaseKey: scrubLeasePath, PreviousHolder: prev.HostID,
-			ExpiredAt: prev.ExpiresAt, TakenBy: a.hostID,
-		}})
-	}
+	return stats, err
+}
 
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	hbErr := make(chan error, 1)
-	go func() { hbErr <- l.Heartbeat(runCtx) }()
-	defer func() {
-		cancel()
-		if err := l.Release(context.WithoutCancel(ctx)); err != nil {
-			a.Logger().Warn("lease release failed; lease will expire via TTL", "err", err)
-		}
-	}()
+// maintenanceSpec is the RunLeased configuration shared by Run and
+// RunOnce: the scrub lease (always taken) and the per-cycle terminal.
+func (a *scrubAgent) maintenanceSpec() agent.MaintenanceSpec {
+	return agent.MaintenanceSpec{
+		AgentType:    "scrub",
+		StoreID:      a.storeID,
+		Lease:        lease.Config{Path: scrubLeasePath, HostID: a.hostID, AgentType: "scrub", TTL: defaultScrubLeaseTTL},
+		LeaseEnabled: true,
+		Terminal:     event.EventAgentCycle,
+		TerminalMode: agent.TerminalEveryCycle,
+		Bus:          a.bus,
+		Driver:       a.drv,
+	}
+}
 
+func scrubStatsMap(s ScrubStats) map[string]int64 {
+	return map[string]int64{
+		"scanned_blobs":  s.ScannedBlobs,
+		"verified_blobs": s.VerifiedBlobs,
+		"failed_blobs":   s.FailedBlobs,
+	}
+}
+
+// verify performs one verification pass — no lifecycle; agent.RunLeased
+// (ADR-94) owns lease/events/state. A blob pass (ListUnverifiedBlobs →
+// VerifyBlobRef → MarkVerified → cascade to consuming manifests) and a
+// manifest pass (ListUnverifiedManifests, covering Inline artifacts the
+// blob pass cannot reach). A blob that fails verification is recorded
+// and the pass continues — one bad blob must not abort the scrub.
+func (a *scrubAgent) verify(ctx context.Context) (ScrubStats, error) {
 	var stats ScrubStats
 	cutoff := a.cutoff(time.Now())
 
@@ -243,26 +229,26 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 	// hits a stale connection. Materialising the (bounded) ref list up
 	// front keeps each index interaction independent.
 	var blobRefs []string
-	blobErr := a.idx.ListUnverifiedBlobs(runCtx, cutoff, func(blobRef string) error {
-		if err := runCtx.Err(); err != nil {
+	blobErr := a.idx.ListUnverifiedBlobs(ctx, cutoff, func(blobRef string) error {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		blobRefs = append(blobRefs, blobRef)
 		return nil
 	})
 	for _, blobRef := range blobRefs {
-		if err := runCtx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
 			blobErr = err
 			break
 		}
 		stats.ScannedBlobs++
-		switch err := a.store.VerifyBlobRef(runCtx, blobRef); {
+		switch err := a.store.VerifyBlobRef(ctx, blobRef); {
 		case err == nil:
 			stats.VerifiedBlobs++
-			if err := a.idx.MarkVerified(runCtx, blobRef, time.Now()); err != nil {
+			if err := a.idx.MarkVerified(ctx, blobRef, time.Now()); err != nil {
 				a.Logger().Warn("scrub: failed to record blob verification", "blob_ref", blobRef, "err", err)
 			}
-			a.cascadeStampConsumers(runCtx, blobRef)
+			a.cascadeStampConsumers(ctx, blobRef)
 		case errors.Is(err, errs.ErrArtifactNotFound):
 			// No consuming manifest (race vs Delete/GC, or orphan):
 			// skip, not a corruption. GC owns orphan removal.
@@ -278,21 +264,21 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 	// Phase B — manifests (cheap; covers Inline artifacts with no blob).
 	// Same collect-then-act discipline as Phase A.
 	var manIDs []domain.ArtifactID
-	manErr := a.idx.ListUnverifiedManifests(runCtx, cutoff, func(m domain.Manifest) error {
-		if err := runCtx.Err(); err != nil {
+	manErr := a.idx.ListUnverifiedManifests(ctx, cutoff, func(m domain.Manifest) error {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		manIDs = append(manIDs, m.ArtifactID)
 		return nil
 	})
 	for _, id := range manIDs {
-		if err := runCtx.Err(); err != nil {
+		if err := ctx.Err(); err != nil {
 			manErr = err
 			break
 		}
-		switch err := a.store.VerifyManifest(runCtx, id); {
+		switch err := a.store.VerifyManifest(ctx, id); {
 		case err == nil:
-			if err := a.idx.MarkManifestVerified(runCtx, id, time.Now()); err != nil {
+			if err := a.idx.MarkManifestVerified(ctx, id, time.Now()); err != nil {
 				a.Logger().Warn("scrub: failed to record manifest verification", "artifact_id", id, "err", err)
 			}
 		case errors.Is(err, errs.ErrArtifactNotFound):
@@ -304,25 +290,8 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 		}
 	}
 
-	a.bus.Publish(event.Event{Type: event.EventAgentCycle, Payload: domain.AgentResult{
-		AgentType: "scrub", StoreID: a.storeID, CompletedAt: time.Now(),
-		Stats: map[string]int64{
-			"scanned_blobs":  stats.ScannedBlobs,
-			"verified_blobs": stats.VerifiedBlobs,
-			"failed_blobs":   stats.FailedBlobs,
-		},
-	}})
-
 	if err := agent.FirstNonCtxErr(blobErr, manErr); err != nil {
 		return stats, fmt.Errorf("scrub.Scrub.RunOnce: %w", err)
-	}
-	// Surface lease loss if the heartbeat aborted mid-pass.
-	select {
-	case herr := <-hbErr:
-		if herr != nil && !agent.IsCtxErr(herr) {
-			return stats, fmt.Errorf("scrub.Scrub.RunOnce: lease lost: %w", herr)
-		}
-	default:
 	}
 	return stats, nil
 }
