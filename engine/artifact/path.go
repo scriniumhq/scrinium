@@ -12,7 +12,7 @@ import (
 // Pure functions, no I/O. The conventions here are part of the on-disk
 // format: changing them requires a migration. Canonical layouts:
 //
-//	Sharded:   blobs/<aa>/<bb>/<full-ref>   (aa,bb = hex chars 1..4 of the ref hex)
+//	Sharded:   blobs/<aa>/<bb>/<ref>   (aa,bb = hex chars 1..4 of the ref)
 //	Flat:      blobs/<full-ref>
 //
 // Chunk and pack blobs use the same topology with roots "chunks/" and
@@ -37,21 +37,17 @@ func rootFor(t domain.BlobType) (string, error) {
 	return "", fmt.Errorf("artifact: unknown blob type %q", t)
 }
 
-// shardOf extracts the two two-character shards from a ref of the form
-// "<algo>-<hex>". Hex is case-folded to lowercase so the on-disk layout
-// stays stable across hashers that might emit uppercase. A ref whose hex
-// tail is shorter than four chars errors: such a ref could only come from
-// a misconfigured HashRegistry, and short shard names are collision-prone.
+// shardOf extracts the two two-character shards from a bare-hex ref
+// (ADR-93: no "<algo>-" prefix). Hex is case-folded to lowercase so the
+// on-disk layout stays stable across hashers that might emit uppercase. A
+// ref shorter than four chars errors: such a ref could only come from a
+// misconfigured HashRegistry, and short shard names are collision-prone.
 func shardOf(ref string) (string, string, error) {
-	dash := strings.IndexByte(ref, '-')
-	if dash < 0 {
-		return "", "", fmt.Errorf("artifact: ref missing algo prefix: %q", ref)
+	low := strings.ToLower(ref)
+	if len(low) < 4 {
+		return "", "", fmt.Errorf("artifact: ref too short to shard: %q", ref)
 	}
-	hex := strings.ToLower(ref[dash+1:])
-	if len(hex) < 4 {
-		return "", "", fmt.Errorf("artifact: hex prefix too short in ref %q", ref)
-	}
-	return hex[0:2], hex[2:4], nil
+	return low[0:2], low[2:4], nil
 }
 
 // BlobPath returns the driver-side path for a blob with the given ref
@@ -99,8 +95,8 @@ func ManifestPath(digest domain.ManifestDigest) (string, error) {
 // RefFromBlobPath extracts the blob ref ("<algo>-<hex>") from a
 // driver-side blob path produced by BlobPath. Both topologies are
 // supported (the ref is always the last path segment). The check is
-// purely structural — last-segment shape "<algo>-<hex>" with a non-empty
-// algo and a hex tail of at least four chars. It does NOT cross-check the
+// purely structural — last-segment is bare hex (ADR-93) of at least four
+// chars. It does NOT cross-check the
 // segment against the topology shards; a caller that needs that paranoia
 // re-runs BlobPath on the result and compares. Used by the Orphan Scan to
 // map a driver-listed file back to a StoreIndex key.
@@ -142,20 +138,14 @@ func lastSegment(p string) (string, error) {
 	return p, nil
 }
 
-// validateRefShape checks the structural form "<algo>-<hex>" with a
-// non-empty algo prefix and at least four lowercase hex chars after the
-// dash (matching shardOf's lower bound).
+// validateRefShape checks the bare-hex structural form (ADR-93: no
+// "<algo>-" prefix) — at least four chars, all lowercase hex.
 func validateRefShape(s string) error {
-	dash := strings.IndexByte(s, '-')
-	if dash <= 0 {
-		return fmt.Errorf("ref %q missing algo prefix", s)
+	if len(s) < 4 {
+		return fmt.Errorf("ref %q shorter than 4 chars", s)
 	}
-	hex := s[dash+1:]
-	if len(hex) < 4 {
-		return fmt.Errorf("ref %q has hex tail shorter than 4 chars", s)
-	}
-	for i := 0; i < len(hex); i++ {
-		c := hex[i]
+	for i := 0; i < len(s); i++ {
+		c := s[i]
 		if !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') {
 			return fmt.Errorf("ref %q has non-hex char at position %d", s, i)
 		}

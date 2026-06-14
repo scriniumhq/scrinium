@@ -66,8 +66,8 @@ func TestRunner_PutRoundTrip(t *testing.T) {
 	ch, br, stages := pp.Finalize()
 
 	// ContentHash = sha256(original); BlobRef = sha256(xored on-disk bytes).
-	wantCH := stubHashes{}.Format("sha256", sha256Sum(payload))
-	wantBR := stubHashes{}.Format("sha256", sha256Sum(onDisk))
+	wantCH := hex.EncodeToString(sha256Sum(payload))
+	wantBR := hex.EncodeToString(sha256Sum(onDisk))
 	if string(ch) != wantCH {
 		t.Errorf("ContentHash mismatch")
 	}

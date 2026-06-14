@@ -27,6 +27,7 @@ package pipeline
 // (implicit verification).
 
 import (
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
@@ -143,9 +144,9 @@ func (pp *PutPipeline) Finalize() (
 	stages []domain.PipelineStage,
 ) {
 	contentHash = domain.ContentHash(
-		pp.formatHash(pp.hashAlgo, pp.contentHash.Sum(nil)))
+		hex.EncodeToString(pp.contentHash.Sum(nil)))
 	blobRef = domain.BlobRef(
-		pp.formatHash(pp.hashAlgo, pp.blobRefHash.Sum(nil)))
+		hex.EncodeToString(pp.blobRefHash.Sum(nil)))
 
 	stages = make([]domain.PipelineStage, 0, len(pp.stages))
 	for _, st := range pp.stages {

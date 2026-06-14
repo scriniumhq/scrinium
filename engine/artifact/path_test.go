@@ -14,7 +14,7 @@ func ref(hexHead string) string {
 	if pad < 0 {
 		pad = 0
 	}
-	return "sha256-" + hexHead + strings.Repeat("0", pad)
+	return hexHead + strings.Repeat("0", pad)
 }
 
 // --- BlobPath: Sharded ---
@@ -88,7 +88,7 @@ func TestBlobPath_EmptyBlobTypeMeansRegular(t *testing.T) {
 // --- Case folding (part of the on-disk format contract) ---
 
 func TestBlobPath_FoldsCaseInShards(t *testing.T) {
-	got, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "sha256-AABBCCDD"+strings.Repeat("0", 56))
+	got, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "AABBCCDD"+strings.Repeat("0", 56))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,14 +105,8 @@ func TestBlobPath_RejectsEmptyRef(t *testing.T) {
 	}
 }
 
-func TestBlobPath_RejectsMissingAlgoPrefix(t *testing.T) {
-	if _, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "deadbeefcafe1234"); err == nil {
-		t.Fatal("expected error on missing algo prefix")
-	}
-}
-
 func TestBlobPath_RejectsTooShortHex(t *testing.T) {
-	if _, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "sha256-ab"); err == nil {
+	if _, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "ab"); err == nil {
 		t.Fatal("expected error on too-short hex")
 	}
 }
@@ -150,7 +144,7 @@ func TestManifestPath_RejectsEmpty(t *testing.T) {
 }
 
 func TestManifestPath_RejectsShort(t *testing.T) {
-	if _, err := artifact.ManifestPath(domain.ManifestDigest("sha256-ab")); err == nil {
+	if _, err := artifact.ManifestPath(domain.ManifestDigest("ab")); err == nil {
 		t.Fatal("expected error on too-short digest")
 	}
 }
@@ -220,7 +214,7 @@ func TestDigestFromManifestPath_RejectsBad(t *testing.T) {
 }
 
 func TestRefFromBlobPath_FlatPathSingleSegment(t *testing.T) {
-	ref := "sha256-1234" + strings.Repeat("a", 60)
+	ref := "1234" + strings.Repeat("a", 60)
 	got, err := artifact.RefFromBlobPath(ref)
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +225,7 @@ func TestRefFromBlobPath_FlatPathSingleSegment(t *testing.T) {
 }
 
 func TestRefFromBlobPath_RoundTripsBlobPath(t *testing.T) {
-	ref := "sha256-cafebabe" + strings.Repeat("f", 56)
+	ref := "cafebabe" + strings.Repeat("f", 56)
 
 	for _, topo := range []domain.PathTopology{domain.PathTopologySharded, domain.PathTopologyFlat} {
 		path, err := artifact.BlobPath(topo, domain.BlobTypeRegular, ref)

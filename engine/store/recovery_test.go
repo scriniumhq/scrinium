@@ -185,7 +185,7 @@ func manifestPathForID(t *testing.T, digest domain.ManifestDigest) string {
 // length (32 hex chars from the "ab" filler + 2 from the suffix)
 // is comfortably above shardOf's 4-char minimum.
 func fakeRef(suffix byte) string {
-	return "sha256-" + strings.Repeat("ab", 16) + fmt.Sprintf("%02x", suffix)
+	return strings.Repeat("ab", 16) + fmt.Sprintf("%02x", suffix)
 }
 
 // --- 1. Fresh Store: no orphans -----------------------------------

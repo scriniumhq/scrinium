@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -40,7 +41,7 @@ func writeInlineSystemArtifact(
 	if _, err := contentHasher.Write(payload); err != nil {
 		return "", fmt.Errorf("system artifact: hash payload: %w", err)
 	}
-	contentHash := domain.ContentHash(hashes.Format(hashAlgo, contentHasher.Sum(nil)))
+	contentHash := domain.ContentHash(hex.EncodeToString(contentHasher.Sum(nil)))
 
 	manifest := domain.Manifest{
 		Namespace:    namespace,
@@ -96,7 +97,7 @@ func writeInlineSystemArtifactUnindexed(
 	if _, err := contentHasher.Write(payload); err != nil {
 		return "", fmt.Errorf("system artifact (no-index): hash payload: %w", err)
 	}
-	contentHash := domain.ContentHash(hashes.Format(hashAlgo, contentHasher.Sum(nil)))
+	contentHash := domain.ContentHash(hex.EncodeToString(contentHasher.Sum(nil)))
 
 	manifest := domain.Manifest{
 		Namespace:    namespace,

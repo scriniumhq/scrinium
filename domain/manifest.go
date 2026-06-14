@@ -58,6 +58,17 @@ type PipelineStage struct {
 	KeyID     string
 }
 
+// ManifestSystemFlags is the legacy system block of a Manifest.
+//
+// Deprecated (ADR-86/92): a pack volume no longer keeps an internal
+// TOC at a fixed offset; the TOC is a separate blob referenced from
+// BlobRefs ([toc_blob, pack_blob]). Retained transitionally until the
+// serialiser and pack-sealing paths are migrated; not serialised.
+type ManifestSystemFlags struct {
+	TOCOffset int64
+	TOCSize   int64
+}
+
 // Manifest is the logical passport of an Artifact.
 //
 // Reference model (ADR-92): a manifest carries an identity slot
@@ -67,10 +78,10 @@ type PipelineStage struct {
 // slot: a filled slot consumes its members (top-down, +ref_count); an
 // empty slot (pack container) places them (bottom-up, no ref_count).
 //
-// MIGRATION NOTE: the Namespace field is still transitional
-// (ADR-79), serialised until its readers migrate. The legacy single
-// BlobRef (ADR-92) and SystemFlags (ADR-86/93) are removed — the
-// россыпь blob is BlobRefs[0].
+// MIGRATION NOTE: the Namespace and SystemFlags fields are still
+// transitional (ADR-79/86), serialised until their readers migrate.
+// The legacy single BlobRef has been removed (ADR-92) — the россыпь
+// blob is BlobRefs[0].
 type Manifest struct {
 	// ArtifactID is the floating external identity (handle):
 	// PRF(NK, cd‖md). It is what the outside world holds and what
@@ -125,6 +136,12 @@ type Manifest struct {
 	ContentHash  ContentHash
 	OriginalSize int64
 
+	// HashAlgo is the content-address algorithm ("sha256"/"blake3"): the
+	// store's immutable ContentHasher, recorded once (ADR-93). The
+	// bare-hex content_hash / blob_refs and the manifest digest are
+	// re-hashable from it without StoreConfig (self-description, Principle 3).
+	HashAlgo string
+
 	// BlobRefs is the ordered array of blob references the manifest
 	// owns (ADR-92/93), at most 65535. Direction is implied by the
 	// identity slot:
@@ -138,7 +155,7 @@ type Manifest struct {
 
 	// HandleRefs is the ordered array of edges to OTHER artifacts —
 	// the content-addressed DAG (ADR-92), at most 65535. Elements are
-	// HandleRef (the handle address space), symmetric to BlobRefs.
+	// HandleRef (the handle address space), symmetric to BlobRefs/BlobRef.
 	// Direction by slot: a filled slot consumes the targets (+ref_count,
 	// top-down); an empty slot (pack container) places them (bottom-up, no
 	// ref_count — the pack members). nil/empty for a plain blob and a
@@ -151,6 +168,11 @@ type Manifest struct {
 
 	RetentionUntil time.Time
 	KeyID          string
+
+	// SystemFlags is the legacy pack TOC offset/size. Deprecated
+	// (ADR-86/92); not used by the new pack model. Retained
+	// transitionally.
+	SystemFlags ManifestSystemFlags
 
 	Ext json.RawMessage
 	Usr json.RawMessage

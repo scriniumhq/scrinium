@@ -17,8 +17,8 @@ func sha256Reg() domain.HashRegistry {
 }
 
 var (
-	cdA = domain.ContentHash("sha256-" + strings.Repeat("ab", 32))
-	cdB = domain.ContentHash("sha256-" + strings.Repeat("cd", 32))
+	cdA = domain.ContentHash(strings.Repeat("ab", 32))
+	cdB = domain.ContentHash(strings.Repeat("cd", 32))
 	mdA = "sha256-" + strings.Repeat("12", 32)
 	mdB = "sha256-" + strings.Repeat("34", 32)
 )

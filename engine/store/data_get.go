@@ -82,7 +82,7 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 // refusal. asKeyProvider maps a nil resolver to a nil provider (the
 // typed-nil guard).
 func (c *core) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	return c.artifactIO().Load(ctx, id, asKeyProvider(c.crypto.resolver()))
+	return c.artifactIO().Load(ctx, id, asKeyProvider(c.crypto.resolver()), string(c.snapshotConfig().ContentHasher))
 }
 
 // guardHandleless enforces the negative identity invariant (ADR-83): a

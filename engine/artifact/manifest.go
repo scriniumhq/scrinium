@@ -16,6 +16,7 @@ package artifact
 //     repack.
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"scrinium.dev/domain"
@@ -189,6 +190,7 @@ func ComputeManifestDigest(
 	dek []byte,
 	keyID string,
 ) (domain.ManifestDigest, []byte, domain.Manifest, error) {
+	m.HashAlgo = hashAlgo // ADR-93: algorithm recorded once; refs/digest are bare hex
 	var bytesEncoded []byte
 	var err error
 
@@ -209,29 +211,24 @@ func ComputeManifestDigest(
 	if _, err := h.Write(bytesEncoded); err != nil {
 		return "", nil, domain.Manifest{}, err
 	}
-	digest := domain.ManifestDigest(registry.Format(hashAlgo, h.Sum(nil)))
+	digest := domain.ManifestDigest(hex.EncodeToString(h.Sum(nil)))
 	m.Digest = digest
 	return digest, bytesEncoded, m, nil
 }
 
 // VerifyManifestDigest re-hashes file bytes and checks the digest against
-// the expected ManifestDigest. The algorithm is taken from the digest's
-// prefix, so a manifest can travel between Stores with different default
-// hashers without losing form-verification. A mismatch is
-// ErrCorruptedManifest.
-func VerifyManifestDigest(digest domain.ManifestDigest, fileBytes []byte, registry domain.HashRegistry) error {
-	algo, _, err := registry.Parse(string(digest))
+// the expected ManifestDigest. The algorithm is the store's immutable
+// ContentHasher (ADR-93: the digest is bare hex), supplied by the caller.
+// A mismatch is ErrCorruptedManifest.
+func VerifyManifestDigest(digest domain.ManifestDigest, fileBytes []byte, hashAlgo string, registry domain.HashRegistry) error {
+	h, err := registry.NewHasher(hashAlgo)
 	if err != nil {
-		return fmt.Errorf("artifact: parse digest: %w", err)
-	}
-	h, err := registry.NewHasher(algo)
-	if err != nil {
-		return fmt.Errorf("artifact: hasher %q: %w", algo, err)
+		return fmt.Errorf("artifact: hasher %q: %w", hashAlgo, err)
 	}
 	if _, err := h.Write(fileBytes); err != nil {
 		return err
 	}
-	got := domain.ManifestDigest(registry.Format(algo, h.Sum(nil)))
+	got := domain.ManifestDigest(hex.EncodeToString(h.Sum(nil)))
 	if got != digest {
 		return errs.ErrCorruptedManifest
 	}

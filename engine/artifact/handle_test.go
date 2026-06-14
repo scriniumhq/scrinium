@@ -16,7 +16,7 @@ import (
 // manifest.
 func baseManifest() domain.Manifest {
 	m := artifactfx.Manifest()
-	m.ContentHash = domain.ContentHash("sha256-" + strings.Repeat("ab", 32))
+	m.ContentHash = domain.ContentHash(strings.Repeat("ab", 32))
 	m.Digest = ""
 	return m
 }
@@ -49,9 +49,9 @@ func TestComputeHandle_AssignsIdentityFields(t *testing.T) {
 // the manifest's content.
 func TestComputeHandle_IdentityMetaHashIsFixed(t *testing.T) {
 	m1 := baseManifest()
-	m1.ContentHash = domain.ContentHash("sha256-" + strings.Repeat("ab", 32))
+	m1.ContentHash = domain.ContentHash(strings.Repeat("ab", 32))
 	m2 := baseManifest()
-	m2.ContentHash = domain.ContentHash("sha256-" + strings.Repeat("cd", 32))
+	m2.ContentHash = domain.ContentHash(strings.Repeat("cd", 32))
 
 	r1, _ := artifact.ComputeHandle(m1, "sha256", artifactfx.Hashes(), hashing.NamingKeyPublic, nil)
 	r2, _ := artifact.ComputeHandle(m2, "sha256", artifactfx.Hashes(), hashing.NamingKeyPublic, nil)
@@ -93,9 +93,9 @@ func TestComputeHandle_ContentAndKeySensitivity(t *testing.T) {
 	nonce := bytes.Repeat([]byte{0x09}, 16)
 
 	mA := baseManifest()
-	mA.ContentHash = domain.ContentHash("sha256-" + strings.Repeat("ab", 32))
+	mA.ContentHash = domain.ContentHash(strings.Repeat("ab", 32))
 	mB := baseManifest()
-	mB.ContentHash = domain.ContentHash("sha256-" + strings.Repeat("cd", 32))
+	mB.ContentHash = domain.ContentHash(strings.Repeat("cd", 32))
 
 	base, _ := artifact.ComputeHandle(mA, "sha256", hashes, hashing.NamingKeyPublic, nonce)
 	diffContent, _ := artifact.ComputeHandle(mB, "sha256", hashes, hashing.NamingKeyPublic, nonce)

@@ -18,7 +18,8 @@ import "github.com/google/uuid"
 type ArtifactID string
 
 // ManifestDigest is the hash of the *full serialised manifest file*
-// (header included). Format: "<algo>-<hex>". It is the physical
+// (header included). Bare hex (ADR-93); the algorithm is the
+// manifest's hash_algo. It is the physical
 // on-disk filename and the form-verifier for a manifest: it CHANGES
 // whenever the manifest is repacked. The index maps ArtifactID
 // (handle) → current ManifestDigest. Distinct type from ArtifactID
@@ -31,12 +32,14 @@ type ManifestDigest string
 // transformation. The global deduplication key: two files with the
 // same content share a ContentHash regardless of Pipeline
 // configuration. Also serves as cd, the content input to ArtifactID.
+// Bare hex (ADR-93); algorithm carried once in the manifest's hash_algo.
 type ContentHash string
 
 // BlobRef is the hash of the final transformed blob stream (after
 // compression and encryption). Used as the physical filename when
 // blobs are stored individually. Applies to all blobs, including
-// chunks and TOC blobs.
+// chunks and TOC blobs. Bare hex (ADR-93); algorithm is the manifest's
+// hash_algo.
 type BlobRef string
 
 // HandleRef is a reference from one artifact to another — an edge in

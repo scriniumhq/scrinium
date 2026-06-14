@@ -248,7 +248,8 @@ func (x *IO) WrapVerifying(inner domain.ReadHandle, onMismatch func(domain.Artif
 	if m.ContentHash == "" {
 		return inner, nil
 	}
-	algo, want, hasher, err := artifact.ParseContentHash(x.hashes, m.ContentHash)
+	algo := m.HashAlgo
+	want, hasher, err := artifact.ParseContentHash(x.hashes, algo, m.ContentHash)
 	if err != nil {
 		_ = inner.Close()
 		return nil, fmt.Errorf("artifactio.WrapVerifying: %w", err)

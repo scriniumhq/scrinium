@@ -87,7 +87,7 @@ func TestComputeManifestDigest_DifferentManifestsDifferentIDs(t *testing.T) {
 
 func TestVerifyManifestDigest_AcceptsUntampered(t *testing.T) {
 	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoPlain)
-	if err := artifact.VerifyManifestDigest(id, b, artifactfx.Hashes()); err != nil {
+	if err := artifact.VerifyManifestDigest(id, b, "sha256", artifactfx.Hashes()); err != nil {
 		t.Fatalf("verify untampered: %v", err)
 	}
 }
@@ -95,7 +95,7 @@ func TestVerifyManifestDigest_AcceptsUntampered(t *testing.T) {
 func TestVerifyManifestDigest_DetectsTampering(t *testing.T) {
 	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoPlain)
 	b[len(b)-1] ^= 0xff
-	if err := artifact.VerifyManifestDigest(id, b, artifactfx.Hashes()); !errors.Is(err, errs.ErrCorruptedManifest) {
+	if err := artifact.VerifyManifestDigest(id, b, "sha256", artifactfx.Hashes()); !errors.Is(err, errs.ErrCorruptedManifest) {
 		t.Fatalf("want ErrCorruptedManifest, got %v", err)
 	}
 }

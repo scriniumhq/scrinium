@@ -50,6 +50,7 @@ package systemlayout
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -278,7 +279,7 @@ func BuildInlineManifest(payload []byte, hashAlgo string, hashes domain.HashRegi
 	if _, err := hasher.Write(payload); err != nil {
 		return nil, domain.Manifest{}, fmt.Errorf("system artifact: hash payload: %w", err)
 	}
-	contentHash := domain.ContentHash(hashes.Format(hashAlgo, hasher.Sum(nil)))
+	contentHash := domain.ContentHash(hex.EncodeToString(hasher.Sum(nil)))
 
 	m := domain.Manifest{
 		SessionID:    sessionID,
@@ -339,18 +340,16 @@ func Load(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, pa
 // ContentHash. For a system artifact the Pipeline is empty, so the
 // content hash is just hash(InlineBlob).
 func verifyInlinePayload(m domain.Manifest, hashes domain.HashRegistry) error {
-	algo, _, err := hashes.Parse(string(m.ContentHash))
-	if err != nil {
-		return fmt.Errorf("%w: parse content hash: %v", errs.ErrCorruptedContent, err)
-	}
-	h, err := hashes.NewHasher(algo)
+	// ADR-93: ContentHash is bare hex; the algorithm is the manifest's
+	// recorded hash_algo (populated on decode, which precedes this check).
+	h, err := hashes.NewHasher(m.HashAlgo)
 	if err != nil {
 		return fmt.Errorf("%w: content hasher: %v", errs.ErrCorruptedContent, err)
 	}
 	if _, err := h.Write(m.InlineBlob); err != nil {
 		return fmt.Errorf("%w: hash payload: %v", errs.ErrCorruptedContent, err)
 	}
-	if got := hashes.Format(algo, h.Sum(nil)); got != string(m.ContentHash) {
+	if got := hex.EncodeToString(h.Sum(nil)); got != string(m.ContentHash) {
 		return fmt.Errorf("%w: payload hash %s != declared %s", errs.ErrCorruptedContent, got, m.ContentHash)
 	}
 	return nil

@@ -61,7 +61,7 @@ func TestLoad_RoundTrip(t *testing.T) {
 	w, r, _, _, cfg := rwHarness(t)
 	id := write(t, w, cfg, "load me")
 
-	m, err := r.Load(context.Background(), id, nil)
+	m, err := r.Load(context.Background(), id, nil, "sha256")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestLoad_RoundTrip(t *testing.T) {
 
 func TestLoad_MissingIsNotFound(t *testing.T) {
 	_, r, _, _, _ := rwHarness(t)
-	_, err := r.Load(context.Background(), domain.ArtifactID("sha256-"+strings.Repeat("f", 64)), nil)
+	_, err := r.Load(context.Background(), domain.ArtifactID("sha256-"+strings.Repeat("f", 64)), nil, "sha256")
 	if err != errs.ErrArtifactNotFound {
 		t.Fatalf("want ErrArtifactNotFound, got %v", err)
 	}
@@ -88,7 +88,7 @@ func TestLoad_TamperedManifestCorrupted(t *testing.T) {
 	// Precondition: loads cleanly. The loaded manifest also gives us the
 	// on-disk ManifestDigest — the manifest file is named by its digest,
 	// not by the floating handle, so we tamper at the digest path.
-	m, err := r.Load(context.Background(), id, nil)
+	m, err := r.Load(context.Background(), id, nil, "sha256")
 	if err != nil {
 		t.Fatalf("precondition Load: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestLoad_TamperedManifestCorrupted(t *testing.T) {
 	if err := drv.Put(context.Background(), mp, bytes.NewReader([]byte("\x00SC1\x00not-json"))); err != nil {
 		t.Fatalf("overwrite manifest: %v", err)
 	}
-	if _, err := r.Load(context.Background(), id, nil); err == nil {
+	if _, err := r.Load(context.Background(), id, nil, "sha256"); err == nil {
 		t.Fatal("Load must fail on a tampered manifest file")
 	}
 }
@@ -113,7 +113,7 @@ func TestOpenBlob_TargetReadsBackContent(t *testing.T) {
 	const content = "open and read these bytes"
 	id := write(t, w, cfg, content)
 
-	m, err := r.Load(context.Background(), id, nil)
+	m, err := r.Load(context.Background(), id, nil, "sha256")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestOpenBlob_Inline(t *testing.T) {
 	cfg.InlineBlobLimit = 1024
 	id := write(t, w, cfg, "inline content")
 
-	m, err := r.Load(context.Background(), id, nil)
+	m, err := r.Load(context.Background(), id, nil, "sha256")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestOpenBlob_Inline(t *testing.T) {
 func TestVerifyBlob_Passes(t *testing.T) {
 	w, r, _, _, cfg := rwHarness(t)
 	id := write(t, w, cfg, "verify me clean")
-	m, err := r.Load(context.Background(), id, nil)
+	m, err := r.Load(context.Background(), id, nil, "sha256")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestOpenHandle_TargetStreamsAndVerifies(t *testing.T) {
 	w, r, _, _, cfg := rwHarness(t)
 	const content = "stream through the verifying handle"
 	id := write(t, w, cfg, content)
-	m, err := r.Load(context.Background(), id, nil)
+	m, err := r.Load(context.Background(), id, nil, "sha256")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestWrapVerifying_NoContentHashReturnsInner(t *testing.T) {
 func TestVerifyBlob_DetectsCorruption(t *testing.T) {
 	w, r, drv, idx, cfg := rwHarness(t)
 	id := write(t, w, cfg, "soon to be corrupt")
-	m, err := r.Load(context.Background(), id, nil)
+	m, err := r.Load(context.Background(), id, nil, "sha256")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestVerifyBlob_DetectsCorruption(t *testing.T) {
 func TestWrapVerifying_OnMismatchFiresOnCorruption(t *testing.T) {
 	w, r, drv, idx, cfg := rwHarness(t)
 	id := write(t, w, cfg, "will be corrupted under a verifying handle")
-	m, err := r.Load(context.Background(), id, nil)
+	m, err := r.Load(context.Background(), id, nil, "sha256")
 	if err != nil {
 		t.Fatal(err)
 	}

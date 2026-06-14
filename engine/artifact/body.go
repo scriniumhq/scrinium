@@ -50,6 +50,7 @@ type jsonSys struct {
 	ContentHash      string              `json:"content_hash,omitempty"`
 	CreatedAt        string              `json:"created_at"`
 	HandleRefs       []string            `json:"handle_refs,omitempty"`
+	HashAlgo         string              `json:"hash_algo,omitempty"`
 	IdentityMetaHash string              `json:"identity_meta_hash,omitempty"`
 	IdentityNonce    string              `json:"identity_nonce,omitempty"` // base64
 	LayoutHeader     jsonLayoutHeader    `json:"layout_header"`
@@ -86,6 +87,7 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 			ContentHash:      string(m.ContentHash),
 			CreatedAt:        timefmt.Format(m.CreatedAt),
 			HandleRefs:       handleRefsToJSON(m.HandleRefs),
+			HashAlgo:         m.HashAlgo,
 			IdentityMetaHash: m.IdentityMetaHash,
 			LayoutHeader:     jsonLayoutHeader{BlobStorage: m.LayoutHeader.BlobStorage},
 			Namespace:        m.Namespace,
@@ -159,6 +161,7 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 		Namespace:        b.Sys.Namespace,
 		SessionID:        domain.SessionID(b.Sys.SessionID),
 		ContentHash:      domain.ContentHash(b.Sys.ContentHash),
+		HashAlgo:         b.Sys.HashAlgo,
 		BlobRefs:         blobRefsFromJSON(b.Sys.BlobRefs),
 		HandleRefs:       handleRefsFromJSON(b.Sys.HandleRefs),
 		Ext:              b.Ext,

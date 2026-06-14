@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -99,7 +100,7 @@ func (x *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
 	if _, err := h.Write(body); err != nil {
 		return Result{}, fmt.Errorf("artifactio: hash inline: %w", err)
 	}
-	ch := domain.ContentHash(x.hashes.Format(hashAlgo, h.Sum(nil)))
+	ch := domain.ContentHash(hex.EncodeToString(h.Sum(nil)))
 	return Result{
 		ContentHash:  ch,
 		BlobRef:      domain.BlobRef(ch),
