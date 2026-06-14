@@ -149,7 +149,7 @@ func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 		ArtifactID:   "art-test",
 		Namespace:    "users",
 		ContentHash:  "sha256-" + domain.ContentHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
-		BlobRef:      "blob-test",
+		BlobRefs:     []domain.BlobRef{"blob-test"},
 		OriginalSize: 1024,
 	}
 	if err := idx1.IndexManifest(ctx, manifest, addr, nil); err != nil {

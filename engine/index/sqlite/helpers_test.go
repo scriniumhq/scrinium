@@ -74,7 +74,7 @@ func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	if m.LayoutHeader.BlobStorage == domain.LayoutInline {
 		blobRefArg = nil
 	} else {
-		blobRefArg = string(m.BlobRef)
+		blobRefArg = string(m.PrimaryBlobRef())
 	}
 	var retentionArg any
 	if !m.RetentionUntil.IsZero() {

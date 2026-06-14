@@ -46,7 +46,7 @@ func makeFSManifest(t *testing.T, id domain.ArtifactID, path string) domain.Mani
 	return domain.Manifest{
 		ArtifactID:   id,
 		Namespace:    "files",
-		BlobRef:      "sha256-" + domain.BlobRef(id),
+		BlobRefs:     []domain.BlobRef{"sha256-" + domain.BlobRef(id)},
 		ContentHash:  "sha256-" + domain.ContentHash(id),
 		OriginalSize: 100,
 		CreatedAt:    time.Now().UTC(),
@@ -63,7 +63,7 @@ func makeForeignManifest(t *testing.T, id domain.ArtifactID) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   id,
 		Namespace:    "mail",
-		BlobRef:      "sha256-" + domain.BlobRef(id),
+		BlobRefs:     []domain.BlobRef{"sha256-" + domain.BlobRef(id)},
 		ContentHash:  "sha256-" + domain.ContentHash(id),
 		OriginalSize: 50,
 		CreatedAt:    time.Now().UTC(),
@@ -150,7 +150,7 @@ func TestApply_Indexed_NoMetadata_Skipped(t *testing.T) {
 	m := domain.Manifest{
 		ArtifactID:   "bare-1",
 		Namespace:    "files",
-		BlobRef:      "sha256-bare",
+		BlobRefs:     []domain.BlobRef{"sha256-bare"},
 		ContentHash:  "sha256-bare",
 		OriginalSize: 10,
 		CreatedAt:    time.Now().UTC(),
@@ -258,7 +258,7 @@ func TestApply_Deleted_RemovesEntries(t *testing.T) {
 	}
 
 	// Delete via the index. It will dispatch ManifestDeleted.
-	if err := idx.DeleteManifest(ctx, "art-del", []string{string(m.BlobRef)}); err != nil {
+	if err := idx.DeleteManifest(ctx, "art-del", []string{string(m.PrimaryBlobRef())}); err != nil {
 		t.Fatalf("DeleteManifest: %v", err)
 	}
 
@@ -282,7 +282,7 @@ func TestApply_Deleted_NotIndexed_NoOp(t *testing.T) {
 	if err := idx.IndexManifest(ctx, m, physAddr(), nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
-	if err := idx.DeleteManifest(ctx, "email-2", []string{string(m.BlobRef)}); err != nil {
+	if err := idx.DeleteManifest(ctx, "email-2", []string{string(m.PrimaryBlobRef())}); err != nil {
 		t.Errorf("DeleteManifest of un-indexed artifact failed: %v", err)
 	}
 }
@@ -302,7 +302,7 @@ func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
 	m := domain.Manifest{
 		ArtifactID:   "art-bad",
 		Namespace:    "files",
-		BlobRef:      "sha256-bad",
+		BlobRefs:     []domain.BlobRef{"sha256-bad"},
 		ContentHash:  "sha256-bad",
 		OriginalSize: 10,
 		CreatedAt:    time.Now().UTC(),

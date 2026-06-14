@@ -168,7 +168,7 @@ func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 		// stays as the zero BlobRef. Callers that need to know whether
 		// this is Inline must read the file. Transitional single-blob
 		// cache; the authoritative list is manifest_blobs (ADR-92).
-		m.BlobRef = domain.BlobRef(blobRef.String)
+		m.BlobRefs = []domain.BlobRef{domain.BlobRef(blobRef.String)}
 	}
 	if contentHash.Valid {
 		m.ContentHash = domain.ContentHash(contentHash.String)

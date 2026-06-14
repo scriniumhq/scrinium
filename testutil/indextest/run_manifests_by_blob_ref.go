@@ -95,7 +95,7 @@ func runManifestsByBlobRef(t *testing.T, f Factory) {
 // Inline builder, and only the scrub-manifest runs need one.
 func inlineManifest(id string) domain.Manifest {
 	m := manifestfx.Blob(id, "")
-	m.BlobRef = ""
+	m.BlobRefs = nil
 	m.LayoutHeader.BlobStorage = domain.LayoutInline
 	m.InlineBlob = []byte("inline-payload")
 	return m

@@ -186,7 +186,7 @@ func (x *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHand
 		return NewInlineHandle(m), nil
 
 	case domain.LayoutTarget:
-		addr, err := x.index.Resolve(ctx, string(m.BlobRef))
+		addr, err := x.index.Resolve(ctx, string(m.PrimaryBlobRef()))
 		if err != nil {
 			return nil, fmt.Errorf("artifactio.OpenHandle: resolve blob path: %w", err)
 		}

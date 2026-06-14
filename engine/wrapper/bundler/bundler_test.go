@@ -101,7 +101,7 @@ func TestIndexExtension_RecordResolveDelete(t *testing.T) {
 	ctx := context.Background()
 	e, _ := newTestExtension(t)
 
-	container := domain.Manifest{BlobRef: "pack-blob-1"}
+	container := domain.Manifest{BlobRefs: []domain.BlobRef{"pack-blob-1"}}
 	entries := []PackedEntry{
 		{
 			ArtifactID:     "art-p1",
@@ -166,11 +166,11 @@ func TestIndexExtension_DeletePackIsVolumeScoped(t *testing.T) {
 	ctx := context.Background()
 	e, _ := newTestExtension(t)
 
-	if err := e.RecordPack(ctx, domain.Manifest{BlobRef: "vol-A"},
+	if err := e.RecordPack(ctx, domain.Manifest{BlobRefs: []domain.BlobRef{"vol-A"}},
 		[]PackedEntry{{ArtifactID: "a1", BlobSize: 1}}); err != nil {
 		t.Fatalf("RecordPack vol-A: %v", err)
 	}
-	if err := e.RecordPack(ctx, domain.Manifest{BlobRef: "vol-B"},
+	if err := e.RecordPack(ctx, domain.Manifest{BlobRefs: []domain.BlobRef{"vol-B"}},
 		[]PackedEntry{{ArtifactID: "b1", BlobSize: 1}}); err != nil {
 		t.Fatalf("RecordPack vol-B: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestIndexExtension_SatisfiesResolver(t *testing.T) {
 // precondition.
 func TestIndexExtension_RecordBeforeSetup(t *testing.T) {
 	e := &indexExtension{}
-	if err := e.RecordPack(context.Background(), domain.Manifest{BlobRef: "x"}, nil); err == nil {
+	if err := e.RecordPack(context.Background(), domain.Manifest{BlobRefs: []domain.BlobRef{"x"}}, nil); err == nil {
 		t.Fatal("RecordPack before Setup: expected error")
 	}
 }

@@ -79,7 +79,7 @@ func (f scrubFixture) blobRefOf(t *testing.T, id domain.ArtifactID) string {
 		t.Fatalf("Get: %v", err)
 	}
 	defer rh.Close()
-	return string(rh.Manifest().BlobRef)
+	return string(rh.Manifest().PrimaryBlobRef())
 }
 
 // tamperBlob flips a byte in the on-disk blob file for blobRef.

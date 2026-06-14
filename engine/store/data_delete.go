@@ -71,10 +71,10 @@ func (d dataFacet) Delete(ctx context.Context, id domain.ArtifactID) error {
 	case domain.LayoutInline:
 		// no blobs row — leave blobRefs empty
 	case domain.LayoutTarget:
-		if manifest.BlobRef == "" {
-			return fmt.Errorf("store.Delete: Target manifest %q has empty BlobRef", id)
+		if len(manifest.BlobRefs) == 0 {
+			return fmt.Errorf("store.Delete: Target manifest %q has no BlobRefs", id)
 		}
-		blobRefs = []string{string(manifest.BlobRef)}
+		blobRefs = []string{string(manifest.BlobRefs[0])}
 	default:
 		return fmt.Errorf("store.Delete: unknown BlobStorage %q", manifest.LayoutHeader.BlobStorage)
 	}

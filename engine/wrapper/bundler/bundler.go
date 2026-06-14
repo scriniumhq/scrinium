@@ -91,7 +91,7 @@ func (e *indexExtension) RecordPack(ctx context.Context, container domain.Manife
 	if e.store == nil {
 		return fmt.Errorf("bundler: RecordPack before Setup")
 	}
-	packBlobRef := string(container.BlobRef)
+	packBlobRef := string(container.PrimaryBlobRef())
 	for _, entry := range entries {
 		ov := extension.PlacementOverlay{
 			PackBlobRef:    packBlobRef,

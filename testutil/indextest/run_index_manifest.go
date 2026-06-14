@@ -122,7 +122,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 			Ext:          json.RawMessage(`{"composite":true}`),
 			Namespace:    "test",
 			ContentHash:  manifestfx.SyntheticHash('0'),
-			BlobRef:      "toc-blob",
+			BlobRefs:     []domain.BlobRef{"toc-blob"},
 			OriginalSize: 3072,
 			CreatedAt:    time.Now(),
 		}
@@ -163,7 +163,7 @@ func runIndexManifest(t *testing.T, f Factory) {
 			Ext:          json.RawMessage(`{"composite":true}`),
 			Namespace:    "test",
 			ContentHash:  manifestfx.SyntheticHash('0'),
-			BlobRef:      "toc-blob",
+			BlobRefs:     []domain.BlobRef{"toc-blob"},
 			OriginalSize: 3072,
 			CreatedAt:    time.Now(),
 		}

@@ -42,9 +42,9 @@ type jsonBody struct {
 // Reference model (ADR-92/93): blob_refs is the ordered array of blob
 // references (россыпь — one, composite — chunks, pack — [toc, pack]) and
 // handle_refs the ordered array of artifact→artifact edges (the DAG).
-// MIGRATION: type/namespace/system are still written transitionally —
-// type until the core dispatch is removed, namespace until its readers
-// move to ext, system until the pack model is rewritten.
+// MIGRATION: namespace/system are still written transitionally —
+// namespace until its readers move to ext (ADR-79), system until the
+// pack model is rewritten (ADR-86).
 type jsonSys struct {
 	ArtifactID       string              `json:"artifact_id,omitempty"`
 	BlobRefs         []string            `json:"blob_refs"`
@@ -124,22 +124,14 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 }
 
 // blobRefsToJSON renders the manifest's blob references as the on-disk
-// blob_refs array. Bridge (ADR-92 migration): if BlobRefs is unset it
-// falls back to the single legacy BlobRef (россыпь), so callers not yet
-// migrated to the array keep producing correct output. Always non-nil so
-// the field is emitted (§7.5 requires blob_refs present).
+// blob_refs array (ADR-92). Always non-nil so the field is emitted
+// (§7.5 requires blob_refs present); empty for the Inline strategy.
 func blobRefsToJSON(m domain.Manifest) []string {
-	if len(m.BlobRefs) > 0 {
-		out := make([]string, len(m.BlobRefs))
-		for i, r := range m.BlobRefs {
-			out[i] = string(r)
-		}
-		return out
+	out := make([]string, len(m.BlobRefs))
+	for i, r := range m.BlobRefs {
+		out[i] = string(r)
 	}
-	if m.BlobRef != "" {
-		return []string{string(m.BlobRef)}
-	}
-	return []string{}
+	return out
 }
 
 // handleRefsToJSON renders HandleRefs as the on-disk handle_refs array, or
@@ -188,12 +180,6 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 			BlobStorage: b.Sys.LayoutHeader.BlobStorage,
 		},
 		Pipeline: pipelineFromJSON(b.Sys.Pipeline),
-	}
-	// Bridge (ADR-92 migration): keep the single legacy BlobRef populated
-	// from the first element so россыпь readers not yet migrated to
-	// BlobRefs keep working.
-	if len(m.BlobRefs) > 0 {
-		m.BlobRef = m.BlobRefs[0]
 	}
 	if b.Sys.IdentityNonce != "" {
 		raw, err := base64.StdEncoding.DecodeString(b.Sys.IdentityNonce)

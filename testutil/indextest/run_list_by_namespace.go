@@ -204,7 +204,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 		pack := domain.Manifest{
 			Namespace:    "ns",
 			ContentHash:  manifestfx.SyntheticHash('p'),
-			BlobRef:      "pack-blob-1",
+			BlobRefs:     []domain.BlobRef{"pack-blob-1"},
 			OriginalSize: 4096,
 			CreatedAt:    time.Now(),
 		}
@@ -258,8 +258,8 @@ func runListByNamespace(t *testing.T, f Factory) {
 		if m.SessionID != src.SessionID {
 			t.Errorf("SessionID: got %q, want %q", m.SessionID, src.SessionID)
 		}
-		if m.BlobRef != src.BlobRef {
-			t.Errorf("BlobRef: got %q, want %q", m.BlobRef, src.BlobRef)
+		if m.PrimaryBlobRef() != src.PrimaryBlobRef() {
+			t.Errorf("BlobRef: got %q, want %q", m.PrimaryBlobRef(), src.PrimaryBlobRef())
 		}
 		if !m.CreatedAt.Equal(src.CreatedAt) {
 			t.Errorf("CreatedAt: got %v, want %v", m.CreatedAt, src.CreatedAt)

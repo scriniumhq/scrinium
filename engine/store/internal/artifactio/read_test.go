@@ -224,7 +224,7 @@ func TestVerifyBlob_DetectsCorruption(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Resolve the blob's physical path and overwrite it with wrong bytes.
-	addr, err := idx.Resolve(context.Background(), string(m.BlobRef))
+	addr, err := idx.Resolve(context.Background(), string(m.PrimaryBlobRef()))
 	if err != nil {
 		t.Fatalf("resolve blob: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestWrapVerifying_OnMismatchFiresOnCorruption(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	addr, err := idx.Resolve(context.Background(), string(m.BlobRef))
+	addr, err := idx.Resolve(context.Background(), string(m.PrimaryBlobRef()))
 	if err != nil {
 		t.Fatal(err)
 	}

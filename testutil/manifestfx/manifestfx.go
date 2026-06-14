@@ -39,7 +39,7 @@ func Sample() domain.Manifest {
 		CreatedAt:    time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC),
 		ContentHash:  domain.ContentHash(contentHashAaa),
 		OriginalSize: 4096,
-		BlobRef:      domain.BlobRef(blobRefBbb),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(blobRefBbb)},
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
 	}
 }
@@ -64,7 +64,7 @@ func Blob(id, blobRef string) domain.Manifest {
 		Digest:       syntheticDigest(id),
 		Namespace:    "test",
 		ContentHash:  domain.ContentHash(contentHashAaa),
-		BlobRef:      domain.BlobRef(blobRef),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(blobRef)},
 		OriginalSize: 1024,
 		CreatedAt:    time.Now(),
 	}
@@ -83,7 +83,7 @@ func BlobWithHash(id, blobRef string, contentHash domain.ContentHash, originalSi
 		Digest:       syntheticDigest(id),
 		Namespace:    "test",
 		ContentHash:  contentHash,
-		BlobRef:      domain.BlobRef(blobRef),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(blobRef)},
 		OriginalSize: originalSize,
 		CreatedAt:    time.Now(),
 	}

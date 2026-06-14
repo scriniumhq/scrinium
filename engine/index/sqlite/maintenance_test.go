@@ -33,7 +33,7 @@ func TestWriteCheckpoint_CreatesCheckpoint(t *testing.T) {
 		domain.PhysicalAddress{Path: "p"}, 1)
 	insertManifest(t, idx, domain.Manifest{
 		ArtifactID: "art-1", Namespace: "ns",
-		BlobRef: "blob-1", CreatedAt: time.Now(),
+		BlobRefs: []domain.BlobRef{"blob-1"}, CreatedAt: time.Now(),
 	})
 
 	dest := filepath.Join(t.TempDir(), "snap.db")
@@ -113,7 +113,7 @@ func TestRestoreCheckpoint_RoundTrip(t *testing.T) {
 		domain.PhysicalAddress{Path: "p"}, 1)
 	insertManifest(t, src, domain.Manifest{
 		ArtifactID: "art-1", Namespace: "ns",
-		BlobRef: "blob-1", CreatedAt: time.Now(),
+		BlobRefs: []domain.BlobRef{"blob-1"}, CreatedAt: time.Now(),
 	})
 
 	cp := filepath.Join(t.TempDir(), "cp.db")

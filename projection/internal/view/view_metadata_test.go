@@ -46,7 +46,7 @@ func strippedManifest(id domain.ArtifactID, namespace string) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   id,
 		Namespace:    namespace,
-		BlobRef:      "sha256-" + domain.BlobRef(id),
+		BlobRefs:     []domain.BlobRef{"sha256-" + domain.BlobRef(id)},
 		ContentHash:  "sha256-" + domain.ContentHash(id),
 		OriginalSize: 100,
 		CreatedAt:    time.Now().UTC(),
@@ -115,7 +115,7 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	src.Add(domain.Manifest{
 		ArtifactID:   idHit,
 		Namespace:    "files",
-		BlobRef:      "sha256-hit",
+		BlobRefs:     []domain.BlobRef{"sha256-hit"},
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
@@ -130,7 +130,7 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	src.Add(domain.Manifest{
 		ArtifactID:   idMiss,
 		Namespace:    "files",
-		BlobRef:      "sha256-miss",
+		BlobRefs:     []domain.BlobRef{"sha256-miss"},
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},

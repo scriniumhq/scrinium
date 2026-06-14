@@ -622,13 +622,13 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		data.Locations = h.buildLocationViews(locs)
 	}
 
-	blobRefValue := string(m.BlobRef)
-	if string(m.BlobRef) == string(m.ContentHash) && len(m.Pipeline) == 0 {
+	blobRefValue := string(m.PrimaryBlobRef())
+	if blobRefValue == string(m.ContentHash) && len(m.Pipeline) == 0 {
 		// Pipeline-empty artifacts have BlobRef == ContentHash by
 		// construction (the same bytes get hashed twice along
 		// the put path). Surface this so the user doesn't read
 		// it as a coincidence.
-		blobRefValue = string(m.BlobRef) + " (same as ContentHash, no pipeline)"
+		blobRefValue = blobRefValue + " (same as ContentHash, no pipeline)"
 	}
 	data.Storage = []labelValue{
 		{Label: "BlobRef", Value: blobRefValue, Mono: true},
@@ -656,7 +656,7 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	// Related artifacts — other manifests that share this
 	// blob. Best-effort: a lookup error doesn't block the
 	// page; we just don't show siblings.
-	if related, err := h.fs.LookupRelated(ctx, m.BlobRef, m.ArtifactID); err == nil {
+	if related, err := h.fs.LookupRelated(ctx, m.PrimaryBlobRef(), m.ArtifactID); err == nil {
 		for _, ra := range related {
 			view := relatedView{
 				URL:       h.prefix + "/_artifact/" + string(ra.ArtifactID),
@@ -718,7 +718,7 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		CreatedAt:      m.CreatedAt,
 		ContentHash:    m.ContentHash,
 		OriginalSize:   m.OriginalSize,
-		BlobRef:        m.BlobRef,
+		BlobRef:        m.PrimaryBlobRef(),
 		LayoutHeader:   m.LayoutHeader,
 		Pipeline:       m.Pipeline,
 		RetentionUntil: m.RetentionUntil,

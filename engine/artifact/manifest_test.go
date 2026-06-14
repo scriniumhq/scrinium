@@ -23,7 +23,7 @@ func TestEncodeDecode_PlainRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Namespace != m.Namespace || string(got.BlobRef) != string(m.BlobRef) || got.OriginalSize != m.OriginalSize {
+	if got.Namespace != m.Namespace || string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) || got.OriginalSize != m.OriginalSize {
 		t.Errorf("round-trip lost sys fields: %+v", got)
 	}
 	if !bytes.Equal(got.InlineBlob, m.InlineBlob) {

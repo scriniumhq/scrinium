@@ -225,8 +225,8 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	// It is a transitional single-blob cache; the authoritative blob
 	// list is manifest_blobs (ADR-92).
 	var blobRefArg any
-	if m.LayoutHeader.BlobStorage != domain.LayoutInline {
-		blobRefArg = string(m.BlobRef)
+	if m.LayoutHeader.BlobStorage != domain.LayoutInline && len(m.BlobRefs) > 0 {
+		blobRefArg = string(m.BlobRefs[0])
 	}
 
 	// retention_until is NULL when no retention was set. Stored alongside
@@ -318,22 +318,22 @@ func indexBlobManifest(
 	// inline blobs by design — docs §… ).
 	//
 	// We dispatch on LayoutHeader.BlobStorage rather than on
-	// emptiness of BlobRef because §7.2 mandates that BlobRef be
+	// emptiness of BlobRefs because §7.2 mandates the array be
 	// populated even on inline manifests (it carries the hash of
 	// the embedded bytes).
 	if m.LayoutHeader.BlobStorage == domain.LayoutInline {
 		return insertManifestRow(ctx, tx, m)
 	}
-	if m.BlobRef == "" {
-		return fmt.Errorf("sqlite: blob manifest %q has empty BlobRef", m.ArtifactID)
+	if len(m.BlobRefs) == 0 {
+		return fmt.Errorf("sqlite: blob manifest %q has no BlobRefs", m.ArtifactID)
 	}
-	if err := registerBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
+	if err := registerBlob(ctx, tx, string(m.BlobRefs[0]), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
 		return err
 	}
 	if err := insertManifestRow(ctx, tx, m); err != nil {
 		return err
 	}
-	return linkManifestToBlob(ctx, tx, m.Digest, string(m.BlobRef), 0)
+	return linkManifestToBlob(ctx, tx, m.Digest, string(m.BlobRefs[0]), 0)
 }
 
 func indexTOCManifest(
@@ -343,11 +343,11 @@ func indexTOCManifest(
 	addr domain.PhysicalAddress,
 	chunkRefs []string,
 ) error {
-	if m.BlobRef == "" {
-		return fmt.Errorf("sqlite: TOC manifest %q has empty BlobRef", m.ArtifactID)
+	if len(m.BlobRefs) == 0 {
+		return fmt.Errorf("sqlite: TOC manifest %q has no BlobRefs", m.ArtifactID)
 	}
 	// Step 1: register the TOC blob itself.
-	if err := registerBlob(ctx, tx, string(m.BlobRef), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
+	if err := registerBlob(ctx, tx, string(m.BlobRefs[0]), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
 		return err
 	}
 
@@ -374,7 +374,7 @@ func indexTOCManifest(
 	if err := insertManifestRow(ctx, tx, m); err != nil {
 		return err
 	}
-	return linkManifestToBlob(ctx, tx, m.Digest, string(m.BlobRef), 0)
+	return linkManifestToBlob(ctx, tx, m.Digest, string(m.BlobRefs[0]), 0)
 }
 
 // DeleteManifest performs the logical deletion of an artifact.

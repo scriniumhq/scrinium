@@ -241,13 +241,15 @@ func (x *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 		CreatedAt:      time.Now().UTC(),
 		ContentHash:    blob.ContentHash,
 		OriginalSize:   blob.OriginalSize,
-		BlobRef:        blob.BlobRef,
 		LayoutHeader:   domain.LayoutHeader{BlobStorage: layout},
 		Pipeline:       blob.Stages,
 		InlineBlob:     blob.InlineBytes,
 		RetentionUntil: opts.RetentionUntil,
 		Ext:            a.Ext,
 		Usr:            a.Usr,
+	}
+	if blob.BlobRef != "" {
+		manifest.BlobRefs = []domain.BlobRef{blob.BlobRef}
 	}
 
 	hashAlgo := string(cfg.ContentHasher)

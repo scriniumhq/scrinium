@@ -78,10 +78,10 @@ type ManifestSystemFlags struct {
 // slot: a filled slot consumes its members (top-down, +ref_count); an
 // empty slot (pack container) places them (bottom-up, no ref_count).
 //
-// MIGRATION NOTE: the single BlobRef, Namespace and SystemFlags
-// fields are transitional. The serialiser bridges BlobRef⇄BlobRefs[0]
-// so existing россыпь callers keep working while array/composite/pack
-// support lands; the legacy fields are removed in a later stage.
+// MIGRATION NOTE: the Namespace and SystemFlags fields are still
+// transitional (ADR-79/86), serialised until their readers migrate.
+// The legacy single BlobRef has been removed (ADR-92) — the россыпь
+// blob is BlobRefs[0].
 type Manifest struct {
 	// ArtifactID is the floating external identity (handle):
 	// PRF(NK, cd‖md). It is what the outside world holds and what
@@ -136,11 +136,6 @@ type Manifest struct {
 	ContentHash  ContentHash
 	OriginalSize int64
 
-	// BlobRef is the single legacy blob reference. Deprecated (ADR-92):
-	// superseded by BlobRefs. Retained transitionally; the serialiser
-	// bridges it to BlobRefs[0] for the россыпь path.
-	BlobRef BlobRef
-
 	// BlobRefs is the ordered array of blob references the manifest
 	// owns (ADR-92/93), at most 65535. Direction is implied by the
 	// identity slot:
@@ -193,6 +188,17 @@ func (m *Manifest) IsSystem() bool { return m.Name != "" }
 // BlobRefs = [toc_blob, pack_blob] and HandleRefs = members (as
 // placement) and is excluded from the user Walk.
 func (m *Manifest) IsContainer() bool { return m.ArtifactID == "" && m.Name == "" }
+
+// PrimaryBlobRef returns the россыпь blob reference (BlobRefs[0]) — the
+// single physical blob a plain-blob manifest owns — or "" when the
+// manifest has no blobs (Inline). Convenience for readers that handled
+// a single BlobRef before ADR-92; the array stays the source of truth.
+func (m Manifest) PrimaryBlobRef() BlobRef {
+	if len(m.BlobRefs) > 0 {
+		return m.BlobRefs[0]
+	}
+	return ""
+}
 
 // IsComposite reports whether the manifest is a chunked composite —
 // the chunker's "composite" flag is set in Ext (ADR-87). The flag is

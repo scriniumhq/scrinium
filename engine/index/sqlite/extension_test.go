@@ -540,7 +540,7 @@ func TestDispatch_ManifestDeleted(t *testing.T) {
 	if err := idx.IndexManifest(ctx, m, addr, nil); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
-	if err := idx.DeleteManifest(ctx, "art-del", []string{string(m.BlobRef)}); err != nil {
+	if err := idx.DeleteManifest(ctx, "art-del", []string{string(m.PrimaryBlobRef())}); err != nil {
 		t.Fatalf("DeleteManifest: %v", err)
 	}
 
@@ -659,7 +659,7 @@ func makeBlobManifest(id domain.ArtifactID) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   id,
 		Namespace:    "files",
-		BlobRef:      "sha256-aaaa",
+		BlobRefs:     []domain.BlobRef{"sha256-aaaa"},
 		ContentHash:  "sha256-aaaa",
 		OriginalSize: 100,
 		CreatedAt:    time.Now().UTC(),

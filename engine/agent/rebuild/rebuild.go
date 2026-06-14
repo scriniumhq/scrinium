@@ -574,9 +574,9 @@ func (a *rebuildAgent) indexBlob(ctx context.Context, m domain.Manifest) error {
 	var addr domain.PhysicalAddress
 	if m.LayoutHeader.BlobStorage == domain.LayoutTarget {
 		topology := a.store.Config().PathTopology
-		p, err := artifact.BlobPath(topology, domain.BlobTypeRegular, string(m.BlobRef))
+		p, err := artifact.BlobPath(topology, domain.BlobTypeRegular, string(m.BlobRefs[0]))
 		if err != nil {
-			return fmt.Errorf("blob path for %q: %w", m.BlobRef, err)
+			return fmt.Errorf("blob path for %q: %w", m.BlobRefs[0], err)
 		}
 		addr = domain.PhysicalAddress{Path: p}
 	}

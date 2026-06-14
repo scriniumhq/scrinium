@@ -283,7 +283,7 @@ func BuildInlineManifest(payload []byte, hashAlgo string, hashes domain.HashRegi
 	m := domain.Manifest{
 		SessionID:    sessionID,
 		ContentHash:  contentHash,
-		BlobRef:      domain.BlobRef(contentHash),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(contentHash)},
 		OriginalSize: int64(len(payload)),
 		InlineBlob:   payload,
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutInline},

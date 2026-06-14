@@ -106,7 +106,7 @@ func (x *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser,
 		return io.NopCloser(bytes.NewReader(m.InlineBlob)), nil
 
 	case domain.LayoutTarget:
-		addr, err := x.index.Resolve(ctx, string(m.BlobRef))
+		addr, err := x.index.Resolve(ctx, string(m.PrimaryBlobRef()))
 		if err != nil {
 			return nil, fmt.Errorf("artifactio: resolve blob path: %w", err)
 		}
