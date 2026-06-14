@@ -36,7 +36,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
 			m.Namespace = s.ns
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 		}
@@ -60,12 +60,12 @@ func runListByNamespace(t *testing.T, f Factory) {
 		idx := f.New(t)
 		mDefault := manifestfx.BlobWithHash("no-ns-1", "blob-d", manifestfx.SyntheticHash('a'), 1024)
 		mDefault.Namespace = ""
-		if err := idx.IndexManifest(ctx, mDefault, manifestfx.PhysAddr("p/d"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, mDefault, manifestfx.PhysAddr("p/d"), nil); err != nil {
 			t.Fatal(err)
 		}
 		mAlpha := manifestfx.BlobWithHash("user-ns", "blob-a", manifestfx.SyntheticHash('b'), 1024)
 		mAlpha.Namespace = "alpha"
-		if err := idx.IndexManifest(ctx, mAlpha, manifestfx.PhysAddr("p/a"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, mAlpha, manifestfx.PhysAddr("p/a"), nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -95,7 +95,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
 			m.Namespace = s.ns
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 		}
@@ -121,7 +121,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
 			m.Namespace = "ns"
 			m.CreatedAt = at
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil); err != nil {
 				t.Fatalf("seed %s: %v", id, err)
 			}
 		}
@@ -150,7 +150,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 			ref := "blob-" + string(fillChar)
 			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
 			m.Namespace = "ns"
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil); err != nil {
 				t.Fatalf("seed %s: %v", id, err)
 			}
 		}
@@ -176,7 +176,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 		idx := f.New(t)
 		m := manifestfx.BlobWithHash("a1", "blob-a1", manifestfx.SyntheticHash('a'), 1024)
 		m.Namespace = "ns"
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -197,7 +197,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 		idx := f.New(t)
 		blob := manifestfx.BlobWithHash("blob-1", "ref-blob-1", manifestfx.SyntheticHash('a'), 1024)
 		blob.Namespace = "ns"
-		if err := idx.IndexManifest(ctx, blob, manifestfx.PhysAddr("p/blob"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, blob, manifestfx.PhysAddr("p/blob"), nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -208,10 +208,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 			OriginalSize: 4096,
 			CreatedAt:    time.Now(),
 		}
-		if err := idx.IndexManifest(ctx, pack, manifestfx.PhysAddr("p/pack"), nil, []domain.PackedEntry{
-			{ArtifactID: "inner-1", BlobRef: "inner-blob-1", BlobSize: 100,
-				ContentHash: manifestfx.SyntheticHash('i'), PipelineParams: []byte{}},
-		}); err != nil {
+		if err := idx.IndexManifest(ctx, pack, manifestfx.PhysAddr("p/pack"), nil); err != nil {
 			t.Fatalf("seed pack: %v", err)
 		}
 
@@ -243,7 +240,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 		src.SessionID = "sess-42"
 		src.CreatedAt = now
 		src.RetentionUntil = retention
-		if err := idx.IndexManifest(ctx, src, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, src, manifestfx.PhysAddr("p"), nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -285,7 +282,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 			ref := "blob-" + string(fillChar)
 			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
 			m.Namespace = "ns"
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil); err != nil {
 				t.Fatalf("seed %s: %v", id, err)
 			}
 		}

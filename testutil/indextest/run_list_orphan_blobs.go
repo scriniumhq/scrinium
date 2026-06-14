@@ -32,7 +32,7 @@ func runListOrphanBlobs(t *testing.T, f Factory) {
 		}
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 			if s.deleted {
@@ -70,7 +70,7 @@ func runListOrphanBlobs(t *testing.T, f Factory) {
 			id := "art-" + string(fillChar)
 			ref := "blob-" + string(fillChar)
 			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil); err != nil {
 				t.Fatal(err)
 			}
 			if err := idx.DeleteManifest(ctx, domain.ArtifactID(id), []string{ref}); err != nil {

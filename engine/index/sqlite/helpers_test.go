@@ -16,8 +16,8 @@ import (
 // internal/testutil/indextest does not use these — it asserts
 // through the public StoreIndex API only. These helpers exist
 // because the remaining sqlite-only tests (vacuum content checks,
-// NULL-column COALESCE on packed_blobs, blob row with packed
-// metadata) need direct SQL access that the public API does not
+// blob row with packed metadata) need direct SQL access that the
+// public API does not
 // expose.
 
 // countRows returns the number of rows in `table`. Used by

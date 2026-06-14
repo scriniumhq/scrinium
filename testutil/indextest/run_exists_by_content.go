@@ -14,7 +14,7 @@ func runExistsByContent(t *testing.T, f Factory) {
 		idx := f.New(t)
 		hash := manifestfx.SyntheticHash('a')
 		m := manifestfx.BlobWithHash("art-1", "blob-1", hash, 1024)
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("blobs/blob-1"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("blobs/blob-1"), nil); err != nil {
 			t.Fatalf("IndexManifest: %v", err)
 		}
 
@@ -53,7 +53,7 @@ func runExistsByContent(t *testing.T, f Factory) {
 		idx := f.New(t)
 		hash := manifestfx.SyntheticHash('x')
 		m := manifestfx.BlobWithHash("art-1k", "blob-1k", hash, 1024)
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p1"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p1"), nil); err != nil {
 			t.Fatal(err)
 		}
 
@@ -74,10 +74,10 @@ func runExistsByContent(t *testing.T, f Factory) {
 		// identities must be two independent rows — ADR-58.
 		mPlain := manifestfx.BlobWithHash("art-plain", "blob-plain", hash, 2048)
 		mEnc := manifestfx.EncryptedBlobWithHash("art-enc", "blob-enc", hash, 2048, "aes-gcm", "k1")
-		if err := idx.IndexManifest(ctx, mPlain, manifestfx.PhysAddr("p-plain"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, mPlain, manifestfx.PhysAddr("p-plain"), nil); err != nil {
 			t.Fatal(err)
 		}
-		if err := idx.IndexManifest(ctx, mEnc, manifestfx.PhysAddr("p-enc"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, mEnc, manifestfx.PhysAddr("p-enc"), nil); err != nil {
 			t.Fatal(err)
 		}
 

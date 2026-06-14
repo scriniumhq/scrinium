@@ -51,7 +51,7 @@ func IsCryptoAlgorithm(algo string) bool {
 
 // BlobDedupKey is the full deduplication key of a blob, shared by
 // every dedup layer (ADR-58): regular blobs (ExistsByContent),
-// chunks (ExistsByHash), packs (packed_blobs), and cross-store
+// chunks (ExistsByHash), packs (the bundler's placement map), and cross-store
 // (MultistoreIndex.ExistsAny). Two blobs collapse to one physical
 // object only when all three components match.
 //

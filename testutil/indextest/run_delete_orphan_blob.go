@@ -20,7 +20,7 @@ func runDeleteOrphanBlob(t *testing.T, f Factory) {
 		t.Helper()
 		ctx := context.Background()
 		m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash('a'), 1024)
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil); err != nil {
 			t.Fatalf("seed %s: %v", id, err)
 		}
 		if err := idx.DeleteManifest(ctx, domain.ArtifactID(id), []string{ref}); err != nil {
@@ -62,7 +62,7 @@ func runDeleteOrphanBlob(t *testing.T, f Factory) {
 		// Revive: a new artifact references the same blob → ref_count
 		// back to 1. DeleteOrphanBlob must NOT remove it.
 		reviver := manifestfx.BlobWithHash("reviver", "blob-shared", manifestfx.SyntheticHash('a'), 1024)
-		if err := idx.IndexManifest(ctx, reviver, manifestfx.PhysAddr("p/blob-shared"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, reviver, manifestfx.PhysAddr("p/blob-shared"), nil); err != nil {
 			t.Fatalf("revive: %v", err)
 		}
 
@@ -96,7 +96,7 @@ func runDeleteOrphanBlob(t *testing.T, f Factory) {
 		idx := f.New(t)
 		// Live: indexed, never deleted → ref_count = 1.
 		m := manifestfx.BlobWithHash("live-1", "blob-live", manifestfx.SyntheticHash('a'), 1024)
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/blob-live"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/blob-live"), nil); err != nil {
 			t.Fatalf("seed live: %v", err)
 		}
 		removed, err := idx.DeleteOrphanBlob(ctx, "blob-live")

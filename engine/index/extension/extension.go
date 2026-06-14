@@ -107,6 +107,70 @@ type EventArgs struct {
 	BlobRefs   []string
 }
 
+// --- Capability roster (ADR-84) ---
+//
+// An IndexExtension declares WHAT it can do by implementing optional
+// capability sub-interfaces below; the backend detects them by
+// assertion (if r, ok := ext.(Resolver); ok), never by a Class field.
+// Only Resolver is defined here — it is what the pack/chunk overlay
+// needs (ADR-86/87). The accounting/compaction roster (GCParticipant,
+// Compactor) and Projector land with the GC-contract and projection
+// work; they are not required to take the core off pack tables.
+
+// PlacementOverlay is the physical location of an artifact whose
+// storage is OWNED by an index extension rather than the core
+// (ADR-84/86) — the overlay counterpart of the core's россыпь
+// resolution. A packed artifact lives as two slices of a .pack
+// volume (its member manifest and its blob) plus the pipeline
+// parameters needed to decode the blob.
+//
+// The type lives in the contract, not in a concrete owner package,
+// so the core resolve path can consult any Resolver without
+// importing the owner. Owners map their internal representation onto
+// this shape.
+type PlacementOverlay struct {
+	// PackBlobRef is the blob_ref of the .pack volume the slices live
+	// in. The driver range-reads this volume.
+	PackBlobRef string
+
+	// ManifestOffset/ManifestSize locate the member-manifest slice
+	// within the volume.
+	ManifestOffset int64
+	ManifestSize   int64
+
+	// BlobOffset/BlobSize locate the member-blob slice within the
+	// volume.
+	BlobOffset int64
+	BlobSize   int64
+
+	// PipelineParams carries the decode parameters for the member
+	// blob — opaque to the core, handed back to the pipeline.
+	PipelineParams []byte
+}
+
+// Resolver is the optional capability an IndexExtension implements
+// to OVERLAY physical placement for the artifacts it owns
+// (ADR-84/86). The core resolves россыпь itself; for anything it
+// does not find, it probes registered Resolvers, each covering its
+// own structure. The core never branches on artifact type —
+// ownership of the index record decides who answers, so a new
+// structural kind needs a new owner, not a core edit.
+//
+// A Resolver is MANDATORY for reading the structure it owns: with no
+// owner registered, the artifact is correctly unresolvable
+// (structurally, not by hiding). Capability is detected by interface
+// assertion, not by Class.
+type Resolver interface {
+	IndexExtension
+
+	// ResolvePacked reports the placement of an artifact this
+	// extension owns, by its ArtifactID. The second return is false
+	// when the artifact is not owned here — the caller continues to
+	// the next resolver or falls back to россыпь. Reads see committed
+	// state.
+	ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (PlacementOverlay, bool, error)
+}
+
 // ExtensionStore is the backend-agnostic data plane an extension
 // uses for its own state. All mutations are scoped to the
 // surrounding transaction; reads see committed state.

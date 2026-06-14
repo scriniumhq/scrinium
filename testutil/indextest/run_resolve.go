@@ -16,7 +16,7 @@ func runResolve(t *testing.T, f Factory) {
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
 		addr := manifestfx.PhysAddr("blobs/aa/bb/blob-1")
-		if err := idx.IndexManifest(ctx, m, addr, nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, addr, nil); err != nil {
 			t.Fatalf("IndexManifest: %v", err)
 		}
 
@@ -41,9 +41,8 @@ func runResolve(t *testing.T, f Factory) {
 	// Note: the "blob row with pack_ref/offset/size populated"
 	// case is sqlite-specific glass-box behaviour. After
 	// IndexManifest of a pack manifest, only ONE blobs row exists
-	// (the pack blob itself); the embedded blobs live in
-	// packed_blobs and are looked up via LookupPacked, not
-	// Resolve. The packed-entries side is covered by
-	// IndexManifest/Pack_RegistersEntries and LookupPacked/Hit
-	// below.
+	// (the pack blob itself), carrying pack_ref/pack_offset/
+	// pack_size so Resolve returns a sliced PhysicalAddress. The
+	// glass-box column-flow check lives in resolve_test.go
+	// (TestResolve_PackedBlob_FromBlobRow).
 }
