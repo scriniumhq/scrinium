@@ -1,4 +1,4 @@
-package fsindex
+package fs
 
 import (
 	"context"
@@ -7,10 +7,10 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
 )
 
-// Tables under the extension namespace. Two K/V groups:
+// Tables under the custom index namespace. Two K/V groups:
 //
 //   - byID:   artifactID → fsmeta JSON (primary, source of truth)
 //   - byPath: "<path>\x00<artifactID>" → "" (reverse, supports
@@ -25,40 +25,40 @@ const (
 	tableByPath = "byPath"
 )
 
-// Name is the stable extension identifier.
+// Name is the stable custom index identifier.
 const Name = "scrinium.fsindex"
 
 // schemaVersion is the on-disk layout version. Bump and add a
 // migration switch in Setup whenever the table layout changes.
 const schemaVersion = 1
 
-// Extension is the fsmeta-aware projection of artifact metadata.
-// Implements customindex.CustomIndex. Construct via New, register
-// via *sqlite.Index.Extensions().Register.
-type Extension struct {
+// CustomIndex is the fsmeta-aware projection of artifact metadata.
+// Implements customindex.CustomIndex. Construct via NewIndex, register
+// via *sqlite.Index.CustomIndexes().Register.
+type CustomIndex struct {
 	// store is captured during Setup and used by the read-side
 	// API (GetByID, LookupByPath, WalkAll) for the lifetime of
 	// the StoreIndex. Backend swaps the underlying executor
 	// from tx-mode to db-mode atomically after Register commits;
 	// the captured reference stays valid throughout.
-	store customindex.ExtensionStore
+	store customindex.Substrate
 }
 
-// New returns a fresh customindex. The instance is not registered
-// — caller passes it to *sqlite.Index.Extensions().Register(ctx, ext).
-func New() *Extension {
-	return &Extension{}
+// NewIndex returns a fresh customindex. The instance is not registered
+// — caller passes it to *sqlite.Index.CustomIndexes().Register(ctx, ext).
+func NewIndex() *CustomIndex {
+	return &CustomIndex{}
 }
 
 // Name returns the stable identifier.
-func (e *Extension) Name() string { return Name }
+func (e *CustomIndex) Name() string { return Name }
 
 // SchemaVersion returns the current data layout version.
-func (e *Extension) SchemaVersion() int { return schemaVersion }
+func (e *CustomIndex) SchemaVersion() int { return schemaVersion }
 
 // Subscribe declares the index events fsindex reacts to.
 // ManifestIndexed: stash fsmeta; ManifestDeleted: drop it.
-func (e *Extension) Subscribe() []customindex.EventKind {
+func (e *CustomIndex) Subscribe() []customindex.EventKind {
 	return []customindex.EventKind{
 		customindex.EventKindManifestIndexed,
 		customindex.EventKindManifestDeleted,
@@ -67,7 +67,7 @@ func (e *Extension) Subscribe() []customindex.EventKind {
 
 // Setup runs once per registration. v1 is initial; nothing to
 // migrate on a fresh DB or on an existing v1.
-func (e *Extension) Setup(ctx context.Context, store customindex.ExtensionStore, oldVersion int) error {
+func (e *CustomIndex) Setup(ctx context.Context, store customindex.Substrate, oldVersion int) error {
 	switch oldVersion {
 	case 0, 1:
 		// Nothing to do — schema is implicit (the K/V tables
@@ -83,7 +83,7 @@ func (e *Extension) Setup(ctx context.Context, store customindex.ExtensionStore,
 // Apply is invoked by the index inside the surrounding write
 // transaction. ManifestIndexed and ManifestDeleted are the only
 // kinds we subscribe to; anything else is a backend bug.
-func (e *Extension) Apply(ctx context.Context, store customindex.ExtensionStore, kind customindex.EventKind, args customindex.EventArgs) error {
+func (e *CustomIndex) Apply(ctx context.Context, store customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
 	switch kind {
 	case customindex.EventKindManifestIndexed:
 		return e.applyIndexed(store, args)
@@ -97,9 +97,9 @@ func (e *Extension) Apply(ctx context.Context, store customindex.ExtensionStore,
 // applyIndexed stores the fsmeta payload (bytes verbatim) plus a
 // reverse-index entry for path lookup. Manifests that don't
 // carry a fsmeta payload (foreign schema, system artifacts) are
-// silently skipped — the extension only indexes what it
+// silently skipped — the custom index only indexes what it
 // understands.
-func (e *Extension) applyIndexed(store customindex.ExtensionStore, args customindex.EventArgs) error {
+func (e *CustomIndex) applyIndexed(store customindex.Substrate, args customindex.EventArgs) error {
 	fs, ok, err := fsmeta.Decode(args.Manifest.Ext)
 	if err != nil {
 		// Decode errors mean the ext block claims to be fsmeta
@@ -139,7 +139,7 @@ func (e *Extension) applyIndexed(store customindex.ExtensionStore, args customin
 // the path to delete the reverse key, so we read the stored
 // fsmeta first. If the artifact wasn't indexed (no fsmeta on
 // write) the byID Get returns ok=false and we exit cleanly.
-func (e *Extension) applyDeleted(store customindex.ExtensionStore, args customindex.EventArgs) error {
+func (e *CustomIndex) applyDeleted(store customindex.Substrate, args customindex.EventArgs) error {
 	id := string(args.ArtifactID)
 
 	raw, ok, err := store.Get(tableByID, id)
@@ -182,9 +182,9 @@ func (e *Extension) applyDeleted(store customindex.ExtensionStore, args customin
 	return nil
 }
 
-// Close releases extension-side resources. Backend storage stays
+// Close releases custom index-side resources. Backend storage stays
 // owned by the StoreIndex.
-func (e *Extension) Close() error {
+func (e *CustomIndex) Close() error {
 	e.store = nil
 	return nil
 }
@@ -198,7 +198,7 @@ func (e *Extension) Close() error {
 // (or any future schema decoder) themselves. The View backfill
 // fast-path uses this to materialise FilesystemFacet without
 // round-tripping to Source.Get.
-func (e *Extension) GetByID(id domain.ArtifactID) (json.RawMessage, bool, error) {
+func (e *CustomIndex) GetByID(id domain.ArtifactID) (json.RawMessage, bool, error) {
 	if e.store == nil {
 		return nil, false, fmt.Errorf("fsindex: not registered")
 	}
@@ -212,11 +212,11 @@ func (e *Extension) GetByID(id domain.ArtifactID) (json.RawMessage, bool, error)
 	return json.RawMessage(value), true, nil
 }
 
-// Ext implements source.Ext (declared in the
+// Ext implements source.Metadata (declared in the
 // projection package). Same shape as GetByID — separate method
 // kept so projection can reference an interface without taking
 // a concrete dependency on fsindex.
-func (e *Extension) Ext(id domain.ArtifactID) (json.RawMessage, bool, error) {
+func (e *CustomIndex) Metadata(id domain.ArtifactID) (json.RawMessage, bool, error) {
 	return e.GetByID(id)
 }
 
@@ -227,7 +227,7 @@ func (e *Extension) Ext(id domain.ArtifactID) (json.RawMessage, bool, error) {
 // Returns "" + (false, nil) if no artifact is indexed at this
 // path — distinct from infrastructure errors which surface as
 // the third return.
-func (e *Extension) LookupByPath(path string) (domain.ArtifactID, bool, error) {
+func (e *CustomIndex) LookupByPath(path string) (domain.ArtifactID, bool, error) {
 	if e.store == nil {
 		return "", false, fmt.Errorf("fsindex: not registered")
 	}
@@ -249,12 +249,12 @@ func (e *Extension) LookupByPath(path string) (domain.ArtifactID, bool, error) {
 
 // WalkAll iterates every (artifactID, fsmeta JSON) pair in
 // lexicographic id order. Returning fs.SkipAll from cb (the
-// extensions sentinel customindex.ErrStopScan also works) ends the
+// custom indexes sentinel customindex.ErrStopScan also works) ends the
 // walk cleanly.
 //
 // Used by projection.View.backfill: one round-trip yields every
 // node's fs metadata.
-func (e *Extension) WalkAll(cb func(id domain.ArtifactID, raw json.RawMessage) error) error {
+func (e *CustomIndex) WalkAll(cb func(id domain.ArtifactID, raw json.RawMessage) error) error {
 	if e.store == nil {
 		return fmt.Errorf("fsindex: not registered")
 	}
@@ -263,6 +263,6 @@ func (e *Extension) WalkAll(cb func(id domain.ArtifactID, raw json.RawMessage) e
 	})
 }
 
-// Compile-time conformance: Extension satisfies
+// Compile-time conformance: CustomIndex satisfies
 // customindex.CustomIndex. Catches signature drift early.
-var _ customindex.CustomIndex = (*Extension)(nil)
+var _ customindex.CustomIndex = (*CustomIndex)(nil)

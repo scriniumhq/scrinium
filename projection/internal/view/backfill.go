@@ -95,19 +95,19 @@ func (v *View) allTrees() []map[string]*viewNode {
 //
 // Two paths exist:
 //
-//   - Fast path (an ExtSource is configured). Source.Walk
+//   - Fast path (an MetadataSource is configured). Source.Walk
 //     gives us the stripped manifests; we top them up by
-//     calling extSource.Ext(id) — an O(log N) lookup against
-//     a local index extension that persisted the ext block at
+//     calling metadataSource.Metadata(id) — an O(log N) lookup against
+//     a local index custom index that persisted the ext block at
 //     write time. No round-trip to Source.Get per manifest.
 //
-//   - Slow path (no ExtSource). We round-trip Source.Get for
+//   - Slow path (no MetadataSource). We round-trip Source.Get for
 //     every manifest to recover Ext. This is N+1 by
 //     construction; acceptable for tests with FakeSource
 //     (which keeps full manifests in memory anyway, so Get is
 //     cheap) and for backfills small enough that latency
 //     doesn't matter. Daemons with large stores configure
-//     WithExtSource (or WithFSIndex) to take the fast path.
+//     WithMetadataSource (or WithFSIndex) to take the fast path.
 func (v *View) backfill(ctx context.Context) error {
 	cb := func(m domain.Manifest) error {
 		if !v.passesFilter(m) {
@@ -133,16 +133,16 @@ func (v *View) backfill(ctx context.Context) error {
 // missing-path behaviour). A noisy "best effort" log line could
 // be added behind the bus once we wire it.
 func (v *View) populateExt(ctx context.Context, m *domain.Manifest) {
-	// Fast path: bulk ExtSource lookup, no Source round-trip.
-	if v.opts.extSource != nil {
-		raw, ok, err := v.opts.extSource.Ext(m.ArtifactID)
+	// Fast path: bulk MetadataSource lookup, no Source round-trip.
+	if v.opts.metadataSource != nil {
+		raw, ok, err := v.opts.metadataSource.Metadata(m.ArtifactID)
 		if err == nil && ok && len(raw) > 0 {
 			m.Ext = raw
 			return
 		}
 		// Miss or error — fall through to Source.Get. A miss is
-		// legitimate (artifact written before the extension was
-		// registered, or extension doesn't index this schema);
+		// legitimate (artifact written before the custom index was
+		// registered, or custom index doesn't index this schema);
 		// for those rare cases the slow path is correct.
 	}
 

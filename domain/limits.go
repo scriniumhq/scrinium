@@ -31,7 +31,7 @@ const MaxSessionIDLen = 255
 const MaxKeyIDLength = 255
 
 // MaxExtSize is the maximum byte size of the Manifest Ext
-// block (extension data the engine itself reads — fsmeta, etc).
+// block (custom index data the engine itself reads — fsmeta, etc).
 // 64 KiB. Returns errs.ErrExtTooLarge when exceeded.
 const MaxExtSize = 64 * 1024
 

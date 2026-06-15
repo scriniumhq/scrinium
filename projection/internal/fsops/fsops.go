@@ -1206,7 +1206,7 @@ func (f *writeFile) Close() error {
 		context.Background(),
 		domain.Artifact{
 			Payload: f.handle,
-			// fsmeta is engine-extension data per ADR-54 — Ext
+			// fsmeta is engine-custom index data per ADR-54 — Ext
 			// block, not Usr (host-opaque).
 			Ext: metadata,
 		},

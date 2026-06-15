@@ -37,8 +37,8 @@ func StatsProvider(c *scrinium.ScriniumClient, startedAt time.Time, capacityTime
 		}
 
 		exts := make([]stats.Extension, 0)
-		for _, e := range c.Extensions() {
-			exts = append(exts, stats.Extension{Name: e.Name, SchemaVersion: e.SchemaVersion})
+		for _, d := range c.Extensions() {
+			exts = append(exts, stats.Extension{Name: d.Name})
 		}
 
 		meta := c.Info

@@ -70,8 +70,7 @@ type StatsStorage struct {
 
 // StatsExtension is one row of the [extensions] section.
 type StatsExtension struct {
-	Name          string
-	SchemaVersion int
+	Name string
 }
 
 // StatsConfig mirrors the daemon's policy switches. Boolean
@@ -249,7 +248,7 @@ const statsPageHTML = `<!DOCTYPE html>
 <table>
   <tbody>
     {{range .Extensions}}
-    <tr><td class="label mono">{{.Name}}</td><td class="value">v{{.SchemaVersion}}</td></tr>
+    <tr><td class="label mono">{{.Name}}</td></tr>
     {{end}}
   </tbody>
 </table>

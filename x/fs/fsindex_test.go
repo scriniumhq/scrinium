@@ -1,4 +1,4 @@
-package fsindex_test
+package fs_test
 
 import (
 	"context"
@@ -8,16 +8,16 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/extension/customindex"
-	"scrinium.dev/engine/index/fsindex"
+	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/index/sqlite"
+	fsExt "scrinium.dev/x/fs"
 )
 
 // --- helpers ---
 
 // newRegisteredFSIndex returns an in-memory sqlite Index plus a
 // freshly-registered fsindex.customindex. Cleanup closes both.
-func newRegisteredFSIndex(t *testing.T) (*sqlite.Index, *fsindex.Extension) {
+func newRegisteredFSIndex(t *testing.T) (*sqlite.Index, *fsExt.CustomIndex) {
 	t.Helper()
 	idx, err := sqlite.NewStore(context.Background(), ":memory:")
 	if err != nil {
@@ -25,11 +25,11 @@ func newRegisteredFSIndex(t *testing.T) (*sqlite.Index, *fsindex.Extension) {
 	}
 	t.Cleanup(func() { _ = idx.Close() })
 
-	ext := fsindex.New()
-	if err := idx.Extensions().Register(context.Background(), ext); err != nil {
+	ci := fsExt.NewIndex()
+	if err := idx.CustomIndexes().Register(context.Background(), ci); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
-	return idx, ext
+	return idx, ci
 }
 
 // makeFSManifest returns a Manifest with fsmeta-shaped Ext
@@ -83,7 +83,7 @@ func physAddr() domain.PhysicalAddress {
 func TestRegister_Succeeds(t *testing.T) {
 	idx, ext := newRegisteredFSIndex(t)
 	if ext == nil {
-		t.Fatal("nil extension")
+		t.Fatal("nil custom index")
 	}
 	if idx == nil {
 		t.Fatal("nil index")
@@ -92,8 +92,8 @@ func TestRegister_Succeeds(t *testing.T) {
 
 func TestRegister_DoubleRegister_Rejects(t *testing.T) {
 	idx, _ := newRegisteredFSIndex(t)
-	err := idx.Extensions().Register(context.Background(), fsindex.New())
-	if err == nil {
+	ci := idx.CustomIndexes().Register(context.Background(), fsExt.NewIndex())
+	if ci == nil {
 		t.Error("expected error on second register, got nil")
 	}
 }
@@ -324,21 +324,21 @@ func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
 	}
 }
 
-// --- Read API on un-registered extension ---
+// --- Read API on un-registered custom index ---
 
 func TestReadAPI_NotRegistered_Errs(t *testing.T) {
-	ext := fsindex.New()
-	_, _, err := ext.GetByID("anything")
+	ci := fsExt.NewIndex()
+	_, _, err := ci.GetByID("anything")
 	if err == nil {
-		t.Error("GetByID on un-registered extension returned nil; want error")
+		t.Error("GetByID on un-registered custom index returned nil; want error")
 	}
-	_, _, err = ext.LookupByPath("anything")
+	_, _, err = ci.LookupByPath("anything")
 	if err == nil {
-		t.Error("LookupByPath on un-registered extension returned nil; want error")
+		t.Error("LookupByPath on un-registered custom index returned nil; want error")
 	}
-	err = ext.WalkAll(func(domain.ArtifactID, json.RawMessage) error { return nil })
+	err = ci.WalkAll(func(domain.ArtifactID, json.RawMessage) error { return nil })
 	if err == nil {
-		t.Error("WalkAll on un-registered extension returned nil; want error")
+		t.Error("WalkAll on un-registered custom index returned nil; want error")
 	}
 }
 
@@ -352,8 +352,8 @@ func TestReadAPI_NotRegistered_Errs(t *testing.T) {
 // --- Subscribe matrix sanity ---
 
 func TestSubscribe_OnlyManifestEvents(t *testing.T) {
-	ext := fsindex.New()
-	subs := ext.Subscribe()
+	ci := fsExt.NewIndex()
+	subs := ci.Subscribe()
 	if len(subs) != 2 {
 		t.Fatalf("Subscribe: got %d kinds, want 2", len(subs))
 	}

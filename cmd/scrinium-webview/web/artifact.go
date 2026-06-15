@@ -670,7 +670,7 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		}
 	}
 
-	// Schema rendering targets the engine-extension block (Ext
+	// Schema rendering targets the engine-custom index block (Ext
 	// per ADR-54) where fsmeta and similar schemas live. Three
 	// branches:
 	//

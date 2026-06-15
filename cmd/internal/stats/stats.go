@@ -12,11 +12,10 @@ import (
 	"scrinium.dev/domain"
 )
 
-// Extension is the render-time DTO for a registered index extension.
-// Callers holding an customindex.ExtensionInfo translate field-for-field.
+// Extension is the render-time DTO for a loaded extension. Callers
+// holding an extension.Descriptor translate field-for-field.
 type Extension struct {
-	Name          string
-	SchemaVersion int
+	Name string
 }
 
 // DaemonInfo carries the per-process and cross-layer state the report
@@ -55,8 +54,8 @@ type DaemonInfo struct {
 	// a field means "driver did not report".
 	Capacity *domain.StorageInfo
 
-	// Extensions lists registered index extensions. nil hides the
-	// [extensions] section; order is normalised (sorted by Name).
+	// Extensions lists loaded extensions. nil hides the [extensions]
+	// section; order is normalised (sorted by Name).
 	Extensions []Extension
 }
 
@@ -149,7 +148,7 @@ func writeExtensionsSection(b *strings.Builder, exts []Extension) {
 		return strings.Compare(a.Name, b.Name)
 	})
 	for _, ext := range sorted {
-		fmt.Fprintf(b, "%-30s v%d\n", ext.Name, ext.SchemaVersion)
+		fmt.Fprintln(b, ext.Name)
 	}
 	b.WriteString("\n")
 }

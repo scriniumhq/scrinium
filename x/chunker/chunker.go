@@ -17,14 +17,14 @@ package chunker
 import (
 	"fmt"
 
-	"scrinium.dev/engine/multistore"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/wrapper"
 	"scrinium.dev/errs"
 )
 
-// ChunkerConfig holds the slicing parameters. The algorithm
+// Config holds the slicing parameters. The algorithm
 // (FastCDC) is hard-wired; only sizes and the window are tunable.
-type ChunkerConfig struct {
+type Config struct {
 	// MinChunkSize, AvgChunkSize, MaxChunkSize define the chunk-size
 	// distribution. FastCDC produces a distribution peaking near
 	// AvgChunkSize with tails clipped by MinChunkSize/MaxChunkSize.
@@ -43,19 +43,32 @@ type ChunkerConfig struct {
 // produces a different ArtifactID and breaks cross-store
 // deduplication.
 //
-// The returned Wrap is a plain store.DataStore without an extension:
+// The returned Wrap is a plain store.DataStore without a custom index:
 // the chunker does not need an explicit Flush, every Put is
 // self-contained.
 //
 // TODO(M5): CDC-based chunker wrapper (milestones C3).
-func New(cfg ChunkerConfig) multistore.WrapperFactory {
+func New(cfg Config) wrapper.Factory {
 	return &factory{cfg: cfg}
 }
 
 type factory struct {
-	cfg ChunkerConfig
+	cfg Config
 }
 
-func (f *factory) Wrap(store store.DataStore, deps multistore.WrapperDeps) (store.DataStore, error) {
+func (f *factory) Wrap(store store.DataStore, deps wrapper.Deps) (store.DataStore, error) {
 	return nil, fmt.Errorf("%w: chunker.Wrap", errs.ErrNotImplemented)
 }
+
+// Descriptor reports the chunker's identity for the wrapper registry and
+// the Rules Engine. chunker is Structural — part of the closed set
+// {chunker, bundler}.
+func (f *factory) Descriptor() wrapper.Descriptor {
+	return wrapper.Descriptor{Name: "chunker", Class: wrapper.Structural}
+}
+
+// init registers the chunker under its name for blank-import wiring
+// (ADR-63), the way drivers and agents register, so hosts can discover
+// the wrapper by name. Construction-time config is applied via New; this
+// registers the default factory. (chunker.Wrap itself lands in M4.5.)
+func init() { wrapper.Register(New(Config{})) }

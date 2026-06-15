@@ -35,7 +35,7 @@ const manifestProjection = `m.manifest_digest, m.artifact_id, m.namespace, m.ses
 // `artifact_id IS NOT NULL` (ADR-83) excludes pack containers (empty
 // slot). System artifacts are not indexed at all (ADR-85), so they
 // never appear here. The namespace filter itself is transitional —
-// ADR-79 moves namespace out of the core index into an extension.
+// ADR-79 moves namespace out of the core index into a custom index.
 func (i *Index) ListByNamespace(
 	ctx context.Context,
 	ns string,

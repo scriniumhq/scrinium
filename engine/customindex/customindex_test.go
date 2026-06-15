@@ -33,7 +33,7 @@ func TestEventKind_String(t *testing.T) {
 func TestSentinels_Distinct(t *testing.T) {
 	sentinels := []error{
 		ErrStopScan,
-		ErrExtensionExists,
+		ErrAlreadyRegistered,
 		ErrSchemaRegression,
 		ErrBackendMismatch,
 		ErrEmptyPrefix,
@@ -55,7 +55,7 @@ func TestSentinels_Distinct(t *testing.T) {
 // stripped the var declarations.
 func TestSentinels_NotNil(t *testing.T) {
 	if ErrStopScan == nil ||
-		ErrExtensionExists == nil ||
+		ErrAlreadyRegistered == nil ||
 		ErrSchemaRegression == nil ||
 		ErrBackendMismatch == nil ||
 		ErrEmptyPrefix == nil {
@@ -70,18 +70,18 @@ func TestSentinels_NotNil(t *testing.T) {
 // They do not run at test time but participate in `go vet` and
 // in the package-level type check.
 
-type stubExtension struct{}
+type stubCustomIndex struct{}
 
-func (stubExtension) Name() string           { return "stub" }
-func (stubExtension) SchemaVersion() int     { return 1 }
-func (stubExtension) Subscribe() []EventKind { return nil }
-func (stubExtension) Setup(ctx context.Context, store ExtensionStore, oldVersion int) error {
+func (stubCustomIndex) Name() string           { return "stub" }
+func (stubCustomIndex) SchemaVersion() int     { return 1 }
+func (stubCustomIndex) Subscribe() []EventKind { return nil }
+func (stubCustomIndex) Setup(ctx context.Context, store Substrate, oldVersion int) error {
 	return nil
 }
-func (stubExtension) Apply(ctx context.Context, store ExtensionStore, kind EventKind, args EventArgs) error {
+func (stubCustomIndex) Apply(ctx context.Context, store Substrate, kind EventKind, args EventArgs) error {
 	return nil
 }
-func (stubExtension) Close() error { return nil }
+func (stubCustomIndex) Close() error { return nil }
 
 type stubStore struct{}
 
@@ -100,29 +100,29 @@ type stubRegistry struct{}
 
 func (stubRegistry) Register(ctx context.Context, ext CustomIndex) error { return nil }
 
-// stubLister satisfies ExtensionLister. The interface was
-// introduced in P0.6 alongside ExtensionInfo to give
-// backends a way to enumerate registered extensions without
+// stubLister satisfies Lister. The interface was
+// introduced in P0.6 alongside Info to give
+// backends a way to enumerate registered custom indexes without
 // re-exposing internal maps. Any future read-only proxy backend
-// would implement this independently of ExtensionHost.
+// would implement this independently of Host.
 type stubLister struct{}
 
-func (stubLister) ListExtensions() []ExtensionInfo { return nil }
+func (stubLister) ListCustomIndexes() []Info { return nil }
 
-// stubHost satisfies ExtensionHost. The interface was
+// stubHost satisfies Host. The interface was
 // introduced in P0.6 to let core (which must not import
 // engine/index/sqlite) type-assert "this StoreIndex supports
-// extension registration" generically.
+// custom index registration" generically.
 type stubHost struct{}
 
-func (stubHost) Extensions() ExtensionRegistry { return stubRegistry{} }
+func (stubHost) CustomIndexes() Registry { return stubRegistry{} }
 
 var (
-	_ CustomIndex       = stubExtension{}
-	_ ExtensionStore    = stubStore{}
-	_ ExtensionRegistry = stubRegistry{}
-	_ ExtensionLister   = stubLister{}
-	_ ExtensionHost     = stubHost{}
+	_ CustomIndex = stubCustomIndex{}
+	_ Substrate   = stubStore{}
+	_ Registry    = stubRegistry{}
+	_ Lister      = stubLister{}
+	_ Host        = stubHost{}
 )
 
 // TestEventArgs_ZeroValueIsValid — the zero EventArgs is the

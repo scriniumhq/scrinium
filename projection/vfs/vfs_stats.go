@@ -7,7 +7,7 @@ import (
 
 // statsBody returns the bytes served at _scrinium/stats. When a host
 // installs a StatsProvider (the ScriniumClient wires one that renders
-// the full report — daemon info, storage capacity, extensions), it
+// the full report — daemon info, storage capacity, custom indexes), it
 // owns the rendering. Absent a provider, the VFS falls back to a
 // minimal dump of its own View counters: enough to be useful, but
 // deliberately free of any cross-layer stats model so the facade

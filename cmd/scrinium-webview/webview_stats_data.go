@@ -19,7 +19,7 @@ import (
 //
 // Kept in main rather than under web/ so the web package stays
 // schema-agnostic; this helper knows about projection-level
-// types (View, ExtensionInfo) which web cannot import.
+// types (View, Info) which web cannot import.
 func buildWebStatsData(
 	reader projection.Reader,
 	cap *domain.StorageInfo,

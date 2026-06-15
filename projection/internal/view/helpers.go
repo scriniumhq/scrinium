@@ -105,7 +105,7 @@ func byDatePath(m domain.Manifest) string {
 
 // byDateLabel picks the human-friendly suffix for a by-date path.
 // Priority: fsmeta path basename → short artifact id with ".bin"
-// extension. Two artifacts created in the same second with the
+// custom index. Two artifacts created in the same second with the
 // same fsmeta basename collide; that's accepted — the by-date
 // tree is a diagnostic aid, not an authoritative storage layout.
 func byDateLabel(m domain.Manifest) string {

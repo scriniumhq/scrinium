@@ -40,7 +40,7 @@ type ArtifactFacet struct {
 	SessionID   domain.SessionID
 	CreatedAt   time.Time
 
-	// Ext carries the engine-extension metadata block (fsmeta and
+	// Ext carries the engine-custom index metadata block (fsmeta and
 	// friends). Per ADR-54 the Usr block is intentionally not
 	// surfaced at facet level.
 	Ext json.RawMessage

@@ -97,8 +97,8 @@ func TestRender_ExtensionsSection(t *testing.T) {
 		out := string(stats.Render(projection.Stats{}, stats.DaemonInfo{
 			StartedAt: time.Now(),
 			Extensions: []stats.Extension{
-				{Name: "scrinium.zeta", SchemaVersion: 2},
-				{Name: "scrinium.alpha", SchemaVersion: 1},
+				{Name: "scrinium.zeta"},
+				{Name: "scrinium.alpha"},
 			},
 		}))
 		if !strings.Contains(out, "[extensions]") {
@@ -123,7 +123,7 @@ func TestRender_ExtensionsSection(t *testing.T) {
 			t.Fatal("section missing for empty slice")
 		}
 		if !strings.Contains(out, "(none registered)") {
-			t.Error("empty extensions slice did not render placeholder")
+			t.Error("empty custom indexes slice did not render placeholder")
 		}
 	})
 }

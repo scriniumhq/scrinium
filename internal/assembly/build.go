@@ -14,15 +14,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
+	"scrinium.dev/extension"
+	"scrinium.dev/x/fs"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/index/fsindex"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/wrapper"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/projection"
@@ -113,13 +115,32 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		}
 	})
 
-	// 4. fsindex extension — must precede store open so the first
-	//    IndexManifest dispatches into it (single-store assembly path).
-	fsidx := fsindex.New()
-	if extIdx, ok := idx.(customindex.ExtensionHost); ok {
-		if err := extIdx.Extensions().Register(ctx, fsidx); err != nil {
-			return nil, fmt.Errorf("scrinium: register fsindex: %w", err)
+	// 4. Extensions — installed as wholes; each part is applied at its
+	//    construction phase (ADR-88, Principle 12 = same result as a
+	//    one-call Use over a live target). The index axis must precede
+	//    store open so the first IndexManifest dispatches into it; the
+	//    behavior wrapper is applied at open; paired agents join the
+	//    scheduler. fsidx is also handed to the projection below.
+	fsidx := fs.NewIndex()
+	exts := []extension.Extension{fs.ExtensionFor(fsidx)}
+	var (
+		loadedExts    []extension.Descriptor
+		wrapFactories []wrapper.Factory
+		extAgents     []extension.Agent
+	)
+	for _, e := range exts {
+		loadedExts = append(loadedExts, e.Descriptor())
+		if ci, ok := e.CustomIndex(); ok {
+			if host, ok := idx.(customindex.Host); ok {
+				if err := host.CustomIndexes().Register(ctx, ci); err != nil {
+					return nil, fmt.Errorf("scrinium: extension %q custom index: %w", e.Descriptor().Name, err)
+				}
+			}
 		}
+		if f, ok := e.Wrapper(); ok {
+			wrapFactories = append(wrapFactories, f)
+		}
+		extAgents = append(extAgents, e.Agents()...)
 	}
 
 	// 5. StoreConfig + passphrase from the policy.
@@ -161,10 +182,38 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		return nil, fmt.Errorf("scrinium: store is locked; check the encryption passphrase")
 	}
 
+	// Behavior axis (Tier 3): wrap the store's data plane with each
+	// extension's decorator, innermost-first, then keep the full Store via
+	// a composite — administrative/maintenance operations pass through to
+	// the underlying store unchanged. The composite is what the client and
+	// the projection read through.
+	if len(wrapFactories) > 0 {
+		// Rules Engine (ADR-75): validate the stack before composing —
+		// structural order/closed-set, ≤1 of each structural, chunker not
+		// on Backup, size invariant. Single-store open has no Backup; the
+		// size inputs are threaded once chunker/bundler config is wired.
+		descs := make([]wrapper.Descriptor, len(wrapFactories))
+		for i, f := range wrapFactories {
+			descs[i] = f.Descriptor()
+		}
+		if verr := wrapper.Validate(descs, wrapper.ValidateOptions{}); verr != nil {
+			return nil, fmt.Errorf("scrinium: wrapper composition: %w", verr)
+		}
+		data := store.DataStore(st)
+		for _, f := range wrapFactories {
+			d, werr := f.Wrap(data, wrapper.Deps{Publisher: bus})
+			if werr != nil {
+				return nil, fmt.Errorf("scrinium: apply extension wrapper: %w", werr)
+			}
+			data = d
+		}
+		st = wrappedStore{DataStore: data, AdminStore: st}
+	}
+
 	// Agents. Validate configured kinds against the registry (fail fast,
 	// like an unknown driver scheme) and assemble the deps the assembler
 	// hands agents directly: Driver and StoreIndex never leave the
-	// assembler (see Assembly.Extensions doc). No scheduler and no
+	// assembler (see Assembly.CustomIndexes doc). No scheduler and no
 	// goroutine here — scheduling is opt-in (ADR-69 level 1 default).
 	for _, ag := range c.Agents {
 		if _, ok := agent.Lookup(ag.Kind); !ok {
@@ -190,6 +239,33 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	scheds, serr := resolveSchedules(spec, c, aw)
 	if serr != nil {
 		return nil, serr
+	}
+
+	// Paired agents from extensions (фоновый довесок): the kind must be
+	// registered; a declared schedule (interval or cron) joins the set
+	// (replace-by-kind) and activates the scheduler, mirroring config
+	// schedules. Without a schedule the kind is available via
+	// RunMaintenance only.
+	for _, ea := range extAgents {
+		if _, ok := agent.Lookup(ea.Kind); !ok {
+			return nil, fmt.Errorf("scrinium: extension agent %q not registered (blank-import its package, as with drivers)", ea.Kind)
+		}
+		if ea.Schedule == "" {
+			continue
+		}
+		rs := resolvedSchedule{cfg: ea.Config}
+		if d, derr := time.ParseDuration(ea.Schedule); derr == nil {
+			rs.interval = d
+		} else if aw.cronParser == nil {
+			return nil, fmt.Errorf("scrinium: extension agent %q has cron schedule %q but cron is not enabled (cron.Enable())", ea.Kind, ea.Schedule)
+		} else {
+			next, cerr := aw.cronParser(ea.Schedule)
+			if cerr != nil {
+				return nil, fmt.Errorf("scrinium: extension agent %q schedule %q: %w", ea.Kind, ea.Schedule, cerr)
+			}
+			rs.next = next
+		}
+		scheds[ea.Kind] = rs
 	}
 	schedActive := aw.stdSched || len(scheds) > 0
 	if schedActive {
@@ -289,7 +365,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		info.ReadOnly = effProj.ReadOnly
 	}
 
-	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus, sched, aw.cronParser), nil
+	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus, sched, aw.cronParser, loadedExts), nil
 }
 
 // resolvedSchedule is a fully-resolved schedule for one kind: either an
@@ -477,7 +553,7 @@ func isNotFound(err error) bool {
 	return errors.Is(err, errs.ErrStoreNotFound)
 }
 
-// dialDriver resolves the store's driver: an extension factory if one
+// dialDriver resolves the store's driver: a custom index factory if one
 // is registered for the scheme, otherwise the engine's built-in
 // DialDriver (file://, s3:// when present, bare paths). The built-in
 // schemes are registered by the consumer's blank import (ADR-63).
@@ -496,7 +572,7 @@ func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
 // dialIndex resolves the index along the default ladder (ADR-63): an
 // explicit spec.Index wins; else Config.Defaults.Index; else a built-in
 // sqlite under a local store dir. The resolved URI is dialled through an
-// extension factory if one is registered for its scheme, otherwise the
+// custom index factory if one is registered for its scheme, otherwise the
 // engine's built-in DialIndex.
 func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.StoreIndex, error) {
 	uri := spec.Index
@@ -671,4 +747,14 @@ func expandTilde(p string) string {
 		}
 	}
 	return p
+}
+
+// wrappedStore presents a full Store whose data plane is decorated by one
+// or more behavior wrappers (Tier 3) while administrative and maintenance
+// operations pass through to the underlying store unchanged. DataStore
+// and AdminStore have disjoint method sets, so embedding both is
+// unambiguous (engine/store/store.go).
+type wrappedStore struct {
+	store.DataStore
+	store.AdminStore
 }

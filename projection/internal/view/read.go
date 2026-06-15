@@ -120,7 +120,7 @@ func (v *View) Search(query string, limit int) []SearchResult {
 
 // makeSearchResult populates a SearchResult from an artifact
 // record. MIME is best-effort from fsmeta; absence falls back
-// to empty (the UI is responsible for any extension-based
+// to empty (the UI is responsible for any custom index-based
 // inference it cares about).
 func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) SearchResult {
 	r := SearchResult{

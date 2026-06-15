@@ -75,8 +75,8 @@ func runServe(args []string) int {
 			capPtr = &c
 		}
 		exts := make([]web.StatsExtension, 0)
-		for _, e := range asm.Extensions() {
-			exts = append(exts, web.StatsExtension{Name: e.Name, SchemaVersion: e.SchemaVersion})
+		for _, d := range asm.Extensions() {
+			exts = append(exts, web.StatsExtension{Name: d.Name})
 		}
 		// webview is always read-only; reflect that on the page.
 		return buildWebStatsData(asm.Projection.Queries(), capPtr, exts, startedAt, asm.MountSession,

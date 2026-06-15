@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/internal/timefmt"
 )
 
@@ -21,7 +21,7 @@ import (
 //     ref_count bump per chunkRef and positional manifest -> chunk links.
 //   - headless pack container (empty slot): indexed exactly like a plain
 //     blob (its body blob_ref flows through manifest_blobs). The pack
-//     PLACEMENT map is owned by the bundler index-extension's Resolver
+//     PLACEMENT map is owned by the bundler index-custom index's Resolver
 //     (ADR-86), not the core — the core holds no pack table and does not
 //     branch on pack-ness.
 //
@@ -60,7 +60,7 @@ func (i *Index) indexManifestTx(
 		// chunk list lives in blob_refs (the core keeps its ref_count), a
 		// plain blob has one, a headless pack container [toc, pack]. Pack
 		// PLACEMENT (the per-member slice map) is owned by the bundler
-		// index-extension's Resolver (ADR-86), recorded out-of-band via
+		// index-custom index's Resolver (ADR-86), recorded out-of-band via
 		// RecordPack — the core holds no pack table (closure, ADR-83).
 		if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
 			return err
@@ -76,15 +76,22 @@ func (i *Index) indexManifestTx(
 			}
 		}
 
-		// Dispatch to subscribed extensions BEFORE commit. An error
-		// from any extension rolls back the entire transaction —
+		// Dispatch to subscribed custom indexes BEFORE commit. An error
+		// from any custom index rolls back the entire transaction —
 		// strict-consistency guarantee per ADR-49. A headless pack
 		// container has no handle and is not surfaced through Walk, so
-		// we skip dispatch for it; extensions index user-visible
+		// we skip dispatch for it; custom indexes index user-visible
 		// artifacts only.
 		if !m.IsContainer() {
+			// Indexers: project ext/usr into proj_* and write any own
+			// tables, in this transaction (§9.2.1). Before the generic
+			// dispatch so projections land first; a failure rolls back the
+			// whole write (strict consistency).
+			if err := i.applyIndexers(ctx, tx, m); err != nil {
+				return err
+			}
 			args := customindex.EventArgs{Manifest: m, ArtifactID: m.ArtifactID}
-			if err := i.dispatchExtensions(ctx, tx, customindex.EventKindManifestIndexed, args); err != nil {
+			if err := i.dispatchCustomIndexes(ctx, tx, customindex.EventKindManifestIndexed, args); err != nil {
 				return err
 			}
 		}
@@ -427,14 +434,21 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 			return err
 		}
 
-		// Dispatch to extensions before commit. EventArgs carries the
+		// Remove the manifest's штатные projections (core-owned, by digest).
+		// Own-table cleanup (Indexer.Unindex) needs the manifest at delete
+		// time and lands with the first own-table consumer (fsindex, M4.4).
+		if err := deleteProjections(ctx, tx, dg); err != nil {
+			return err
+		}
+
+		// Dispatch to custom indexes before commit. EventArgs carries the
 		// actual blob refs read from manifest_blobs (authoritative set)
 		// and the artifact id of the deleted row.
 		args := customindex.EventArgs{
 			ArtifactID: domain.ArtifactID(artifactID),
 			BlobRefs:   actual,
 		}
-		return i.dispatchExtensions(ctx, tx, customindex.EventKindManifestDeleted, args)
+		return i.dispatchCustomIndexes(ctx, tx, customindex.EventKindManifestDeleted, args)
 	})
 }
 

@@ -113,12 +113,12 @@ func run(storeURI string) error {
 		fmt.Printf("Capacity: unavailable (%v)\n", capErr)
 	}
 
-	// Index extensions are an optional capability — Extensions() returns
-	// nil when the index backend exposes none.
+	// Loaded extensions, surfaced as whole units. Extensions() returns
+	// nil when none are loaded.
 	if exts := asm.Extensions(); len(exts) > 0 {
-		fmt.Println("\nIndex extensions:")
-		for _, e := range exts {
-			fmt.Printf("  %s (schema v%d)\n", e.Name, e.SchemaVersion)
+		fmt.Println("\nExtensions:")
+		for _, d := range exts {
+			fmt.Printf("  %s\n", d.Name)
 		}
 	}
 

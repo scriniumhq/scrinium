@@ -160,7 +160,7 @@ var (
 )
 
 // agentTypePattern matches a short built-in name ("gc") or a
-// namespaced extension name ("acme.replicator"). Lowercase only.
+// namespaced custom index name ("acme.replicator"). Lowercase only.
 var agentTypePattern = regexp.MustCompile(`^[a-z0-9-]+(\.[a-z0-9-]+)?$`)
 
 // validAgentType reports whether name is a well-formed AgentType.

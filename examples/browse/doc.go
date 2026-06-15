@@ -8,7 +8,7 @@
 //     (projection.readOnly: true — no writes, no scratch dir needed).
 //   - Iterating manifests via Store.Walk.
 //   - Pulling capacity figures via Store.Capacity.
-//   - Listing index extensions via ScriniumClient.Extensions().
+//   - Listing index custom indexes via ScriniumClient.CustomIndexes().
 //
 // Usage:
 //

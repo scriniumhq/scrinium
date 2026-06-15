@@ -9,7 +9,7 @@ import (
 	"scrinium.dev/engine/pipeline"
 )
 
-// Extension factory signatures. Hosts register implementations through
+// CustomIndex factory signatures. Hosts register implementations through
 // the Register* functions (typically in an init()), after which the
 // corresponding scheme/kind works in a config document alongside the
 // built-ins.
@@ -18,7 +18,7 @@ import (
 // built-in pipeline stages (hash/compress/crypto) are NOT registered
 // here — they are resolved directly by build through the engine's own
 // dialers and stage packages. These registries hold third-party
-// extensions only; build consults them before falling back to the
+// custom indexes only; build consults them before falling back to the
 // built-in path.
 type (
 	// DriverFactory builds a Driver from a URI and resolved
@@ -39,7 +39,7 @@ type (
 	AgentFactory func(a Assembly, config map[string]any) (any, error)
 )
 
-// registries holds the process-wide extension tables. A single guard
+// registries holds the process-wide custom index tables. A single guard
 // covers all four — registration is a startup-time, low-contention
 // operation.
 type registries struct {
@@ -57,7 +57,7 @@ var reg = &registries{
 	agents:  map[string]AgentFactory{},
 }
 
-// RegisterDriver registers an extension driver under a URI scheme
+// RegisterDriver registers a custom index driver under a URI scheme
 // (e.g. "myco-blob"). Panics on empty scheme, nil factory, or
 // duplicate — a double import or typo fails at startup.
 func RegisterDriver(scheme string, f DriverFactory) {
@@ -66,14 +66,14 @@ func RegisterDriver(scheme string, f DriverFactory) {
 	})
 }
 
-// RegisterIndex registers an extension index under a URI scheme.
+// RegisterIndex registers a custom index index under a URI scheme.
 func RegisterIndex(scheme string, f IndexFactory) {
 	mustRegister(scheme, f == nil, "index", func() {
 		reg.indexes[scheme] = f
 	})
 }
 
-// RegisterPipelineStage registers an extension pipeline stage under a
+// RegisterPipelineStage registers a custom index pipeline stage under a
 // kind (e.g. "mycompany-watermark").
 func RegisterPipelineStage(kind string, f PipelineStageFactory) {
 	mustRegister(kind, f == nil, "pipeline stage", func() {

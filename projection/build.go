@@ -11,12 +11,12 @@ import (
 	"scrinium.dev/projection/internal/view"
 )
 
-// ExtIndex is the read-side contract the View consults for fast
+// MetadataIndex is the read-side contract the View consults for fast
 // ext/path lookups. It is satisfied by engine/index/fsindex's
-// registered extension. The composition root registers the extension
+// registered custom index. The composition root registers the custom index
 // with the store's index backend (which must happen before the store
 // opens) and then hands the same handle to Build.
-type ExtIndex = source.Ext
+type MetadataIndex = source.Metadata
 
 // Backend is the store surface a projection needs: the read side the
 // View walks and fetches from, plus the write side FSOps uses. It is
@@ -31,9 +31,9 @@ type Backend interface {
 
 // Build wires the read-side View and the read/write FSOps facade over
 // a store backend, per cfg. The backend must already have the fsindex
-// extension registered and fsidx must be that extension's handle. The
+// custom index registered and fsidx must be that custom index's handle. The
 // returned Projection owns the View; Close releases it.
-func Build(ctx context.Context, backend Backend, fsidx ExtIndex, cfg Config) (*Projection, error) {
+func Build(ctx context.Context, backend Backend, fsidx MetadataIndex, cfg Config) (*Projection, error) {
 	v, err := buildView(ctx, backend, fsidx, cfg)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func Build(ctx context.Context, backend Backend, fsidx ExtIndex, cfg Config) (*P
 
 // buildView constructs the read-side projection. cfg selects the root
 // tree and the by-path fallback; zero values leave engine defaults.
-func buildView(ctx context.Context, backend Backend, fsidx ExtIndex, cfg Config) (*view.View, error) {
+func buildView(ctx context.Context, backend Backend, fsidx MetadataIndex, cfg Config) (*view.View, error) {
 	opts := []view.Option{
 		view.WithPathResolver(fsmeta.Resolver),
 		view.WithFSIndex(fsidx),
