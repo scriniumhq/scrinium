@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/index/extension"
+	"scrinium.dev/engine/extension/customindex"
 	"scrinium.dev/engine/internal/timefmt"
 )
 
@@ -83,8 +83,8 @@ func (i *Index) indexManifestTx(
 		// we skip dispatch for it; extensions index user-visible
 		// artifacts only.
 		if !m.IsContainer() {
-			args := extension.EventArgs{Manifest: m, ArtifactID: m.ArtifactID}
-			if err := i.dispatchExtensions(ctx, tx, extension.EventKindManifestIndexed, args); err != nil {
+			args := customindex.EventArgs{Manifest: m, ArtifactID: m.ArtifactID}
+			if err := i.dispatchExtensions(ctx, tx, customindex.EventKindManifestIndexed, args); err != nil {
 				return err
 			}
 		}
@@ -430,11 +430,11 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 		// Dispatch to extensions before commit. EventArgs carries the
 		// actual blob refs read from manifest_blobs (authoritative set)
 		// and the artifact id of the deleted row.
-		args := extension.EventArgs{
+		args := customindex.EventArgs{
 			ArtifactID: domain.ArtifactID(artifactID),
 			BlobRefs:   actual,
 		}
-		return i.dispatchExtensions(ctx, tx, extension.EventKindManifestDeleted, args)
+		return i.dispatchExtensions(ctx, tx, customindex.EventKindManifestDeleted, args)
 	})
 }
 

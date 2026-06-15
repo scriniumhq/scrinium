@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/index/extension"
+	"scrinium.dev/engine/extension/customindex"
 )
 
 // customIndex is the bundler's index-side half (ADR-88/86): it
@@ -32,7 +32,7 @@ import (
 // accounting and copy-forward compaction, ADR-86) land with the pack
 // GC contract. This stub implements only the Resolver overlay.
 type customIndex struct {
-	store extension.ExtensionStore
+	store customindex.ExtensionStore
 }
 
 const (
@@ -43,14 +43,14 @@ const (
 
 // compile-time capability assertions.
 var (
-	_ extension.CustomIndex = (*customIndex)(nil)
-	_ extension.Resolver    = (*customIndex)(nil)
+	_ customindex.CustomIndex = (*customIndex)(nil)
+	_ customindex.Resolver    = (*customIndex)(nil)
 )
 
-// NewCustomIndex returns the bundler's index-side extension.
-// Register it against a StoreIndex backend (extension.ExtensionHost)
+// NewCustomIndex returns the bundler's index-side customindex.
+// Register it against a StoreIndex backend (customindex.ExtensionHost)
 // to give the core a Resolver overlay for packed artifacts.
-func NewCustomIndex() extension.CustomIndex {
+func NewCustomIndex() customindex.CustomIndex {
 	return &customIndex{}
 }
 
@@ -61,20 +61,20 @@ func (e *customIndex) SchemaVersion() int { return extSchemaVer }
 // Subscribe returns no event kinds: the placement map is populated
 // through RecordPack, not derived from index mutations (the per-member
 // entries are not present in EventArgs).
-func (e *customIndex) Subscribe() []extension.EventKind { return nil }
+func (e *customIndex) Subscribe() []customindex.EventKind { return nil }
 
 // Setup captures the long-lived store for the read/write API. The
 // stored value flips to db-mode once registration commits.
 //
 // TODO(M4): when oldVersion indicates an existing map, or on a cold
 // start, rebuild placement by scanning each volume's TOC-blob.
-func (e *customIndex) Setup(ctx context.Context, store extension.ExtensionStore, oldVersion int) error {
+func (e *customIndex) Setup(ctx context.Context, store customindex.ExtensionStore, oldVersion int) error {
 	e.store = store
 	return nil
 }
 
 // Apply is a no-op: this extension has no subscriptions.
-func (e *customIndex) Apply(ctx context.Context, store extension.ExtensionStore, kind extension.EventKind, args extension.EventArgs) error {
+func (e *customIndex) Apply(ctx context.Context, store customindex.ExtensionStore, kind customindex.EventKind, args customindex.EventArgs) error {
 	return nil
 }
 
@@ -93,7 +93,7 @@ func (e *customIndex) RecordPack(ctx context.Context, container domain.Manifest,
 	}
 	packBlobRef := string(container.PrimaryBlobRef())
 	for _, entry := range entries {
-		ov := extension.PlacementOverlay{
+		ov := customindex.PlacementOverlay{
 			PackBlobRef:    packBlobRef,
 			ManifestOffset: entry.ManifestOffset,
 			ManifestSize:   entry.ManifestSize,
@@ -112,23 +112,23 @@ func (e *customIndex) RecordPack(ctx context.Context, container domain.Manifest,
 	return nil
 }
 
-// ResolvePacked implements extension.Resolver: it overlays the
+// ResolvePacked implements customindex.Resolver: it overlays the
 // placement of a packed artifact by its ArtifactID. A false return
 // means the artifact is not packed (the caller falls back to россыпь).
-func (e *customIndex) ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (extension.PlacementOverlay, bool, error) {
+func (e *customIndex) ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (customindex.PlacementOverlay, bool, error) {
 	if e.store == nil {
-		return extension.PlacementOverlay{}, false, fmt.Errorf("bundler: ResolvePacked before Setup")
+		return customindex.PlacementOverlay{}, false, fmt.Errorf("bundler: ResolvePacked before Setup")
 	}
 	value, ok, err := e.store.Get(placementTable, string(artifactID))
 	if err != nil {
-		return extension.PlacementOverlay{}, false, fmt.Errorf("bundler: lookup placement for %q: %w", artifactID, err)
+		return customindex.PlacementOverlay{}, false, fmt.Errorf("bundler: lookup placement for %q: %w", artifactID, err)
 	}
 	if !ok {
-		return extension.PlacementOverlay{}, false, nil
+		return customindex.PlacementOverlay{}, false, nil
 	}
-	var ov extension.PlacementOverlay
+	var ov customindex.PlacementOverlay
 	if err := json.Unmarshal(value, &ov); err != nil {
-		return extension.PlacementOverlay{}, false, fmt.Errorf("bundler: decode placement for %q: %w", artifactID, err)
+		return customindex.PlacementOverlay{}, false, fmt.Errorf("bundler: decode placement for %q: %w", artifactID, err)
 	}
 	return ov, true, nil
 }
@@ -145,7 +145,7 @@ func (e *customIndex) DeletePack(ctx context.Context, packBlobRef string) error 
 	}
 	var victims []string
 	scanErr := e.store.Scan(placementTable, "", func(key string, value []byte) error {
-		var ov extension.PlacementOverlay
+		var ov customindex.PlacementOverlay
 		if err := json.Unmarshal(value, &ov); err != nil {
 			return fmt.Errorf("bundler: decode placement at %q: %w", key, err)
 		}

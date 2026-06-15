@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"scrinium.dev/engine/extension/customindex"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/index/extension"
 	"scrinium.dev/engine/index/fsindex"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -116,7 +116,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	// 4. fsindex extension — must precede store open so the first
 	//    IndexManifest dispatches into it (single-store assembly path).
 	fsidx := fsindex.New()
-	if extIdx, ok := idx.(extension.ExtensionHost); ok {
+	if extIdx, ok := idx.(customindex.ExtensionHost); ok {
 		if err := extIdx.Extensions().Register(ctx, fsidx); err != nil {
 			return nil, fmt.Errorf("scrinium: register fsindex: %w", err)
 		}

@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"scrinium.dev/engine/index/extension"
+	"scrinium.dev/engine/extension/customindex"
 	"scrinium.dev/engine/internal/timefmt"
 )
 
@@ -19,8 +19,8 @@ import (
 // a core ↔ index import cycle and respects backends that don't
 // support extensions).
 //
-// Implements extension.ExtensionHost.
-func (i *Index) Extensions() extension.ExtensionRegistry {
+// Implements customindex.ExtensionHost.
+func (i *Index) Extensions() customindex.ExtensionRegistry {
 	return &extensionRegistry{idx: i}
 }
 
@@ -33,16 +33,16 @@ func (i *Index) Extensions() extension.ExtensionRegistry {
 // Returns an empty slice (never nil) when no extensions are
 // registered.
 //
-// Implements extension.ExtensionLister.
-func (i *Index) ListExtensions() []extension.ExtensionInfo {
+// Implements customindex.ExtensionLister.
+func (i *Index) ListExtensions() []customindex.ExtensionInfo {
 	i.extMu.Lock()
 	defer i.extMu.Unlock()
 	if len(i.extByName) == 0 {
-		return []extension.ExtensionInfo{}
+		return []customindex.ExtensionInfo{}
 	}
-	out := make([]extension.ExtensionInfo, 0, len(i.extByName))
+	out := make([]customindex.ExtensionInfo, 0, len(i.extByName))
 	for name, ext := range i.extByName {
-		out = append(out, extension.ExtensionInfo{
+		out = append(out, customindex.ExtensionInfo{
 			Name:          name,
 			SchemaVersion: ext.SchemaVersion(),
 		})
@@ -51,14 +51,14 @@ func (i *Index) ListExtensions() []extension.ExtensionInfo {
 }
 
 // extensionRegistry is the concrete implementation of
-// extension.ExtensionRegistry for the sqlite backend. Holds a back-
+// customindex.ExtensionRegistry for the sqlite backend. Holds a back-
 // reference to the index and runs Register inside the index's
 // extension lock plus a fresh transaction.
 type extensionRegistry struct {
 	idx *Index
 }
 
-func (r *extensionRegistry) Register(ctx context.Context, ext extension.CustomIndex) error {
+func (r *extensionRegistry) Register(ctx context.Context, ext customindex.CustomIndex) error {
 	if ext == nil {
 		return fmt.Errorf("sqlite: Register: nil extension")
 	}
@@ -71,7 +71,7 @@ func (r *extensionRegistry) Register(ctx context.Context, ext extension.CustomIn
 	defer r.idx.extMu.Unlock()
 
 	if _, exists := r.idx.extByName[name]; exists {
-		return fmt.Errorf("%w: %q", extension.ErrExtensionExists, name)
+		return fmt.Errorf("%w: %q", customindex.ErrExtensionExists, name)
 	}
 
 	// store is captured inside the tx closure and reused after
@@ -90,7 +90,7 @@ func (r *extensionRegistry) Register(ctx context.Context, ext extension.CustomIn
 		newVersion := ext.SchemaVersion()
 		if newVersion < oldVersion {
 			return fmt.Errorf("%w: %q v%d → v%d",
-				extension.ErrSchemaRegression, name, oldVersion, newVersion)
+				customindex.ErrSchemaRegression, name, oldVersion, newVersion)
 		}
 
 		store = newSqliteExtStore(name)
@@ -159,7 +159,7 @@ func upsertExtensionVersion(ctx context.Context, tx *sql.Tx, name string, versio
 
 // --- ExtensionStore implementation ---
 
-// sqliteExtStore is the extension.ExtensionStore implementation for the
+// sqliteExtStore is the customindex.ExtensionStore implementation for the
 // sqlite backend. It carries an executor — either *sql.Tx (during
 // Setup or Apply) or *sql.DB (for read-side after Setup) — and
 // dispatches every method through it.
@@ -256,7 +256,7 @@ func (s *sqliteExtStore) Delete(table, key string) error {
 
 func (s *sqliteExtStore) DeletePrefix(table, prefix string) error {
 	if prefix == "" {
-		return extension.ErrEmptyPrefix
+		return customindex.ErrEmptyPrefix
 	}
 	upper, hasUpper := prefixUpperBound(prefix)
 	ex := s.exec()
@@ -327,7 +327,7 @@ func (s *sqliteExtStore) Scan(table, prefix string, cb func(key string, value []
 			return err
 		}
 		if cbErr := cb(key, value); cbErr != nil {
-			if errors.Is(cbErr, extension.ErrStopScan) {
+			if errors.Is(cbErr, customindex.ErrStopScan) {
 				return nil
 			}
 			return cbErr
@@ -415,14 +415,14 @@ func prefixUpperBound(prefix string) (string, bool) {
 // given kind, taken under the extension lock. The copy ensures the
 // dispatcher iterates a stable list even if a concurrent Close
 // nilled out the maps.
-func (i *Index) snapshotSubscribers(kind extension.EventKind) []extension.CustomIndex {
+func (i *Index) snapshotSubscribers(kind customindex.EventKind) []customindex.CustomIndex {
 	i.extMu.Lock()
 	defer i.extMu.Unlock()
 	subs := i.extByKind[kind]
 	if len(subs) == 0 {
 		return nil
 	}
-	out := make([]extension.CustomIndex, len(subs))
+	out := make([]customindex.CustomIndex, len(subs))
 	copy(out, subs)
 	return out
 }
@@ -439,8 +439,8 @@ func (i *Index) snapshotSubscribers(kind extension.EventKind) []extension.Custom
 func (i *Index) dispatchExtensions(
 	ctx context.Context,
 	tx *sql.Tx,
-	kind extension.EventKind,
-	args extension.EventArgs,
+	kind customindex.EventKind,
+	args customindex.EventArgs,
 ) error {
 	subs := i.snapshotSubscribers(kind)
 	for _, ext := range subs {

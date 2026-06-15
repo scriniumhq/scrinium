@@ -17,8 +17,8 @@ package chunker
 import (
 	"fmt"
 
+	"scrinium.dev/engine/multistore"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/wrapper/multistore"
 	"scrinium.dev/errs"
 )
 

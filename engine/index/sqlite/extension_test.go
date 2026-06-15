@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/index/extension"
+	"scrinium.dev/engine/extension/customindex"
 )
 
 // --- Test helpers ---
@@ -17,28 +17,28 @@ import (
 type fakeExt struct {
 	name        string
 	version     int
-	subscribe   []extension.EventKind
+	subscribe   []customindex.EventKind
 	setupCalls  int
 	setupOldVer int
 	setupErr    error
-	applyCalls  []extension.EventArgs
-	applyKinds  []extension.EventKind
+	applyCalls  []customindex.EventArgs
+	applyKinds  []customindex.EventKind
 	applyErr    error
 	closeCalls  int
 
-	captured extension.ExtensionStore
+	captured customindex.ExtensionStore
 }
 
-func (e *fakeExt) Name() string                     { return e.name }
-func (e *fakeExt) SchemaVersion() int               { return e.version }
-func (e *fakeExt) Subscribe() []extension.EventKind { return e.subscribe }
-func (e *fakeExt) Setup(ctx context.Context, store extension.ExtensionStore, oldVersion int) error {
+func (e *fakeExt) Name() string                       { return e.name }
+func (e *fakeExt) SchemaVersion() int                 { return e.version }
+func (e *fakeExt) Subscribe() []customindex.EventKind { return e.subscribe }
+func (e *fakeExt) Setup(ctx context.Context, store customindex.ExtensionStore, oldVersion int) error {
 	e.setupCalls++
 	e.setupOldVer = oldVersion
 	e.captured = store
 	return e.setupErr
 }
-func (e *fakeExt) Apply(ctx context.Context, store extension.ExtensionStore, kind extension.EventKind, args extension.EventArgs) error {
+func (e *fakeExt) Apply(ctx context.Context, store customindex.ExtensionStore, kind customindex.EventKind, args customindex.EventArgs) error {
 	e.applyKinds = append(e.applyKinds, kind)
 	e.applyCalls = append(e.applyCalls, args)
 	if e.applyErr != nil {
@@ -46,7 +46,7 @@ func (e *fakeExt) Apply(ctx context.Context, store extension.ExtensionStore, kin
 	}
 	// For ManifestIndexed, write something into the store so
 	// dispatch atomicity can be verified.
-	if kind == extension.EventKindManifestIndexed {
+	if kind == customindex.EventKindManifestIndexed {
 		_ = store.Put("trace", string(args.ArtifactID), []byte("seen"))
 	}
 	return nil
@@ -143,7 +143,7 @@ func TestRegister_DuplicateName(t *testing.T) {
 		t.Fatalf("first Register: %v", err)
 	}
 	err := idx.Extensions().Register(context.Background(), b)
-	if !errors.Is(err, extension.ErrExtensionExists) {
+	if !errors.Is(err, customindex.ErrExtensionExists) {
 		t.Errorf("expected ErrExtensionExists, got %v", err)
 	}
 }
@@ -172,7 +172,7 @@ func TestRegister_SchemaRegression(t *testing.T) {
 	defer idx2.Close()
 	ext2 := &fakeExt{name: "test.regression", version: 3}
 	err = idx2.Extensions().Register(context.Background(), ext2)
-	if !errors.Is(err, extension.ErrSchemaRegression) {
+	if !errors.Is(err, customindex.ErrSchemaRegression) {
 		t.Errorf("expected ErrSchemaRegression, got %v", err)
 	}
 }
@@ -187,7 +187,7 @@ func TestRegister_SetupFailure_RollbackEverything(t *testing.T) {
 	if !errors.Is(err, failure) {
 		t.Errorf("expected setup error, got %v", err)
 	}
-	// ext_meta must NOT contain a row for the failed extension.
+	// ext_meta must NOT contain a row for the failed customindex.
 	var v int
 	scanErr := idx.db.QueryRow(
 		`SELECT schema_version FROM ext_meta WHERE extension = ?`,
@@ -317,7 +317,7 @@ func TestExtStore_Scan_StopScan(t *testing.T) {
 	err := store.Scan("scan", "", func(k string, v []byte) error {
 		count++
 		if count == 2 {
-			return extension.ErrStopScan
+			return customindex.ErrStopScan
 		}
 		return nil
 	})
@@ -363,7 +363,7 @@ func TestExtStore_DeletePrefix_EmptyRejected(t *testing.T) {
 	idx.Extensions().Register(context.Background(), ext)
 
 	err := ext.captured.DeletePrefix("t", "")
-	if !errors.Is(err, extension.ErrEmptyPrefix) {
+	if !errors.Is(err, customindex.ErrEmptyPrefix) {
 		t.Errorf("expected ErrEmptyPrefix, got %v", err)
 	}
 }
@@ -435,7 +435,7 @@ func TestDispatch_ManifestIndexed(t *testing.T) {
 	ext := &fakeExt{
 		name:      "test.dispatch",
 		version:   1,
-		subscribe: []extension.EventKind{extension.EventKindManifestIndexed},
+		subscribe: []customindex.EventKind{customindex.EventKindManifestIndexed},
 	}
 	if err := idx.Extensions().Register(context.Background(), ext); err != nil {
 		t.Fatalf("Register: %v", err)
@@ -450,7 +450,7 @@ func TestDispatch_ManifestIndexed(t *testing.T) {
 	if len(ext.applyCalls) != 1 {
 		t.Fatalf("Apply called %d times, want 1", len(ext.applyCalls))
 	}
-	if ext.applyKinds[0] != extension.EventKindManifestIndexed {
+	if ext.applyKinds[0] != customindex.EventKindManifestIndexed {
 		t.Errorf("kind = %v, want ManifestIndexed", ext.applyKinds[0])
 	}
 	if ext.applyCalls[0].Manifest.ArtifactID != "art-1" {
@@ -476,7 +476,7 @@ func TestDispatch_NotSubscribed_NoApply(t *testing.T) {
 	ext := &fakeExt{
 		name:      "test.notsub",
 		version:   1,
-		subscribe: []extension.EventKind{extension.EventKindManifestDeleted},
+		subscribe: []customindex.EventKind{customindex.EventKindManifestDeleted},
 	}
 	idx.Extensions().Register(context.Background(), ext)
 
@@ -497,7 +497,7 @@ func TestDispatch_ApplyError_RollsBack(t *testing.T) {
 	ext := &fakeExt{
 		name:      "test.applyfail",
 		version:   1,
-		subscribe: []extension.EventKind{extension.EventKindManifestIndexed},
+		subscribe: []customindex.EventKind{customindex.EventKindManifestIndexed},
 		applyErr:  failure,
 	}
 	idx.Extensions().Register(context.Background(), ext)
@@ -530,7 +530,7 @@ func TestDispatch_ManifestDeleted(t *testing.T) {
 	ext := &fakeExt{
 		name:      "test.del",
 		version:   1,
-		subscribe: []extension.EventKind{extension.EventKindManifestDeleted},
+		subscribe: []customindex.EventKind{customindex.EventKindManifestDeleted},
 	}
 	idx.Extensions().Register(context.Background(), ext)
 
@@ -547,7 +547,7 @@ func TestDispatch_ManifestDeleted(t *testing.T) {
 	if len(ext.applyCalls) != 1 {
 		t.Fatalf("Apply called %d times, want 1", len(ext.applyCalls))
 	}
-	if ext.applyKinds[0] != extension.EventKindManifestDeleted {
+	if ext.applyKinds[0] != customindex.EventKindManifestDeleted {
 		t.Errorf("kind = %v, want ManifestDeleted", ext.applyKinds[0])
 	}
 	if ext.applyCalls[0].ArtifactID != "art-del" {
@@ -587,7 +587,7 @@ func openMemIndex(t *testing.T) *Index {
 // TestIndex_ListExtensions verifies (*Index).ListExtensions returns
 // every registered extension's name and SchemaVersion. Introduced
 // after P0.6, when the method's return type was lifted from a
-// sqlite-local ExtensionInfo to extension.ExtensionInfo (the contract
+// sqlite-local ExtensionInfo to customindex.ExtensionInfo (the contract
 // type backends share). Without a direct test, a regression in
 // either the return shape or the slice population would surface
 // only via the projection layer's stats renderer — too far from
