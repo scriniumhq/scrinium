@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"scrinium.dev/engine/customindex"
 	"scrinium.dev/extension"
-	"scrinium.dev/extensions/fs"
+	"scrinium.dev/x/fs"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
@@ -188,6 +188,17 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	// the underlying store unchanged. The composite is what the client and
 	// the projection read through.
 	if len(wrapFactories) > 0 {
+		// Rules Engine (ADR-75): validate the stack before composing —
+		// structural order/closed-set, ≤1 of each structural, chunker not
+		// on Backup, size invariant. Single-store open has no Backup; the
+		// size inputs are threaded once chunker/bundler config is wired.
+		descs := make([]wrapper.Descriptor, len(wrapFactories))
+		for i, f := range wrapFactories {
+			descs[i] = f.Descriptor()
+		}
+		if verr := wrapper.Validate(descs, wrapper.ValidateOptions{}); verr != nil {
+			return nil, fmt.Errorf("scrinium: wrapper composition: %w", verr)
+		}
 		data := store.DataStore(st)
 		for _, f := range wrapFactories {
 			d, werr := f.Wrap(data, wrapper.Deps{Publisher: bus})

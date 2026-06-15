@@ -10,7 +10,7 @@ import (
 	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/index/sqlite"
-	fsExt "scrinium.dev/extensions/fs"
+	fsExt "scrinium.dev/x/fs"
 )
 
 // --- helpers ---

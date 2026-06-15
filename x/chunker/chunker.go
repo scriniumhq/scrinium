@@ -59,3 +59,16 @@ type factory struct {
 func (f *factory) Wrap(store store.DataStore, deps wrapper.Deps) (store.DataStore, error) {
 	return nil, fmt.Errorf("%w: chunker.Wrap", errs.ErrNotImplemented)
 }
+
+// Descriptor reports the chunker's identity for the wrapper registry and
+// the Rules Engine. chunker is Structural — part of the closed set
+// {chunker, bundler}.
+func (f *factory) Descriptor() wrapper.Descriptor {
+	return wrapper.Descriptor{Name: "chunker", Class: wrapper.Structural}
+}
+
+// init registers the chunker under its name for blank-import wiring
+// (ADR-63), the way drivers and agents register, so hosts can discover
+// the wrapper by name. Construction-time config is applied via New; this
+// registers the default factory. (chunker.Wrap itself lands in M4.5.)
+func init() { wrapper.Register(New(Config{})) }
