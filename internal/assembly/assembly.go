@@ -20,7 +20,7 @@ type Assembly interface {
 	// Store is the high-level CAS store (Put/Get/Delete/Walk + admin).
 	Store() store.Store
 
-	// Extensions lists the index extensions registered on the backing
+	// CustomIndexes lists the index custom indexes registered on the backing
 	// store index, for diagnostics (e.g. a stats page). Empty when the
 	// index backend exposes none. This is the only index detail the
 	// assembly surfaces: the raw StoreIndex (with its mutating
@@ -31,7 +31,7 @@ type Assembly interface {
 	// StoreIndex directly from the assembler at construction time
 	// (engine-internal); they do not reach them through this surface,
 	// and neither do hosts.
-	Extensions() []customindex.Info
+	CustomIndexes() []customindex.Info
 
 	// Projection is the read-side View plus the optional read/write
 	// FSOps facade, bundled. Nil when the assembly was built without a
@@ -157,10 +157,10 @@ func (a *asm) Projection() *projection.Projection { return a.proj }
 func (a *asm) MountSession() domain.SessionID     { return a.mountSession }
 func (a *asm) Info() Info                         { return a.info }
 
-// Extensions reports the index extensions when the backend implements
+// CustomIndexes reports the index custom indexes when the backend implements
 // customindex.Lister, and nil otherwise. The raw index is held only
 // internally (a.index) and never handed out.
-func (a *asm) Extensions() []customindex.Info {
+func (a *asm) CustomIndexes() []customindex.Info {
 	if l, ok := a.index.(customindex.Lister); ok {
 		return l.ListCustomIndexes()
 	}

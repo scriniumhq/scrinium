@@ -49,7 +49,7 @@ type VFS struct {
 
 	// statsProvider, if non-nil, returns the bytes served at
 	// _scrinium/stats. Hosts inject one that bundles live
-	// capacity, extension list, and policy snippets in
+	// capacity, custom index list, and policy snippets in
 	// addition to the View counters. Falls back to a minimal
 	// View-only renderer when nil — keeps tests and basic
 	// surfaces working without supplying a provider.
@@ -66,7 +66,7 @@ type VFS struct {
 
 // StatsProvider returns the bytes for the _scrinium/stats
 // virtual file. Hosts implement this to feed live data
-// (capacity, extensions, runtime info) that the projection
+// (capacity, custom indexes, runtime info) that the projection
 // alone doesn't track.
 type StatsProvider func() []byte
 

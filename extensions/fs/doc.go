@@ -1,9 +1,9 @@
-// Package fsindex is an index extension that persists the fsmeta
+// Package fsindex is an index custom index that persists the fsmeta
 // payload of every artifact whose Manifest.Ext uses the
 // filesystem schema. It hangs off StoreIndex via the index
-// extensions infrastructure (see 3. Reference/09 CustomIndex and Search.md).
+// custom indexes infrastructure (see 3. Reference/09 CustomIndex and Search.md).
 //
-// The extension serves two roles:
+// The custom index serves two roles:
 //
 //   - Backfill source for view.View. After a process
 //     restart the View needs to rebuild its filesystem trees
@@ -15,7 +15,7 @@
 //   - Direct path lookup. Hosts that want to translate a
 //     virtual path to an ArtifactID without standing up a
 //     full View (FUSE Stat hot-path, WebDAV PROPFIND on a
-//     specific resource) call LookupByPath. The extension
+//     specific resource) call LookupByPath. The custom index
 //     keeps a reverse index for O(log N) lookups.
 //
 // fsindex stores the fsmeta JSON as-is rather than pre-decoded

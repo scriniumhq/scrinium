@@ -7,7 +7,7 @@
 //
 // The report deliberately lives here rather than in projection: a
 // projection owns its logical counters (ViewStats) but has no concept
-// of physical capacity, registered index extensions, or daemon
+// of physical capacity, registered index custom indexes, or daemon
 // uptime. Those belong to the store and the assembly respectively, so
 // the join is a composition concern — kept off the projection
 // primitive's public surface.

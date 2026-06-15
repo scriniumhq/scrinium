@@ -50,9 +50,9 @@ type Index struct {
 	// ciStores keeps the long-lived CustomIndexStore handed to each
 	// CustomIndex during Setup. Apply uses fresh tx-scoped stores
 	// (allocated per call); the long-lived stores in this map are
-	// the ones extensions may have captured for read-side use.
+	// the ones custom indexes may have captured for read-side use.
 	// Maintained so Close can release them in lockstep with the
-	// extension list.
+	// custom index list.
 	ciStores map[string]*sqliteCIStore
 }
 
@@ -251,16 +251,16 @@ func applyPragmas(ctx context.Context, db *sql.DB, path string, o options) error
 func (i *Index) Close() error {
 	i.closeOnce.Do(func() {
 		i.ciMu.Lock()
-		// Close in reverse-registration order. extByKind is the
+		// Close in reverse-registration order. ciByKind is the
 		// dispatch map; a stable insertion-order list would be
 		// cleaner, but the set of subscribers is small in
-		// practice — iterating extByName here is fine.
+		// practice — iterating ciByName here is fine.
 		for _, ext := range i.ciByName {
 			_ = ext.Close()
 		}
 		// Drop store-side references so Get/Scan calls from a
 		// host that mistakenly held a captured store after
-		// Close fail with a clear errExtStoreClosed instead of
+		// Close fail with a clear errSubstrateClosed instead of
 		// hitting a closed *sql.DB.
 		for _, store := range i.ciStores {
 			store.executor.Store(nil)

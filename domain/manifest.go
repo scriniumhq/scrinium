@@ -10,7 +10,7 @@ import (
 // It consists of a byte stream (Payload) and two metadata blocks
 // per ADR-54:
 //
-//   - Ext: Scrinium-extension data the engine itself reads
+//   - Ext: Scrinium-custom index data the engine itself reads
 //     (fsmeta and friends).
 //   - Usr: opaque host-application data — tags, business
 //     attributes; the engine never inspects them.
@@ -191,7 +191,7 @@ func (m Manifest) PrimaryBlobRef() BlobRef {
 
 // IsComposite reports whether the manifest is a chunked composite —
 // the chunker's "composite" flag is set in Ext (ADR-87). The flag is
-// for the chunker extension; the core does not branch on it. For a
+// for the chunker custom index; the core does not branch on it. For a
 // composite, BlobRefs holds the ordered chunk list.
 func (m *Manifest) IsComposite() bool {
 	if len(m.Ext) == 0 {

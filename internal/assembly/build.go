@@ -113,11 +113,11 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		}
 	})
 
-	// 4. fsindex extension — must precede store open so the first
+	// 4. fsindex custom index — must precede store open so the first
 	//    IndexManifest dispatches into it (single-store assembly path).
 	fsidx := fs.NewIndex()
-	if extIdx, ok := idx.(customindex.Host); ok {
-		if err := extIdx.CustomIndexes().Register(ctx, fsidx); err != nil {
+	if ciHost, ok := idx.(customindex.Host); ok {
+		if err := ciHost.CustomIndexes().Register(ctx, fsidx); err != nil {
 			return nil, fmt.Errorf("scrinium: register fsindex: %w", err)
 		}
 	}
@@ -164,7 +164,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	// Agents. Validate configured kinds against the registry (fail fast,
 	// like an unknown driver scheme) and assemble the deps the assembler
 	// hands agents directly: Driver and StoreIndex never leave the
-	// assembler (see Assembly.Extensions doc). No scheduler and no
+	// assembler (see Assembly.CustomIndexes doc). No scheduler and no
 	// goroutine here — scheduling is opt-in (ADR-69 level 1 default).
 	for _, ag := range c.Agents {
 		if _, ok := agent.Lookup(ag.Kind); !ok {
@@ -477,7 +477,7 @@ func isNotFound(err error) bool {
 	return errors.Is(err, errs.ErrStoreNotFound)
 }
 
-// dialDriver resolves the store's driver: an extension factory if one
+// dialDriver resolves the store's driver: a custom index factory if one
 // is registered for the scheme, otherwise the engine's built-in
 // DialDriver (file://, s3:// when present, bare paths). The built-in
 // schemes are registered by the consumer's blank import (ADR-63).
@@ -496,7 +496,7 @@ func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
 // dialIndex resolves the index along the default ladder (ADR-63): an
 // explicit spec.Index wins; else Config.Defaults.Index; else a built-in
 // sqlite under a local store dir. The resolved URI is dialled through an
-// extension factory if one is registered for its scheme, otherwise the
+// custom index factory if one is registered for its scheme, otherwise the
 // engine's built-in DialIndex.
 func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.StoreIndex, error) {
 	uri := spec.Index

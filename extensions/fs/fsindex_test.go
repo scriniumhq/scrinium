@@ -83,7 +83,7 @@ func physAddr() domain.PhysicalAddress {
 func TestRegister_Succeeds(t *testing.T) {
 	idx, ext := newRegisteredFSIndex(t)
 	if ext == nil {
-		t.Fatal("nil extension")
+		t.Fatal("nil custom index")
 	}
 	if idx == nil {
 		t.Fatal("nil index")
@@ -324,21 +324,21 @@ func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
 	}
 }
 
-// --- Read API on un-registered extension ---
+// --- Read API on un-registered custom index ---
 
 func TestReadAPI_NotRegistered_Errs(t *testing.T) {
 	ci := fsExt.NewIndex()
 	_, _, err := ci.GetByID("anything")
 	if err == nil {
-		t.Error("GetByID on un-registered extension returned nil; want error")
+		t.Error("GetByID on un-registered custom index returned nil; want error")
 	}
 	_, _, err = ci.LookupByPath("anything")
 	if err == nil {
-		t.Error("LookupByPath on un-registered extension returned nil; want error")
+		t.Error("LookupByPath on un-registered custom index returned nil; want error")
 	}
 	err = ci.WalkAll(func(domain.ArtifactID, json.RawMessage) error { return nil })
 	if err == nil {
-		t.Error("WalkAll on un-registered extension returned nil; want error")
+		t.Error("WalkAll on un-registered custom index returned nil; want error")
 	}
 }
 

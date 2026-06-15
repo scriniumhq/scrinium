@@ -7,31 +7,31 @@ import (
 	"scrinium.dev/domain"
 )
 
-// CustomIndex is the contract host-side index extensions
-// satisfy. An extension lives inside a StoreIndex backend,
+// CustomIndex is the contract host-side index custom indexes
+// satisfy. A custom index lives inside a StoreIndex backend,
 // shares its transactions, and exposes its own read API to the
 // host.
 //
 // Two-paragraph mental model:
 //
-// (1) Subscriptions. Extensions declare which mutations they
+// (1) Subscriptions. CustomIndexes declare which mutations they
 // care about via Subscribe. The backend dispatches matching
 // events into Apply WITHIN the same transaction as the main
-// index write — so an extension cannot drift from the main
+// index write — so a custom index cannot drift from the main
 // index state. A failure in Apply rolls the whole transaction
 // back, including the main write.
 //
-// (2) Storage. Extensions own no SQL, no DB handles, no
+// (2) Storage. CustomIndexes own no SQL, no DB handles, no
 // migration code: they put bytes into a backend-agnostic
 // Substrate keyed by (table, key). The backend translates
 // to its own substrate. Tables are namespace-prefixed by
-// extension Name to prevent collisions between extensions.
+// custom index Name to prevent collisions between custom indexes.
 //
 // Contract spec: 3. Reference/09 CustomIndex and Search.md.
 type CustomIndex interface {
-	// Name is the stable identifier for this extension. Used
+	// Name is the stable identifier for this custom index. Used
 	// as the namespace prefix in Substrate. Must be
-	// unique among extensions registered to the same backend.
+	// unique among custom indexes registered to the same backend.
 	// Recommended: dotted, lower-case, like "scrinium.fsindex".
 	Name() string
 
@@ -39,12 +39,12 @@ type CustomIndex interface {
 	// backend persists the version of the most-recent successful
 	// Setup; on a later registration with a different version,
 	// Setup is called with the stored value as oldVersion and
-	// the extension migrates.
+	// the custom index migrates.
 	SchemaVersion() int
 
-	// Subscribe returns the event kinds this extension wants to
+	// Subscribe returns the event kinds this custom index wants to
 	// observe. An empty slice means "no subscriptions" — useful
-	// for read-only extensions that initialise data in Setup
+	// for read-only custom indexes that initialise data in Setup
 	// and never react to mutations. Called once at Register;
 	// the result is cached.
 	Subscribe() []EventKind
@@ -62,12 +62,12 @@ type CustomIndex interface {
 	// returned here aborts both.
 	Apply(ctx context.Context, store Substrate, kind EventKind, args EventArgs) error
 
-	// Close releases extension-side resources. Backend storage
+	// Close releases custom index-side resources. Backend storage
 	// remains owned by the StoreIndex.
 	Close() error
 }
 
-// EventKind names an index-level operation an extension can
+// EventKind names an index-level operation a custom index can
 // observe. The set is closed (defined here, exhaustive switch
 // in implementations).
 type EventKind uint8
@@ -118,7 +118,7 @@ type EventArgs struct {
 // work; they are not required to take the core off pack tables.
 
 // PlacementOverlay is the physical location of an artifact whose
-// storage is OWNED by an index extension rather than the core
+// storage is OWNED by an index custom index rather than the core
 // (ADR-88/86) — the overlay counterpart of the core's россыпь
 // resolution. A packed artifact lives as two slices of a .pack
 // volume (its member manifest and its blob) plus the pipeline
@@ -164,19 +164,19 @@ type Resolver interface {
 	CustomIndex
 
 	// ResolvePacked reports the placement of an artifact this
-	// extension owns, by its ArtifactID. The second return is false
+	// custom index owns, by its ArtifactID. The second return is false
 	// when the artifact is not owned here — the caller continues to
 	// the next resolver or falls back to россыпь. Reads see committed
 	// state.
 	ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (PlacementOverlay, bool, error)
 }
 
-// Substrate is the backend-agnostic data plane an extension
+// Substrate is the backend-agnostic data plane a custom index
 // uses for its own state. All mutations are scoped to the
 // surrounding transaction; reads see committed state.
 //
-// Tables are auto-namespaced by extension Name; the same `table`
-// argument from two extensions does not collide.
+// Tables are auto-namespaced by custom index Name; the same `table`
+// argument from two custom indexes does not collide.
 type Substrate interface {
 	// Put writes (or overwrites) a value for the given key.
 	// Idempotent.
@@ -210,16 +210,16 @@ type Substrate interface {
 }
 
 // Registry is the surface returned by
-// StoreIndex.Extensions. The only mutation is Register; backends
+// StoreIndex.CustomIndexes. The only mutation is Register; backends
 // expose nothing else through this interface.
 type Registry interface {
-	// Register attaches an extension to the index. Setup runs
+	// Register attaches a custom index to the index. Setup runs
 	// in a single transaction; failure rolls back any work the
-	// extension did during Setup, persisted schema_version is
+	// custom index did during Setup, persisted schema_version is
 	// not bumped, and no subscriptions are recorded.
 	//
-	// Returns ErrExtensionExists if Name() collides with an
-	// already-registered extension.
+	// Returns ErrAlreadyRegistered if Name() collides with an
+	// already-registered custom index.
 	// Returns ErrSchemaRegression if SchemaVersion() is less
 	// than the persisted value for this Name().
 	Register(ctx context.Context, ext CustomIndex) error
@@ -232,19 +232,19 @@ var (
 	// to stop the iteration without surfacing it as an error.
 	ErrStopScan = errors.New("scrinium/index: stop scan")
 
-	// ErrExtensionExists is returned by Register when an
-	// extension with the same Name() is already registered.
-	ErrExtensionExists = errors.New("scrinium/index: extension already registered")
+	// ErrAlreadyRegistered is returned by Register when an
+	// custom index with the same Name() is already registered.
+	ErrAlreadyRegistered = errors.New("scrinium/index: custom index already registered")
 
 	// ErrSchemaRegression is returned by Register when the
-	// extension's SchemaVersion() is less than the persisted
+	// custom index's SchemaVersion() is less than the persisted
 	// value. Backends do not auto-downgrade.
-	ErrSchemaRegression = errors.New("scrinium/index: extension schema version regressed")
+	ErrSchemaRegression = errors.New("scrinium/index: custom index schema version regressed")
 
-	// ErrBackendMismatch is returned by extension Setup when
-	// the backend does not implement an interface the extension
+	// ErrBackendMismatch is returned by custom index Setup when
+	// the backend does not implement an interface the custom index
 	// requires (typically a backend escape hatch like SQLBackend).
-	ErrBackendMismatch = errors.New("scrinium/index: extension incompatible with backend")
+	ErrBackendMismatch = errors.New("scrinium/index: custom index incompatible with backend")
 
 	// ErrEmptyPrefix is returned by DeletePrefix when called
 	// with an empty prefix. "Delete all rows of a table" is an
@@ -253,41 +253,41 @@ var (
 )
 
 // Info is the public, backend-agnostic descriptor of a
-// registered index extension. Surfaces (stats endpoints, debug
+// registered index custom index. Surfaces (stats endpoints, debug
 // pages, examples) consume this rather than reaching into a
 // concrete backend type.
 //
-// Backends that report registered extensions return slices of
+// Backends that report registered custom indexes return slices of
 // this type via Lister. The type is intentionally
 // flat — no behaviour, no pointers — so it can travel through
 // any layer without dragging dependencies.
 type Info struct {
-	// Name is the extension's stable identifier
+	// Name is the custom index's stable identifier
 	// (CustomIndex.Name()).
 	Name string
 
 	// SchemaVersion is the persisted schema version for this
-	// extension on this backend, after the most recent successful
+	// custom index on this backend, after the most recent successful
 	// Setup. Used to surface migration state.
 	SchemaVersion int
 }
 
 // Host is the optional capability a StoreIndex backend
-// exposes when it supports registering host-side extensions.
+// exposes when it supports registering host-side custom indexes.
 //
-// Backends that support extensions implement this; the rest are
+// Backends that support custom indexes implement this; the rest are
 // transparently skipped by callers that type-assert it. Lives
 // here (not on store.StoreIndex) so the core package needs no
 // import of engine/index — the assertion happens at the wiring
 // layer instead.
 type Host interface {
-	// Extensions returns the registry through which CustomIndex
+	// CustomIndexes returns the registry through which CustomIndex
 	// implementations are attached to this backend.
 	CustomIndexes() Registry
 }
 
 // Lister is the optional capability a StoreIndex backend
-// exposes when it can enumerate currently-registered extensions.
+// exposes when it can enumerate currently-registered custom indexes.
 //
 // Distinct from Host (the registration-side capability)
 // because read and write surfaces are conceptually independent —
@@ -295,7 +295,7 @@ type Host interface {
 // or a constrained backend might register without listing. In
 // practice today's sqlite backend implements both.
 //
-// Returns an empty slice (never nil) when no extensions are
+// Returns an empty slice (never nil) when no custom indexes are
 // registered. Order is unspecified — callers that need stable
 // listings sort by Name.
 type Lister interface {

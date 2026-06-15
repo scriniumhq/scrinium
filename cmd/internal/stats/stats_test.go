@@ -38,7 +38,7 @@ func TestRender_OmitsOptionalFields(t *testing.T) {
 		StartedAt: time.Now(),
 	}))
 
-	for _, leaked := range []string{"MountSession:", "StorePath:", "[storage]", "[extensions]"} {
+	for _, leaked := range []string{"MountSession:", "StorePath:", "[storage]", "[custom indexes]"} {
 		if strings.Contains(out, leaked) {
 			t.Errorf("%q leaked despite empty field", leaked)
 		}
@@ -92,38 +92,38 @@ func TestRender_StorageNA(t *testing.T) {
 	}
 }
 
-func TestRender_ExtensionsSection(t *testing.T) {
+func TestRender_CustomIndexesSection(t *testing.T) {
 	t.Run("populated", func(t *testing.T) {
 		out := string(stats.Render(projection.Stats{}, stats.DaemonInfo{
 			StartedAt: time.Now(),
-			Extensions: []stats.Extension{
+			CustomIndexes: []stats.CustomIndex{
 				{Name: "scrinium.zeta", SchemaVersion: 2},
 				{Name: "scrinium.alpha", SchemaVersion: 1},
 			},
 		}))
-		if !strings.Contains(out, "[extensions]") {
-			t.Fatal("missing [extensions]")
+		if !strings.Contains(out, "[custom indexes]") {
+			t.Fatal("missing [custom indexes]")
 		}
 		alpha := strings.Index(out, "scrinium.alpha")
 		zeta := strings.Index(out, "scrinium.zeta")
 		if alpha < 0 || zeta < 0 {
-			t.Fatal("extensions missing from output")
+			t.Fatal("custom indexes missing from output")
 		}
 		if alpha >= zeta {
-			t.Error("extensions not sorted alphabetically")
+			t.Error("custom indexes not sorted alphabetically")
 		}
 	})
 
 	t.Run("empty slice shows (none registered)", func(t *testing.T) {
 		out := string(stats.Render(projection.Stats{}, stats.DaemonInfo{
-			StartedAt:  time.Now(),
-			Extensions: []stats.Extension{},
+			StartedAt:     time.Now(),
+			CustomIndexes: []stats.CustomIndex{},
 		}))
-		if !strings.Contains(out, "[extensions]") {
+		if !strings.Contains(out, "[custom indexes]") {
 			t.Fatal("section missing for empty slice")
 		}
 		if !strings.Contains(out, "(none registered)") {
-			t.Error("empty extensions slice did not render placeholder")
+			t.Error("empty custom indexes slice did not render placeholder")
 		}
 	})
 }

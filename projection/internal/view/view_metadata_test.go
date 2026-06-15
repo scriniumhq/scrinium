@@ -17,24 +17,24 @@ import (
 
 // --- helpers ---
 
-// countingExtSource records every call to Ext so tests can
+// countingMetadataSource records every call to Ext so tests can
 // assert the fast-path was actually taken.
-type countingExtSource struct {
+type countingMetadataSource struct {
 	store map[domain.ArtifactID]json.RawMessage
 	calls atomic.Int32
 }
 
-func newCountingExtSource() *countingExtSource {
-	return &countingExtSource{
+func newCountingMetadataSource() *countingMetadataSource {
+	return &countingMetadataSource{
 		store: make(map[domain.ArtifactID]json.RawMessage),
 	}
 }
 
-func (c *countingExtSource) put(id domain.ArtifactID, raw json.RawMessage) {
+func (c *countingMetadataSource) put(id domain.ArtifactID, raw json.RawMessage) {
 	c.store[id] = raw
 }
 
-func (c *countingExtSource) Ext(id domain.ArtifactID) (json.RawMessage, bool, error) {
+func (c *countingMetadataSource) Metadata(id domain.ArtifactID) (json.RawMessage, bool, error) {
 	c.calls.Add(1)
 	raw, ok := c.store[id]
 	return raw, ok, nil
@@ -67,13 +67,13 @@ func encodeFSMeta(t *testing.T, path string) json.RawMessage {
 // --- tests ---
 
 // TestBackfill_FastPath_UsesExtSource verifies that when a
-// ExtSource is configured, vw.backfill consults it for
+// MetadataSource is configured, vw.backfill consults it for
 // every walked manifest. Source.Get is still callable (the slow
 // path is fallback), but the fast path should hit first when the
 // source has the artifact.
 func TestBackfill_FastPath_UsesExtSource(t *testing.T) {
 	src := projectionfx.New()
-	ms := newCountingExtSource()
+	ms := newCountingMetadataSource()
 
 	for i, path := range []string{"a.txt", "b.txt", "c.txt"} {
 		id := domain.ArtifactID([]byte{'i', 'd', '0' + byte(i)})
@@ -85,7 +85,7 @@ func TestBackfill_FastPath_UsesExtSource(t *testing.T) {
 
 	v, err := vw.New(context.Background(), src,
 		vw.WithPathResolver(fsmeta.Resolver),
-		vw.WithExtSource(ms),
+		vw.WithMetadataSource(ms),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
@@ -95,22 +95,22 @@ func TestBackfill_FastPath_UsesExtSource(t *testing.T) {
 	}
 
 	// Every walked manifest should have triggered exactly one
-	// ExtSource lookup.
+	// MetadataSource lookup.
 	if got := ms.calls.Load(); got != 3 {
-		t.Errorf("ExtSource.Ext called %d times, want 3", got)
+		t.Errorf("MetadataSource.Ext called %d times, want 3", got)
 	}
 }
 
 // TestBackfill_FastPath_FallsBackOnMiss verifies that when the
-// ExtSource doesn't have a record (e.g. artifact written
-// before the extension was registered), backfill silently falls
+// MetadataSource doesn't have a record (e.g. artifact written
+// before the custom index was registered), backfill silently falls
 // back to Source.Get and the View still ends up with the
 // ext block for that manifest.
 func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	src := projectionfx.New()
-	ms := newCountingExtSource()
+	ms := newCountingMetadataSource()
 
-	// One artifact in ExtSource with full ext payload.
+	// One artifact in MetadataSource with full ext payload.
 	idHit := domain.ArtifactID("hit")
 	src.Add(domain.Manifest{
 		ArtifactID:   idHit,
@@ -123,7 +123,7 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	}, nil)
 	ms.put(idHit, encodeFSMeta(t, "in-source.txt"))
 
-	// Another artifact NOT in ExtSource. FakeSource keeps the
+	// Another artifact NOT in MetadataSource. FakeSource keeps the
 	// full manifest in-memory; the slow-path Get returns it,
 	// recovering Ext for the vw.
 	idMiss := domain.ArtifactID("miss")
@@ -140,7 +140,7 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 
 	v, err := vw.New(context.Background(), src,
 		vw.WithPathResolver(fsmeta.Resolver),
-		vw.WithExtSource(ms),
+		vw.WithMetadataSource(ms),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
@@ -156,12 +156,12 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 
 	// Fast path was tried for both.
 	if got := ms.calls.Load(); got != 2 {
-		t.Errorf("ExtSource.Ext called %d times, want 2", got)
+		t.Errorf("MetadataSource.Ext called %d times, want 2", got)
 	}
 }
 
 // TestBackfill_NoExtSource_FallsBackToGet verifies the
-// backwards-compatible slow path: with no ExtSource
+// backwards-compatible slow path: with no MetadataSource
 // configured, View round-trips Source.Get for each manifest. We
 // detect this by injecting a Get error and observing that the
 // resolver doesn't see Ext (path resolution fails, but the
@@ -181,7 +181,7 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 
 	v, err := vw.New(context.Background(), src,
 		vw.WithPathResolver(fsmeta.Resolver),
-		// No WithExtSource here.
+		// No WithMetadataSource here.
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
@@ -229,11 +229,11 @@ func indexByte(s string, b byte) int {
 }
 
 // TestWithFSIndex_Convenience verifies WithFSIndex is just a
-// pass-through for WithExtSource. We confirm by passing a
+// pass-through for WithMetadataSource. We confirm by passing a
 // counting source through WithFSIndex and observing the calls.
 func TestWithFSIndex_Convenience(t *testing.T) {
 	src := projectionfx.New()
-	ms := newCountingExtSource()
+	ms := newCountingMetadataSource()
 
 	id := domain.ArtifactID("a")
 	src.Add(strippedManifest(id, "files"), nil)
@@ -248,6 +248,6 @@ func TestWithFSIndex_Convenience(t *testing.T) {
 	}
 
 	if got := ms.calls.Load(); got != 1 {
-		t.Errorf("ExtSource.Ext called %d times, want 1", got)
+		t.Errorf("MetadataSource.Ext called %d times, want 1", got)
 	}
 }

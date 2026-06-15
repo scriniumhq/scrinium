@@ -12,9 +12,9 @@ import (
 	"scrinium.dev/domain"
 )
 
-// Extension is the render-time DTO for a registered index extension.
-// Callers holding an customindex.ExtensionInfo translate field-for-field.
-type Extension struct {
+// CustomIndex is the render-time DTO for a registered index custom index.
+// Callers holding an customindex.Info translate field-for-field.
+type CustomIndex struct {
 	Name          string
 	SchemaVersion int
 }
@@ -22,7 +22,7 @@ type Extension struct {
 // DaemonInfo carries the per-process and cross-layer state the report
 // can't derive from the projection counters alone. Fields with no
 // meaningful value are left zero; Render hides empty groups and
-// "n/a"-renders absent numbers (Capacity == nil, Extensions == nil).
+// "n/a"-renders absent numbers (Capacity == nil, CustomIndexes == nil).
 type DaemonInfo struct {
 	// Source labels the projection's backing source kind (e.g.
 	// the source.Kind the View was built from), rendered verbatim.
@@ -55,9 +55,9 @@ type DaemonInfo struct {
 	// a field means "driver did not report".
 	Capacity *domain.StorageInfo
 
-	// Extensions lists registered index extensions. nil hides the
-	// [extensions] section; order is normalised (sorted by Name).
-	Extensions []Extension
+	// CustomIndexes lists registered index custom indexes. nil hides the
+	// [custom indexes] section; order is normalised (sorted by Name).
+	CustomIndexes []CustomIndex
 }
 
 // Render produces the canonical text report. Sections are grouped and
@@ -73,8 +73,8 @@ func Render(vs projection.Stats, info DaemonInfo) []byte {
 	if info.Capacity != nil {
 		writeStorageSection(&b, info.Capacity)
 	}
-	if info.Extensions != nil {
-		writeExtensionsSection(&b, info.Extensions)
+	if info.CustomIndexes != nil {
+		writeCustomIndexesSection(&b, info.CustomIndexes)
 	}
 	writeConfigSection(&b, info)
 
@@ -137,15 +137,15 @@ func writeStorageSection(b *strings.Builder, c *domain.StorageInfo) {
 	b.WriteString("\n")
 }
 
-func writeExtensionsSection(b *strings.Builder, exts []Extension) {
-	fmt.Fprintln(b, "[extensions]")
-	if len(exts) == 0 {
+func writeCustomIndexesSection(b *strings.Builder, cis []CustomIndex) {
+	fmt.Fprintln(b, "[custom indexes]")
+	if len(cis) == 0 {
 		fmt.Fprintln(b, "(none registered)")
 		b.WriteString("\n")
 		return
 	}
-	sorted := append([]Extension(nil), exts...)
-	slices.SortFunc(sorted, func(a, b Extension) int {
+	sorted := append([]CustomIndex(nil), cis...)
+	slices.SortFunc(sorted, func(a, b CustomIndex) int {
 		return strings.Compare(a.Name, b.Name)
 	})
 	for _, ext := range sorted {

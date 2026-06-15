@@ -1,6 +1,6 @@
 // Command scrinium-webdav exposes a Scrinium store over WebDAV —
 // cross-platform access (Finder, Windows Explorer, rclone) without a
-// kernel extension or root.
+// kernel custom index or root.
 //
 // The store/projection is described by a Scrinium configuration document; how
 // it is served (listen address, OS-junk filtering) is given by flags.

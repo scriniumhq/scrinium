@@ -40,34 +40,34 @@ type viewOptions struct {
 	filter   Filter
 	bus      event.EventBus
 
-	// extSource is an optional bulk source of manifest
+	// metadataSource is an optional bulk source of manifest
 	// metadata used by backfill to skip per-manifest
-	// Source.Get round-trips. Set via WithExtSource or
+	// Source.Get round-trips. Set via WithMetadataSource or
 	// WithFSIndex (the latter is a typed convenience for the
 	// common engine/index/fsindex case).
-	extSource source.Ext
+	metadataSource source.Metadata
 }
 
-// WithExtSource installs a bulk metadata source for
+// WithMetadataSource installs a bulk metadata source for
 // backfill. When set, View.backfill consults the source instead
 // of round-tripping Source.Get for each manifest. A miss
 // (artifact not indexed by the source) falls back to Source.Get
 // transparently — the option is a performance hint, not a
 // correctness requirement.
-func WithExtSource(ms source.Ext) Option {
-	return func(o *viewOptions) { o.extSource = ms }
+func WithMetadataSource(ms source.Metadata) Option {
+	return func(o *viewOptions) { o.metadataSource = ms }
 }
 
 // WithFSIndex is a typed convenience for the engine/index/fsindex
-// case: pass the registered *fs.Extension and it doubles as
-// a ExtSource. Equivalent to WithExtSource(fsidx).
+// case: pass the registered *fs.CustomIndex and it doubles as
+// a MetadataSource. Equivalent to WithMetadataSource(fsidx).
 //
 // Implemented at the package level via an interface to avoid
 // taking a hard dependency on engine/index/fsindex from
 // projection — fsindex imports projection's fsmeta, so a back-
 // edge would cycle.
-func WithFSIndex(fsidx source.Ext) Option {
-	return WithExtSource(fsidx)
+func WithFSIndex(fsidx source.Metadata) Option {
+	return WithMetadataSource(fsidx)
 }
 
 // WithPathResolver registers the path-extraction function. Without

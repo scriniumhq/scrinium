@@ -15,7 +15,7 @@ import (
 // overlays it through the Resolver capability; the core itself holds
 // no pack tables and does not branch on pack-ness (closure, ADR-83).
 //
-// Storage is the backend-agnostic ExtensionStore — one table keyed by
+// Storage is the backend-agnostic Substrate — one table keyed by
 // the packed ArtifactID, value = the encoded PlacementOverlay. The
 // store is captured in Setup (db-mode after registration: committed
 // reads, autocommit writes).
@@ -36,9 +36,9 @@ type customIndex struct {
 }
 
 const (
-	extName        = "scrinium.bundler"
-	extSchemaVer   = 1
-	placementTable = "placement"
+	ciName          = "scrinium.bundler"
+	ciSchemaVersion = 1
+	placementTable  = "placement"
 )
 
 // compile-time capability assertions.
@@ -54,9 +54,9 @@ func NewCustomIndex() customindex.CustomIndex {
 	return &customIndex{}
 }
 
-func (e *customIndex) Name() string { return extName }
+func (e *customIndex) Name() string { return ciName }
 
-func (e *customIndex) SchemaVersion() int { return extSchemaVer }
+func (e *customIndex) SchemaVersion() int { return ciSchemaVersion }
 
 // Subscribe returns no event kinds: the placement map is populated
 // through RecordPack, not derived from index mutations (the per-member
@@ -73,7 +73,7 @@ func (e *customIndex) Setup(ctx context.Context, store customindex.Substrate, ol
 	return nil
 }
 
-// Apply is a no-op: this extension has no subscriptions.
+// Apply is a no-op: this custom index has no subscriptions.
 func (e *customIndex) Apply(ctx context.Context, store customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
 	return nil
 }
@@ -85,7 +85,7 @@ func (e *customIndex) Close() error { return nil }
 // the core as an ordinary headless manifest — its two blob_refs (TOC
 // + body) flow through manifest_blobs and carry the body blob's
 // ref_count — so RecordPack adds only the per-member slice map this
-// extension owns. The pack volume's blob_ref is the container's body
+// custom index owns. The pack volume's blob_ref is the container's body
 // blob (container.BlobRef).
 func (e *customIndex) RecordPack(ctx context.Context, container domain.Manifest, entries []PackedEntry) error {
 	if e.store == nil {

@@ -16,15 +16,15 @@ type Provider interface {
 	Get(ctx context.Context, id domain.ArtifactID, opts ...domain.GetOption) (domain.ReadHandle, error)
 }
 
-// Ext is the optional bulk metadata provider a view's backfill uses
-// to fetch an artifact's extension block in one round-trip instead of
+// Metadata is the optional bulk metadata provider a view's backfill uses
+// to fetch an artifact's custom index block in one round-trip instead of
 // re-reading the manifest.
 //
-// Ext returns (raw, true, nil) when found, (nil, false, nil) when the
+// Metadata returns (raw, true, nil) when found, (nil, false, nil) when the
 // artifact has no ext block, and a non-nil error only for
 // infrastructure failures (DB I/O).
-type Ext interface {
-	Ext(id domain.ArtifactID) (json.RawMessage, bool, error)
+type Metadata interface {
+	Metadata(id domain.ArtifactID) (json.RawMessage, bool, error)
 }
 
 // Resolver extracts a virtual path from a manifest. Implementing it

@@ -10,7 +10,7 @@ import (
 	"scrinium.dev/engine/customindex"
 )
 
-// Tables under the extension namespace. Two K/V groups:
+// Tables under the custom index namespace. Two K/V groups:
 //
 //   - byID:   artifactID → fsmeta JSON (primary, source of truth)
 //   - byPath: "<path>\x00<artifactID>" → "" (reverse, supports
@@ -25,7 +25,7 @@ const (
 	tableByPath = "byPath"
 )
 
-// Name is the stable extension identifier.
+// Name is the stable custom index identifier.
 const Name = "scrinium.fsindex"
 
 // schemaVersion is the on-disk layout version. Bump and add a
@@ -34,7 +34,7 @@ const schemaVersion = 1
 
 // CustomIndex is the fsmeta-aware projection of artifact metadata.
 // Implements customindex.CustomIndex. Construct via NewIndex, register
-// via *sqlite.Index.Extensions().Register.
+// via *sqlite.Index.CustomIndexes().Register.
 type CustomIndex struct {
 	// store is captured during Setup and used by the read-side
 	// API (GetByID, LookupByPath, WalkAll) for the lifetime of
@@ -45,7 +45,7 @@ type CustomIndex struct {
 }
 
 // NewIndex returns a fresh customindex. The instance is not registered
-// — caller passes it to *sqlite.Index.Extensions().Register(ctx, ext).
+// — caller passes it to *sqlite.Index.CustomIndexes().Register(ctx, ext).
 func NewIndex() *CustomIndex {
 	return &CustomIndex{}
 }
@@ -97,7 +97,7 @@ func (e *CustomIndex) Apply(ctx context.Context, store customindex.Substrate, ki
 // applyIndexed stores the fsmeta payload (bytes verbatim) plus a
 // reverse-index entry for path lookup. Manifests that don't
 // carry a fsmeta payload (foreign schema, system artifacts) are
-// silently skipped — the extension only indexes what it
+// silently skipped — the custom index only indexes what it
 // understands.
 func (e *CustomIndex) applyIndexed(store customindex.Substrate, args customindex.EventArgs) error {
 	fs, ok, err := fsmeta.Decode(args.Manifest.Ext)
@@ -182,7 +182,7 @@ func (e *CustomIndex) applyDeleted(store customindex.Substrate, args customindex
 	return nil
 }
 
-// Close releases extension-side resources. Backend storage stays
+// Close releases custom index-side resources. Backend storage stays
 // owned by the StoreIndex.
 func (e *CustomIndex) Close() error {
 	e.store = nil
@@ -212,11 +212,11 @@ func (e *CustomIndex) GetByID(id domain.ArtifactID) (json.RawMessage, bool, erro
 	return json.RawMessage(value), true, nil
 }
 
-// Ext implements source.Ext (declared in the
+// Ext implements source.Metadata (declared in the
 // projection package). Same shape as GetByID — separate method
 // kept so projection can reference an interface without taking
 // a concrete dependency on fsindex.
-func (e *CustomIndex) Ext(id domain.ArtifactID) (json.RawMessage, bool, error) {
+func (e *CustomIndex) Metadata(id domain.ArtifactID) (json.RawMessage, bool, error) {
 	return e.GetByID(id)
 }
 
@@ -249,7 +249,7 @@ func (e *CustomIndex) LookupByPath(path string) (domain.ArtifactID, bool, error)
 
 // WalkAll iterates every (artifactID, fsmeta JSON) pair in
 // lexicographic id order. Returning fs.SkipAll from cb (the
-// extensions sentinel customindex.ErrStopScan also works) ends the
+// custom indexes sentinel customindex.ErrStopScan also works) ends the
 // walk cleanly.
 //
 // Used by projection.View.backfill: one round-trip yields every

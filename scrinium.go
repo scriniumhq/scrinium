@@ -132,11 +132,11 @@ func (c *ScriniumClient) Close() error {
 	return c.asm.Close()
 }
 
-// Extensions lists the index extensions registered on the backing
+// CustomIndexes lists the index custom indexes registered on the backing
 // store index, for diagnostics (e.g. listing them on a stats page).
 // Empty when the index backend exposes none. The raw StoreIndex is
 // intentionally not surfaced — it carries mutating methods.
-func (c *ScriniumClient) Extensions() []customindex.Info { return c.asm.Extensions() }
+func (c *ScriniumClient) CustomIndexes() []customindex.Info { return c.asm.CustomIndexes() }
 
 // RecoveryKit returns the recovery-kit bytes produced when this client
 // freshly initialised an encrypted store, and true. For a store that

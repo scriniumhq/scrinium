@@ -43,7 +43,7 @@ type Config struct {
 // produces a different ArtifactID and breaks cross-store
 // deduplication.
 //
-// The returned Wrap is a plain store.DataStore without an extension:
+// The returned Wrap is a plain store.DataStore without a custom index:
 // the chunker does not need an explicit Flush, every Put is
 // self-contained.
 //

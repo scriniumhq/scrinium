@@ -11,36 +11,36 @@ import (
 	"scrinium.dev/engine/customindex"
 )
 
-// fakeExtStore is an in-memory customindex.Substrate used to test
-// the bundler index-extension in isolation, without a sqlite backend.
-type fakeExtStore struct {
+// fakeSubstrate is an in-memory customindex.Substrate used to test
+// the bundler index-custom index in isolation, without a sqlite backend.
+type fakeSubstrate struct {
 	data map[string][]byte // key: table + "\x00" + key
 }
 
-func newFakeExtStore() *fakeExtStore { return &fakeExtStore{data: map[string][]byte{}} }
+func newFakeSubstrate() *fakeSubstrate { return &fakeSubstrate{data: map[string][]byte{}} }
 
-var _ customindex.Substrate = (*fakeExtStore)(nil)
+var _ customindex.Substrate = (*fakeSubstrate)(nil)
 
-func (f *fakeExtStore) compositeKey(table, key string) string { return table + "\x00" + key }
+func (f *fakeSubstrate) compositeKey(table, key string) string { return table + "\x00" + key }
 
-func (f *fakeExtStore) Put(table, key string, value []byte) error {
+func (f *fakeSubstrate) Put(table, key string, value []byte) error {
 	cp := make([]byte, len(value))
 	copy(cp, value)
 	f.data[f.compositeKey(table, key)] = cp
 	return nil
 }
 
-func (f *fakeExtStore) Get(table, key string) ([]byte, bool, error) {
+func (f *fakeSubstrate) Get(table, key string) ([]byte, bool, error) {
 	v, ok := f.data[f.compositeKey(table, key)]
 	return v, ok, nil
 }
 
-func (f *fakeExtStore) Delete(table, key string) error {
+func (f *fakeSubstrate) Delete(table, key string) error {
 	delete(f.data, f.compositeKey(table, key))
 	return nil
 }
 
-func (f *fakeExtStore) DeletePrefix(table, prefix string) error {
+func (f *fakeSubstrate) DeletePrefix(table, prefix string) error {
 	if prefix == "" {
 		return customindex.ErrEmptyPrefix
 	}
@@ -53,7 +53,7 @@ func (f *fakeExtStore) DeletePrefix(table, prefix string) error {
 	return nil
 }
 
-func (f *fakeExtStore) Scan(table, prefix string, cb func(key string, value []byte) error) error {
+func (f *fakeSubstrate) Scan(table, prefix string, cb func(key string, value []byte) error) error {
 	tablePrefix := table + "\x00"
 	keyPrefix := f.compositeKey(table, prefix)
 	for k, v := range f.data {
@@ -73,7 +73,7 @@ func (f *fakeExtStore) Scan(table, prefix string, cb func(key string, value []by
 	return nil
 }
 
-func (f *fakeExtStore) Inc(table, key string, delta int64) (int64, error) {
+func (f *fakeSubstrate) Inc(table, key string, delta int64) (int64, error) {
 	var cur int64
 	if v, ok := f.data[f.compositeKey(table, key)]; ok && len(v) == 8 {
 		cur = int64(binary.BigEndian.Uint64(v))
@@ -85,12 +85,12 @@ func (f *fakeExtStore) Inc(table, key string, delta int64) (int64, error) {
 	return cur, nil
 }
 
-// newTestExtension returns a bundler index-extension wired to a fresh
+// newTestCustomIndex returns a bundler index-custom index wired to a fresh
 // in-memory store (Setup already run, db-mode equivalent).
-func newTestExtension(t *testing.T) (*customIndex, *fakeExtStore) {
+func newTestCustomIndex(t *testing.T) (*customIndex, *fakeSubstrate) {
 	t.Helper()
 	e := &customIndex{}
-	store := newFakeExtStore()
+	store := newFakeSubstrate()
 	if err := e.Setup(context.Background(), store, 0); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
@@ -99,7 +99,7 @@ func newTestExtension(t *testing.T) (*customIndex, *fakeExtStore) {
 
 func TestCustomIndex_RecordResolveDelete(t *testing.T) {
 	ctx := context.Background()
-	e, _ := newTestExtension(t)
+	e, _ := newTestCustomIndex(t)
 
 	container := domain.Manifest{BlobRefs: []domain.BlobRef{"pack-blob-1"}}
 	entries := []PackedEntry{
@@ -164,7 +164,7 @@ func TestCustomIndex_RecordResolveDelete(t *testing.T) {
 
 func TestCustomIndex_DeletePackIsVolumeScoped(t *testing.T) {
 	ctx := context.Background()
-	e, _ := newTestExtension(t)
+	e, _ := newTestCustomIndex(t)
 
 	if err := e.RecordPack(ctx, domain.Manifest{BlobRefs: []domain.BlobRef{"vol-A"}},
 		[]PackedEntry{{ArtifactID: "a1", BlobSize: 1}}); err != nil {
@@ -192,7 +192,7 @@ func TestCustomIndex_DeletePackIsVolumeScoped(t *testing.T) {
 func TestCustomIndex_SatisfiesResolver(t *testing.T) {
 	var ext customindex.CustomIndex = NewCustomIndex()
 	if _, ok := ext.(customindex.Resolver); !ok {
-		t.Fatal("bundler index-extension does not satisfy customindex.Resolver")
+		t.Fatal("bundler index-custom index does not satisfy customindex.Resolver")
 	}
 }
 

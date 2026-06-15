@@ -29,7 +29,7 @@ type StoreIndex interface {
 	// every blob in blob_refs is registered, ref-counted and linked
 	// positionally — a composite's chunk list lives in blob_refs and the
 	// core keeps its ref_count. Pack PLACEMENT (the per-member slice map)
-	// is owned by the bundler index-extension's Resolver (ADR-86),
+	// is owned by the bundler index-custom index's Resolver (ADR-86),
 	// recorded out-of-band via its RecordPack API — the core index holds
 	// no pack state.
 	IndexManifest(
