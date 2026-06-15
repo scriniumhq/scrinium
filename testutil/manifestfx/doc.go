@@ -14,6 +14,6 @@
 //     also pins the content hash and original size.
 //   - SyntheticHash — fills a 32-byte ContentHash with a single
 //     repeated byte, useful when only hash distinctness matters.
-//   - PhysAddr, PackedAddr — PhysicalAddress builders for direct
+//   - PhysAddr — a PhysicalAddress builder for direct
 //     and packed blob references.
 package manifestfx

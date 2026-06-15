@@ -20,11 +20,10 @@ func TestResolveManifestDigest_Hit(t *testing.T) {
 	m := domain.Manifest{
 		ArtifactID:   handle,
 		Digest:       digest,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "ns",
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutInline},
 	}
-	if err := idx.IndexManifest(ctx, m, domain.PhysicalAddress{Path: "manifests/x"}, nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, domain.PhysicalAddress{Path: "manifests/x"}); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 

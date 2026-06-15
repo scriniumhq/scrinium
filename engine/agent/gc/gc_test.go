@@ -55,7 +55,7 @@ func (f gcFixture) putAndOrphan(t *testing.T, data string) (domain.ArtifactID, s
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	ref := string(rh.Manifest().BlobRef)
+	ref := string(rh.Manifest().PrimaryBlobRef())
 	_ = rh.Close()
 	// Logical delete: manifest gone, ref_count -> 0, blob FILE retained
 	// on disk (physical removal is the GC agent's job).

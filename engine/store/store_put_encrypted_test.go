@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"testing"
 
 	"scrinium.dev/domain"
@@ -155,14 +154,10 @@ func readManifestRaw(t *testing.T, s store.Store, id domain.ArtifactID) []byte {
 	// (manifests/<x>/<y>/<digest>) the way blobpath.ManifestPath does.
 	digest := mustDigest(t, s, id)
 	dStr := string(digest)
-	if !strings.HasPrefix(dStr, "sha256-") {
-		t.Fatalf("unexpected digest prefix: %q", dStr)
-	}
-	hex := strings.TrimPrefix(dStr, "sha256-")
-	if len(hex) < 4 {
+	if len(dStr) < 4 {
 		t.Fatal("digest too short")
 	}
-	path := "manifests/" + hex[:2] + "/" + hex[2:4] + "/" + dStr
+	path := "manifests/" + dStr[:2] + "/" + dStr[2:4] + "/" + dStr
 
 	raw, err := store.ReadDriverFile(s, path)
 	if err != nil {
@@ -463,14 +458,10 @@ func manifestPathFor(t *testing.T, s store.Store, id domain.ArtifactID) string {
 	t.Helper()
 	// Manifest files are named by their ManifestDigest, not the handle.
 	dStr := string(mustDigest(t, s, id))
-	if !strings.HasPrefix(dStr, "sha256-") {
-		t.Fatalf("unexpected digest prefix: %q", dStr)
-	}
-	hex := strings.TrimPrefix(dStr, "sha256-")
-	if len(hex) < 4 {
+	if len(dStr) < 4 {
 		t.Fatal("digest too short")
 	}
-	return "manifests/" + hex[:2] + "/" + hex[2:4] + "/" + dStr
+	return "manifests/" + dStr[:2] + "/" + dStr[2:4] + "/" + dStr
 }
 
 // --- Walk on Paranoid Store works without decrypting ---

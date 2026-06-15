@@ -12,8 +12,9 @@ import (
 // rules (reject system.* prefix, length limit) and delegates iteration
 // to the StoreIndex.
 //
-// Pack manifests are excluded by the index (they live in packed_blobs,
-// never in manifests). System namespaces are excluded both by the index
+// Headless pack containers are excluded by the index (they carry no
+// handle, so the artifact_id filter skips them). System namespaces are
+// excluded both by the index
 // (the "*" wildcard skips system.*) and here at the API surface (an
 // explicit "system.foo" gets errs.ErrReservedNamespace first).
 func (d dataFacet) Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error {

@@ -443,7 +443,7 @@ func TestDispatch_ManifestIndexed(t *testing.T) {
 
 	m := makeBlobManifest("art-1")
 	addr := domain.PhysicalAddress{Path: "/blobs/x"}
-	if err := idx.IndexManifest(ctx, m, addr, nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, addr); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
 
@@ -481,7 +481,7 @@ func TestDispatch_NotSubscribed_NoApply(t *testing.T) {
 	idx.Extensions().Register(context.Background(), ext)
 
 	m := makeBlobManifest("art-2")
-	idx.IndexManifest(ctx, m, domain.PhysicalAddress{Path: "/blobs/y"}, nil, nil)
+	idx.IndexManifest(ctx, m, domain.PhysicalAddress{Path: "/blobs/y"})
 
 	if len(ext.applyCalls) != 0 {
 		t.Errorf("non-subscribed extension's Apply called %d times", len(ext.applyCalls))
@@ -504,16 +504,16 @@ func TestDispatch_ApplyError_RollsBack(t *testing.T) {
 
 	m := makeBlobManifest("art-rollback")
 	addr := domain.PhysicalAddress{Path: "/blobs/z"}
-	err := idx.IndexManifest(ctx, m, addr, nil, nil)
+	err := idx.IndexManifest(ctx, m, addr)
 	if !errors.Is(err, failure) {
 		t.Errorf("expected apply error to propagate, got %v", err)
 	}
 
 	// The main index write must have rolled back too — manifest
 	// should NOT be in the manifests table.
-	exists, err := idx.ManifestExists(ctx, "art-rollback")
+	_, exists, err := idx.ResolveManifestDigest(ctx, "art-rollback")
 	if err != nil {
-		t.Fatalf("ManifestExists: %v", err)
+		t.Fatalf("ResolveManifestDigest: %v", err)
 	}
 	if exists {
 		t.Error("manifest committed despite extension apply failure")
@@ -537,10 +537,10 @@ func TestDispatch_ManifestDeleted(t *testing.T) {
 	// Insert a manifest, then delete.
 	m := makeBlobManifest("art-del")
 	addr := domain.PhysicalAddress{Path: "/blobs/d"}
-	if err := idx.IndexManifest(ctx, m, addr, nil, nil); err != nil {
+	if err := idx.IndexManifest(ctx, m, addr); err != nil {
 		t.Fatalf("IndexManifest: %v", err)
 	}
-	if err := idx.DeleteManifest(ctx, "art-del", []string{string(m.BlobRef)}); err != nil {
+	if err := idx.DeleteManifest(ctx, m.Digest); err != nil {
 		t.Fatalf("DeleteManifest: %v", err)
 	}
 
@@ -658,9 +658,8 @@ func TestIndex_ListExtensions_Empty(t *testing.T) {
 func makeBlobManifest(id domain.ArtifactID) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   id,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "files",
-		BlobRef:      "sha256-aaaa",
+		BlobRefs:     []domain.BlobRef{"sha256-aaaa"},
 		ContentHash:  "sha256-aaaa",
 		OriginalSize: 100,
 		CreatedAt:    time.Now().UTC(),

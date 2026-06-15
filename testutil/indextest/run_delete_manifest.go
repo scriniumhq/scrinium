@@ -13,13 +13,13 @@ func runDeleteManifest(t *testing.T, f Factory) {
 		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
-		if err := idx.DeleteManifest(ctx, "art-1", []string{"blob-1"}); err != nil {
+		if err := idx.DeleteManifest(ctx, m.Digest); err != nil {
 			t.Fatalf("DeleteManifest: %v", err)
 		}
-		exists, err := idx.ManifestExists(ctx, "art-1")
+		_, exists, err := idx.ResolveManifestDigest(ctx, "art-1")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -40,30 +40,8 @@ func runDeleteManifest(t *testing.T, f Factory) {
 	t.Run("Idempotent", func(t *testing.T) {
 		ctx := t.Context()
 		idx := f.New(t)
-		if err := idx.DeleteManifest(ctx, "nonexistent", nil); err != nil {
-			t.Errorf("delete of unknown artifact must be no-op, got %v", err)
-		}
-	})
-
-	t.Run("BlobRefMismatch", func(t *testing.T) {
-		ctx := t.Context()
-		// Caller passes blobRefs that don't match the manifest's
-		// linked blobs. The implementation must refuse and leave
-		// the index unchanged.
-		idx := f.New(t)
-		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
-			t.Fatal(err)
-		}
-		if err := idx.DeleteManifest(ctx, "art-1", []string{"blob-WRONG"}); err == nil {
-			t.Fatal("expected error on blobRefs mismatch")
-		}
-		exists, err := idx.ManifestExists(ctx, "art-1")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !exists {
-			t.Error("manifest disappeared after a refused DeleteManifest")
+		if err := idx.DeleteManifest(ctx, "nonexistent-digest"); err != nil {
+			t.Errorf("delete of unknown digest must be no-op, got %v", err)
 		}
 	})
 }

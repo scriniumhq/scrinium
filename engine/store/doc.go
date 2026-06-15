@@ -46,7 +46,7 @@
 // Contracts and core type:
 //
 //   - store.go        — the Store / DataStore / AdminStore / SystemStore
-//     interfaces and the SystemPutConfig / SystemPutOption types.
+//     interfaces and the SystemArtifact value type.
 //   - readhandle.go   — the ReadHandle interface.
 //   - store_impl.go   — the *store struct, its fields, the lock-order
 //     invariant, and System().
@@ -93,11 +93,10 @@
 //
 // System and config plumbing:
 //
-//   - system_store.go    — the systemStore facade (Put/Get/Delete/Walk).
-//   - system_pointer.go  — the name → pointer → artifact mechanics.
-//   - system_write.go    — the inline system-artifact write primitives.
-//   - system_options.go  — systemStore.Put options (WithoutIndex).
-//   - config_writer.go   — the configWriter closure bound to the primitive.
+//   - system_store.go    — the systemStore facade (Put/Get/Delete/Walk),
+//     a thin adapter over internal/systemlayout. System artifacts are
+//     addressed by name in their own system/ address space and are never
+//     indexed (ADR-85), so there is no pointer file and no opt-out flag.
 //
 // internal/ subpackages — concerns that own their state and so are
 // separate packages (the boundary along which the engine can be split):
@@ -107,8 +106,12 @@
 //     and manifest load, blob open, and verification (read).
 //   - descriptor   — the on-disk descriptor and its L2 cache.
 //   - keyring      — the KDF (Argon2id) and KEK/DEK wrap/unwrap kernels.
+//   - systemlayout — the system/<name>/<seq> address-space mechanics
+//     (name validation, seq claim via atomic create, inline-manifest
+//     build, verify-on-read) shared by the systemStore facade and the
+//     storeconfig bootstrap path (ADR-85).
 //   - storeconfig  — the StoreConfig format, defaults, validation, and
-//     persistence.
+//     persistence (over systemlayout).
 //   - orphanscan   — bootstrap-time orphan recovery.
 //   - reconcile    — replica reconciliation.
 //   - recoverykit  — the recovery-kit format.

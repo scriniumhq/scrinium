@@ -209,7 +209,7 @@ func readBlobRef(t *testing.T, s store.Store, id domain.ArtifactID) domain.BlobR
 		t.Fatalf("Get for manifest: %v", err)
 	}
 	defer rh.Close()
-	return rh.Manifest().BlobRef
+	return rh.Manifest().PrimaryBlobRef()
 }
 
 // --- M2.3: encrypted manifest is transparent to Verify ---

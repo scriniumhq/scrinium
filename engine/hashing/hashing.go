@@ -80,7 +80,7 @@ var NamingKeyPublic = []byte("scrinium/artifact-id/v1")
 
 // Handle computes the floating ArtifactID = H(NK ‖ cd ‖ md ‖ nonce).
 //
-// cd and md are "<algo>-<hex>" digests sharing the store's hash algo;
+// md is an "<algo>-<hex>" digest; cd is bare hex (ADR-93). Both share the store's hash algo;
 // their raw bytes are fixed-length within a store, so the concatenation
 // is unambiguous (nonce is a fixed 16 bytes in Unique mode, empty in
 // Coalesced — the mode is an immutable store property). nk is the naming
@@ -90,9 +90,9 @@ var NamingKeyPublic = []byte("scrinium/artifact-id/v1")
 // partition md is a constant token, so a raw cd‖md would expose cd. H
 // keeps the output indistinguishable from random.
 func Handle(reg domain.HashRegistry, algo string, nk []byte, cd domain.ContentHash, md string, nonce []byte) (domain.ArtifactID, error) {
-	_, cdRaw, err := reg.Parse(string(cd))
+	cdRaw, err := hex.DecodeString(string(cd))
 	if err != nil {
-		return "", fmt.Errorf("hashing: parse cd: %w", err)
+		return "", fmt.Errorf("hashing: decode cd: %w", err)
 	}
 	_, mdRaw, err := reg.Parse(md)
 	if err != nil {

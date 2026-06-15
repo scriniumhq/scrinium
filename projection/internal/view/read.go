@@ -164,7 +164,7 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 		if id == exclude {
 			continue
 		}
-		if rec.manifest.BlobRef != blobRef {
+		if len(rec.manifest.BlobRefs) == 0 || rec.manifest.BlobRefs[0] != blobRef {
 			continue
 		}
 		out = append(out, RelatedArtifact{

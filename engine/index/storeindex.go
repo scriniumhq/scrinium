@@ -24,24 +24,27 @@ import (
 type StoreIndex interface {
 	// Writes and deletes.
 
-	// IndexManifest registers an artifact in the index. It branches
-	// on manifest.Type:
-	//   - blob: upsert blob, increment ref_count, insert manifest.
-	//   - toc:  + increment ref_count for each chunkRef.
-	//   - pack: transitive registration of every packed artifact via
-	//     packedEntries.
+	// IndexManifest registers an artifact in the index. россыпь,
+	// composite and headless pack container index uniformly (ADR-87/92):
+	// every blob in blob_refs is registered, ref-counted and linked
+	// positionally — a composite's chunk list lives in blob_refs and the
+	// core keeps its ref_count. Pack PLACEMENT (the per-member slice map)
+	// is owned by the bundler index-extension's Resolver (ADR-86),
+	// recorded out-of-band via its RecordPack API — the core index holds
+	// no pack state.
 	IndexManifest(
 		ctx context.Context,
 		m domain.Manifest,
 		addr domain.PhysicalAddress,
-		chunkRefs []string,
-		packedEntries []domain.PackedEntry,
 	) error
 
-	// DeleteManifest performs a logical deletion: a single
-	// transaction, DELETE manifest + decrement ref_count for each
-	// blobRef.
-	DeleteManifest(ctx context.Context, artifactID domain.ArtifactID, blobRefs []string) error
+	// DeleteManifest performs a logical deletion keyed by manifest
+	// digest (the table PK): a single transaction that decrements
+	// ref_count for each blob the manifest references (read from
+	// manifest_blobs — the authoritative set) and removes the
+	// manifest row and its edges. Idempotent: deleting an absent
+	// digest is a no-op.
+	DeleteManifest(ctx context.Context, digest domain.ManifestDigest) error
 
 	// Resolution and existence checks.
 
@@ -81,25 +84,6 @@ type StoreIndex interface {
 
 	// GetRefCount returns the current reference count of a blob.
 	GetRefCount(ctx context.Context, blobRef string) (int, error)
-
-	// LookupPacked returns the data needed for a range read by the
-	// ArtifactID of a packed artifact. The second return value is
-	// false when the artifact is not packed (it lives in /blobs/ or
-	// /manifests/ as usual).
-	LookupPacked(ctx context.Context, artifactID domain.ArtifactID) (domain.PackedBlobInfo, bool, error)
-
-	// ManifestExists reports whether a manifest row with the given
-	// ArtifactID is present in the index. It is the manifests-side
-	// counterpart of Resolve: a point-lookup that does not return
-	// the row contents, only its presence. Used by the bootstrap
-	// Orphan Scan to find manifest files on disk that have no
-	// matching index row (the crash window between Driver.Put on
-	// the manifest path and the IndexManifest transaction).
-	//
-	// A false return with a nil error is the normal "not present"
-	// signal. Errors are reserved for index-infrastructure
-	// failures.
-	ManifestExists(ctx context.Context, id domain.ArtifactID) (bool, error)
 
 	// Iteration. Implementations are required to stream through the
 	// callback rather than load the whole result set into memory.
@@ -165,11 +149,6 @@ type StoreIndex interface {
 	// after the manifest re-hash; for multi-blob (TOC) artifacts once
 	// every referenced blob is fresh.
 	MarkManifestVerified(ctx context.Context, artifactID domain.ArtifactID, timestamp time.Time) error
-
-	// DeletePacked removes every packed_blobs record of a given
-	// pack volume. Called by the GC Agent before tombstoning the
-	// pack blob.
-	DeletePacked(ctx context.Context, packBlobRef string) error
 
 	// store_meta service table. A singleton key/value store for
 	// Store metadata: schema_version, descriptor cache,

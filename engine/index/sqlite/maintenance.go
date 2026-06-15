@@ -49,25 +49,6 @@ func (i *Index) MarkManifestVerified(ctx context.Context, artifactID domain.Arti
 	})
 }
 
-// DeletePacked removes every packed_blobs row whose pack_blob_ref
-// matches. Called by the GC Agent right before tombstoning a pack
-// volume whose ref_count has dropped to zero (every packed entry
-// has been logically deleted, the pack is now an orphan).
-//
-// The pack's own row in `blobs` is NOT touched by this method:
-// pack entries and pack metadata are different things, and the GC
-// Agent removes them in separate, well-defined steps. This method
-// owns only the `packed_blobs` cleanup.
-//
-// Idempotent: a missing pack_blob_ref returns nil.
-func (i *Index) DeletePacked(ctx context.Context, packBlobRef string) error {
-	return i.observe("DeletePacked", func() error {
-		const stmt = `DELETE FROM packed_blobs WHERE pack_blob_ref = ?`
-		_, err := i.db.ExecContext(ctx, stmt, packBlobRef)
-		return err
-	})
-}
-
 // DeleteOrphanBlob removes the blobs row for blobRef only while it is
 // still an orphan (ref_count = 0). The guard lives in the WHERE clause
 // so the check and the delete are one atomic statement: a concurrent
@@ -173,7 +154,7 @@ var checkpointContentTables = []string{
 	"blobs",
 	"manifests",
 	"manifest_blobs",
-	"packed_blobs",
+	"manifest_handles",
 	"ext_meta",
 	"ext_data",
 }

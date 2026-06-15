@@ -39,7 +39,6 @@ type ArtifactFacet struct {
 	Namespace   string
 	SessionID   domain.SessionID
 	CreatedAt   time.Time
-	Type        domain.ManifestType
 
 	// Ext carries the engine-extension metadata block (fsmeta and
 	// friends). Per ADR-54 the Usr block is intentionally not

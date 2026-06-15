@@ -12,56 +12,53 @@ import (
 	"scrinium.dev/engine/internal/timefmt"
 )
 
+// manifestProjection is the shared SELECT list feeding scanManifestRow.
+// Column order MUST match scanManifestRow's Scan order. The blobs JOIN
+// recovers content_hash/original_size (the dedup key lives on the blob
+// row, not the manifest row); LEFT because Inline manifests have no
+// blobs partner.
+const manifestProjection = `m.manifest_digest, m.artifact_id, m.namespace, m.session_id,
+	       m.blob_ref, m.created_at, m.retention_until,
+	       b.content_hash, b.original_size`
+
 // ListByNamespace iterates over manifests whose namespace matches
 // the filter. The callback is invoked once per manifest in
 // (namespace, created_at) order; cancelling via fs.SkipAll
 // or any other error from the callback stops the iteration.
 //
 // Filter semantics match the contract of Walk in store.DataStore:
-//   - "*"          — every user namespace; system.* is excluded
+//   - "*"          — every user namespace
 //   - ""           — only the default (empty) namespace
 //   - <other>      — exactly that namespace
 //
-// Pack manifests are NEVER included; they live in packed_blobs and
-// are reachable through LookupPacked instead. The manifests table
-// already excludes them by construction (indexPackManifest does
-// not insert a row), so this method does not need an explicit
-// type filter — but the SQL keeps one for defence in depth.
+// Handleless artifacts are NEVER included: the predicate
+// `artifact_id IS NOT NULL` (ADR-83) excludes pack containers (empty
+// slot). System artifacts are not indexed at all (ADR-85), so they
+// never appear here. The namespace filter itself is transitional —
+// ADR-79 moves namespace out of the core index into an extension.
 func (i *Index) ListByNamespace(
 	ctx context.Context,
 	ns string,
 	cb func(domain.Manifest) error,
 ) error {
 	const (
-		// We LEFT JOIN blobs to recover original_size and
-		// content_hash, which live on the blobs row (the dedup
-		// key) rather than on the manifest row. LEFT (not INNER)
-		// because Inline manifests have no matching blobs row
-		// (the bytes live inside the manifest) — for them the JOIN
-		// yields NULLs and scanManifestRow leaves OriginalSize at zero.
 		queryDefault = `
-			SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
-			       m.blob_ref, m.created_at, m.retention_until,
-			       b.content_hash, b.original_size
+			SELECT ` + manifestProjection + `
 			FROM manifests m
 			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
-			WHERE m.namespace = '' AND m.type != ?
+			WHERE m.namespace = '' AND m.artifact_id IS NOT NULL
 			ORDER BY m.created_at`
 		queryAny = `
-			SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
-			       m.blob_ref, m.created_at, m.retention_until,
-			       b.content_hash, b.original_size
+			SELECT ` + manifestProjection + `
 			FROM manifests m
 			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
-			WHERE m.namespace NOT LIKE 'system.%' AND m.type != ?
+			WHERE m.artifact_id IS NOT NULL AND m.namespace NOT LIKE 'system.%'
 			ORDER BY m.namespace, m.created_at`
 		queryExact = `
-			SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
-			       m.blob_ref, m.created_at, m.retention_until,
-			       b.content_hash, b.original_size
+			SELECT ` + manifestProjection + `
 			FROM manifests m
 			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
-			WHERE m.namespace = ? AND m.type != ?
+			WHERE m.namespace = ? AND m.artifact_id IS NOT NULL
 			ORDER BY m.created_at`
 	)
 
@@ -69,11 +66,11 @@ func (i *Index) ListByNamespace(
 	var err error
 	switch ns {
 	case domain.NamespaceWildcard:
-		rows, err = i.db.QueryContext(ctx, queryAny, string(domain.ManifestTypePack))
+		rows, err = i.db.QueryContext(ctx, queryAny)
 	case "":
-		rows, err = i.db.QueryContext(ctx, queryDefault, string(domain.ManifestTypePack))
+		rows, err = i.db.QueryContext(ctx, queryDefault)
 	default:
-		rows, err = i.db.QueryContext(ctx, queryExact, ns, string(domain.ManifestTypePack))
+		rows, err = i.db.QueryContext(ctx, queryExact, ns)
 	}
 	if err != nil {
 		return classifyError(err)
@@ -93,8 +90,11 @@ func (i *Index) ListByNamespace(
 // last-line check, but consistency demands the index honour any
 // query the caller passes. The engine's RollbackSession is the
 // place where mass-delete safety lives.
+//
+// Rows with a NULL artifact_id (system artifacts under the name slot,
+// pack containers) are skipped — rollback operates on user handles.
 func (i *Index) GetBySession(ctx context.Context, sessionID domain.SessionID) ([]domain.ArtifactID, error) {
-	const stmt = `SELECT artifact_id FROM manifests WHERE session_id = ?`
+	const stmt = `SELECT artifact_id FROM manifests WHERE session_id = ? AND artifact_id IS NOT NULL`
 	rows, err := i.db.QueryContext(ctx, stmt, string(sessionID))
 	if err != nil {
 		return nil, classifyError(err)
@@ -103,11 +103,13 @@ func (i *Index) GetBySession(ctx context.Context, sessionID domain.SessionID) ([
 
 	var out []domain.ArtifactID
 	for rows.Next() {
-		var id string
+		var id sql.NullString
 		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		out = append(out, domain.ArtifactID(id))
+		if id.Valid {
+			out = append(out, domain.ArtifactID(id.String))
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, classifyError(err)
@@ -164,9 +166,9 @@ func (i *Index) ListUnverifiedBlobs(ctx context.Context, before time.Time, cb fu
 }
 
 // iterateManifestRows is the shared cursor loop for callbacks that
-// take domain.Manifest. Centralised because three iteration sites
-// (ListByNamespace and the two future query variants) want the
-// same context check / fs.SkipAll / scan pattern.
+// take domain.Manifest. Centralised because the iteration sites
+// (ListByNamespace, ManifestsByBlobRef, ListUnverifiedManifests) want
+// the same context check / fs.SkipAll / scan pattern.
 func iterateManifestRows(
 	ctx context.Context,
 	rows *sql.Rows,
@@ -191,9 +193,9 @@ func iterateManifestRows(
 }
 
 // ManifestsByBlobRef iterates over every manifest that references
-// blobRef, joining through the manifest_blobs edge table. The Scrub
-// Agent uses it to cascade from a verified physical blob to its
-// consuming artifacts. The same nine-column projection as
+// blobRef, joining through the manifest_blobs edge table (keyed by
+// manifest digest). The Scrub Agent uses it to cascade from a verified
+// physical blob to its consuming artifacts. The same projection as
 // ListByNamespace feeds scanManifestRow; the join to blobs recovers
 // content_hash/original_size, and manifest_blobs supplies the edge.
 func (i *Index) ManifestsByBlobRef(
@@ -202,14 +204,12 @@ func (i *Index) ManifestsByBlobRef(
 	cb func(domain.Manifest) error,
 ) error {
 	const query = `
-		SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
-		       m.blob_ref, m.created_at, m.retention_until,
-		       b.content_hash, b.original_size
+		SELECT ` + manifestProjection + `
 		FROM manifest_blobs mb
-		JOIN manifests m ON m.artifact_id = mb.artifact_id
+		JOIN manifests m ON m.manifest_digest = mb.manifest_digest
 		LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
 		WHERE mb.blob_ref = ?
-		ORDER BY m.artifact_id`
+		ORDER BY m.manifest_digest`
 	rows, err := i.db.QueryContext(ctx, query, blobRef)
 	if err != nil {
 		return classifyError(err)
@@ -222,8 +222,10 @@ func (i *Index) ManifestsByBlobRef(
 // last_verified_at is older than `before` (NULL = never verified,
 // always eligible), oldest first. The Scrub Agent's manifest pass uses
 // it to reach Inline artifacts, which have no blobs row and so never
-// surface through ListUnverifiedBlobs. Pack manifests are excluded —
-// engine-internal, verified through their own pack blob.
+// surface through ListUnverifiedBlobs. Handleless artifacts are
+// excluded (artifact_id IS NOT NULL, ADR-83): pack containers verify
+// through their own pack blob, and system artifacts are not indexed
+// (ADR-85).
 func (i *Index) ListUnverifiedManifests(
 	ctx context.Context,
 	before time.Time,
@@ -231,15 +233,13 @@ func (i *Index) ListUnverifiedManifests(
 ) error {
 	cutoff := timefmt.Format(before)
 	const query = `
-		SELECT m.artifact_id, m.manifest_digest, m.type, m.namespace, m.session_id,
-		       m.blob_ref, m.created_at, m.retention_until,
-		       b.content_hash, b.original_size
+		SELECT ` + manifestProjection + `
 		FROM manifests m
 		LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
-		WHERE m.type != ?
+		WHERE m.artifact_id IS NOT NULL
 		  AND (m.last_verified_at IS NULL OR m.last_verified_at < ?)
 		ORDER BY m.last_verified_at`
-	rows, err := i.db.QueryContext(ctx, query, string(domain.ManifestTypePack), cutoff)
+	rows, err := i.db.QueryContext(ctx, query, cutoff)
 	if err != nil {
 		return classifyError(err)
 	}

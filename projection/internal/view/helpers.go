@@ -32,11 +32,10 @@ func artifactFacetFrom(m domain.Manifest) *ArtifactFacet {
 	return &ArtifactFacet{
 		ArtifactID:  m.ArtifactID,
 		ContentHash: m.ContentHash,
-		BlobRef:     m.BlobRef,
+		BlobRef:     m.PrimaryBlobRef(),
 		Namespace:   m.Namespace,
 		SessionID:   m.SessionID,
 		CreatedAt:   m.CreatedAt,
-		Type:        m.Type,
 		Ext:         m.Ext,
 	}
 }

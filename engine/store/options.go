@@ -76,7 +76,7 @@ func WithPurgeOnReinit() StoreOption {
 
 // WithConfig provides the Store configuration. At InitStore it
 // fixes the immutable parameters. At OpenStore it is checked
-// against the configuration loaded from system.config/current —
+// against the configuration loaded from the active system/config version —
 // a divergence in immutable fields produces errs.ErrConfigMismatch.
 func WithConfig(cfg domain.StoreConfig) StoreOption {
 	return func(o *storeOptions) { o.cfg = &cfg }

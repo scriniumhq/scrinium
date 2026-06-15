@@ -21,14 +21,15 @@ import (
 // engine-level "this thing is not here" error; from the StoreIndex
 // perspective there is no separate "blob not found" — the index
 // either knows where to find a blob or it does not.
+//
+// Resolves loose (россыпь) blobs only — blobs.physical_path. Packed
+// placement is owned by index-extension Resolvers (ADR-86), not a column
+// here; the core never branches on pack state.
 func (i *Index) Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error) {
-	const stmt = `
-		SELECT physical_path,
-		       pack_ref, pack_offset, pack_size
-		FROM blobs WHERE blob_ref = ?`
+	const stmt = `SELECT physical_path FROM blobs WHERE blob_ref = ?`
 	var addr domain.PhysicalAddress
 	err := i.db.QueryRowContext(ctx, stmt, blobRef).
-		Scan(&addr.Path, &addr.PackRef, &addr.Offset, &addr.Size)
+		Scan(&addr.Path)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return domain.PhysicalAddress{}, errs.ErrArtifactNotFound
@@ -123,82 +124,52 @@ func (i *Index) GetRefCount(ctx context.Context, blobRef string) (int, error) {
 	return n, nil
 }
 
-// LookupPacked returns the range-read information for an
-// artifact stored inside a .pack volume. The boolean second result
-// is the "found" flag — false (not an error) means the artifact
-// lives outside any pack; the caller should reach for Resolve(BlobRef)
-// instead.
+// scanManifestRow scans one row produced by the projection
+// `manifests m LEFT JOIN blobs b ON b.blob_ref = m.blob_ref`. The
+// blobs side supplies content_hash and original_size; nullable here
+// because Inline manifests have no blobs row (bytes live in the
+// manifest). Returns a partial domain.Manifest with the persisted
+// routing fields; the rest (Pipeline, LayoutHeader, InlineBlob, Ext,
+// Usr, the full BlobRefs/HandleRefs arrays) are absent — the caller
+// reconstructs them from the manifest file on disk if needed. This is
+// intentional: the index is the cheap routing layer, not the source of
+// truth for manifest content.
 //
-// On the read path, the engine consults LookupPacked first because
-// it is the only way to know whether to open a sliced range read
-// or a full blob. A missing packed_blobs row is the normal case:
-// most artifacts are not packed.
-func (i *Index) LookupPacked(ctx context.Context, artifactID domain.ArtifactID) (domain.PackedBlobInfo, bool, error) {
-	const stmt = `
-		SELECT pack_blob_ref, manifest_offset, manifest_size,
-		       blob_offset, blob_size, COALESCE(pipeline_params, x'')
-		FROM packed_blobs WHERE artifact_id = ?`
-	var info domain.PackedBlobInfo
-	err := i.db.QueryRowContext(ctx, stmt, string(artifactID)).Scan(
-		&info.PackBlobRef,
-		&info.ManifestOffset, &info.ManifestSize,
-		&info.BlobOffset, &info.BlobSize,
-		&info.PipelineParams,
-	)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return domain.PackedBlobInfo{}, false, nil
-	case err != nil:
-		return domain.PackedBlobInfo{}, false, classifyError(err)
-	}
-	return info, true, nil
-}
-
-// --- Internal: helpers used by future iteration code. Living here
-// so the read-side has a single home; iterate.go in pack 4 will
-// consume them. Kept unexported and minimal. ---
-
-// scanManifestRow scans one manifests-table row into a partial
-// domain.Manifest. Used by Walk-style methods. Returns a Manifest
-// with the fields we actually persist; the rest (Pipeline,
-// LayoutHeader, InlineBlob, Ext, Usr, etc.) are absent — the
-// caller reconstructs them from the manifest file on disk if
-// needed. This is intentional: the index is the cheap routing
-// layer, not the source of truth for manifest content.
-// scanManifestRow scans one row produced by the JOIN
-// `manifests m LEFT JOIN blobs b USING (blob_ref)`. The blobs side
-// supplies content_hash and original_size; nullable here because
-// Inline manifests have no blobs row (bytes live in the manifest).
+// The identity slot is the nullable artifact_id (ADR-83/84/92): a user
+// artifact's handle, or NULL for a pack container (empty slot). System
+// artifacts are not indexed (ADR-85), so no name column exists.
 func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	var (
-		artifactID, manifestDigest, mtype, namespace string
-		sessionID                                    domain.SessionID
-		createdAt                                    string
-		blobRef, retentionUntil                      sql.NullString
-		contentHash                                  sql.NullString
-		originalSize                                 sql.NullInt64
+		manifestDigest     string
+		artifactID         sql.NullString
+		namespace          string
+		sessionID          domain.SessionID
+		createdAt          string
+		blobRef, retention sql.NullString
+		contentHash        sql.NullString
+		originalSize       sql.NullInt64
 	)
 	if err := rows.Scan(
-		&artifactID, &manifestDigest, &mtype, &namespace, &sessionID,
-		&blobRef, &createdAt, &retentionUntil,
+		&manifestDigest, &artifactID, &namespace, &sessionID,
+		&blobRef, &createdAt, &retention,
 		&contentHash, &originalSize,
 	); err != nil {
 		return domain.Manifest{}, err
 	}
 	m := domain.Manifest{
-		ArtifactID: domain.ArtifactID(artifactID),
-		Digest:     domain.ManifestDigest(manifestDigest),
-		Type:       domain.ManifestType(mtype),
-		Namespace:  namespace,
-		SessionID:  sessionID,
+		Digest:    domain.ManifestDigest(manifestDigest),
+		Namespace: namespace,
+		SessionID: sessionID,
+	}
+	if artifactID.Valid {
+		m.ArtifactID = domain.ArtifactID(artifactID.String)
 	}
 	if blobRef.Valid {
 		// NULL when LayoutHeader.BlobStorage == "Inline" (§9.1.2);
-		// stays as the zero BlobRef. The router-layer doc-comment
-		// on this function lists LayoutHeader as "absent — read
-		// the manifest file" — same applies here: callers that
-		// need to know whether this is Inline must read the file.
-		m.BlobRef = domain.BlobRef(blobRef.String)
+		// stays as the zero BlobRef. Callers that need to know whether
+		// this is Inline must read the file. Transitional single-blob
+		// cache; the authoritative list is manifest_blobs (ADR-92).
+		m.BlobRefs = []domain.BlobRef{domain.BlobRef(blobRef.String)}
 	}
 	if contentHash.Valid {
 		m.ContentHash = domain.ContentHash(contentHash.String)
@@ -211,8 +182,8 @@ func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 		return domain.Manifest{}, fmt.Errorf("scan created_at: %w", err)
 	}
 	m.CreatedAt = t
-	if retentionUntil.Valid {
-		t, err := timefmt.Parse(retentionUntil.String)
+	if retention.Valid {
+		t, err := timefmt.Parse(retention.String)
 		if err != nil {
 			return domain.Manifest{}, fmt.Errorf("scan retention_until: %w", err)
 		}

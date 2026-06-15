@@ -48,11 +48,10 @@ func recHex(b byte, n int) string {
 // the package fixture so the crypto-mode tests have something to hide.
 func recManifest(mut ...func(*domain.Manifest)) domain.Manifest {
 	m := domain.Manifest{
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "ns",
 		SessionID:    "sess-1",
 		ContentHash:  domain.ContentHash(recHex('a', 64)),
-		BlobRef:      domain.BlobRef(recHex('a', 64)),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(recHex('a', 64))},
 		OriginalSize: 1234,
 		CreatedAt:    time.Unix(1700000000, 0).UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
@@ -79,13 +78,10 @@ func TestEncodeDecode_PlainRoundTrip_AllFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Type != m.Type {
-		t.Errorf("Type lost: got %q want %q", got.Type, m.Type)
-	}
 	if got.Namespace != m.Namespace || got.SessionID != m.SessionID {
 		t.Errorf("namespace/session lost: %+v", got)
 	}
-	if string(got.ContentHash) != string(m.ContentHash) || string(got.BlobRef) != string(m.BlobRef) {
+	if string(got.ContentHash) != string(m.ContentHash) || string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) {
 		t.Errorf("content/blob ref lost: %+v", got)
 	}
 	if got.OriginalSize != m.OriginalSize {
@@ -157,8 +153,8 @@ func TestSealed_RoundTrip_AllFields(t *testing.T) {
 	if got.Namespace != m.Namespace {
 		t.Errorf("Namespace lost: got %q", got.Namespace)
 	}
-	if string(got.BlobRef) != string(m.BlobRef) {
-		t.Errorf("BlobRef lost: got %q", got.BlobRef)
+	if string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) {
+		t.Errorf("BlobRef lost: got %q", got.PrimaryBlobRef())
 	}
 	if !bytes.Equal(got.Ext, m.Ext) {
 		t.Errorf("Ext lost: got %s", got.Ext)

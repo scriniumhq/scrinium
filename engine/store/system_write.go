@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -40,14 +41,13 @@ func writeInlineSystemArtifact(
 	if _, err := contentHasher.Write(payload); err != nil {
 		return "", fmt.Errorf("system artifact: hash payload: %w", err)
 	}
-	contentHash := domain.ContentHash(hashes.Format(hashAlgo, contentHasher.Sum(nil)))
+	contentHash := domain.ContentHash(hex.EncodeToString(contentHasher.Sum(nil)))
 
 	manifest := domain.Manifest{
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    namespace,
 		SessionID:    sessionID,
 		ContentHash:  contentHash,
-		BlobRef:      domain.BlobRef(contentHash),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(contentHash)},
 		OriginalSize: int64(len(payload)),
 		InlineBlob:   payload,
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutInline},
@@ -72,7 +72,7 @@ func writeInlineSystemArtifact(
 
 	if err := idx.IndexManifest(ctx, manifest, domain.PhysicalAddress{
 		Path: manifestPath,
-	}, nil, nil); err != nil {
+	}); err != nil {
 		return "", fmt.Errorf("system artifact: index: %w", err)
 	}
 
@@ -97,14 +97,13 @@ func writeInlineSystemArtifactUnindexed(
 	if _, err := contentHasher.Write(payload); err != nil {
 		return "", fmt.Errorf("system artifact (no-index): hash payload: %w", err)
 	}
-	contentHash := domain.ContentHash(hashes.Format(hashAlgo, contentHasher.Sum(nil)))
+	contentHash := domain.ContentHash(hex.EncodeToString(contentHasher.Sum(nil)))
 
 	manifest := domain.Manifest{
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    namespace,
 		SessionID:    sessionID,
 		ContentHash:  contentHash,
-		BlobRef:      domain.BlobRef(contentHash),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(contentHash)},
 		OriginalSize: int64(len(payload)),
 		InlineBlob:   payload,
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutInline},

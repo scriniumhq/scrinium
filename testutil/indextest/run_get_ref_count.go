@@ -15,7 +15,7 @@ func runGetRefCount(t *testing.T, f Factory) {
 		ctx := t.Context()
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
 
@@ -44,10 +44,10 @@ func runGetRefCount(t *testing.T, f Factory) {
 		// to process. Reach it through Index → Delete.
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
-		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p"), nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p")); err != nil {
 			t.Fatal(err)
 		}
-		if err := idx.DeleteManifest(ctx, "art-1", []string{"blob-1"}); err != nil {
+		if err := idx.DeleteManifest(ctx, m.Digest); err != nil {
 			t.Fatal(err)
 		}
 

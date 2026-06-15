@@ -166,111 +166,71 @@ func (a *gcAgent) Validate(ctx context.Context) error { return ctx.Err() }
 // Run performs one Mark+Sweep cycle and returns its AgentResult. The
 // agent is periodically invoked by the scheduler (ADR-69), not a
 // resident loop: an interrupted cycle resumes from the Store-held
-// progress (orphan re-selection) on the next call.
+// progress (orphan re-selection) on the next call. The maintenance
+// lifecycle (lease, events, state) is agent.RunLeased (ADR-94); Run
+// supplies only the Mark+Sweep pass.
 func (a *gcAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
-	a.SetState(agent.StateRunning, nil)
-	stats, err := a.RunOnce(ctx)
-	res := &domain.AgentResult{
-		AgentType:   "gc",
-		StoreID:     a.storeID,
-		CompletedAt: time.Now(),
-		Stats: map[string]int64{
-			"scanned_blobs": stats.ScannedBlobs,
-			"marked_blobs":  stats.MarkedBlobs,
-			"removed_blobs": stats.RemovedBlobs,
-			"freed_bytes":   stats.FreedBytes,
-		},
-	}
-	if err != nil {
-		a.SetState(agent.StateFaulted, err)
-		if agent.IsCtxErr(err) {
-			res.Partial = true
-			a.bus.Publish(event.Event{Type: event.EventAgentCancelled})
-			return res, err
-		}
-		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
-			AgentType: "gc", StoreID: a.storeID, Err: err,
-		}})
-		return res, err
-	}
-	a.SetState(agent.StateIdle, nil)
-	return res, nil
+	return agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), func(ctx context.Context) (map[string]int64, error) {
+		stats, err := a.runCycle(ctx)
+		return gcStatsMap(stats), err
+	})
 }
 
-// RunOnce executes one Mark+Sweep cycle. Under GCLeasePolicy:
-// LeaderElection it first acquires the gc lease (SingleHost relies on
-// location.lock and takes none). Mark tombstones every ref_count=0 blob;
-// Sweep removes tombstone files whose grace period has elapsed and drops
-// their index rows.
+// RunOnce executes one full Mark+Sweep cycle and returns the typed stats
+// — the manual/test entry of the GCAgent interface. Runs the same leased
+// lifecycle as Run (agent.RunLeased, ADR-94).
 func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
+	var stats GCStats
+	_, err := agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), func(ctx context.Context) (map[string]int64, error) {
+		var werr error
+		stats, werr = a.runCycle(ctx)
+		return gcStatsMap(stats), werr
+	})
+	return stats, err
+}
+
+// maintenanceSpec is the RunLeased configuration shared by Run and
+// RunOnce. The lease is conditional: LeaderElection coordinates via
+// gc/lease, SingleHost relies on location.lock and takes none
+// (leaseRequired).
+func (a *gcAgent) maintenanceSpec() agent.MaintenanceSpec {
+	return agent.MaintenanceSpec{
+		AgentType:    "gc",
+		StoreID:      a.storeID,
+		Lease:        lease.Config{Path: gcLeasePath, HostID: a.hostID, AgentType: "gc", TTL: a.cfg.LeaseTTL},
+		LeaseEnabled: a.leaseRequired(a.store.Config().GCLeasePolicy),
+		Terminal:     event.EventAgentCycle,
+		TerminalMode: agent.TerminalEveryCycle,
+		Bus:          a.bus,
+		Driver:       a.drv,
+	}
+}
+
+func gcStatsMap(s GCStats) map[string]int64 {
+	return map[string]int64{
+		"scanned_blobs": s.ScannedBlobs,
+		"marked_blobs":  s.MarkedBlobs,
+		"removed_blobs": s.RemovedBlobs,
+		"freed_bytes":   s.FreedBytes,
+	}
+}
+
+// runCycle executes one Mark+Sweep pass — no lifecycle; agent.RunLeased
+// (ADR-94) owns lease/events/state. Mark tombstones every ref_count=0
+// blob; Sweep removes tombstone files whose grace period has elapsed and
+// drops their index rows.
+func (a *gcAgent) runCycle(ctx context.Context) (GCStats, error) {
 	if err := ctx.Err(); err != nil {
 		return GCStats{}, err
 	}
-	a.bus.Publish(event.Event{Type: event.EventAgentStarted, Payload: event.AgentStartedPayload{
-		AgentType: "gc", StoreID: a.storeID, StartedAt: time.Now(),
-	}})
-
-	cfg := a.store.Config()
-
-	// Conditional lease: only LeaderElection coordinates via gc/lease.
-	var hbErr <-chan error
-	runCtx := ctx
-	if a.leaseRequired(cfg.GCLeasePolicy) {
-		l, prev, err := lease.Acquire(ctx, a.drv, lease.Config{
-			Path:      gcLeasePath,
-			HostID:    a.hostID,
-			AgentType: "gc",
-			TTL:       a.cfg.LeaseTTL,
-		})
-		if err != nil {
-			return GCStats{}, fmt.Errorf("gc.GC.RunOnce: acquire lease: %w", err)
-		}
-		if prev != nil {
-			a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
-				LeaseKey: gcLeasePath, PreviousHolder: prev.HostID,
-				ExpiredAt: prev.ExpiresAt, TakenBy: a.hostID,
-			}})
-		}
-		var cancel context.CancelFunc
-		runCtx, cancel = context.WithCancel(ctx)
-		ch := make(chan error, 1)
-		go func() { ch <- l.Heartbeat(runCtx) }()
-		hbErr = ch
-		defer func() {
-			cancel()
-			if err := l.Release(context.WithoutCancel(ctx)); err != nil {
-				a.Logger().Warn("lease release failed; lease will expire via TTL", "err", err)
-			}
-		}()
-	}
-
 	var stats GCStats
-	grace := cfg.TombstoneGracePeriod
+	grace := a.store.Config().TombstoneGracePeriod
 
-	markErr := a.mark(runCtx, &stats)
-	sweepErr := a.sweep(runCtx, grace, &stats)
-
-	a.bus.Publish(event.Event{Type: event.EventAgentCycle, Payload: domain.AgentResult{
-		AgentType: "gc", StoreID: a.storeID, CompletedAt: time.Now(),
-		Stats: map[string]int64{
-			"scanned_blobs": stats.ScannedBlobs,
-			"marked_blobs":  stats.MarkedBlobs,
-			"removed_blobs": stats.RemovedBlobs,
-			"freed_bytes":   stats.FreedBytes,
-		},
-	}})
+	markErr := a.mark(ctx, &stats)
+	sweepErr := a.sweep(ctx, grace, &stats)
 
 	if err := agent.FirstNonCtxErr(markErr, sweepErr); err != nil {
 		return stats, fmt.Errorf("gc.GC.RunOnce: %w", err)
-	}
-	if hbErr != nil {
-		select {
-		case herr := <-hbErr:
-			if herr != nil && !agent.IsCtxErr(herr) {
-				return stats, fmt.Errorf("gc.GC.RunOnce: lease lost: %w", herr)
-			}
-		default:
-		}
 	}
 	return stats, nil
 }

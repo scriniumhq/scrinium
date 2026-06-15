@@ -16,7 +16,7 @@ func runResolve(t *testing.T, f Factory) {
 		idx := f.New(t)
 		m := manifestfx.Blob("art-1", "blob-1")
 		addr := manifestfx.PhysAddr("blobs/aa/bb/blob-1")
-		if err := idx.IndexManifest(ctx, m, addr, nil, nil); err != nil {
+		if err := idx.IndexManifest(ctx, m, addr); err != nil {
 			t.Fatalf("IndexManifest: %v", err)
 		}
 
@@ -37,13 +37,4 @@ func runResolve(t *testing.T, f Factory) {
 			t.Fatalf("expected errs.ErrArtifactNotFound, got %v", err)
 		}
 	})
-
-	// Note: the "blob row with pack_ref/offset/size populated"
-	// case is sqlite-specific glass-box behaviour. After
-	// IndexManifest of a pack manifest, only ONE blobs row exists
-	// (the pack blob itself); the embedded blobs live in
-	// packed_blobs and are looked up via LookupPacked, not
-	// Resolve. The packed-entries side is covered by
-	// IndexManifest/Pack_RegistersEntries and LookupPacked/Hit
-	// below.
 }

@@ -79,8 +79,11 @@ const (
 // NewCheckpointAgent creates a Checkpoint Agent. Constructed by the
 // assembler (Variant B): it needs the StoreIndex to WriteCheckpoint a
 // checkpoint file and the Store to publish that file into the CAS via
-// System().Put (WithoutIndex — a checkpoint is engine state, not a user
-// artifact, and indexing it would make it a rebuild input of itself).
+// System().Put. A checkpoint is engine state, not a user artifact;
+// system artifacts live in their own system/ address space and are
+// never indexed (ADR-85), so a checkpoint can never become a rebuild
+// input of itself — that guarantee is structural now, not an opt-out
+// flag on the write.
 func NewCheckpointAgent(
 	st store.Store,
 	drv driver.Driver,
@@ -148,83 +151,49 @@ func (a *checkpointAgent) AgentType() string { return "checkpoint" }
 func (a *checkpointAgent) Validate(ctx context.Context) error { return ctx.Err() }
 
 // Run takes one checkpoint and returns its AgentResult. A one-shot
-// operation: the scheduler decides cadence (ADR-69).
+// operation: the scheduler decides cadence (ADR-69). The maintenance
+// lifecycle (lease, events, state) is agent.RunLeased (ADR-94); Run
+// supplies only the checkpoint pass.
 func (a *checkpointAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
-	a.SetState(agent.StateRunning, nil)
-	stats, err := a.TakeCheckpoint(ctx)
-	res := &domain.AgentResult{
-		AgentType:   "checkpoint",
-		StoreID:     a.storeID,
-		CompletedAt: time.Now(),
-		Stats:       map[string]int64{"db_bytes": stats.DBBytes},
-	}
-	if err != nil {
-		a.SetState(agent.StateFaulted, err)
-		if agent.IsCtxErr(err) {
-			res.Partial = true
-			a.bus.Publish(event.Event{Type: event.EventAgentCancelled})
-			return res, err
-		}
-		a.bus.Publish(event.Event{Type: event.EventAgentFailed, Payload: event.AgentFailedPayload{
-			AgentType: "checkpoint", StoreID: a.storeID, Err: err,
-		}})
-		return res, err
-	}
-	a.SetState(agent.StateIdle, nil)
-	return res, nil
+	return agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), func(ctx context.Context) (map[string]int64, error) {
+		stats, err := a.checkpointOnce(ctx)
+		return checkpointStatsMap(stats), err
+	})
 }
 
-// TakeCheckpoint vacuums the index into a temp file, publishes it into
-// the CAS under index_checkpoint/<ts> (unindexed), then prunes old
-// checkpoints past Retention. Runs under the checkpoint lease so two hosts
-// do not vacuum concurrently.
+// maintenanceSpec is the RunLeased configuration shared by Run and
+// TakeCheckpoint: the checkpoint lease (always taken) and the one-shot
+// terminal (EventAgentCompleted on success).
+func (a *checkpointAgent) maintenanceSpec() agent.MaintenanceSpec {
+	return agent.MaintenanceSpec{
+		AgentType:    "checkpoint",
+		StoreID:      a.storeID,
+		Lease:        lease.Config{Path: checkpointLeasePath, HostID: a.hostID, AgentType: "checkpoint", TTL: defaultCheckpointLeaseTTL},
+		LeaseEnabled: true,
+		Terminal:     event.EventAgentCompleted,
+		TerminalMode: agent.TerminalOnSuccess,
+		Bus:          a.bus,
+		Driver:       a.drv,
+	}
+}
+
+func checkpointStatsMap(s CheckpointStats) map[string]int64 {
+	return map[string]int64{"db_bytes": s.DBBytes}
+}
+
+// TakeCheckpoint forces a checkpoint regardless of Interval and
+// ArtifactThreshold — the ad-hoc entry of the CheckpointAgent interface.
+// It runs the same leased lifecycle as Run (agent.RunLeased, ADR-94):
+// vacuum the index into a temp file, publish it into the CAS under
+// index_checkpoint/<ts> (unindexed), then prune past Retention.
 func (a *checkpointAgent) TakeCheckpoint(ctx context.Context) (CheckpointStats, error) {
-	if err := ctx.Err(); err != nil {
-		return CheckpointStats{}, err
-	}
-	a.bus.Publish(event.Event{Type: event.EventAgentStarted, Payload: event.AgentStartedPayload{
-		AgentType: "checkpoint", StoreID: a.storeID, StartedAt: time.Now(),
-	}})
-
-	l, prev, err := lease.Acquire(ctx, a.drv, lease.Config{
-		Path:      checkpointLeasePath,
-		HostID:    a.hostID,
-		AgentType: "checkpoint",
-		TTL:       defaultCheckpointLeaseTTL,
+	var stats CheckpointStats
+	_, err := agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), func(ctx context.Context) (map[string]int64, error) {
+		var werr error
+		stats, werr = a.checkpointOnce(ctx)
+		return checkpointStatsMap(stats), werr
 	})
-	if err != nil {
-		return CheckpointStats{}, fmt.Errorf("checkpoint.Checkpoint.TakeCheckpoint: acquire lease: %w", err)
-	}
-	if prev != nil {
-		a.bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
-			LeaseKey: checkpointLeasePath, PreviousHolder: prev.HostID,
-			ExpiredAt: prev.ExpiresAt, TakenBy: a.hostID,
-		}})
-	}
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	hbErr := make(chan error, 1)
-	go func() { hbErr <- l.Heartbeat(runCtx) }()
-	defer func() {
-		cancel()
-		if err := l.Release(context.WithoutCancel(ctx)); err != nil {
-			a.Logger().Warn("lease release failed; lease will expire via TTL", "err", err)
-		}
-	}()
-
-	stats, err := a.checkpointOnce(runCtx)
-	if err != nil {
-		return CheckpointStats{}, fmt.Errorf("checkpoint.Checkpoint.TakeCheckpoint: %w", err)
-	}
-	if herr := drainHeartbeat(hbErr); herr != nil {
-		return CheckpointStats{}, fmt.Errorf("checkpoint.Checkpoint.TakeCheckpoint: lease lost: %w", herr)
-	}
-
-	a.bus.Publish(event.Event{Type: event.EventAgentCompleted, Payload: domain.AgentResult{
-		AgentType: "checkpoint", StoreID: a.storeID, CompletedAt: time.Now(),
-		Stats: map[string]int64{"db_bytes": stats.DBBytes},
-	}})
-	return stats, nil
+	return stats, err
 }
 
 func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, error) {
@@ -261,7 +230,6 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 	name := checkpointfmt.Prefix + id
 	if err := a.store.System().Put(ctx,
 		store.SystemArtifact{Name: name, Payload: f},
-		store.WithoutIndex(),
 	); err != nil {
 		return CheckpointStats{}, fmt.Errorf("publish checkpoint %q: %w", name, err)
 	}
@@ -315,19 +283,6 @@ func (a *checkpointAgent) pruneOldCheckpoints(ctx context.Context) error {
 		if err := a.store.System().Delete(ctx, old); err != nil {
 			return fmt.Errorf("delete old checkpoint %q: %w", old, err)
 		}
-	}
-	return nil
-}
-
-// drainHeartbeat returns a non-context heartbeat error if one is already
-// pending, else nil. Shared shape with the other lease-holding agents.
-func drainHeartbeat(hbErr <-chan error) error {
-	select {
-	case herr := <-hbErr:
-		if herr != nil && !agent.IsCtxErr(herr) {
-			return herr
-		}
-	default:
 	}
 	return nil
 }

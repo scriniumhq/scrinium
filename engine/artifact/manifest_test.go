@@ -23,7 +23,7 @@ func TestEncodeDecode_PlainRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Namespace != m.Namespace || string(got.BlobRef) != string(m.BlobRef) || got.OriginalSize != m.OriginalSize {
+	if got.Namespace != m.Namespace || string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) || got.OriginalSize != m.OriginalSize {
 		t.Errorf("round-trip lost sys fields: %+v", got)
 	}
 	if !bytes.Equal(got.InlineBlob, m.InlineBlob) {
@@ -87,7 +87,7 @@ func TestComputeManifestDigest_DifferentManifestsDifferentIDs(t *testing.T) {
 
 func TestVerifyManifestDigest_AcceptsUntampered(t *testing.T) {
 	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoPlain)
-	if err := artifact.VerifyManifestDigest(id, b, artifactfx.Hashes()); err != nil {
+	if err := artifact.VerifyManifestDigest(id, b, "sha256", artifactfx.Hashes()); err != nil {
 		t.Fatalf("verify untampered: %v", err)
 	}
 }
@@ -95,7 +95,7 @@ func TestVerifyManifestDigest_AcceptsUntampered(t *testing.T) {
 func TestVerifyManifestDigest_DetectsTampering(t *testing.T) {
 	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoPlain)
 	b[len(b)-1] ^= 0xff
-	if err := artifact.VerifyManifestDigest(id, b, artifactfx.Hashes()); !errors.Is(err, errs.ErrCorruptedManifest) {
+	if err := artifact.VerifyManifestDigest(id, b, "sha256", artifactfx.Hashes()); !errors.Is(err, errs.ErrCorruptedManifest) {
 		t.Fatalf("want ErrCorruptedManifest, got %v", err)
 	}
 }
@@ -181,38 +181,26 @@ func TestDecodeEncrypted_PlainForwards(t *testing.T) {
 	}
 }
 
-func TestEncode_ManifestTooLarge(t *testing.T) {
-	huge := make([]byte, domain.MaxManifestSize)
-	huge[0] = '"'
-	for i := 1; i < len(huge)-1; i++ {
-		huge[i] = 'x'
+func TestDecode_ManifestTooLarge(t *testing.T) {
+	oversized := make([]byte, domain.MaxManifestSize+1)
+	if _, err := artifact.Decode(oversized); !errors.Is(err, errs.ErrManifestTooLarge) {
+		t.Fatalf("Decode: got %v, want errs.ErrManifestTooLarge", err)
 	}
-	huge[len(huge)-1] = '"'
-
-	m := artifactfx.Manifest(func(m *domain.Manifest) { m.Ext = huge })
-
-	_, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
-	if !errors.Is(err, errs.ErrManifestTooLarge) {
-		t.Fatalf("Encode: got %v, want errs.ErrManifestTooLarge", err)
+	if _, err := artifact.DecodeEncrypted(oversized, nil); !errors.Is(err, errs.ErrManifestTooLarge) {
+		t.Fatalf("DecodeEncrypted: got %v, want errs.ErrManifestTooLarge", err)
 	}
 }
 
-func TestEncode_ManifestUnderLimit_OK(t *testing.T) {
-	huge := make([]byte, domain.MaxManifestSize/2)
-	huge[0] = '"'
-	for i := 1; i < len(huge)-1; i++ {
-		huge[i] = 'x'
+func TestEncode_TooManyRefs(t *testing.T) {
+	refs := make([]domain.BlobRef, domain.MaxBlobRefs+1)
+	for i := range refs {
+		refs[i] = domain.BlobRef("aabbccdd")
 	}
-	huge[len(huge)-1] = '"'
+	m := artifactfx.Manifest(func(m *domain.Manifest) { m.BlobRefs = refs })
 
-	m := artifactfx.Manifest(func(m *domain.Manifest) { m.Ext = huge })
-
-	bs, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
-	if err != nil {
-		t.Fatalf("Encode: %v", err)
-	}
-	if len(bs) > domain.MaxManifestSize {
-		t.Fatalf("encoded size %d exceeds limit %d", len(bs), domain.MaxManifestSize)
+	_, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if !errors.Is(err, errs.ErrTooManyRefs) {
+		t.Fatalf("Encode: got %v, want errs.ErrTooManyRefs", err)
 	}
 }
 

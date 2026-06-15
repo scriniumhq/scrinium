@@ -12,7 +12,6 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/store/internal/artifactio"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/orphanscan"
 	"scrinium.dev/engine/store/internal/reconcile"
@@ -48,27 +47,12 @@ func buildStore(
 			keyResolver: o.keyResolver,
 		},
 	}
-	c.system = newSystemStore(drv, idx, o.hashRegistry, cfg,
-		// ArtifactWriter: the inline-artifact write primitive lives in
-		// store (shared with the config writer); systemstore calls it
-		// through this closure, branching on skipIndex.
-		func(ctx context.Context, ns string, sid domain.SessionID, payload []byte, hashAlgo string, skipIndex bool) (domain.ManifestDigest, error) {
-			if skipIndex {
-				return writeInlineSystemArtifactUnindexed(ctx, drv, o.hashRegistry, ns, sid, payload, hashAlgo)
-			}
-			return writeInlineSystemArtifact(ctx, drv, idx, o.hashRegistry, ns, sid, payload, hashAlgo)
-		},
-		// InlineHandleFactory: systemstore builds inline handles through
-		// this closure; the implementation lives in artifactio.
-		func(m domain.Manifest) domain.ReadHandle {
-			return artifactio.NewInlineHandle(m)
-		},
-		// Logger: the systemStore logs its own best-effort cleanup
-		// failures (dropPredecessor) which have no caller to surface
-		// them. resolveLogger was already applied to s.log in the
-		// struct literal above; reuse it so the component tag is "store".
-		c.log,
-	)
+	// SystemStore facade over the pointer-free layout (ADR-85). It needs
+	// only the driver, the hash registry, the active config (for its
+	// immutable ContentHasher), and a logger — no StoreIndex and no write
+	// indirection, since system artifacts are unindexed and the inline
+	// write is self-contained in systemlayout.
+	c.system = newSystemStore(drv, o.hashRegistry, cfg, c.log)
 	return c, nil
 }
 

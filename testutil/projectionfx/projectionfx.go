@@ -170,12 +170,11 @@ func (f *FakeSource) Put(
 
 	m := domain.Manifest{
 		ArtifactID:   id,
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    po.Namespace,
 		SessionID:    po.SessionID,
 		CreatedAt:    time.Now().UTC(),
 		ContentHash:  hash,
-		BlobRef:      domain.BlobRef(hash),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(hash)},
 		OriginalSize: int64(len(payload)),
 		Ext:          a.Ext,
 		Usr:          a.Usr,
@@ -332,5 +331,3 @@ func (h *FakeReadHandle) Close() error {
 
 // Compile-time guard.
 var _ domain.ReadHandle = (*FakeReadHandle)(nil)
-
-// --- Manifest builders ---

@@ -2,6 +2,8 @@ package sqlite
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -14,8 +16,8 @@ import (
 // internal/testutil/indextest does not use these — it asserts
 // through the public StoreIndex API only. These helpers exist
 // because the remaining sqlite-only tests (vacuum content checks,
-// NULL-column COALESCE on packed_blobs, blob row with packed
-// metadata) need direct SQL access that the public API does not
+// blob row with packed metadata) need direct SQL access that the
+// public API does not
 // expose.
 
 // countRows returns the number of rows in `table`. Used by
@@ -33,21 +35,17 @@ func countRows(t *testing.T, idx *Index, table string) int {
 
 // insertBlob inserts a blob row directly into the blobs table,
 // bypassing IndexManifest's blob-side bookkeeping (manifest_blobs
-// links, ref_count from incoming manifest, etc.). Used by the
-// pack-row Resolve test where the row shape (blob_ref with
-// pack_ref/offset/size populated) is not produced by the public
-// IndexManifest path — only direct INSERT can stage it.
+// links, ref_count from incoming manifest, etc.). Used by tests that
+// need to stage a specific blob-row shape directly.
 func insertBlob(t *testing.T, idx *Index, ref, contentHash string, size int64, addr domain.PhysicalAddress, refCount int) {
 	t.Helper()
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO blobs (
-			blob_ref, content_hash, original_size, 
-            crypto_identity, physical_path,
-			pack_ref, pack_offset, pack_size,
+			blob_ref, content_hash, original_size,
+			crypto_identity, physical_path,
 			ref_count, last_verified_at, created_at
-		) VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, NULL, ?)`,
+		) VALUES (?, ?, ?, '', ?, ?, NULL, ?)`,
 		ref, contentHash, size, addr.Path,
-		addr.PackRef, addr.Offset, addr.Size,
 		refCount, timefmt.Format(time.Now()),
 	)
 	if err != nil {
@@ -72,18 +70,27 @@ func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	if m.LayoutHeader.BlobStorage == domain.LayoutInline {
 		blobRefArg = nil
 	} else {
-		blobRefArg = string(m.BlobRef)
+		blobRefArg = string(m.PrimaryBlobRef())
 	}
 	var retentionArg any
 	if !m.RetentionUntil.IsZero() {
 		retentionArg = timefmt.Format(m.RetentionUntil)
 	}
+	// manifest_digest is the PK after the identity axis (ADR-83/92).
+	// Honour a fixture-supplied digest; synthesize a distinct one from
+	// the row's identifying fields otherwise so two staged manifests
+	// never collide on an empty PK.
+	digest := string(m.Digest)
+	if digest == "" {
+		sum := sha256.Sum256([]byte(string(m.ArtifactID) + "|" + m.Namespace + "|" + string(m.SessionID) + "|" + timefmt.Format(createdAt)))
+		digest = "sha256-" + hex.EncodeToString(sum[:])
+	}
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO manifests (
-			artifact_id, type, namespace, session_id,
+			manifest_digest, artifact_id, namespace, session_id,
 			blob_ref, created_at, retention_until
 		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		string(m.ArtifactID), string(m.Type),
+		digest, string(m.ArtifactID),
 		m.Namespace, m.SessionID, blobRefArg,
 		timefmt.Format(createdAt), retentionArg,
 	)

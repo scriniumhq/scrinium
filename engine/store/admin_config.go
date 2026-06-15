@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"slices"
-	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store/internal/storeconfig"
@@ -32,11 +30,11 @@ func (c *core) snapshotConfig() domain.StoreConfig {
 // UpdateConfig swaps the active StoreConfig. Only mutable fields
 // can change; immutable mismatches return errs.ErrConfigMismatch.
 //
-// On-disk effect: a new system.config inline artifact is written
-// and system.config/current is atomically bumped to its
-// ArtifactID. The in-memory active config is swapped only after
-// both writes succeed, so Config() never returns a value that
-// disagrees with the disk pointer.
+// On-disk effect: a new system/config version is published by
+// claiming the next seq (ADR-85); the active config is the highest
+// seq. The in-memory active config is swapped only after the write
+// succeeds, so Config() never returns a value that disagrees with
+// the active on-disk version.
 //
 // Concurrency: the disk write and the in-memory swap are both
 // performed under cfgMu.Lock(). Two parallel UpdateConfig calls
@@ -71,7 +69,7 @@ func (a adminFacet) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) er
 	}
 
 	a.cfgMu.Lock()
-	if _, err := storeconfig.Write(ctx, a.drv, configWriter(a.drv, a.index, a.hashes), requested); err != nil {
+	if err := storeconfig.Write(ctx, a.drv, a.hashes, requested); err != nil {
 		a.cfgMu.Unlock()
 		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
@@ -90,79 +88,18 @@ func (a adminFacet) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) er
 	return nil
 }
 
-// ConfigHistory returns every system.config snapshot: the active one
-// first, the rest sorted by CreatedAt descending.
-//
-// The "active first" rule matters because a rollback through
-// UpdateConfig produces a fresh snapshot whose CreatedAt is newer than
-// the version it rolls back to, while the disk pointer follows the
-// rollback. Sorting purely by time would put the discarded version
-// first; promoting the pointer's target keeps the result honest about
-// which config is in effect.
+// ConfigHistory returns every system/config snapshot, newest first.
+// Under the seq model (ADR-85) the active config is simply the highest
+// version, so "newest first" already puts the in-effect config at
+// index 0 — no pointer reconciliation is needed. A rollback is itself
+// published as a new max-seq copy, so it too surfaces at index 0.
 func (a adminFacet) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
 	if err := a.enterRead(ctx); err != nil {
 		return nil, err
 	}
-
-	currentDigest, err := storeconfig.ReadPointer(ctx, a.drv, a.hashes)
+	hist, err := storeconfig.History(ctx, a.drv, a.hashes)
 	if err != nil {
 		return nil, fmt.Errorf("store.ConfigHistory: %w", err)
 	}
-
-	// ListByNamespace yields manifest rows from the index — namespace,
-	// CreatedAt, ArtifactID — but NOT the inline payload (which
-	// lives only in the manifest file on disk; the index has no
-	// column for it). Each entry therefore needs a second hop:
-	// load the manifest file for its ArtifactID and unmarshal the
-	// embedded StoreConfig payload.
-	type entry struct {
-		digest    domain.ManifestDigest
-		cfg       domain.StoreConfig
-		createdAt time.Time
-	}
-	var entries []entry
-	listErr := a.index.ListByNamespace(ctx, domain.NamespaceSystemConfig, func(m domain.Manifest) error {
-		cfg, err := storeconfig.LoadByID(ctx, a.drv, a.hashes, m.Digest)
-		if err != nil {
-			return fmt.Errorf("decode %s: %w", m.ArtifactID, err)
-		}
-		entries = append(entries, entry{
-			digest:    m.Digest,
-			cfg:       storeconfig.ApplyDefaults(cfg),
-			createdAt: m.CreatedAt,
-		})
-		return nil
-	})
-	if listErr != nil {
-		return nil, fmt.Errorf("store.ConfigHistory: list by namespace: %w", listErr)
-	}
-
-	slices.SortStableFunc(entries, func(a, b entry) int {
-		// Reverse chronological order: newest first.
-		return b.createdAt.Compare(a.createdAt)
-	})
-
-	currentIdx := -1
-	for i := range entries {
-		if entries[i].digest == currentDigest {
-			currentIdx = i
-			break
-		}
-	}
-	if currentIdx < 0 {
-		// Pointer points at an artifact the index did not yield. On a
-		// healthy Store this cannot happen — bootstrap reads the same
-		// pointer and would have refused. Surface the standard error.
-		return nil, errs.ErrDanglingConfigPointer
-	}
-
-	out := make([]domain.StoreConfig, 0, len(entries))
-	out = append(out, entries[currentIdx].cfg)
-	for i, e := range entries {
-		if i == currentIdx {
-			continue
-		}
-		out = append(out, e.cfg)
-	}
-	return out, nil
+	return hist, nil
 }

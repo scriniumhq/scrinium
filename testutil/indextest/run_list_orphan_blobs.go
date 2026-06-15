@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"testing"
 
-	"scrinium.dev/domain"
 	"scrinium.dev/testutil/manifestfx"
 )
 
@@ -32,11 +31,11 @@ func runListOrphanBlobs(t *testing.T, f Factory) {
 		}
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref)); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)
 			}
 			if s.deleted {
-				if err := idx.DeleteManifest(ctx, domain.ArtifactID(s.id), []string{s.ref}); err != nil {
+				if err := idx.DeleteManifest(ctx, m.Digest); err != nil {
 					t.Fatalf("delete %s: %v", s.id, err)
 				}
 			}
@@ -70,10 +69,10 @@ func runListOrphanBlobs(t *testing.T, f Factory) {
 			id := "art-" + string(fillChar)
 			ref := "blob-" + string(fillChar)
 			m := manifestfx.BlobWithHash(id, ref, manifestfx.SyntheticHash(fillChar), 1024)
-			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref), nil, nil); err != nil {
+			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+ref)); err != nil {
 				t.Fatal(err)
 			}
-			if err := idx.DeleteManifest(ctx, domain.ArtifactID(id), []string{ref}); err != nil {
+			if err := idx.DeleteManifest(ctx, m.Digest); err != nil {
 				t.Fatal(err)
 			}
 		}

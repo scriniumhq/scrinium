@@ -40,12 +40,26 @@ const MaxExtSize = 64 * 1024
 // errs.ErrUsrTooLarge when exceeded.
 const MaxUsrSize = 64 * 1024
 
-// MaxManifestSize is the maximum byte size of a serialised
-// Manifest. 1 MiB.
-// Returns errs.ErrManifestTooLarge when exceeded.
-// A manifest with thousands of chunks or huge Metadata is
-// a design error.
-const MaxManifestSize = 1024 * 1024
+// MaxBlobRefs and MaxHandleRefs cap the manifest reference arrays
+// (ADR-92/93): the on-disk chunk/member list is 16-bit length-counted, so
+// each array holds at most 65535 entries. Exceeding either returns
+// errs.ErrTooManyRefs on write. The encode path has no overall byte cap —
+// it is bounded field-by-field — while reads are guarded by
+// MaxManifestSize (below) against corrupt or oversized files.
+const (
+	MaxBlobRefs   = 65535
+	MaxHandleRefs = 65535
+)
+
+// MaxManifestSize bounds a manifest file on READ, so a corrupt or hostile
+// file cannot force an unbounded allocation before the per-field limits
+// (checked post-parse) can fire. It is derived from the per-field maxima,
+// not arbitrary: a worst-case well-formed manifest is
+// (MaxBlobRefs + MaxHandleRefs) hex digests + MaxExtSize + MaxUsrSize +
+// fixed overhead — ~9 MiB for SHA-256, ~17 MiB for SHA-512. 32 MiB leaves
+// headroom for the longest registered hash. The encode path does NOT use
+// this — it is bounded field-by-field. Returns errs.ErrManifestTooLarge.
+const MaxManifestSize = 32 * 1024 * 1024
 
 // SegmentSize bounds for the segmented AEAD blob format (ADR-59,
 // docs/4 §11.1 "SegmentSize"). The on-disk header stores the

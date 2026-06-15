@@ -34,7 +34,7 @@ import (
 // keys is the manifest key provider (store passes its KeyResolver adapted
 // to artifact.KeyProvider; nil means "no resolver" — Plain decodes, an
 // encrypted manifest surfaces ErrKeyNotFound).
-func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyProvider) (domain.Manifest, error) {
+func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyProvider, hashAlgo string) (domain.Manifest, error) {
 	if id == "" {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
 	}
@@ -56,12 +56,15 @@ func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 		}
 		return domain.Manifest{}, fmt.Errorf("artifactio.Load: read: %w", err)
 	}
-	raw, err := io.ReadAll(rc)
+	raw, err := io.ReadAll(io.LimitReader(rc, domain.MaxManifestSize+1))
 	_ = rc.Close()
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("artifactio.Load: read body: %w", err)
 	}
-	if err := artifact.VerifyManifestDigest(digest, raw, x.hashes); err != nil {
+	if len(raw) > domain.MaxManifestSize {
+		return domain.Manifest{}, errs.ErrManifestTooLarge
+	}
+	if err := artifact.VerifyManifestDigest(digest, raw, hashAlgo, x.hashes); err != nil {
 		return domain.Manifest{}, err
 	}
 	m, err := artifact.DecodeEncrypted(raw, keys)
@@ -106,7 +109,7 @@ func (x *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser,
 		return io.NopCloser(bytes.NewReader(m.InlineBlob)), nil
 
 	case domain.LayoutTarget:
-		addr, err := x.index.Resolve(ctx, string(m.BlobRef))
+		addr, err := x.index.Resolve(ctx, string(m.PrimaryBlobRef()))
 		if err != nil {
 			return nil, fmt.Errorf("artifactio: resolve blob path: %w", err)
 		}
@@ -125,13 +128,13 @@ func (x *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser,
 }
 
 // VerifyBlob re-hashes the artifact's plaintext bytes and compares against
-// manifest.ContentHash. The algorithm comes from the ContentHash prefix
+// manifest.ContentHash. The algorithm is the manifest's hash_algo (ADR-93)
 // (not the current config), so historical artifacts still verify. Any
 // decode-side failure inside the inverse pipeline (AEAD tag mismatch,
 // decompressor error) is folded into ErrCorruptedBlob; a context error is
 // returned as-is. The caller decides whether to publish EventScrubFailed.
 func (x *IO) VerifyBlob(ctx context.Context, m domain.Manifest) error {
-	_, want, hasher, err := artifact.ParseContentHash(x.hashes, m.ContentHash)
+	want, hasher, err := artifact.ParseContentHash(x.hashes, m.HashAlgo, m.ContentHash)
 	if err != nil {
 		return fmt.Errorf("artifactio.VerifyBlob: %w", err)
 	}

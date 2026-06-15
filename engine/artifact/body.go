@@ -38,11 +38,19 @@ type jsonBody struct {
 // bytes and lives only in-memory / as the filename). identity_meta_hash
 // (md) and identity_nonce are the other handle inputs and are serialised
 // so the handle stays reproducible and survives index loss.
+//
+// Reference model (ADR-92/93): blob_refs is the ordered array of blob
+// references (россыпь — one, composite — chunks, pack — [toc, pack]) and
+// handle_refs the ordered array of artifact→artifact edges (the DAG).
+// MIGRATION: namespace is still written transitionally — until its
+// readers move to ext (ADR-79).
 type jsonSys struct {
 	ArtifactID       string              `json:"artifact_id,omitempty"`
-	BlobRef          string              `json:"blob_ref"`
+	BlobRefs         []string            `json:"blob_refs"`
 	ContentHash      string              `json:"content_hash,omitempty"`
 	CreatedAt        string              `json:"created_at"`
+	HandleRefs       []string            `json:"handle_refs,omitempty"`
+	HashAlgo         string              `json:"hash_algo,omitempty"`
 	IdentityMetaHash string              `json:"identity_meta_hash,omitempty"`
 	IdentityNonce    string              `json:"identity_nonce,omitempty"` // base64
 	LayoutHeader     jsonLayoutHeader    `json:"layout_header"`
@@ -52,8 +60,6 @@ type jsonSys struct {
 	RetentionTime    string              `json:"retention_until,omitempty"`
 	SchemaVersion    int                 `json:"schema_version"`
 	SessionID        string              `json:"session_id"`
-	System           *jsonSystemFlags    `json:"system,omitempty"`
-	Type             string              `json:"type"`
 }
 
 type jsonLayoutHeader struct {
@@ -67,11 +73,6 @@ type jsonPipelineStage struct {
 	KeyID     string `json:"key_id,omitempty"`
 }
 
-type jsonSystemFlags struct {
-	TOCOffset int64 `json:"toc_offset"`
-	TOCSize   int64 `json:"toc_size"`
-}
-
 // marshalBodyJSON produces deterministic JSON bytes per §7.5: alphabetical
 // key order, no whitespace. Determinism comes from declaring fields in
 // alphabetical-by-JSON-tag order at both levels; encoding/json emits in
@@ -82,16 +83,17 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 		Usr: m.Usr,
 		Sys: jsonSys{
 			ArtifactID:       string(m.ArtifactID),
-			BlobRef:          string(m.BlobRef),
+			BlobRefs:         blobRefsToJSON(m),
 			ContentHash:      string(m.ContentHash),
 			CreatedAt:        timefmt.Format(m.CreatedAt),
+			HandleRefs:       handleRefsToJSON(m.HandleRefs),
+			HashAlgo:         m.HashAlgo,
 			IdentityMetaHash: m.IdentityMetaHash,
 			LayoutHeader:     jsonLayoutHeader{BlobStorage: m.LayoutHeader.BlobStorage},
 			Namespace:        m.Namespace,
 			Pipeline:         pipelineToJSON(m.Pipeline),
 			SchemaVersion:    SchemaVersion,
 			SessionID:        string(m.SessionID),
-			Type:             string(m.Type),
 		},
 	}
 	if len(m.IdentityNonce) > 0 {
@@ -106,14 +108,32 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 	if !m.RetentionUntil.IsZero() {
 		body.Sys.RetentionTime = timefmt.Format(m.RetentionUntil)
 	}
-	if m.SystemFlags.TOCOffset != 0 || m.SystemFlags.TOCSize != 0 {
-		body.Sys.System = &jsonSystemFlags{
-			TOCOffset: m.SystemFlags.TOCOffset,
-			TOCSize:   m.SystemFlags.TOCSize,
-		}
-	}
 
 	return json.Marshal(&body)
+}
+
+// blobRefsToJSON renders the manifest's blob references as the on-disk
+// blob_refs array (ADR-92). Always non-nil so the field is emitted
+// (§7.5 requires blob_refs present); empty for the Inline strategy.
+func blobRefsToJSON(m domain.Manifest) []string {
+	out := make([]string, len(m.BlobRefs))
+	for i, r := range m.BlobRefs {
+		out[i] = string(r)
+	}
+	return out
+}
+
+// handleRefsToJSON renders HandleRefs as the on-disk handle_refs array, or
+// nil to omit it (omitempty) when there are no artifact→artifact edges.
+func handleRefsToJSON(refs []domain.HandleRef) []string {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]string, len(refs))
+	for i, h := range refs {
+		out[i] = string(h)
+	}
+	return out
 }
 
 // unmarshalBodyJSON parses body bytes into a domain.Manifest. Input field
@@ -138,11 +158,12 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 	m := domain.Manifest{
 		ArtifactID:       domain.ArtifactID(b.Sys.ArtifactID),
 		IdentityMetaHash: b.Sys.IdentityMetaHash,
-		Type:             domain.ManifestType(b.Sys.Type),
 		Namespace:        b.Sys.Namespace,
 		SessionID:        domain.SessionID(b.Sys.SessionID),
 		ContentHash:      domain.ContentHash(b.Sys.ContentHash),
-		BlobRef:          domain.BlobRef(b.Sys.BlobRef),
+		HashAlgo:         b.Sys.HashAlgo,
+		BlobRefs:         blobRefsFromJSON(b.Sys.BlobRefs),
+		HandleRefs:       handleRefsFromJSON(b.Sys.HandleRefs),
 		Ext:              b.Ext,
 		Usr:              b.Usr,
 		LayoutHeader: domain.LayoutHeader{
@@ -181,13 +202,33 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 		}
 		m.RetentionUntil = t
 	}
-	if b.Sys.System != nil {
-		m.SystemFlags = domain.ManifestSystemFlags{
-			TOCOffset: b.Sys.System.TOCOffset,
-			TOCSize:   b.Sys.System.TOCSize,
-		}
-	}
 	return m, nil
+}
+
+// blobRefsFromJSON converts the on-disk blob_refs array to domain.BlobRef
+// values; nil for an empty/absent array.
+func blobRefsFromJSON(refs []string) []domain.BlobRef {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]domain.BlobRef, len(refs))
+	for i, r := range refs {
+		out[i] = domain.BlobRef(r)
+	}
+	return out
+}
+
+// handleRefsFromJSON converts the on-disk handle_refs array to
+// domain.HandleRef values; nil for an empty/absent array.
+func handleRefsFromJSON(refs []string) []domain.HandleRef {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]domain.HandleRef, len(refs))
+	for i, r := range refs {
+		out[i] = domain.HandleRef(r)
+	}
+	return out
 }
 
 func pipelineToJSON(stages []domain.PipelineStage) []jsonPipelineStage {

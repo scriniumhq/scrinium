@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -99,7 +100,7 @@ func (x *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
 	if _, err := h.Write(body); err != nil {
 		return Result{}, fmt.Errorf("artifactio: hash inline: %w", err)
 	}
-	ch := domain.ContentHash(x.hashes.Format(hashAlgo, h.Sum(nil)))
+	ch := domain.ContentHash(hex.EncodeToString(h.Sum(nil)))
 	return Result{
 		ContentHash:  ch,
 		BlobRef:      domain.BlobRef(ch),
@@ -236,19 +237,20 @@ func (x *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 		layout = domain.LayoutInline
 	}
 	manifest := domain.Manifest{
-		Type:           domain.ManifestTypeBlob,
 		Namespace:      opts.Namespace,
 		SessionID:      opts.SessionID,
 		CreatedAt:      time.Now().UTC(),
 		ContentHash:    blob.ContentHash,
 		OriginalSize:   blob.OriginalSize,
-		BlobRef:        blob.BlobRef,
 		LayoutHeader:   domain.LayoutHeader{BlobStorage: layout},
 		Pipeline:       blob.Stages,
 		InlineBlob:     blob.InlineBytes,
 		RetentionUntil: opts.RetentionUntil,
 		Ext:            a.Ext,
 		Usr:            a.Usr,
+	}
+	if blob.BlobRef != "" {
+		manifest.BlobRefs = []domain.BlobRef{blob.BlobRef}
 	}
 
 	hashAlgo := string(cfg.ContentHasher)
@@ -304,7 +306,7 @@ func (x *IO) PersistManifest(ctx context.Context, manifest domain.Manifest, mani
 	if err := x.drv.Put(ctx, manifestPath, bytes.NewReader(manifestBytes)); err != nil {
 		return fmt.Errorf("artifactio: write manifest: %w", err)
 	}
-	if err := x.index.IndexManifest(ctx, manifest, addr, nil, nil); err != nil {
+	if err := x.index.IndexManifest(ctx, manifest, addr); err != nil {
 		// Manifest is on disk but unindexed; the rebuild agent is the
 		// recovery path. Surface so the caller can retry.
 		return fmt.Errorf("artifactio: index manifest: %w", err)

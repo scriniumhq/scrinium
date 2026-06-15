@@ -14,7 +14,7 @@ import (
 	"scrinium.dev/errs"
 )
 
-// MarkVerified, DeletePacked, and MarkVerified-related listing
+// MarkVerified and MarkVerified-related listing
 // behaviour live in the conformance suite at
 // internal/testutil/indextest. This file is for sqlite-specific
 // behaviour: WriteCheckpoint (the optional index.CheckpointWriter
@@ -32,8 +32,8 @@ func TestWriteCheckpoint_CreatesCheckpoint(t *testing.T) {
 	insertBlob(t, idx, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
 		domain.PhysicalAddress{Path: "p"}, 1)
 	insertManifest(t, idx, domain.Manifest{
-		ArtifactID: "art-1", Type: domain.ManifestTypeBlob, Namespace: "ns",
-		BlobRef: "blob-1", CreatedAt: time.Now(),
+		ArtifactID: "art-1", Namespace: "ns",
+		BlobRefs: []domain.BlobRef{"blob-1"}, CreatedAt: time.Now(),
 	})
 
 	dest := filepath.Join(t.TempDir(), "snap.db")
@@ -112,8 +112,8 @@ func TestRestoreCheckpoint_RoundTrip(t *testing.T) {
 	insertBlob(t, src, "blob-1", "sha256-"+strings.Repeat("a", 64), 1024,
 		domain.PhysicalAddress{Path: "p"}, 1)
 	insertManifest(t, src, domain.Manifest{
-		ArtifactID: "art-1", Type: domain.ManifestTypeBlob, Namespace: "ns",
-		BlobRef: "blob-1", CreatedAt: time.Now(),
+		ArtifactID: "art-1", Namespace: "ns",
+		BlobRefs: []domain.BlobRef{"blob-1"}, CreatedAt: time.Now(),
 	})
 
 	cp := filepath.Join(t.TempDir(), "cp.db")

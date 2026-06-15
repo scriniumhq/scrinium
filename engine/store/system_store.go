@@ -2,267 +2,150 @@ package store
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
-	"sort"
-	"strings"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/store/internal/artifactio"
+	"scrinium.dev/engine/store/internal/systemlayout"
 	"scrinium.dev/errs"
 )
 
-// maxSystemPointerSize caps how many bytes are read from a pointer
-// file ("<algo>-<hex>\n") before treating it as corrupt.
-const maxSystemPointerSize = 256
-
-// systemSessionID is the fixed SessionID engine writers use for
-// system artifacts.
-const systemSessionID = domain.SessionID("init")
-
-// ArtifactWriter persists a system artifact and returns its ManifestDigest.
-// skipIndex selects the unindexed write path (see WithoutIndex).
-type ArtifactWriter func(
-	ctx context.Context,
-	namespace string,
-	sessionID domain.SessionID,
-	payload []byte,
-	hashAlgo string,
-	skipIndex bool,
-) (domain.ManifestDigest, error)
-
-// InlineHandleFactory builds a ReadHandle over an inline manifest's payload.
-type InlineHandleFactory func(domain.Manifest) domain.ReadHandle
-
+// systemStore is the SystemStore facade over the pointer-free layout
+// (ADR-85, engine/store/internal/systemlayout). Every system name maps
+// to system/<name>/<seq>; the active version is max(seq); a write claims
+// the next seq with an exclusive create. System artifacts are never
+// indexed in StoreIndex and never written under manifests/ — they live
+// in their own address space, so they are invisible to Store.Walk
+// (handle-IS-NULL) by construction rather than by an index filter.
 type systemStore struct {
-	drv        driver.Driver
-	index      index.StoreIndex
-	hashes     domain.HashRegistry
-	cfg        domain.StoreConfig
-	writeArt   ArtifactWriter
-	makeHandle InlineHandleFactory
-	log        *slog.Logger
+	drv    driver.Driver
+	hashes domain.HashRegistry
+	cfg    domain.StoreConfig // immutable fields only (ContentHasher); see newSystemStore
+	log    *slog.Logger
+
+	// keep is the number of historical versions retained per name after
+	// a write. The active version is always retained; older versions are
+	// best-effort GC.
+	keep int
 }
+
+// systemKeepVersions is the default retained-version count for a system
+// name: the active version plus a small history for rollback/diagnosis.
+const systemKeepVersions = 3
 
 // Compile-time check that the concrete type satisfies the contract.
 var _ SystemStore = (*systemStore)(nil)
 
-// newSystemStore wires the facade; writeArt and makeHandle inject the two
-// store-layer primitives without coupling to *store internals.
+// newSystemStore wires the facade. It needs only the driver (the layout
+// is on-disk), the hash registry (verify-on-read and the content hash of
+// each write), the active config (for its immutable ContentHasher), and
+// a logger for best-effort prune failures. No StoreIndex and no write
+// indirection: the inline-manifest write is self-contained in
+// systemlayout.
 func newSystemStore(
 	drv driver.Driver,
-	idx index.StoreIndex,
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
-	writeArt ArtifactWriter,
-	makeHandle InlineHandleFactory,
 	log *slog.Logger,
 ) *systemStore {
 	return &systemStore{
-		drv:        drv,
-		index:      idx,
-		hashes:     hashes,
-		cfg:        cfg,
-		writeArt:   writeArt,
-		makeHandle: makeHandle,
-		log:        log,
+		drv:    drv,
+		hashes: hashes,
+		cfg:    cfg,
+		log:    log,
+		keep:   systemKeepVersions,
 	}
 }
 
-// namespaceForName resolves a system-store name to its physical
-// namespace:
-//
-//	"config/*" → system.config (versioned configuration history)
-//	everything else (cursors, snapshots, scrub/, gc/, ingester/,
-//	checkpoint/, maintenance/, index_checkpoint/) → system.state
-func namespaceForName(name string) (string, error) {
-	if err := validateSystemName(name); err != nil {
-		return "", err
+// Put writes a SystemArtifact as a new version of its Name. The payload
+// is buffered (system payloads are small), encoded as an inline
+// manifest, and published by claiming the next seq. After a successful
+// write, versions older than keep are pruned best-effort.
+func (ss *systemStore) Put(ctx context.Context, a SystemArtifact) error {
+	if err := systemlayout.ValidateName(a.Name); err != nil {
+		return err
 	}
-	if strings.HasPrefix(name, "config/") {
-		return domain.NamespaceSystemConfig, nil
+	body, err := io.ReadAll(a.Payload)
+	if err != nil {
+		return fmt.Errorf("system store: read payload for %q: %w", a.Name, err)
 	}
-	return domain.NamespaceSystemState, nil
-}
-
-// validateSystemName enforces the name contract for SystemStore.
-// Names are slash-separated path-like strings, must be non-empty,
-// must not contain ".", "..", or empty segments, must not start
-// or end with "/". The first segment categorises the artifact
-// (config/, scrub/, gc/, snapshot/, ...); subsequent segments are
-// caller-defined.
-func validateSystemName(name string) error {
-	if name == "" {
-		return fmt.Errorf("%w: empty name", errs.ErrInvalidSystemName)
+	fileBytes, _, err := systemlayout.BuildInlineManifest(body, string(ss.cfg.ContentHasher), ss.hashes)
+	if err != nil {
+		return fmt.Errorf("system store: build %q: %w", a.Name, err)
 	}
-	if name[0] == '/' || name[len(name)-1] == '/' {
-		return fmt.Errorf("%w: %q has leading or trailing slash",
-			errs.ErrInvalidSystemName, name)
+	if _, _, err := systemlayout.ClaimVersion(ctx, ss.drv, a.Name, fileBytes); err != nil {
+		return fmt.Errorf("system store: put %q: %w", a.Name, err)
 	}
-	if strings.Contains(name, "//") {
-		return fmt.Errorf("%w: %q has empty segment",
-			errs.ErrInvalidSystemName, name)
-	}
-	for _, seg := range strings.Split(name, "/") {
-		if seg == "." || seg == ".." {
-			return fmt.Errorf("%w: %q has traversal segment",
-				errs.ErrInvalidSystemName, name)
-		}
+	// Retention is GC, not a liveness step: a prune failure leaves an
+	// invisible old version for the next prune to reclaim and never
+	// invalidates the version just written.
+	if err := systemlayout.Prune(ctx, ss.drv, a.Name, ss.keep); err != nil {
+		ss.logger().LogAttrs(ctx, slog.LevelWarn,
+			"system artifact prune failed (old versions left for next prune)",
+			slog.String("name", a.Name), slog.String("error", err.Error()))
 	}
 	return nil
 }
 
-// pointerPath returns the driver path of the pointer file for the
-// given name. Pointers live in a dedicated `pointers/` subtree of the
-// physical namespace, kept separate from manifest files and from lease
-// files that share the namespace.
-//
-// Special case: `system.config/current` keeps a flat path — it is the
-// single mutable file in the store and its on-disk format predates the
-// pointers/ subtree.
-func pointerPath(name string) (string, error) {
-	ns, err := namespaceForName(name)
-	if err != nil {
-		return "", err
-	}
-	if ns == domain.NamespaceSystemConfig && name == "config/current" {
-		return domain.NamespaceSystemConfig + "/current", nil
-	}
-	return ns + "/pointers/" + name, nil
-}
-
-func (ss *systemStore) Put(ctx context.Context, a SystemArtifact, opts ...SystemPutOption) error {
-	name, payload := a.Name, a.Payload
-
-	o := SystemPutConfig{}
-	for _, opt := range opts {
-		opt.ApplySystemPut(&o)
-	}
-
-	ns, err := namespaceForName(name)
-	if err != nil {
-		return err
-	}
-	ptrPath, err := pointerPath(name)
-	if err != nil {
-		return err
-	}
-
-	prevID, prevErr := ss.readPointer(ctx, ptrPath)
-	if prevErr != nil && !errors.Is(prevErr, errs.ErrArtifactNotFound) {
-		return fmt.Errorf("system store: read pointer for %q: %w", name, prevErr)
-	}
-
-	// Inline artifacts need the whole payload in memory; system
-	// payloads are small (cursors, configs).
-	body, err := io.ReadAll(payload)
-	if err != nil {
-		return fmt.Errorf("system store: read payload for %q: %w", name, err)
-	}
-
-	newID, err := ss.writeArt(
-		ctx, ns, systemSessionID, body,
-		string(ss.cfg.ContentHasher), o.SkipIndex,
-	)
-	if err != nil {
-		return fmt.Errorf("system store: put %q: %w", name, err)
-	}
-
-	// Flip the pointer (driver.Put is atomic).
-	if err := ss.writePointer(ctx, ptrPath, newID); err != nil {
-		return fmt.Errorf("system store: flip pointer for %q: %w", name, err)
-	}
-
-	// Best-effort: a stale predecessor is reclaimed by Orphan Scan;
-	// the operation already succeeded once the pointer flipped.
-	if prevID != "" && prevID != newID {
-		ss.dropPredecessor(ctx, prevID)
-	}
-	return nil
-}
-
+// Get opens the active version of name. Returns errs.ErrArtifactNotFound
+// when the name has never been written.
 func (ss *systemStore) Get(ctx context.Context, name string) (domain.ReadHandle, error) {
-	ptrPath, err := pointerPath(name)
+	seq, found, err := systemlayout.ResolveActiveSeq(ctx, ss.drv, name)
+	if err != nil {
+		return nil, fmt.Errorf("system store: get %q: %w", name, err)
+	}
+	if !found {
+		return nil, errs.ErrArtifactNotFound
+	}
+	path, err := systemlayout.VersionPath(name, seq)
 	if err != nil {
 		return nil, err
 	}
-	id, err := ss.readPointer(ctx, ptrPath)
+	m, err := systemlayout.Load(ctx, ss.drv, ss.hashes, path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("system store: get %q: %w", name, err)
 	}
-	return ss.readArtifact(ctx, id)
+	return artifactio.NewInlineHandle(m), nil
 }
 
-// Delete is idempotent.
+// Delete removes every version of name. Idempotent: deleting an absent
+// name returns nil.
 func (ss *systemStore) Delete(ctx context.Context, name string) error {
-	ptrPath, err := pointerPath(name)
-	if err != nil {
-		return err
-	}
-	id, err := ss.readPointer(ctx, ptrPath)
-	if err != nil {
-		if errors.Is(err, errs.ErrArtifactNotFound) {
-			return nil
-		}
+	if err := systemlayout.RemoveAll(ctx, ss.drv, name); err != nil {
 		return fmt.Errorf("system store: delete %q: %w", name, err)
 	}
-
-	// Pointer first: once the pointer is gone, the artifact is
-	// unreachable through SystemStore.Get. The manifest file
-	// lingers until step 2 finishes (or until Orphan Scan does
-	// if we crash).
-	if err := ss.drv.Remove(ctx, ptrPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("system store: remove pointer %q: %w", name, err)
-	}
-	ss.dropPredecessor(ctx, id)
 	return nil
 }
 
+// Walk iterates over every name with the given prefix in alphabetical
+// order, yielding the active manifest for each.
 func (ss *systemStore) Walk(ctx context.Context, prefix string, cb func(name string, m domain.Manifest) error) error {
-	// Determine which physical namespaces to scan. config/* lives
-	// in system.config; everything else in system.state. An empty
-	// prefix means "everything" — scan both.
-	scanConfig := prefix == "" || prefix == "config" || strings.HasPrefix(prefix, "config/")
-	scanState := prefix == "" || !(prefix == "config" || strings.HasPrefix(prefix, "config/"))
-
-	var names []string
-	if scanConfig {
-		gathered, err := ss.gatherNames(ctx, domain.NamespaceSystemConfig, prefix)
-		if err != nil {
-			return err
-		}
-		names = append(names, gathered...)
+	actives, err := systemlayout.ListActive(ctx, ss.drv, prefix)
+	if err != nil {
+		return err
 	}
-	if scanState {
-		gathered, err := ss.gatherNames(ctx, domain.NamespaceSystemState, prefix)
+	for _, a := range actives {
+		m, err := systemlayout.Load(ctx, ss.drv, ss.hashes, a.Path)
 		if err != nil {
-			return err
-		}
-		names = append(names, gathered...)
-	}
-
-	sort.Strings(names)
-
-	for _, name := range names {
-		ptrPath, err := pointerPath(name)
-		if err != nil {
+			// A version that vanished or failed verification mid-walk is
+			// skipped rather than aborting the enumeration of the rest.
 			continue
 		}
-		id, err := ss.readPointerAt(ctx, ptrPath)
-		if err != nil {
-			continue
-		}
-		m, err := ss.loadManifest(ctx, id)
-		if err != nil {
-			continue
-		}
-		if err := cb(name, m); err != nil {
+		if err := cb(a.Name, m); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// logger returns the systemStore's logger, never nil. Mirrors the
+// store-level nil-safety so call sites need no guard.
+func (ss *systemStore) logger() *slog.Logger {
+	if ss.log == nil {
+		return discardLogger
+	}
+	return ss.log
 }

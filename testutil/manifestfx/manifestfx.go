@@ -1,6 +1,8 @@
 package manifestfx
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"time"
 
@@ -8,24 +10,36 @@ import (
 	"scrinium.dev/domain/fsmeta"
 )
 
+// syntheticDigest derives a stable, valid-shaped ManifestDigest from an
+// artifact id. After the identity axis (ADR-83/92) the manifests table
+// is keyed by manifest_digest, so two fixtures must carry two distinct
+// digests to land two rows — distinct ids give distinct digests, while
+// the same id re-used gives the same digest (idempotent re-index). The
+// index treats the digest as an opaque PK; the production write path
+// computes the real digest via artifact.ComputeManifestDigest, so this
+// fixture value never reaches the store.
+func syntheticDigest(id string) domain.ManifestDigest {
+	sum := sha256.Sum256([]byte("manifestfx:" + id))
+	return domain.ManifestDigest(hex.EncodeToString(sum[:]))
+}
+
 // Synthetic hashes used in fixtures. Cannot be const because
 // strings.Repeat is a runtime call.
 var (
-	contentHashAaa = "sha256-" + strings.Repeat("a", 64)
-	blobRefBbb     = "sha256-" + strings.Repeat("b", 64)
+	contentHashAaa = strings.Repeat("a", 64)
+	blobRefBbb     = strings.Repeat("b", 64)
 )
 
 // Sample returns a minimal valid blob manifest with a fixed
 // CreatedAt — byte-stable across runs for round-trip tests.
 func Sample() domain.Manifest {
 	return domain.Manifest{
-		Type:         domain.ManifestTypeBlob,
 		Namespace:    "users",
 		SessionID:    "sess-1",
 		CreatedAt:    time.Date(2026, 4, 1, 12, 0, 0, 0, time.UTC),
 		ContentHash:  domain.ContentHash(contentHashAaa),
 		OriginalSize: 4096,
-		BlobRef:      domain.BlobRef(blobRefBbb),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(blobRefBbb)},
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
 	}
 }
@@ -47,10 +61,10 @@ func Sample() domain.Manifest {
 func Blob(id, blobRef string) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   domain.ArtifactID(id),
-		Type:         domain.ManifestTypeBlob,
+		Digest:       syntheticDigest(id),
 		Namespace:    "test",
 		ContentHash:  domain.ContentHash(contentHashAaa),
-		BlobRef:      domain.BlobRef(blobRef),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(blobRef)},
 		OriginalSize: 1024,
 		CreatedAt:    time.Now(),
 	}
@@ -66,10 +80,10 @@ func Blob(id, blobRef string) domain.Manifest {
 func BlobWithHash(id, blobRef string, contentHash domain.ContentHash, originalSize int64) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   domain.ArtifactID(id),
-		Type:         domain.ManifestTypeBlob,
+		Digest:       syntheticDigest(id),
 		Namespace:    "test",
 		ContentHash:  contentHash,
-		BlobRef:      domain.BlobRef(blobRef),
+		BlobRefs:     []domain.BlobRef{domain.BlobRef(blobRef)},
 		OriginalSize: originalSize,
 		CreatedAt:    time.Now(),
 	}
@@ -84,19 +98,19 @@ func EncryptedBlobWithHash(id, blobRef string, contentHash domain.ContentHash, o
 	return m
 }
 
-// SyntheticHash builds a 64-hex-character sha256-prefixed string by
+// SyntheticHash builds a 64-hex-character bare hash (ADR-93) by
 // repeating fillChar. Convenient when staging multiple blobs that
 // must have distinct content hashes:
 //
-//	SyntheticHash('a') == "sha256-aaaa…aaaa"
-//	SyntheticHash('b') == "sha256-bbbb…bbbb"
+//	SyntheticHash('a') == "aaaa…aaaa"
+//	SyntheticHash('b') == "bbbb…bbbb"
 //
 // fillChar must be a hex digit (0-9, a-f); the function does not
 // validate — passing a non-hex character produces a string the
 // hash registry will refuse to parse, which is the desired
 // failure for a test feeding malformed input.
 func SyntheticHash(fillChar byte) domain.ContentHash {
-	return domain.ContentHash("sha256-" + strings.Repeat(string(fillChar), 64))
+	return domain.ContentHash(strings.Repeat(string(fillChar), 64))
 }
 
 // PhysAddr is a Location-workspace address at path.
@@ -106,23 +120,11 @@ func PhysAddr(path string) domain.PhysicalAddress {
 	}
 }
 
-// PackedAddr is a Location-workspace address inside a pack volume:
-// physical_path points at the pack file, and pack_ref/offset/size
-// describe the byte range of the embedded blob.
-func PackedAddr(packPath, packRef string, offset, size int64) domain.PhysicalAddress {
-	return domain.PhysicalAddress{
-		Path:    packPath,
-		PackRef: packRef,
-		Offset:  offset,
-		Size:    size,
-	}
-}
-
 // ManifestWithFsmetaPath builds a Blob manifest tagged with an fsmeta
 // virtual path — the common fixture for projection and surface tests
 // that need an artifact placed at a known path in the by-path tree.
 func ManifestWithFsmetaPath(id, path string) domain.Manifest {
-	m := Blob(id, "sha256-"+strings.Repeat("b", 64))
+	m := Blob(id, strings.Repeat("b", 64))
 	if err := AddFsmetaPath(&m, path); err != nil {
 		panic("manifestfx.ManifestWithFsmetaPath: " + err.Error())
 	}

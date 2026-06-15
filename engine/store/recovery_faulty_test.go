@@ -54,7 +54,7 @@ func TestRecoverOrphans_TransientResolveError_PreservesBlob(t *testing.T) {
 		resolveErr: errors.New("simulated SQLite busy"),
 	}
 
-	ref := "sha256-" + strings.Repeat("ab", 16) + "cd"
+	ref := strings.Repeat("ab", 16) + "cd"
 	blobPath := "blobs/" + ref[:4] + "/" + ref[4:8] + "/" + ref
 	if err := drv.Put(context.Background(), blobPath, strings.NewReader("orphan or not?")); err != nil {
 		t.Fatalf("Put blob: %v", err)
@@ -84,7 +84,7 @@ func TestRecoverOrphans_TransientResolveError_DoesNotAbortSweep(t *testing.T) {
 	}
 
 	for i, suffix := range []string{"01", "02"} {
-		ref := "sha256-" + strings.Repeat("cd", 16) + suffix
+		ref := strings.Repeat("cd", 16) + suffix
 		path := "blobs/" + ref[:4] + "/" + ref[4:8] + "/" + ref
 		if err := drv.Put(context.Background(), path, strings.NewReader("blob")); err != nil {
 			t.Fatalf("blob %d: %v", i, err)
@@ -123,7 +123,7 @@ func TestRecoverOrphans_TransientManifestExistsError_PreservesManifest(t *testin
 		manifestExistsErr: errors.New("simulated index outage"),
 	}
 
-	id := "sha256-" + strings.Repeat("ef", 16) + "00"
+	id := strings.Repeat("ef", 16) + "00"
 	manifestPath := "manifests/" + id[:4] + "/" + id[4:8] + "/" + id
 	if err := drv.Put(context.Background(), manifestPath, strings.NewReader("{}")); err != nil {
 		t.Fatalf("Put manifest: %v", err)
@@ -191,7 +191,7 @@ func TestRecoverOrphans_Default_RemovesUnknownBlob(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
 
-	ref := "sha256-" + strings.Repeat("12", 16) + "ff"
+	ref := strings.Repeat("12", 16) + "ff"
 	blobPath := "blobs/" + ref[:4] + "/" + ref[4:8] + "/" + ref
 	if err := drv.Put(context.Background(), blobPath, strings.NewReader("orphan")); err != nil {
 		t.Fatalf("Put: %v", err)
