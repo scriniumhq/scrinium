@@ -9,7 +9,7 @@ import (
 	"scrinium.dev/engine/index/extension"
 )
 
-// indexExtension is the bundler's index-side half (ADR-84/86): it
+// customIndex is the bundler's index-side half (ADR-88/86): it
 // OWNS the placement map of packed artifacts — the table that used
 // to live in the core index as `packed_blobs`. The core resolve path
 // overlays it through the Resolver capability; the core itself holds
@@ -31,7 +31,7 @@ import (
 // (recovery); the GCParticipant/Compactor capabilities (dead-ratio
 // accounting and copy-forward compaction, ADR-86) land with the pack
 // GC contract. This stub implements only the Resolver overlay.
-type indexExtension struct {
+type customIndex struct {
 	store extension.ExtensionStore
 }
 
@@ -43,42 +43,42 @@ const (
 
 // compile-time capability assertions.
 var (
-	_ extension.IndexExtension = (*indexExtension)(nil)
-	_ extension.Resolver       = (*indexExtension)(nil)
+	_ extension.CustomIndex = (*customIndex)(nil)
+	_ extension.Resolver    = (*customIndex)(nil)
 )
 
-// NewIndexExtension returns the bundler's index-side extension.
+// NewCustomIndex returns the bundler's index-side extension.
 // Register it against a StoreIndex backend (extension.ExtensionHost)
 // to give the core a Resolver overlay for packed artifacts.
-func NewIndexExtension() extension.IndexExtension {
-	return &indexExtension{}
+func NewCustomIndex() extension.CustomIndex {
+	return &customIndex{}
 }
 
-func (e *indexExtension) Name() string { return extName }
+func (e *customIndex) Name() string { return extName }
 
-func (e *indexExtension) SchemaVersion() int { return extSchemaVer }
+func (e *customIndex) SchemaVersion() int { return extSchemaVer }
 
 // Subscribe returns no event kinds: the placement map is populated
 // through RecordPack, not derived from index mutations (the per-member
 // entries are not present in EventArgs).
-func (e *indexExtension) Subscribe() []extension.EventKind { return nil }
+func (e *customIndex) Subscribe() []extension.EventKind { return nil }
 
 // Setup captures the long-lived store for the read/write API. The
 // stored value flips to db-mode once registration commits.
 //
 // TODO(M4): when oldVersion indicates an existing map, or on a cold
 // start, rebuild placement by scanning each volume's TOC-blob.
-func (e *indexExtension) Setup(ctx context.Context, store extension.ExtensionStore, oldVersion int) error {
+func (e *customIndex) Setup(ctx context.Context, store extension.ExtensionStore, oldVersion int) error {
 	e.store = store
 	return nil
 }
 
 // Apply is a no-op: this extension has no subscriptions.
-func (e *indexExtension) Apply(ctx context.Context, store extension.ExtensionStore, kind extension.EventKind, args extension.EventArgs) error {
+func (e *customIndex) Apply(ctx context.Context, store extension.ExtensionStore, kind extension.EventKind, args extension.EventArgs) error {
 	return nil
 }
 
-func (e *indexExtension) Close() error { return nil }
+func (e *customIndex) Close() error { return nil }
 
 // RecordPack records the placement of every member of a sealed pack
 // volume (ADR-86, decision A). The container manifest is indexed by
@@ -87,7 +87,7 @@ func (e *indexExtension) Close() error { return nil }
 // ref_count — so RecordPack adds only the per-member slice map this
 // extension owns. The pack volume's blob_ref is the container's body
 // blob (container.BlobRef).
-func (e *indexExtension) RecordPack(ctx context.Context, container domain.Manifest, entries []PackedEntry) error {
+func (e *customIndex) RecordPack(ctx context.Context, container domain.Manifest, entries []PackedEntry) error {
 	if e.store == nil {
 		return fmt.Errorf("bundler: RecordPack before Setup")
 	}
@@ -115,7 +115,7 @@ func (e *indexExtension) RecordPack(ctx context.Context, container domain.Manife
 // ResolvePacked implements extension.Resolver: it overlays the
 // placement of a packed artifact by its ArtifactID. A false return
 // means the artifact is not packed (the caller falls back to россыпь).
-func (e *indexExtension) ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (extension.PlacementOverlay, bool, error) {
+func (e *customIndex) ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (extension.PlacementOverlay, bool, error) {
 	if e.store == nil {
 		return extension.PlacementOverlay{}, false, fmt.Errorf("bundler: ResolvePacked before Setup")
 	}
@@ -139,7 +139,7 @@ func (e *indexExtension) ResolvePacked(ctx context.Context, artifactID domain.Ar
 // entries are found by scanning the placement table and matching
 // PackBlobRef. Used by compaction/tombstoning (ADR-86); physical
 // reclaim of the volume itself is the Compactor's job.
-func (e *indexExtension) DeletePack(ctx context.Context, packBlobRef string) error {
+func (e *customIndex) DeletePack(ctx context.Context, packBlobRef string) error {
 	if e.store == nil {
 		return fmt.Errorf("bundler: DeletePack before Setup")
 	}

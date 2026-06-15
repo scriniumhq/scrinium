@@ -45,8 +45,8 @@ type Index struct {
 	// the in-memory work is map lookups; the SQL transaction it
 	// guards may be long, but the lock is released right after.
 	extMu     sync.Mutex
-	extByName map[string]extension.IndexExtension
-	extByKind map[extension.EventKind][]extension.IndexExtension
+	extByName map[string]extension.CustomIndex
+	extByKind map[extension.EventKind][]extension.CustomIndex
 	// extStores keeps the long-lived ExtensionStore handed to each
 	// extension during Setup. Apply uses fresh tx-scoped stores
 	// (allocated per call); the long-lived stores in this map are
@@ -187,8 +187,8 @@ func newStoreInternal(ctx context.Context, path string, o options) (*Index, erro
 	return &Index{
 		db:        db,
 		opts:      o,
-		extByName: make(map[string]extension.IndexExtension),
-		extByKind: make(map[extension.EventKind][]extension.IndexExtension),
+		extByName: make(map[string]extension.CustomIndex),
+		extByKind: make(map[extension.EventKind][]extension.CustomIndex),
 		extStores: make(map[string]*sqliteExtStore),
 	}, nil
 }

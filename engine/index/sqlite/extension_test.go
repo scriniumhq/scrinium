@@ -12,7 +12,7 @@ import (
 
 // --- Test helpers ---
 
-// fakeExt is a minimal IndexExtension. Per-test instances capture
+// fakeExt is a minimal CustomIndex. Per-test instances capture
 // the events they observe so the test can assert dispatch.
 type fakeExt struct {
 	name        string

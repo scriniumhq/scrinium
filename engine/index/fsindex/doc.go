@@ -1,7 +1,7 @@
 // Package fsindex is an index extension that persists the fsmeta
 // payload of every artifact whose Manifest.Ext uses the
 // filesystem schema. It hangs off StoreIndex via the index
-// extensions infrastructure (see 3. Reference/09 Index Extensions.md).
+// extensions infrastructure (see 3. Reference/09 CustomIndex and Search.md).
 //
 // The extension serves two roles:
 //

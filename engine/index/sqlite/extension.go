@@ -58,7 +58,7 @@ type extensionRegistry struct {
 	idx *Index
 }
 
-func (r *extensionRegistry) Register(ctx context.Context, ext extension.IndexExtension) error {
+func (r *extensionRegistry) Register(ctx context.Context, ext extension.CustomIndex) error {
 	if ext == nil {
 		return fmt.Errorf("sqlite: Register: nil extension")
 	}
@@ -415,14 +415,14 @@ func prefixUpperBound(prefix string) (string, bool) {
 // given kind, taken under the extension lock. The copy ensures the
 // dispatcher iterates a stable list even if a concurrent Close
 // nilled out the maps.
-func (i *Index) snapshotSubscribers(kind extension.EventKind) []extension.IndexExtension {
+func (i *Index) snapshotSubscribers(kind extension.EventKind) []extension.CustomIndex {
 	i.extMu.Lock()
 	defer i.extMu.Unlock()
 	subs := i.extByKind[kind]
 	if len(subs) == 0 {
 		return nil
 	}
-	out := make([]extension.IndexExtension, len(subs))
+	out := make([]extension.CustomIndex, len(subs))
 	copy(out, subs)
 	return out
 }

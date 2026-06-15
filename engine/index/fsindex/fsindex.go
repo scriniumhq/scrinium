@@ -33,7 +33,7 @@ const Name = "scrinium.fsindex"
 const schemaVersion = 1
 
 // Extension is the fsmeta-aware projection of artifact metadata.
-// Implements extension.IndexExtension. Construct via New, register
+// Implements extension.CustomIndex. Construct via New, register
 // via *sqlite.Index.Extensions().Register.
 type Extension struct {
 	// store is captured during Setup and used by the read-side
@@ -264,5 +264,5 @@ func (e *Extension) WalkAll(cb func(id domain.ArtifactID, raw json.RawMessage) e
 }
 
 // Compile-time conformance: Extension satisfies
-// extension.IndexExtension. Catches signature drift early.
-var _ extension.IndexExtension = (*Extension)(nil)
+// extension.CustomIndex. Catches signature drift early.
+var _ extension.CustomIndex = (*Extension)(nil)

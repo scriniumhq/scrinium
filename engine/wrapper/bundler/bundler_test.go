@@ -87,9 +87,9 @@ func (f *fakeExtStore) Inc(table, key string, delta int64) (int64, error) {
 
 // newTestExtension returns a bundler index-extension wired to a fresh
 // in-memory store (Setup already run, db-mode equivalent).
-func newTestExtension(t *testing.T) (*indexExtension, *fakeExtStore) {
+func newTestExtension(t *testing.T) (*customIndex, *fakeExtStore) {
 	t.Helper()
-	e := &indexExtension{}
+	e := &customIndex{}
 	store := newFakeExtStore()
 	if err := e.Setup(context.Background(), store, 0); err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -97,7 +97,7 @@ func newTestExtension(t *testing.T) (*indexExtension, *fakeExtStore) {
 	return e, store
 }
 
-func TestIndexExtension_RecordResolveDelete(t *testing.T) {
+func TestCustomIndex_RecordResolveDelete(t *testing.T) {
 	ctx := context.Background()
 	e, _ := newTestExtension(t)
 
@@ -162,7 +162,7 @@ func TestIndexExtension_RecordResolveDelete(t *testing.T) {
 	}
 }
 
-func TestIndexExtension_DeletePackIsVolumeScoped(t *testing.T) {
+func TestCustomIndex_DeletePackIsVolumeScoped(t *testing.T) {
 	ctx := context.Background()
 	e, _ := newTestExtension(t)
 
@@ -186,20 +186,20 @@ func TestIndexExtension_DeletePackIsVolumeScoped(t *testing.T) {
 	}
 }
 
-// TestIndexExtension_SatisfiesResolver pins the capability contract:
+// TestCustomIndex_SatisfiesResolver pins the capability contract:
 // the value returned by the constructor must be assertable to
-// extension.Resolver (the core overlay probes by assertion, ADR-84).
-func TestIndexExtension_SatisfiesResolver(t *testing.T) {
-	var ext extension.IndexExtension = NewIndexExtension()
+// extension.Resolver (the core overlay probes by assertion, ADR-88).
+func TestCustomIndex_SatisfiesResolver(t *testing.T) {
+	var ext extension.CustomIndex = NewCustomIndex()
 	if _, ok := ext.(extension.Resolver); !ok {
 		t.Fatal("bundler index-extension does not satisfy extension.Resolver")
 	}
 }
 
-// TestIndexExtension_RecordBeforeSetup guards the store-capture
+// TestCustomIndex_RecordBeforeSetup guards the store-capture
 // precondition.
-func TestIndexExtension_RecordBeforeSetup(t *testing.T) {
-	e := &indexExtension{}
+func TestCustomIndex_RecordBeforeSetup(t *testing.T) {
+	e := &customIndex{}
 	if err := e.RecordPack(context.Background(), domain.Manifest{BlobRefs: []domain.BlobRef{"x"}}, nil); err == nil {
 		t.Fatal("RecordPack before Setup: expected error")
 	}

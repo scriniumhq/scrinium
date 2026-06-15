@@ -98,7 +98,7 @@ func (stubStore) Inc(table, key string, delta int64) (int64, error) { return 0, 
 
 type stubRegistry struct{}
 
-func (stubRegistry) Register(ctx context.Context, ext IndexExtension) error { return nil }
+func (stubRegistry) Register(ctx context.Context, ext CustomIndex) error { return nil }
 
 // stubLister satisfies ExtensionLister. The interface was
 // introduced in P0.6 alongside ExtensionInfo to give
@@ -118,7 +118,7 @@ type stubHost struct{}
 func (stubHost) Extensions() ExtensionRegistry { return stubRegistry{} }
 
 var (
-	_ IndexExtension    = stubExtension{}
+	_ CustomIndex       = stubExtension{}
 	_ ExtensionStore    = stubStore{}
 	_ ExtensionRegistry = stubRegistry{}
 	_ ExtensionLister   = stubLister{}
