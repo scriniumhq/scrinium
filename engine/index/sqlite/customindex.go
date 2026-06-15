@@ -9,22 +9,22 @@ import (
 	"sync/atomic"
 	"time"
 
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/internal/timefmt"
 )
 
-// Extensions returns the registry for installing index extensions
+// CustomIndexes returns the registry for installing index extensions
 // against this backend. Method on the concrete *Index type rather
 // than on store.StoreIndex — see ADR-49 for the rationale (avoids
 // a core ↔ index import cycle and respects backends that don't
 // support extensions).
 //
-// Implements customindex.ExtensionHost.
-func (i *Index) Extensions() customindex.ExtensionRegistry {
-	return &extensionRegistry{idx: i}
+// Implements customindex.Host.
+func (i *Index) CustomIndexes() customindex.Registry {
+	return &customIndexRegistry{idx: i}
 }
 
-// ListExtensions enumerates currently-registered extensions,
+// ListCustomIndexes enumerates currently-registered extensions,
 // returning each one's name and persisted schema version. Names
 // appear in unspecified order — callers wanting deterministic
 // listings sort the result. Useful for diagnostics and stats
@@ -33,50 +33,50 @@ func (i *Index) Extensions() customindex.ExtensionRegistry {
 // Returns an empty slice (never nil) when no extensions are
 // registered.
 //
-// Implements customindex.ExtensionLister.
-func (i *Index) ListExtensions() []customindex.ExtensionInfo {
-	i.extMu.Lock()
-	defer i.extMu.Unlock()
-	if len(i.extByName) == 0 {
-		return []customindex.ExtensionInfo{}
+// Implements customindex.Lister.
+func (i *Index) ListCustomIndexes() []customindex.Info {
+	i.ciMu.Lock()
+	defer i.ciMu.Unlock()
+	if len(i.ciByName) == 0 {
+		return []customindex.Info{}
 	}
-	out := make([]customindex.ExtensionInfo, 0, len(i.extByName))
-	for name, ext := range i.extByName {
-		out = append(out, customindex.ExtensionInfo{
+	out := make([]customindex.Info, 0, len(i.ciByName))
+	for name, ci := range i.ciByName {
+		out = append(out, customindex.Info{
 			Name:          name,
-			SchemaVersion: ext.SchemaVersion(),
+			SchemaVersion: ci.SchemaVersion(),
 		})
 	}
 	return out
 }
 
-// extensionRegistry is the concrete implementation of
-// customindex.ExtensionRegistry for the sqlite backend. Holds a back-
+// customIndexRegistry is the concrete implementation of
+// customindex.Registry for the sqlite backend. Holds a back-
 // reference to the index and runs Register inside the index's
 // extension lock plus a fresh transaction.
-type extensionRegistry struct {
+type customIndexRegistry struct {
 	idx *Index
 }
 
-func (r *extensionRegistry) Register(ctx context.Context, ext customindex.CustomIndex) error {
-	if ext == nil {
-		return fmt.Errorf("sqlite: Register: nil extension")
+func (r *customIndexRegistry) Register(ctx context.Context, ci customindex.CustomIndex) error {
+	if ci == nil {
+		return fmt.Errorf("sqlite: Register: nil CustomIndex")
 	}
-	name := ext.Name()
+	name := ci.Name()
 	if name == "" {
-		return fmt.Errorf("sqlite: Register: empty extension name")
+		return fmt.Errorf("sqlite: Register: empty CustomIndex name")
 	}
 
-	r.idx.extMu.Lock()
-	defer r.idx.extMu.Unlock()
+	r.idx.ciMu.Lock()
+	defer r.idx.ciMu.Unlock()
 
-	if _, exists := r.idx.extByName[name]; exists {
+	if _, exists := r.idx.ciByName[name]; exists {
 		return fmt.Errorf("%w: %q", customindex.ErrExtensionExists, name)
 	}
 
 	// store is captured inside the tx closure and reused after
 	// commit (useDB switch + cache insertion).
-	var store *sqliteExtStore
+	var store *sqliteCIStore
 
 	// Begin a transaction for Setup. The persisted version is read,
 	// Setup runs against a tx-bound store, and the new version is
@@ -87,7 +87,7 @@ func (r *extensionRegistry) Register(ctx context.Context, ext customindex.Custom
 		if err != nil {
 			return fmt.Errorf("sqlite: Register: load version: %w", err)
 		}
-		newVersion := ext.SchemaVersion()
+		newVersion := ci.SchemaVersion()
 		if newVersion < oldVersion {
 			return fmt.Errorf("%w: %q v%d → v%d",
 				customindex.ErrSchemaRegression, name, oldVersion, newVersion)
@@ -96,7 +96,7 @@ func (r *extensionRegistry) Register(ctx context.Context, ext customindex.Custom
 		store = newSqliteExtStore(name)
 		store.useTx(tx)
 
-		if err := ext.Setup(ctx, store, oldVersion); err != nil {
+		if err := ci.Setup(ctx, store, oldVersion); err != nil {
 			return fmt.Errorf("extension %q setup: %w", name, err)
 		}
 
@@ -118,10 +118,10 @@ func (r *extensionRegistry) Register(ctx context.Context, ext customindex.Custom
 	// called once at registration and the result is final; if a
 	// later restart re-creates the extension instance, that's a
 	// new Register call and the new Subscribe() result wins.
-	r.idx.extByName[name] = ext
-	r.idx.extStores[name] = store
-	for _, kind := range ext.Subscribe() {
-		r.idx.extByKind[kind] = append(r.idx.extByKind[kind], ext)
+	r.idx.ciByName[name] = ci
+	r.idx.ciStores[name] = store
+	for _, kind := range ci.Subscribe() {
+		r.idx.ciByKind[kind] = append(r.idx.ciByKind[kind], ci)
 	}
 	return nil
 }
@@ -159,7 +159,7 @@ func upsertExtensionVersion(ctx context.Context, tx *sql.Tx, name string, versio
 
 // --- ExtensionStore implementation ---
 
-// sqliteExtStore is the customindex.ExtensionStore implementation for the
+// sqliteCIStore is the customindex.Substrate implementation for the
 // sqlite backend. It carries an executor — either *sql.Tx (during
 // Setup or Apply) or *sql.DB (for read-side after Setup) — and
 // dispatches every method through it.
@@ -169,7 +169,7 @@ func upsertExtensionVersion(ctx context.Context, tx *sql.Tx, name string, versio
 // db-mode atomically once Register commits. Without atomicity, a
 // concurrent reader caller could race against the swap and see a
 // stale tx pointer pointing at a closed transaction.
-type sqliteExtStore struct {
+type sqliteCIStore struct {
 	extName  string
 	executor atomic.Pointer[sqlExecutor]
 }
@@ -182,21 +182,21 @@ type sqlExecutor interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-func newSqliteExtStore(name string) *sqliteExtStore {
-	return &sqliteExtStore{extName: name}
+func newSqliteExtStore(name string) *sqliteCIStore {
+	return &sqliteCIStore{extName: name}
 }
 
-func (s *sqliteExtStore) useTx(tx *sql.Tx) {
+func (s *sqliteCIStore) useTx(tx *sql.Tx) {
 	var ex sqlExecutor = tx
 	s.executor.Store(&ex)
 }
 
-func (s *sqliteExtStore) useDB(db *sql.DB) {
+func (s *sqliteCIStore) useDB(db *sql.DB) {
 	var ex sqlExecutor = db
 	s.executor.Store(&ex)
 }
 
-func (s *sqliteExtStore) exec() sqlExecutor {
+func (s *sqliteCIStore) exec() sqlExecutor {
 	p := s.executor.Load()
 	if p == nil {
 		// Should never happen — newSqliteExtStore is followed
@@ -206,7 +206,7 @@ func (s *sqliteExtStore) exec() sqlExecutor {
 	return *p
 }
 
-func (s *sqliteExtStore) Put(table, key string, value []byte) error {
+func (s *sqliteCIStore) Put(table, key string, value []byte) error {
 	const stmt = `
 		INSERT INTO ext_data (extension, table_name, key, value)
 		VALUES (?, ?, ?, ?)
@@ -221,7 +221,7 @@ func (s *sqliteExtStore) Put(table, key string, value []byte) error {
 	return err
 }
 
-func (s *sqliteExtStore) Get(table, key string) ([]byte, bool, error) {
+func (s *sqliteCIStore) Get(table, key string) ([]byte, bool, error) {
 	const stmt = `
 		SELECT value FROM ext_data
 		WHERE extension = ? AND table_name = ? AND key = ?`
@@ -241,7 +241,7 @@ func (s *sqliteExtStore) Get(table, key string) ([]byte, bool, error) {
 	return value, true, nil
 }
 
-func (s *sqliteExtStore) Delete(table, key string) error {
+func (s *sqliteCIStore) Delete(table, key string) error {
 	const stmt = `
 		DELETE FROM ext_data
 		WHERE extension = ? AND table_name = ? AND key = ?`
@@ -254,7 +254,7 @@ func (s *sqliteExtStore) Delete(table, key string) error {
 	return err
 }
 
-func (s *sqliteExtStore) DeletePrefix(table, prefix string) error {
+func (s *sqliteCIStore) DeletePrefix(table, prefix string) error {
 	if prefix == "" {
 		return customindex.ErrEmptyPrefix
 	}
@@ -281,7 +281,7 @@ func (s *sqliteExtStore) DeletePrefix(table, prefix string) error {
 	return err
 }
 
-func (s *sqliteExtStore) Scan(table, prefix string, cb func(key string, value []byte) error) error {
+func (s *sqliteCIStore) Scan(table, prefix string, cb func(key string, value []byte) error) error {
 	ex := s.exec()
 	if ex == nil {
 		return errExtStoreClosed
@@ -336,7 +336,7 @@ func (s *sqliteExtStore) Scan(table, prefix string, cb func(key string, value []
 	return rows.Err()
 }
 
-func (s *sqliteExtStore) Inc(table, key string, delta int64) (int64, error) {
+func (s *sqliteCIStore) Inc(table, key string, delta int64) (int64, error) {
 	ex := s.exec()
 	if ex == nil {
 		return 0, errExtStoreClosed
@@ -416,9 +416,9 @@ func prefixUpperBound(prefix string) (string, bool) {
 // dispatcher iterates a stable list even if a concurrent Close
 // nilled out the maps.
 func (i *Index) snapshotSubscribers(kind customindex.EventKind) []customindex.CustomIndex {
-	i.extMu.Lock()
-	defer i.extMu.Unlock()
-	subs := i.extByKind[kind]
+	i.ciMu.Lock()
+	defer i.ciMu.Unlock()
+	subs := i.ciByKind[kind]
 	if len(subs) == 0 {
 		return nil
 	}
@@ -432,7 +432,7 @@ func (i *Index) snapshotSubscribers(kind customindex.EventKind) []customindex.Cu
 // which the caller must let propagate so the surrounding
 // transaction rolls back.
 //
-// A new sqliteExtStore is allocated per (Apply call, extension)
+// A new sqliteCIStore is allocated per (Apply call, extension)
 // pair — short-lived, tx-scoped, never captured outside Apply.
 // The long-lived store the extension captured during Setup is a
 // different instance that lives on the index until Close.

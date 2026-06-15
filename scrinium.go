@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
 	"scrinium.dev/internal/assembly"
@@ -136,7 +136,7 @@ func (c *ScriniumClient) Close() error {
 // store index, for diagnostics (e.g. listing them on a stats page).
 // Empty when the index backend exposes none. The raw StoreIndex is
 // intentionally not surfaced — it carries mutating methods.
-func (c *ScriniumClient) Extensions() []customindex.ExtensionInfo { return c.asm.Extensions() }
+func (c *ScriniumClient) Extensions() []customindex.Info { return c.asm.Extensions() }
 
 // RecoveryKit returns the recovery-kit bytes produced when this client
 // freshly initialised an encrypted store, and true. For a store that

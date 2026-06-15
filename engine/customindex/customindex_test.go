@@ -75,10 +75,10 @@ type stubExtension struct{}
 func (stubExtension) Name() string           { return "stub" }
 func (stubExtension) SchemaVersion() int     { return 1 }
 func (stubExtension) Subscribe() []EventKind { return nil }
-func (stubExtension) Setup(ctx context.Context, store ExtensionStore, oldVersion int) error {
+func (stubExtension) Setup(ctx context.Context, store Substrate, oldVersion int) error {
 	return nil
 }
-func (stubExtension) Apply(ctx context.Context, store ExtensionStore, kind EventKind, args EventArgs) error {
+func (stubExtension) Apply(ctx context.Context, store Substrate, kind EventKind, args EventArgs) error {
 	return nil
 }
 func (stubExtension) Close() error { return nil }
@@ -100,29 +100,29 @@ type stubRegistry struct{}
 
 func (stubRegistry) Register(ctx context.Context, ext CustomIndex) error { return nil }
 
-// stubLister satisfies ExtensionLister. The interface was
-// introduced in P0.6 alongside ExtensionInfo to give
+// stubLister satisfies Lister. The interface was
+// introduced in P0.6 alongside Info to give
 // backends a way to enumerate registered extensions without
 // re-exposing internal maps. Any future read-only proxy backend
-// would implement this independently of ExtensionHost.
+// would implement this independently of Host.
 type stubLister struct{}
 
-func (stubLister) ListExtensions() []ExtensionInfo { return nil }
+func (stubLister) ListCustomIndexes() []Info { return nil }
 
-// stubHost satisfies ExtensionHost. The interface was
+// stubHost satisfies Host. The interface was
 // introduced in P0.6 to let core (which must not import
 // engine/index/sqlite) type-assert "this StoreIndex supports
 // extension registration" generically.
 type stubHost struct{}
 
-func (stubHost) Extensions() ExtensionRegistry { return stubRegistry{} }
+func (stubHost) CustomIndexes() Registry { return stubRegistry{} }
 
 var (
-	_ CustomIndex       = stubExtension{}
-	_ ExtensionStore    = stubStore{}
-	_ ExtensionRegistry = stubRegistry{}
-	_ ExtensionLister   = stubLister{}
-	_ ExtensionHost     = stubHost{}
+	_ CustomIndex = stubExtension{}
+	_ Substrate   = stubStore{}
+	_ Registry    = stubRegistry{}
+	_ Lister      = stubLister{}
+	_ Host        = stubHost{}
 )
 
 // TestEventArgs_ZeroValueIsValid — the zero EventArgs is the

@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
 )
 
-// fakeExtStore is an in-memory customindex.ExtensionStore used to test
+// fakeExtStore is an in-memory customindex.Substrate used to test
 // the bundler index-extension in isolation, without a sqlite backend.
 type fakeExtStore struct {
 	data map[string][]byte // key: table + "\x00" + key
@@ -19,7 +19,7 @@ type fakeExtStore struct {
 
 func newFakeExtStore() *fakeExtStore { return &fakeExtStore{data: map[string][]byte{}} }
 
-var _ customindex.ExtensionStore = (*fakeExtStore)(nil)
+var _ customindex.Substrate = (*fakeExtStore)(nil)
 
 func (f *fakeExtStore) compositeKey(table, key string) string { return table + "\x00" + key }
 

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/internal/timefmt"
 )
 

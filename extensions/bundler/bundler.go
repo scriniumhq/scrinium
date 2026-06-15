@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
 )
 
 // customIndex is the bundler's index-side half (ADR-88/86): it
@@ -32,7 +32,7 @@ import (
 // accounting and copy-forward compaction, ADR-86) land with the pack
 // GC contract. This stub implements only the Resolver overlay.
 type customIndex struct {
-	store customindex.ExtensionStore
+	store customindex.Substrate
 }
 
 const (
@@ -48,7 +48,7 @@ var (
 )
 
 // NewCustomIndex returns the bundler's index-side customindex.
-// Register it against a StoreIndex backend (customindex.ExtensionHost)
+// Register it against a StoreIndex backend (customindex.Host)
 // to give the core a Resolver overlay for packed artifacts.
 func NewCustomIndex() customindex.CustomIndex {
 	return &customIndex{}
@@ -68,13 +68,13 @@ func (e *customIndex) Subscribe() []customindex.EventKind { return nil }
 //
 // TODO(M4): when oldVersion indicates an existing map, or on a cold
 // start, rebuild placement by scanning each volume's TOC-blob.
-func (e *customIndex) Setup(ctx context.Context, store customindex.ExtensionStore, oldVersion int) error {
+func (e *customIndex) Setup(ctx context.Context, store customindex.Substrate, oldVersion int) error {
 	e.store = store
 	return nil
 }
 
 // Apply is a no-op: this extension has no subscriptions.
-func (e *customIndex) Apply(ctx context.Context, store customindex.ExtensionStore, kind customindex.EventKind, args customindex.EventArgs) error {
+func (e *customIndex) Apply(ctx context.Context, store customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
 	return nil
 }
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
 )
 
 // --- Test helpers ---
@@ -26,19 +26,19 @@ type fakeExt struct {
 	applyErr    error
 	closeCalls  int
 
-	captured customindex.ExtensionStore
+	captured customindex.Substrate
 }
 
 func (e *fakeExt) Name() string                       { return e.name }
 func (e *fakeExt) SchemaVersion() int                 { return e.version }
 func (e *fakeExt) Subscribe() []customindex.EventKind { return e.subscribe }
-func (e *fakeExt) Setup(ctx context.Context, store customindex.ExtensionStore, oldVersion int) error {
+func (e *fakeExt) Setup(ctx context.Context, store customindex.Substrate, oldVersion int) error {
 	e.setupCalls++
 	e.setupOldVer = oldVersion
 	e.captured = store
 	return e.setupErr
 }
-func (e *fakeExt) Apply(ctx context.Context, store customindex.ExtensionStore, kind customindex.EventKind, args customindex.EventArgs) error {
+func (e *fakeExt) Apply(ctx context.Context, store customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
 	e.applyKinds = append(e.applyKinds, kind)
 	e.applyCalls = append(e.applyCalls, args)
 	if e.applyErr != nil {
@@ -105,7 +105,7 @@ func TestRegister_FirstTime_OldVersionZero(t *testing.T) {
 	defer idx.Close()
 
 	ext := &fakeExt{name: "test.alpha", version: 1}
-	if err := idx.Extensions().Register(context.Background(), ext); err != nil {
+	if err := idx.CustomIndexes().Register(context.Background(), ext); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	if ext.setupCalls != 1 {
@@ -119,7 +119,7 @@ func TestRegister_FirstTime_OldVersionZero(t *testing.T) {
 func TestRegister_NilExtension(t *testing.T) {
 	idx := openMemIndex(t)
 	defer idx.Close()
-	if err := idx.Extensions().Register(context.Background(), nil); err == nil {
+	if err := idx.CustomIndexes().Register(context.Background(), nil); err == nil {
 		t.Error("expected error for nil extension")
 	}
 }
@@ -128,7 +128,7 @@ func TestRegister_EmptyName(t *testing.T) {
 	idx := openMemIndex(t)
 	defer idx.Close()
 	ext := &fakeExt{name: "", version: 1}
-	if err := idx.Extensions().Register(context.Background(), ext); err == nil {
+	if err := idx.CustomIndexes().Register(context.Background(), ext); err == nil {
 		t.Error("expected error for empty name")
 	}
 }
@@ -139,10 +139,10 @@ func TestRegister_DuplicateName(t *testing.T) {
 
 	a := &fakeExt{name: "test.dupe", version: 1}
 	b := &fakeExt{name: "test.dupe", version: 1}
-	if err := idx.Extensions().Register(context.Background(), a); err != nil {
+	if err := idx.CustomIndexes().Register(context.Background(), a); err != nil {
 		t.Fatalf("first Register: %v", err)
 	}
-	err := idx.Extensions().Register(context.Background(), b)
+	err := idx.CustomIndexes().Register(context.Background(), b)
 	if !errors.Is(err, customindex.ErrExtensionExists) {
 		t.Errorf("expected ErrExtensionExists, got %v", err)
 	}
@@ -158,7 +158,7 @@ func TestRegister_SchemaRegression(t *testing.T) {
 		t.Fatalf("NewStore phase 1: %v", err)
 	}
 	ext1 := &fakeExt{name: "test.regression", version: 5}
-	if err := idx1.Extensions().Register(context.Background(), ext1); err != nil {
+	if err := idx1.CustomIndexes().Register(context.Background(), ext1); err != nil {
 		t.Fatalf("first Register: %v", err)
 	}
 	idx1.Close()
@@ -171,7 +171,7 @@ func TestRegister_SchemaRegression(t *testing.T) {
 	}
 	defer idx2.Close()
 	ext2 := &fakeExt{name: "test.regression", version: 3}
-	err = idx2.Extensions().Register(context.Background(), ext2)
+	err = idx2.CustomIndexes().Register(context.Background(), ext2)
 	if !errors.Is(err, customindex.ErrSchemaRegression) {
 		t.Errorf("expected ErrSchemaRegression, got %v", err)
 	}
@@ -183,7 +183,7 @@ func TestRegister_SetupFailure_RollbackEverything(t *testing.T) {
 
 	failure := errors.New("setup boom")
 	ext := &fakeExt{name: "test.fail", version: 1, setupErr: failure}
-	err := idx.Extensions().Register(context.Background(), ext)
+	err := idx.CustomIndexes().Register(context.Background(), ext)
 	if !errors.Is(err, failure) {
 		t.Errorf("expected setup error, got %v", err)
 	}
@@ -203,7 +203,7 @@ func TestRegister_SchemaVersionPersisted(t *testing.T) {
 	defer idx.Close()
 
 	ext := &fakeExt{name: "test.persist", version: 7}
-	if err := idx.Extensions().Register(context.Background(), ext); err != nil {
+	if err := idx.CustomIndexes().Register(context.Background(), ext); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -227,7 +227,7 @@ func TestExtStore_PutGetDelete(t *testing.T) {
 	defer idx.Close()
 
 	ext := &fakeExt{name: "test.kv", version: 1}
-	if err := idx.Extensions().Register(context.Background(), ext); err != nil {
+	if err := idx.CustomIndexes().Register(context.Background(), ext); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	store := ext.captured
@@ -257,7 +257,7 @@ func TestExtStore_Get_Absent(t *testing.T) {
 	defer idx.Close()
 
 	ext := &fakeExt{name: "test.absent", version: 1}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 	_, ok, err := ext.captured.Get("t1", "nope")
 	if err != nil {
 		t.Errorf("Get on absent key returned error: %v", err)
@@ -272,7 +272,7 @@ func TestExtStore_Scan_Prefix(t *testing.T) {
 	defer idx.Close()
 
 	ext := &fakeExt{name: "test.scan", version: 1}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 	store := ext.captured
 
 	pairs := map[string]string{
@@ -306,7 +306,7 @@ func TestExtStore_Scan_StopScan(t *testing.T) {
 	defer idx.Close()
 
 	ext := &fakeExt{name: "test.stop", version: 1}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 	store := ext.captured
 
 	for i := 0; i < 5; i++ {
@@ -334,7 +334,7 @@ func TestExtStore_DeletePrefix(t *testing.T) {
 	defer idx.Close()
 
 	ext := &fakeExt{name: "test.delpref", version: 1}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 	store := ext.captured
 
 	store.Put("t", "alpha:1", []byte("v"))
@@ -360,7 +360,7 @@ func TestExtStore_DeletePrefix_EmptyRejected(t *testing.T) {
 	defer idx.Close()
 
 	ext := &fakeExt{name: "test.empty", version: 1}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 
 	err := ext.captured.DeletePrefix("t", "")
 	if !errors.Is(err, customindex.ErrEmptyPrefix) {
@@ -373,7 +373,7 @@ func TestExtStore_Inc(t *testing.T) {
 	defer idx.Close()
 
 	ext := &fakeExt{name: "test.inc", version: 1}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 	store := ext.captured
 
 	v, err := store.Inc("counters", "k1", 5)
@@ -409,8 +409,8 @@ func TestExtStore_NamespaceIsolation(t *testing.T) {
 
 	a := &fakeExt{name: "test.A", version: 1}
 	b := &fakeExt{name: "test.B", version: 1}
-	idx.Extensions().Register(context.Background(), a)
-	idx.Extensions().Register(context.Background(), b)
+	idx.CustomIndexes().Register(context.Background(), a)
+	idx.CustomIndexes().Register(context.Background(), b)
 
 	a.captured.Put("shared", "key", []byte("from-A"))
 	b.captured.Put("shared", "key", []byte("from-B"))
@@ -437,7 +437,7 @@ func TestDispatch_ManifestIndexed(t *testing.T) {
 		version:   1,
 		subscribe: []customindex.EventKind{customindex.EventKindManifestIndexed},
 	}
-	if err := idx.Extensions().Register(context.Background(), ext); err != nil {
+	if err := idx.CustomIndexes().Register(context.Background(), ext); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
@@ -478,7 +478,7 @@ func TestDispatch_NotSubscribed_NoApply(t *testing.T) {
 		version:   1,
 		subscribe: []customindex.EventKind{customindex.EventKindManifestDeleted},
 	}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 
 	m := makeBlobManifest("art-2")
 	idx.IndexManifest(ctx, m, domain.PhysicalAddress{Path: "/blobs/y"})
@@ -500,7 +500,7 @@ func TestDispatch_ApplyError_RollsBack(t *testing.T) {
 		subscribe: []customindex.EventKind{customindex.EventKindManifestIndexed},
 		applyErr:  failure,
 	}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 
 	m := makeBlobManifest("art-rollback")
 	addr := domain.PhysicalAddress{Path: "/blobs/z"}
@@ -532,7 +532,7 @@ func TestDispatch_ManifestDeleted(t *testing.T) {
 		version:   1,
 		subscribe: []customindex.EventKind{customindex.EventKindManifestDeleted},
 	}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 
 	// Insert a manifest, then delete.
 	m := makeBlobManifest("art-del")
@@ -561,7 +561,7 @@ func TestClose_CallsExtensionClose(t *testing.T) {
 	idx := openMemIndex(t)
 
 	ext := &fakeExt{name: "test.close", version: 1}
-	idx.Extensions().Register(context.Background(), ext)
+	idx.CustomIndexes().Register(context.Background(), ext)
 
 	if err := idx.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -587,7 +587,7 @@ func openMemIndex(t *testing.T) *Index {
 // TestIndex_ListExtensions verifies (*Index).ListExtensions returns
 // every registered extension's name and SchemaVersion. Introduced
 // after P0.6, when the method's return type was lifted from a
-// sqlite-local ExtensionInfo to customindex.ExtensionInfo (the contract
+// sqlite-local ExtensionInfo to customindex.Info (the contract
 // type backends share). Without a direct test, a regression in
 // either the return shape or the slice population would surface
 // only via the projection layer's stats renderer — too far from
@@ -607,12 +607,12 @@ func TestIndex_ListExtensions(t *testing.T) {
 		{name: "scrinium.gamma", version: 7},
 	}
 	for _, e := range exts {
-		if err := idx.Extensions().Register(context.Background(), e); err != nil {
+		if err := idx.CustomIndexes().Register(context.Background(), e); err != nil {
 			t.Fatalf("Register %q: %v", e.name, err)
 		}
 	}
 
-	got := idx.ListExtensions()
+	got := idx.ListCustomIndexes()
 	if len(got) != len(exts) {
 		t.Fatalf("ListExtensions: got %d entries, want %d", len(got), len(exts))
 	}
@@ -646,7 +646,7 @@ func TestIndex_ListExtensions_Empty(t *testing.T) {
 	idx := openMemIndex(t)
 	defer idx.Close()
 
-	got := idx.ListExtensions()
+	got := idx.ListCustomIndexes()
 	if got == nil {
 		t.Error("ListExtensions on fresh Index: returned nil, want empty non-nil slice")
 	}

@@ -59,7 +59,7 @@ func WithExtSource(ms source.Ext) Option {
 }
 
 // WithFSIndex is a typed convenience for the engine/index/fsindex
-// case: pass the registered *fsindex.Extension and it doubles as
+// case: pass the registered *fs.Extension and it doubles as
 // a ExtSource. Equivalent to WithExtSource(fsidx).
 //
 // Implemented at the package level via an interface to avoid

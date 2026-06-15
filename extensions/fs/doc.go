@@ -23,4 +23,4 @@
 // future v2…); keeping the bytes verbatim lets newer schemas
 // flow through without an fsindex migration whenever fsmeta
 // adds a field.
-package fsindex
+package fs

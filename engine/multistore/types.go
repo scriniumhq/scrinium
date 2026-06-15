@@ -2,8 +2,6 @@ package multistore
 
 import (
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/store"
-	"scrinium.dev/event"
 )
 
 // --- Policy enums ---
@@ -103,20 +101,3 @@ type RoutingFunc func(meta RoutingMetadata) []StoreTarget
 // artifacts as a separate operation, when the original hints from
 // PutOptions are no longer available.
 type MetadataRouter func(m domain.Manifest) domain.RoutingHints
-
-// --- Decorators and WrapperFactory ---
-
-// WrapperFactory creates a decorator on top of a Store while
-// receiving its dependencies from the multistore. It is applied
-// during Target/Backup registration through WithStore/WithBackup,
-// giving decorators access to their dependencies through a standard
-// contract rather than via public objects.
-type WrapperFactory interface {
-	Wrap(store store.DataStore, deps WrapperDeps) (store.DataStore, error)
-}
-
-// WrapperDeps are the dependencies provided by the multistore to a
-// decorator at registration time.
-type WrapperDeps struct {
-	Publisher event.Publisher
-}

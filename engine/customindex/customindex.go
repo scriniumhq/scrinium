@@ -23,14 +23,14 @@ import (
 //
 // (2) Storage. Extensions own no SQL, no DB handles, no
 // migration code: they put bytes into a backend-agnostic
-// ExtensionStore keyed by (table, key). The backend translates
+// Substrate keyed by (table, key). The backend translates
 // to its own substrate. Tables are namespace-prefixed by
 // extension Name to prevent collisions between extensions.
 //
 // Contract spec: 3. Reference/09 CustomIndex and Search.md.
 type CustomIndex interface {
 	// Name is the stable identifier for this extension. Used
-	// as the namespace prefix in ExtensionStore. Must be
+	// as the namespace prefix in Substrate. Must be
 	// unique among extensions registered to the same backend.
 	// Recommended: dotted, lower-case, like "scrinium.fsindex".
 	Name() string
@@ -54,13 +54,13 @@ type CustomIndex interface {
 	// positive value is the persisted SchemaVersion from a
 	// previous run. Implementations migrate from oldVersion to
 	// SchemaVersion().
-	Setup(ctx context.Context, store ExtensionStore, oldVersion int) error
+	Setup(ctx context.Context, store Substrate, oldVersion int) error
 
 	// Apply is invoked for each subscribed event, inside the
 	// backend's transaction. Mutations through store land in
 	// the same transaction as the main index write; an error
 	// returned here aborts both.
-	Apply(ctx context.Context, store ExtensionStore, kind EventKind, args EventArgs) error
+	Apply(ctx context.Context, store Substrate, kind EventKind, args EventArgs) error
 
 	// Close releases extension-side resources. Backend storage
 	// remains owned by the StoreIndex.
@@ -171,13 +171,13 @@ type Resolver interface {
 	ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (PlacementOverlay, bool, error)
 }
 
-// ExtensionStore is the backend-agnostic data plane an extension
+// Substrate is the backend-agnostic data plane an extension
 // uses for its own state. All mutations are scoped to the
 // surrounding transaction; reads see committed state.
 //
 // Tables are auto-namespaced by extension Name; the same `table`
 // argument from two extensions does not collide.
-type ExtensionStore interface {
+type Substrate interface {
 	// Put writes (or overwrites) a value for the given key.
 	// Idempotent.
 	Put(table, key string, value []byte) error
@@ -209,10 +209,10 @@ type ExtensionStore interface {
 	Inc(table, key string, delta int64) (int64, error)
 }
 
-// ExtensionRegistry is the surface returned by
+// Registry is the surface returned by
 // StoreIndex.Extensions. The only mutation is Register; backends
 // expose nothing else through this interface.
-type ExtensionRegistry interface {
+type Registry interface {
 	// Register attaches an extension to the index. Setup runs
 	// in a single transaction; failure rolls back any work the
 	// extension did during Setup, persisted schema_version is
@@ -228,7 +228,7 @@ type ExtensionRegistry interface {
 // Sentinel errors. Wrapped by backends with %w so callers can
 // errors.Is against them.
 var (
-	// ErrStopScan is returned by an ExtensionStore.Scan callback
+	// ErrStopScan is returned by an Substrate.Scan callback
 	// to stop the iteration without surfacing it as an error.
 	ErrStopScan = errors.New("scrinium/index: stop scan")
 
@@ -252,16 +252,16 @@ var (
 	ErrEmptyPrefix = errors.New("scrinium/index: empty prefix in DeletePrefix")
 )
 
-// ExtensionInfo is the public, backend-agnostic descriptor of a
+// Info is the public, backend-agnostic descriptor of a
 // registered index extension. Surfaces (stats endpoints, debug
 // pages, examples) consume this rather than reaching into a
 // concrete backend type.
 //
 // Backends that report registered extensions return slices of
-// this type via ExtensionLister. The type is intentionally
+// this type via Lister. The type is intentionally
 // flat — no behaviour, no pointers — so it can travel through
 // any layer without dragging dependencies.
-type ExtensionInfo struct {
+type Info struct {
 	// Name is the extension's stable identifier
 	// (CustomIndex.Name()).
 	Name string
@@ -272,7 +272,7 @@ type ExtensionInfo struct {
 	SchemaVersion int
 }
 
-// ExtensionHost is the optional capability a StoreIndex backend
+// Host is the optional capability a StoreIndex backend
 // exposes when it supports registering host-side extensions.
 //
 // Backends that support extensions implement this; the rest are
@@ -280,16 +280,16 @@ type ExtensionInfo struct {
 // here (not on store.StoreIndex) so the core package needs no
 // import of engine/index — the assertion happens at the wiring
 // layer instead.
-type ExtensionHost interface {
+type Host interface {
 	// Extensions returns the registry through which CustomIndex
 	// implementations are attached to this backend.
-	Extensions() ExtensionRegistry
+	CustomIndexes() Registry
 }
 
-// ExtensionLister is the optional capability a StoreIndex backend
+// Lister is the optional capability a StoreIndex backend
 // exposes when it can enumerate currently-registered extensions.
 //
-// Distinct from ExtensionHost (the registration-side capability)
+// Distinct from Host (the registration-side capability)
 // because read and write surfaces are conceptually independent —
 // a future read-only proxy backend might list without registering,
 // or a constrained backend might register without listing. In
@@ -298,6 +298,6 @@ type ExtensionHost interface {
 // Returns an empty slice (never nil) when no extensions are
 // registered. Order is unspecified — callers that need stable
 // listings sort by Name.
-type ExtensionLister interface {
-	ListExtensions() []ExtensionInfo
+type Lister interface {
+	ListCustomIndexes() []Info
 }

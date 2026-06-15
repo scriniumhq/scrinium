@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"scrinium.dev/engine/extension/customindex"
+	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/event"
 )
@@ -38,22 +38,22 @@ type Index struct {
 	closeOnce sync.Once
 	closeErr  error
 
-	// extMu guards the extension dispatcher. Acquired in write
+	// ciMu guards the CustomIndex dispatcher. Acquired in write
 	// mode by Register and by every IndexManifest/DeleteManifest
 	// call (so a concurrent Register cannot insert a
 	// new subscriber midway through a dispatch). Held briefly —
 	// the in-memory work is map lookups; the SQL transaction it
 	// guards may be long, but the lock is released right after.
-	extMu     sync.Mutex
-	extByName map[string]customindex.CustomIndex
-	extByKind map[customindex.EventKind][]customindex.CustomIndex
-	// extStores keeps the long-lived ExtensionStore handed to each
-	// extension during Setup. Apply uses fresh tx-scoped stores
+	ciMu     sync.Mutex
+	ciByName map[string]customindex.CustomIndex
+	ciByKind map[customindex.EventKind][]customindex.CustomIndex
+	// ciStores keeps the long-lived CustomIndexStore handed to each
+	// CustomIndex during Setup. Apply uses fresh tx-scoped stores
 	// (allocated per call); the long-lived stores in this map are
 	// the ones extensions may have captured for read-side use.
 	// Maintained so Close can release them in lockstep with the
 	// extension list.
-	extStores map[string]*sqliteExtStore
+	ciStores map[string]*sqliteCIStore
 }
 
 // Compile-time interface conformance. Catches signature drift
@@ -185,11 +185,11 @@ func newStoreInternal(ctx context.Context, path string, o options) (*Index, erro
 	}
 
 	return &Index{
-		db:        db,
-		opts:      o,
-		extByName: make(map[string]customindex.CustomIndex),
-		extByKind: make(map[customindex.EventKind][]customindex.CustomIndex),
-		extStores: make(map[string]*sqliteExtStore),
+		db:       db,
+		opts:     o,
+		ciByName: make(map[string]customindex.CustomIndex),
+		ciByKind: make(map[customindex.EventKind][]customindex.CustomIndex),
+		ciStores: make(map[string]*sqliteCIStore),
 	}, nil
 }
 
@@ -244,31 +244,31 @@ func applyPragmas(ctx context.Context, db *sql.DB, path string, o options) error
 // while database/sql.DB.Close itself errors on the second call —
 // sync.Once captures the first outcome and returns it forever.
 //
-// Registered extensions are closed in the reverse order of
-// registration. Errors from extension Close are swallowed (logged
+// Registered CustomIndexes are closed in the reverse order of
+// registration. Errors from CustomIndex Close are swallowed (logged
 // would be the proper behaviour once a logger is wired in) — they
 // must not prevent the underlying DB from being released.
 func (i *Index) Close() error {
 	i.closeOnce.Do(func() {
-		i.extMu.Lock()
+		i.ciMu.Lock()
 		// Close in reverse-registration order. extByKind is the
 		// dispatch map; a stable insertion-order list would be
 		// cleaner, but the set of subscribers is small in
 		// practice — iterating extByName here is fine.
-		for _, ext := range i.extByName {
+		for _, ext := range i.ciByName {
 			_ = ext.Close()
 		}
 		// Drop store-side references so Get/Scan calls from a
 		// host that mistakenly held a captured store after
 		// Close fail with a clear errExtStoreClosed instead of
 		// hitting a closed *sql.DB.
-		for _, store := range i.extStores {
+		for _, store := range i.ciStores {
 			store.executor.Store(nil)
 		}
-		i.extByName = nil
-		i.extByKind = nil
-		i.extStores = nil
-		i.extMu.Unlock()
+		i.ciByName = nil
+		i.ciByKind = nil
+		i.ciStores = nil
+		i.ciMu.Unlock()
 
 		i.closeErr = i.db.Close()
 	})
