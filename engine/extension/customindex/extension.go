@@ -1,4 +1,4 @@
-package extension
+package customindex
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"scrinium.dev/domain"
 )
 
-// IndexExtension is the contract host-side index extensions
+// CustomIndex is the contract host-side index extensions
 // satisfy. An extension lives inside a StoreIndex backend,
 // shares its transactions, and exposes its own read API to the
 // host.
@@ -27,8 +27,8 @@ import (
 // to its own substrate. Tables are namespace-prefixed by
 // extension Name to prevent collisions between extensions.
 //
-// Contract spec: 3. Reference/09 Index Extensions.md.
-type IndexExtension interface {
+// Contract spec: 3. Reference/09 CustomIndex and Search.md.
+type CustomIndex interface {
 	// Name is the stable identifier for this extension. Used
 	// as the namespace prefix in ExtensionStore. Must be
 	// unique among extensions registered to the same backend.
@@ -107,19 +107,19 @@ type EventArgs struct {
 	BlobRefs   []string
 }
 
-// --- Capability roster (ADR-84) ---
+// --- Capability roster (ADR-88) ---
 //
-// An IndexExtension declares WHAT it can do by implementing optional
+// A CustomIndex declares WHAT it can do by implementing optional
 // capability sub-interfaces below; the backend detects them by
 // assertion (if r, ok := ext.(Resolver); ok), never by a Class field.
 // Only Resolver is defined here — it is what the pack/chunk overlay
 // needs (ADR-86/87). The accounting/compaction roster (GCParticipant,
-// Compactor) and Projector land with the GC-contract and projection
+// Compactor) and Indexer land with the GC-contract and projection
 // work; they are not required to take the core off pack tables.
 
 // PlacementOverlay is the physical location of an artifact whose
 // storage is OWNED by an index extension rather than the core
-// (ADR-84/86) — the overlay counterpart of the core's россыпь
+// (ADR-88/86) — the overlay counterpart of the core's россыпь
 // resolution. A packed artifact lives as two slices of a .pack
 // volume (its member manifest and its blob) plus the pipeline
 // parameters needed to decode the blob.
@@ -148,9 +148,9 @@ type PlacementOverlay struct {
 	PipelineParams []byte
 }
 
-// Resolver is the optional capability an IndexExtension implements
+// Resolver is the optional capability a CustomIndex implements
 // to OVERLAY physical placement for the artifacts it owns
-// (ADR-84/86). The core resolves россыпь itself; for anything it
+// (ADR-88/86). The core resolves россыпь itself; for anything it
 // does not find, it probes registered Resolvers, each covering its
 // own structure. The core never branches on artifact type —
 // ownership of the index record decides who answers, so a new
@@ -161,7 +161,7 @@ type PlacementOverlay struct {
 // (structurally, not by hiding). Capability is detected by interface
 // assertion, not by Class.
 type Resolver interface {
-	IndexExtension
+	CustomIndex
 
 	// ResolvePacked reports the placement of an artifact this
 	// extension owns, by its ArtifactID. The second return is false
@@ -222,7 +222,7 @@ type ExtensionRegistry interface {
 	// already-registered extension.
 	// Returns ErrSchemaRegression if SchemaVersion() is less
 	// than the persisted value for this Name().
-	Register(ctx context.Context, ext IndexExtension) error
+	Register(ctx context.Context, ext CustomIndex) error
 }
 
 // Sentinel errors. Wrapped by backends with %w so callers can
@@ -263,7 +263,7 @@ var (
 // any layer without dragging dependencies.
 type ExtensionInfo struct {
 	// Name is the extension's stable identifier
-	// (IndexExtension.Name()).
+	// (CustomIndex.Name()).
 	Name string
 
 	// SchemaVersion is the persisted schema version for this
@@ -281,7 +281,7 @@ type ExtensionInfo struct {
 // import of engine/index — the assertion happens at the wiring
 // layer instead.
 type ExtensionHost interface {
-	// Extensions returns the registry through which IndexExtension
+	// Extensions returns the registry through which CustomIndex
 	// implementations are attached to this backend.
 	Extensions() ExtensionRegistry
 }

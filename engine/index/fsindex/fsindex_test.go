@@ -8,7 +8,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/index/extension"
+	"scrinium.dev/engine/extension/customindex"
 	"scrinium.dev/engine/index/fsindex"
 	"scrinium.dev/engine/index/sqlite"
 )
@@ -16,7 +16,7 @@ import (
 // --- helpers ---
 
 // newRegisteredFSIndex returns an in-memory sqlite Index plus a
-// freshly-registered fsindex.Extension. Cleanup closes both.
+// freshly-registered fsindex.customindex. Cleanup closes both.
 func newRegisteredFSIndex(t *testing.T) (*sqlite.Index, *fsindex.Extension) {
 	t.Helper()
 	idx, err := sqlite.NewStore(context.Background(), ":memory:")
@@ -357,14 +357,14 @@ func TestSubscribe_OnlyManifestEvents(t *testing.T) {
 	if len(subs) != 2 {
 		t.Fatalf("Subscribe: got %d kinds, want 2", len(subs))
 	}
-	have := map[extension.EventKind]bool{}
+	have := map[customindex.EventKind]bool{}
 	for _, k := range subs {
 		have[k] = true
 	}
-	if !have[extension.EventKindManifestIndexed] {
+	if !have[customindex.EventKindManifestIndexed] {
 		t.Error("missing EventKindManifestIndexed")
 	}
-	if !have[extension.EventKindManifestDeleted] {
+	if !have[customindex.EventKindManifestDeleted] {
 		t.Error("missing EventKindManifestDeleted")
 	}
 }

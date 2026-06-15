@@ -90,7 +90,7 @@ func (c *core) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.M
 // user-visible artifact — a pack container or other engine-internal
 // object — so user-facing Get/Delete/Verify collapse it to not-found
 // rather than leaking it. Structure (chunked/composite bodies) is no
-// longer dispatched here: the owning wrapper handles it (ADR-84), and a
+// longer dispatched here: the owning wrapper handles it (ADR-88), and a
 // body whose layout needs an absent decorator fails in the open path.
 func guardHandleless(m domain.Manifest) error {
 	if !m.IsUser() {

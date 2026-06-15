@@ -7,7 +7,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/fsmeta"
-	"scrinium.dev/engine/index/extension"
+	"scrinium.dev/engine/extension/customindex"
 )
 
 // Tables under the extension namespace. Two K/V groups:
@@ -33,7 +33,7 @@ const Name = "scrinium.fsindex"
 const schemaVersion = 1
 
 // Extension is the fsmeta-aware projection of artifact metadata.
-// Implements extension.IndexExtension. Construct via New, register
+// Implements customindex.CustomIndex. Construct via New, register
 // via *sqlite.Index.Extensions().Register.
 type Extension struct {
 	// store is captured during Setup and used by the read-side
@@ -41,10 +41,10 @@ type Extension struct {
 	// the StoreIndex. Backend swaps the underlying executor
 	// from tx-mode to db-mode atomically after Register commits;
 	// the captured reference stays valid throughout.
-	store extension.ExtensionStore
+	store customindex.ExtensionStore
 }
 
-// New returns a fresh Extension. The instance is not registered
+// New returns a fresh customindex. The instance is not registered
 // — caller passes it to *sqlite.Index.Extensions().Register(ctx, ext).
 func New() *Extension {
 	return &Extension{}
@@ -58,16 +58,16 @@ func (e *Extension) SchemaVersion() int { return schemaVersion }
 
 // Subscribe declares the index events fsindex reacts to.
 // ManifestIndexed: stash fsmeta; ManifestDeleted: drop it.
-func (e *Extension) Subscribe() []extension.EventKind {
-	return []extension.EventKind{
-		extension.EventKindManifestIndexed,
-		extension.EventKindManifestDeleted,
+func (e *Extension) Subscribe() []customindex.EventKind {
+	return []customindex.EventKind{
+		customindex.EventKindManifestIndexed,
+		customindex.EventKindManifestDeleted,
 	}
 }
 
 // Setup runs once per registration. v1 is initial; nothing to
 // migrate on a fresh DB or on an existing v1.
-func (e *Extension) Setup(ctx context.Context, store extension.ExtensionStore, oldVersion int) error {
+func (e *Extension) Setup(ctx context.Context, store customindex.ExtensionStore, oldVersion int) error {
 	switch oldVersion {
 	case 0, 1:
 		// Nothing to do — schema is implicit (the K/V tables
@@ -83,11 +83,11 @@ func (e *Extension) Setup(ctx context.Context, store extension.ExtensionStore, o
 // Apply is invoked by the index inside the surrounding write
 // transaction. ManifestIndexed and ManifestDeleted are the only
 // kinds we subscribe to; anything else is a backend bug.
-func (e *Extension) Apply(ctx context.Context, store extension.ExtensionStore, kind extension.EventKind, args extension.EventArgs) error {
+func (e *Extension) Apply(ctx context.Context, store customindex.ExtensionStore, kind customindex.EventKind, args customindex.EventArgs) error {
 	switch kind {
-	case extension.EventKindManifestIndexed:
+	case customindex.EventKindManifestIndexed:
 		return e.applyIndexed(store, args)
-	case extension.EventKindManifestDeleted:
+	case customindex.EventKindManifestDeleted:
 		return e.applyDeleted(store, args)
 	default:
 		return fmt.Errorf("fsindex: unexpected event kind %s", kind)
@@ -99,7 +99,7 @@ func (e *Extension) Apply(ctx context.Context, store extension.ExtensionStore, k
 // carry a fsmeta payload (foreign schema, system artifacts) are
 // silently skipped — the extension only indexes what it
 // understands.
-func (e *Extension) applyIndexed(store extension.ExtensionStore, args extension.EventArgs) error {
+func (e *Extension) applyIndexed(store customindex.ExtensionStore, args customindex.EventArgs) error {
 	fs, ok, err := fsmeta.Decode(args.Manifest.Ext)
 	if err != nil {
 		// Decode errors mean the ext block claims to be fsmeta
@@ -139,7 +139,7 @@ func (e *Extension) applyIndexed(store extension.ExtensionStore, args extension.
 // the path to delete the reverse key, so we read the stored
 // fsmeta first. If the artifact wasn't indexed (no fsmeta on
 // write) the byID Get returns ok=false and we exit cleanly.
-func (e *Extension) applyDeleted(store extension.ExtensionStore, args extension.EventArgs) error {
+func (e *Extension) applyDeleted(store customindex.ExtensionStore, args customindex.EventArgs) error {
 	id := string(args.ArtifactID)
 
 	raw, ok, err := store.Get(tableByID, id)
@@ -236,7 +236,7 @@ func (e *Extension) LookupByPath(path string) (domain.ArtifactID, bool, error) {
 	var found domain.ArtifactID
 	err := e.store.Scan(tableByPath, prefix, func(_ string, value []byte) error {
 		found = domain.ArtifactID(value)
-		return extension.ErrStopScan
+		return customindex.ErrStopScan
 	})
 	if err != nil {
 		return "", false, fmt.Errorf("fsindex: LookupByPath: %w", err)
@@ -249,7 +249,7 @@ func (e *Extension) LookupByPath(path string) (domain.ArtifactID, bool, error) {
 
 // WalkAll iterates every (artifactID, fsmeta JSON) pair in
 // lexicographic id order. Returning fs.SkipAll from cb (the
-// extensions sentinel extension.ErrStopScan also works) ends the
+// extensions sentinel customindex.ErrStopScan also works) ends the
 // walk cleanly.
 //
 // Used by projection.View.backfill: one round-trip yields every
@@ -264,5 +264,5 @@ func (e *Extension) WalkAll(cb func(id domain.ArtifactID, raw json.RawMessage) e
 }
 
 // Compile-time conformance: Extension satisfies
-// extension.IndexExtension. Catches signature drift early.
-var _ extension.IndexExtension = (*Extension)(nil)
+// customindex.CustomIndex. Catches signature drift early.
+var _ customindex.CustomIndex = (*Extension)(nil)

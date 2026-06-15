@@ -17,6 +17,16 @@ var ErrArtifactNotFound = newBridgedSentinel(
 	"scrinium: artifact not found", fs.ErrNotExist,
 )
 
+// ErrUnavailable — the artifact (or a pack/composite member) exists and
+// is accounted for, but cannot be resolved because its owning extension
+// (e.g. the bundler/chunker Resolver) is not registered — for instance a
+// rebuild performed without the owner. Distinct from ErrArtifactNotFound:
+// "present but unreachable" is not "does not exist", so this sentinel
+// deliberately does NOT bridge to fs.ErrNotExist. The anchor manifest is
+// always scattered, so the container is found; only the packed member is
+// unreachable without its overlay. ADR-92/86/87 (rebuild-safety invariant).
+var ErrUnavailable = errors.New("scrinium: artifact unavailable")
+
 // ErrDeletionForbidden — Delete on a Store with
 // DeletionPolicy: NoDelete.
 var ErrDeletionForbidden = errors.New("scrinium: deletion forbidden")
