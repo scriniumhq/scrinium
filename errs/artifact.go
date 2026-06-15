@@ -18,7 +18,7 @@ var ErrArtifactNotFound = newBridgedSentinel(
 )
 
 // ErrUnavailable — the artifact (or a pack/composite member) exists and
-// is accounted for, but cannot be resolved because its owning custom index
+// is accounted for, but cannot be resolved because its owning extension
 // (e.g. the bundler/chunker Resolver) is not registered — for instance a
 // rebuild performed without the owner. Distinct from ErrArtifactNotFound:
 // "present but unreachable" is not "does not exist", so this sentinel
@@ -54,7 +54,7 @@ var ErrSessionIDTooLong = errors.New("scrinium: session ID too long")
 var ErrEmptySessionID = errors.New("scrinium: empty session ID")
 
 // ErrExtTooLarge — Artifact.Ext > MaxExtSize (64 KB). Ext is the
-// engine-readable custom index block (fsmeta and friends).
+// engine-readable extension block (fsmeta and friends).
 var ErrExtTooLarge = errors.New("scrinium: ext metadata too large")
 
 // ErrUsrTooLarge — Artifact.Usr > MaxUsrSize (64 KB). Usr is the
