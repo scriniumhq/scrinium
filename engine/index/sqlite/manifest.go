@@ -83,6 +83,13 @@ func (i *Index) indexManifestTx(
 		// we skip dispatch for it; custom indexes index user-visible
 		// artifacts only.
 		if !m.IsContainer() {
+			// Indexers: project ext/usr into proj_* and write any own
+			// tables, in this transaction (§9.2.1). Before the generic
+			// dispatch so projections land first; a failure rolls back the
+			// whole write (strict consistency).
+			if err := i.applyIndexers(ctx, tx, m); err != nil {
+				return err
+			}
 			args := customindex.EventArgs{Manifest: m, ArtifactID: m.ArtifactID}
 			if err := i.dispatchCustomIndexes(ctx, tx, customindex.EventKindManifestIndexed, args); err != nil {
 				return err
@@ -424,6 +431,13 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 			`DELETE FROM manifests WHERE manifest_digest = ?`,
 			dg,
 		); err != nil {
+			return err
+		}
+
+		// Remove the manifest's штатные projections (core-owned, by digest).
+		// Own-table cleanup (Indexer.Unindex) needs the manifest at delete
+		// time and lands with the first own-table consumer (fsindex, M4.4).
+		if err := deleteProjections(ctx, tx, dg); err != nil {
 			return err
 		}
 

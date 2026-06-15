@@ -20,7 +20,7 @@ var migrations = []migration{
 		Version: 1,
 		Description: "baseline: blobs, manifests (digest-PK + identity slots), " +
 			"manifest_blobs, manifest_handles, ext_meta, " +
-			"ext_data, store_meta",
+			"ext_data, proj_ext, proj_usr, store_meta",
 		Statements: []string{schemaBaseline},
 	},
 }
@@ -58,12 +58,12 @@ type migration struct {
 //     manifest_digest. Populated for pack containers (placement of
 //     members) and any artifact carrying artifact→artifact edges; empty
 //     for a plain blob and a composite.
-//   - ext_meta:        per-extension state; stores the schema_version
+//   - ext_meta:        per-custom index state; stores the schema_version
 //     persisted from the last successful Setup so later registrations
 //     can migrate forward
-//   - ext_data:        the universal K/V store index extensions write
+//   - ext_data:        the universal K/V store index custom indexes write
 //     into; the composite PK (extension, table_name, key) gives each
-//     extension a private namespace plus per-table grouping, and
+//     custom index a private namespace plus per-table grouping, and
 //     WITHOUT ROWID keeps entries in PK order for prefix range scans
 //   - store_meta:      singleton key/value table for engine metadata
 //     (schema version, descriptor cache, scan timestamps, etc.)
@@ -163,6 +163,39 @@ CREATE TABLE ext_data (
     value      BLOB NOT NULL,
     PRIMARY KEY (extension, table_name, key)
 ) WITHOUT ROWID;
+
+-- proj_ext: narrow EAV projecting ext-pocket fields of all extensions for
+-- equality search without reading the manifest (ADR-78). value is a JSON
+-- scalar (ext is always JSON) — no binary here. Filled by each active
+-- extension's Indexer, in the manifest transaction; the core does not
+-- branch on manifest type.
+CREATE TABLE proj_ext (
+    digest    TEXT    NOT NULL,
+    ext_name  TEXT    NOT NULL,
+    field     TEXT    NOT NULL,
+    value     TEXT    NOT NULL,
+    PRIMARY KEY (digest, ext_name, field)
+) WITHOUT ROWID;
+
+-- Equality lookup by (ext_name, field, value); serves Walk(ns) and search.
+CREATE INDEX proj_ext_lookup ON proj_ext(ext_name, field, value);
+
+-- proj_usr: projection of usr-pocket fields, gated by store_meta.usr_indexing
+-- (default off) plus a per-field flag (ADR-78). The only place with binary —
+-- by hash of the DECODED value (value_hash); opaque bytes are not indexed.
+CREATE TABLE proj_usr (
+    digest       TEXT    NOT NULL,
+    field        TEXT    NOT NULL,
+    value_text   TEXT,
+    value_number INTEGER,
+    value_hash   TEXT,
+    PRIMARY KEY (digest, field)
+) WITHOUT ROWID;
+
+-- Equality by field over structural values and the decoded-binary hash.
+CREATE INDEX proj_usr_text   ON proj_usr(field, value_text);
+CREATE INDEX proj_usr_number ON proj_usr(field, value_number);
+CREATE INDEX proj_usr_hash   ON proj_usr(field, value_hash);
 
 CREATE TABLE store_meta (
     key   TEXT PRIMARY KEY,

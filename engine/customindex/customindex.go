@@ -112,10 +112,12 @@ type EventArgs struct {
 // A CustomIndex declares WHAT it can do by implementing optional
 // capability sub-interfaces below; the backend detects them by
 // assertion (if r, ok := ext.(Resolver); ok), never by a Class field.
-// Only Resolver is defined here — it is what the pack/chunk overlay
-// needs (ADR-86/87). The accounting/compaction roster (GCParticipant,
-// Compactor) and Indexer land with the GC-contract and projection
-// work; they are not required to take the core off pack tables.
+// Resolver is the pack/chunk overlay capability (ADR-86/87). Indexer
+// (write-side projection) and the Accessor family (KeyLookup/PrefixScan/
+// RangeScan, read-side) are the metadata-search capabilities (ADR-78).
+// The accounting/compaction roster (GCParticipant, Compactor) lands with
+// the GC contract. A CustomIndex implements whichever it needs; the
+// backend detects each by assertion, never by a Class field.
 
 // PlacementOverlay is the physical location of an artifact whose
 // storage is OWNED by an index custom index rather than the core
@@ -169,6 +171,110 @@ type Resolver interface {
 	// the next resolver or falls back to россыпь. Reads see committed
 	// state.
 	ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (PlacementOverlay, bool, error)
+}
+
+// Key is a position in a CustomIndex's OWN ordered key space — a path for a
+// tree index — written via Substrate inside Index and scanned by the Accessor
+// family (KeyLookup/PrefixScan/RangeScan over own tables, §9.7). It is distinct
+// from a Projection: equality projection into the штатные tables (proj_ext/
+// proj_usr) is expressed by RETURNING Projections from Index, not Keys.
+type Key string
+
+// Pocket selects which manifest pocket a projected field is read from.
+type Pocket uint8
+
+const (
+	// PocketExt — the ext pocket (always JSON); projected into proj_ext.
+	PocketExt Pocket = iota
+	// PocketUsr — the usr pocket; projected into proj_usr, gated by the
+	// global store_meta.usr_indexing switch (default off).
+	PocketUsr
+)
+
+// ValueKind selects the proj_usr column a usr projection lands in. Ignored
+// for PocketExt (proj_ext stores a JSON scalar as text).
+type ValueKind uint8
+
+const (
+	// KindText — value_text (structural string).
+	KindText ValueKind = iota
+	// KindNumber — value_number (Value parsed as a base-10 integer).
+	KindNumber
+	// KindHash — value_hash; Value is the hex hash of the DECODED value,
+	// computed by the index (opaque bytes are never indexed directly).
+	KindHash
+)
+
+// Projection is one equality row an Indexer emits for the core to write into
+// the штатные tables (proj_ext for PocketExt, proj_usr for PocketUsr, §9.5).
+// The index supplies Field/Value(/Kind); the core stamps the manifest digest
+// and ext_name (= Name()), so an index cannot project under another index's
+// name (Principle 8). proj_* is the core-maintained equality store; an index
+// keeps NO own tables for it. Several Projections per Index call are allowed —
+// the proj_ext PK (digest, ext_name, field) holds multiple fields per index.
+type Projection struct {
+	// Pocket selects the target table (ext → proj_ext, usr → proj_usr).
+	Pocket Pocket
+
+	// Field is the projected field name within the pocket ("nsid", "path",
+	// …) — independent of the index Name (ext_name): Walk(ns) reads
+	// ext_name="namespace", field="nsid".
+	Field string
+
+	// Value is the projected scalar: a JSON scalar as text for ext; for usr,
+	// the text / integer / hex-hash per Kind.
+	Value string
+
+	// Kind selects the proj_usr column for a PocketUsr field; ignored for
+	// PocketExt.
+	Kind ValueKind
+}
+
+// Indexer is the optional write-side capability (ADR-78) — the SINGLE mechanism
+// that populates the index for search (Principle 9): a pure function of the
+// manifest, run by the core inside the index-write transaction on Put. Index
+// (a) RETURNS Projections the core writes into proj_ext/proj_usr — equality
+// search, core-maintained (§9.5); and/or (b) writes the index's OWN tables via
+// store — prefix-trees, counters (§9.7), scanned later by the Accessor family.
+// namespace projects (ext "nsid"); fsindex writes an own path tree. Unindex is
+// symmetric on Delete/Rollback, recomputing from the manifest — the index never
+// touches foreign rows by ArtifactID (Principle 8); the core removes the
+// manifest's proj_* rows by digest. Both sides are idempotent over the manifest
+// (Put/Delete, not conditional) so the backend may replay after crash recovery
+// (§9.10). Index sees the passport {digest, ext(+usr)}, not the content
+// (Principle 6); determinism lets rebuild reproduce an identical index
+// (Corollary 14). Writes through store happen in the same transaction.
+type Indexer interface {
+	Index(ctx context.Context, store Substrate, m domain.Manifest) ([]Projection, error)
+	Unindex(ctx context.Context, store Substrate, m domain.Manifest) error
+}
+
+// KeyLookup, PrefixScan, and RangeScan are the read-side Accessor family
+// (ADR-78/88), implemented selectively: a CustomIndex exposes only the
+// access shapes its key space supports — equality, subtree, range — with
+// no forced stubs (an equality index does not carry a dummy ScanRange).
+// They are narrow read handles used directly, without a projection view
+// (an ingester calls ScanPrefix(dir); namespace calls Lookup(nsid)).
+// Cardinality is many-to-many: a key maps to 0..N artifacts. What that
+// multiplicity MEANS — a collision or a normal bucket — is the consuming
+// view's call (07 Projection), not the accessor's. The backend detects
+// each capability by assertion (if l, ok := ci.(KeyLookup); ok).
+type KeyLookup interface {
+	Lookup(key string) ([]domain.ArtifactID, error)
+}
+
+// PrefixScan walks the children of a prefix (a directory listing /
+// subtree). The callback receives each key and the artifacts under it;
+// returning an error stops the scan.
+type PrefixScan interface {
+	ScanPrefix(prefix string, cb func(Key, []domain.ArtifactID) error) error
+}
+
+// RangeScan walks keys in the half-open ordered range [lo, hi). The
+// callback receives each key and the artifacts under it; returning an
+// error stops the scan.
+type RangeScan interface {
+	ScanRange(lo, hi string, cb func(Key, []domain.ArtifactID) error) error
 }
 
 // Substrate is the backend-agnostic data plane a custom index

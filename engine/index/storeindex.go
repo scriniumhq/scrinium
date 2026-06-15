@@ -93,6 +93,21 @@ type StoreIndex interface {
 	// (empty). Returns blob and toc; pack is excluded.
 	ListByNamespace(ctx context.Context, ns string, cb func(domain.Manifest) error) error
 
+	// QueryByExtField streams the ArtifactIDs whose projected ext field
+	// extName.field equals value, read from proj_ext (read-side of the
+	// Indexer projection, ADR-78/88). It is the lower level for Store.Walk
+	// over a namespace (extName="namespace", field="nsid") and for basic
+	// metadata-search; v1 is equality only (a richer language is M7). Only
+	// visible artifacts surface — handle-less rows (system artifacts, pack
+	// containers) are excluded by construction (artifact_id IS NULL). The
+	// callback may return fs.SkipAll to stop early without an error.
+	QueryByExtField(ctx context.Context, extName, field, value string, cb func(domain.ArtifactID) error) error
+
+	// QueryByUsrField is the same over proj_usr (user-pocket fields). It
+	// returns an empty result (no error) unless the global usr_indexing
+	// switch is on — when off, proj_usr is not maintained.
+	QueryByUsrField(ctx context.Context, field, value string, cb func(domain.ArtifactID) error) error
+
 	// ListOrphanBlobs iterates over blobs with ref_count = 0. Used
 	// by the GC Agent.
 	ListOrphanBlobs(ctx context.Context, cb func(blobRef string) error) error
