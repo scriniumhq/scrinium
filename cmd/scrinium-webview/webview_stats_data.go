@@ -23,7 +23,7 @@ import (
 func buildWebStatsData(
 	reader projection.Reader,
 	cap *domain.StorageInfo,
-	cis []web.StatsCustomIndex,
+	exts []web.StatsExtension,
 	startedAt time.Time,
 	mountSession domain.SessionID,
 	storePath string,
@@ -52,7 +52,7 @@ func buildWebStatsData(
 			TransitCount:   stats.TransitCount,
 			ByStore:        stats.ByStore,
 		},
-		CustomIndexes: cis,
+		Extensions: exts,
 	}
 
 	if cap != nil {

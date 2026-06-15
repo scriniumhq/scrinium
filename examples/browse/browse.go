@@ -113,12 +113,12 @@ func run(storeURI string) error {
 		fmt.Printf("Capacity: unavailable (%v)\n", capErr)
 	}
 
-	// Index custom indexes are an optional capability — CustomIndexes() returns
-	// nil when the index backend exposes none.
-	if cis := asm.CustomIndexes(); len(cis) > 0 {
-		fmt.Println("\nIndex custom indexes:")
-		for _, e := range cis {
-			fmt.Printf("  %s (schema v%d)\n", e.Name, e.SchemaVersion)
+	// Loaded extensions, surfaced as whole units. Extensions() returns
+	// nil when none are loaded.
+	if exts := asm.Extensions(); len(exts) > 0 {
+		fmt.Println("\nExtensions:")
+		for _, d := range exts {
+			fmt.Printf("  %s\n", d.Name)
 		}
 	}
 

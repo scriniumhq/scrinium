@@ -36,22 +36,22 @@ func StatsProvider(c *scrinium.ScriniumClient, startedAt time.Time, capacityTime
 			capPtr = &info
 		}
 
-		cis := make([]stats.CustomIndex, 0)
-		for _, e := range c.CustomIndexes() {
-			cis = append(cis, stats.CustomIndex{Name: e.Name, SchemaVersion: e.SchemaVersion})
+		exts := make([]stats.Extension, 0)
+		for _, d := range c.Extensions() {
+			exts = append(exts, stats.Extension{Name: d.Name})
 		}
 
 		meta := c.Info
 		return stats.Render(c.Projection.View.Stats, stats.DaemonInfo{
-			Source:        string(c.Projection.View.Source),
-			StartedAt:     startedAt,
-			MountSession:  c.MountSession,
-			StorePath:     meta.StoreURI,
-			ReadOnly:      meta.ReadOnly,
-			Editing:       meta.Editing,
-			Namespace:     meta.Namespace,
-			Capacity:      capPtr,
-			CustomIndexes: cis,
+			Source:       string(c.Projection.View.Source),
+			StartedAt:    startedAt,
+			MountSession: c.MountSession,
+			StorePath:    meta.StoreURI,
+			ReadOnly:     meta.ReadOnly,
+			Editing:      meta.Editing,
+			Namespace:    meta.Namespace,
+			Capacity:     capPtr,
+			Extensions:   exts,
 		})
 	}
 }

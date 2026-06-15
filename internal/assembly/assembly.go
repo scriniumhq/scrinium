@@ -7,10 +7,10 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
+	"scrinium.dev/extension"
 	"scrinium.dev/projection"
 )
 
@@ -20,18 +20,12 @@ type Assembly interface {
 	// Store is the high-level CAS store (Put/Get/Delete/Walk + admin).
 	Store() store.Store
 
-	// CustomIndexes lists the index custom indexes registered on the backing
-	// store index, for diagnostics (e.g. a stats page). Empty when the
-	// index backend exposes none. This is the only index detail the
-	// assembly surfaces: the raw StoreIndex (with its mutating
-	// IndexManifest/DeletePacked) stays internal.
-	//
-	// Note: the assembly deliberately exposes no raw Driver either.
-	// Built-in maintenance/background agents receive Driver and
-	// StoreIndex directly from the assembler at construction time
-	// (engine-internal); they do not reach them through this surface,
-	// and neither do hosts.
-	CustomIndexes() []customindex.Info
+	// Extensions lists the extensions loaded into this assembly, as
+	// whole units (their descriptors), for diagnostics (e.g. a stats
+	// page). The assembly surfaces extensions, not the index/store axes
+	// they occupy: the raw StoreIndex (with its mutating
+	// IndexManifest/DeletePacked) and the raw Driver stay internal.
+	Extensions() []extension.Descriptor
 
 	// Projection is the read-side View plus the optional read/write
 	// FSOps facade, bundled. Nil when the assembly was built without a
@@ -112,10 +106,11 @@ type asm struct {
 	info         Info
 	recoveryKit  []byte
 	closeFn      func() error
-	agentDeps    agent.AgentDeps  // Driver/Index/Publisher the assembler hands agents
-	bus          event.EventBus   // the store+agent event channel; Subscribe taps it
-	sched        agent.Scheduler  // built-in scheduler; nil unless WithStandardScheduler
-	cronParser   agent.CronParser // nil unless a cron adapter was enabled
+	agentDeps    agent.AgentDeps        // Driver/Index/Publisher the assembler hands agents
+	bus          event.EventBus         // the store+agent event channel; Subscribe taps it
+	sched        agent.Scheduler        // built-in scheduler; nil unless WithStandardScheduler
+	cronParser   agent.CronParser       // nil unless a cron adapter was enabled
+	extensions   []extension.Descriptor // loaded extensions, for diagnostics
 }
 
 var _ Assembly = (*asm)(nil)
@@ -136,6 +131,7 @@ func New(
 	bus event.EventBus,
 	sched agent.Scheduler,
 	cronParser agent.CronParser,
+	exts []extension.Descriptor,
 ) Assembly {
 	return &asm{
 		store:        st,
@@ -149,6 +145,7 @@ func New(
 		bus:          bus,
 		sched:        sched,
 		cronParser:   cronParser,
+		extensions:   exts,
 	}
 }
 
@@ -157,15 +154,10 @@ func (a *asm) Projection() *projection.Projection { return a.proj }
 func (a *asm) MountSession() domain.SessionID     { return a.mountSession }
 func (a *asm) Info() Info                         { return a.info }
 
-// CustomIndexes reports the index custom indexes when the backend implements
-// customindex.Lister, and nil otherwise. The raw index is held only
-// internally (a.index) and never handed out.
-func (a *asm) CustomIndexes() []customindex.Info {
-	if l, ok := a.index.(customindex.Lister); ok {
-		return l.ListCustomIndexes()
-	}
-	return nil
-}
+// Extensions reports the extensions loaded into this assembly as whole
+// units. The raw index is held only internally (a.index) and never
+// handed out.
+func (a *asm) Extensions() []extension.Descriptor { return a.extensions }
 
 func (a *asm) RecoveryKit() ([]byte, bool) {
 	if len(a.recoveryKit) == 0 {

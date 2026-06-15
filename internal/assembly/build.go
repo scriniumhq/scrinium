@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"scrinium.dev/engine/customindex"
+	"scrinium.dev/extension"
 	"scrinium.dev/extensions/fs"
 
 	"scrinium.dev/domain"
@@ -113,14 +114,18 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		}
 	})
 
-	// 4. fsindex custom index — must precede store open so the first
+	// 4. fs extension — installed as one whole; routes its CustomIndex
+	//    into the StoreIndex. Must precede store open so the first
 	//    IndexManifest dispatches into it (single-store assembly path).
+	//    The same fsidx is handed to the projection below as its metadata
+	//    source. Manual per-axis wiring would be identical (ADR-88 §12).
 	fsidx := fs.NewIndex()
-	if ciHost, ok := idx.(customindex.Host); ok {
-		if err := ciHost.CustomIndexes().Register(ctx, fsidx); err != nil {
-			return nil, fmt.Errorf("scrinium: register fsindex: %w", err)
-		}
+	var loadedExts []extension.Descriptor
+	fsExt := fs.ExtensionFor(fsidx)
+	if err := extension.Use(ctx, indexTarget{idx: idx}, fsExt); err != nil {
+		return nil, fmt.Errorf("scrinium: use fs extension: %w", err)
 	}
+	loadedExts = append(loadedExts, fsExt.Descriptor())
 
 	// 5. StoreConfig + passphrase from the policy.
 	cfg, _ := storeConfigFromPolicy(spec.Policy)
@@ -289,7 +294,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		info.ReadOnly = effProj.ReadOnly
 	}
 
-	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus, sched, aw.cronParser), nil
+	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus, sched, aw.cronParser, loadedExts), nil
 }
 
 // resolvedSchedule is a fully-resolved schedule for one kind: either an
@@ -671,4 +676,19 @@ func expandTilde(p string) string {
 		}
 	}
 	return p
+}
+
+// indexTarget is the extension.Target the assembler uses to route an
+// extension's index-axis part (CustomIndex) into the StoreIndex. A
+// backend that does not implement customindex.Host accepts no custom
+// indexes, so registration is a no-op there (matching the prior
+// best-effort cast).
+type indexTarget struct{ idx index.StoreIndex }
+
+func (t indexTarget) RegisterCustomIndex(ctx context.Context, ci customindex.CustomIndex) error {
+	host, ok := t.idx.(customindex.Host)
+	if !ok {
+		return nil
+	}
+	return host.CustomIndexes().Register(ctx, ci)
 }

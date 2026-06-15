@@ -30,9 +30,9 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
+	"scrinium.dev/extension"
 	"scrinium.dev/internal/assembly"
 	"scrinium.dev/projection"
 )
@@ -132,11 +132,11 @@ func (c *ScriniumClient) Close() error {
 	return c.asm.Close()
 }
 
-// CustomIndexes lists the index custom indexes registered on the backing
-// store index, for diagnostics (e.g. listing them on a stats page).
-// Empty when the index backend exposes none. The raw StoreIndex is
-// intentionally not surfaced — it carries mutating methods.
-func (c *ScriniumClient) CustomIndexes() []customindex.Info { return c.asm.CustomIndexes() }
+// Extensions lists the extensions loaded into this client, as whole
+// units (their descriptors), for diagnostics (e.g. a stats page). The
+// client deals in extensions, not in the index/store axes they occupy;
+// the raw StoreIndex is intentionally never surfaced.
+func (c *ScriniumClient) Extensions() []extension.Descriptor { return c.asm.Extensions() }
 
 // RecoveryKit returns the recovery-kit bytes produced when this client
 // freshly initialised an encrypted store, and true. For a store that

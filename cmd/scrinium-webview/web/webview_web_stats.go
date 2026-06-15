@@ -20,13 +20,13 @@ import (
 // the IsZero/HasX flags on the embedded structs — the daemon
 // passes zero values when a section has no meaningful data.
 type StatsData struct {
-	Daemon        StatsDaemon
-	View          StatsView
-	Storage       StatsStorage
-	HasStorage    bool
-	CustomIndexes []StatsCustomIndex
-	Config        StatsConfig
-	HasConfig     bool
+	Daemon     StatsDaemon
+	View       StatsView
+	Storage    StatsStorage
+	HasStorage bool
+	Extensions []StatsExtension
+	Config     StatsConfig
+	HasConfig  bool
 }
 
 // StatsDaemon mirrors projection.DaemonInfo's daemon-level
@@ -68,10 +68,9 @@ type StatsStorage struct {
 	AvailableBytes string
 }
 
-// StatsCustomIndex is one row of the [custom indexes] section.
-type StatsCustomIndex struct {
-	Name          string
-	SchemaVersion int
+// StatsExtension is one row of the [extensions] section.
+type StatsExtension struct {
+	Name string
 }
 
 // StatsConfig mirrors the daemon's policy switches. Boolean
@@ -244,12 +243,12 @@ const statsPageHTML = `<!DOCTYPE html>
 </table>
 {{end}}
 
-{{if .CustomIndexes}}
-<h2>CustomIndexes</h2>
+{{if .Extensions}}
+<h2>Extensions</h2>
 <table>
   <tbody>
-    {{range .CustomIndexes}}
-    <tr><td class="label mono">{{.Name}}</td><td class="value">v{{.SchemaVersion}}</td></tr>
+    {{range .Extensions}}
+    <tr><td class="label mono">{{.Name}}</td></tr>
     {{end}}
   </tbody>
 </table>
