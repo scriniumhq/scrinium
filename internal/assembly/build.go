@@ -24,6 +24,7 @@ import (
 	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/wrapper"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/projection"
@@ -114,18 +115,33 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		}
 	})
 
-	// 4. fs extension — installed as one whole; routes its CustomIndex
-	//    into the StoreIndex. Must precede store open so the first
-	//    IndexManifest dispatches into it (single-store assembly path).
-	//    The same fsidx is handed to the projection below as its metadata
-	//    source. Manual per-axis wiring would be identical (ADR-88 §12).
+	// 4. Extensions — installed as wholes; each part is applied at its
+	//    construction phase (ADR-88, Principle 12 = same result as a
+	//    one-call Use over a live target). The index axis must precede
+	//    store open so the first IndexManifest dispatches into it; the
+	//    behavior wrapper is applied at open; paired agents join the
+	//    scheduler. fsidx is also handed to the projection below.
 	fsidx := fs.NewIndex()
-	var loadedExts []extension.Descriptor
-	fsExt := fs.ExtensionFor(fsidx)
-	if err := extension.Use(ctx, indexTarget{idx: idx}, fsExt); err != nil {
-		return nil, fmt.Errorf("scrinium: use fs extension: %w", err)
+	exts := []extension.Extension{fs.ExtensionFor(fsidx)}
+	var (
+		loadedExts    []extension.Descriptor
+		wrapFactories []wrapper.Factory
+		extAgents     []extension.Agent
+	)
+	for _, e := range exts {
+		loadedExts = append(loadedExts, e.Descriptor())
+		if ci, ok := e.CustomIndex(); ok {
+			if host, ok := idx.(customindex.Host); ok {
+				if err := host.CustomIndexes().Register(ctx, ci); err != nil {
+					return nil, fmt.Errorf("scrinium: extension %q custom index: %w", e.Descriptor().Name, err)
+				}
+			}
+		}
+		if f, ok := e.Wrapper(); ok {
+			wrapFactories = append(wrapFactories, f)
+		}
+		extAgents = append(extAgents, e.Agents()...)
 	}
-	loadedExts = append(loadedExts, fsExt.Descriptor())
 
 	// 5. StoreConfig + passphrase from the policy.
 	cfg, _ := storeConfigFromPolicy(spec.Policy)
@@ -166,6 +182,23 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		return nil, fmt.Errorf("scrinium: store is locked; check the encryption passphrase")
 	}
 
+	// Behavior axis (Tier 3): wrap the store's data plane with each
+	// extension's decorator, innermost-first, then keep the full Store via
+	// a composite — administrative/maintenance operations pass through to
+	// the underlying store unchanged. The composite is what the client and
+	// the projection read through.
+	if len(wrapFactories) > 0 {
+		data := store.DataStore(st)
+		for _, f := range wrapFactories {
+			d, werr := f.Wrap(data, wrapper.Deps{Publisher: bus})
+			if werr != nil {
+				return nil, fmt.Errorf("scrinium: apply extension wrapper: %w", werr)
+			}
+			data = d
+		}
+		st = wrappedStore{DataStore: data, AdminStore: st}
+	}
+
 	// Agents. Validate configured kinds against the registry (fail fast,
 	// like an unknown driver scheme) and assemble the deps the assembler
 	// hands agents directly: Driver and StoreIndex never leave the
@@ -195,6 +228,33 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	scheds, serr := resolveSchedules(spec, c, aw)
 	if serr != nil {
 		return nil, serr
+	}
+
+	// Paired agents from extensions (фоновый довесок): the kind must be
+	// registered; a declared schedule (interval or cron) joins the set
+	// (replace-by-kind) and activates the scheduler, mirroring config
+	// schedules. Without a schedule the kind is available via
+	// RunMaintenance only.
+	for _, ea := range extAgents {
+		if _, ok := agent.Lookup(ea.Kind); !ok {
+			return nil, fmt.Errorf("scrinium: extension agent %q not registered (blank-import its package, as with drivers)", ea.Kind)
+		}
+		if ea.Schedule == "" {
+			continue
+		}
+		rs := resolvedSchedule{cfg: ea.Config}
+		if d, derr := time.ParseDuration(ea.Schedule); derr == nil {
+			rs.interval = d
+		} else if aw.cronParser == nil {
+			return nil, fmt.Errorf("scrinium: extension agent %q has cron schedule %q but cron is not enabled (cron.Enable())", ea.Kind, ea.Schedule)
+		} else {
+			next, cerr := aw.cronParser(ea.Schedule)
+			if cerr != nil {
+				return nil, fmt.Errorf("scrinium: extension agent %q schedule %q: %w", ea.Kind, ea.Schedule, cerr)
+			}
+			rs.next = next
+		}
+		scheds[ea.Kind] = rs
 	}
 	schedActive := aw.stdSched || len(scheds) > 0
 	if schedActive {
@@ -678,17 +738,12 @@ func expandTilde(p string) string {
 	return p
 }
 
-// indexTarget is the extension.Target the assembler uses to route an
-// extension's index-axis part (CustomIndex) into the StoreIndex. A
-// backend that does not implement customindex.Host accepts no custom
-// indexes, so registration is a no-op there (matching the prior
-// best-effort cast).
-type indexTarget struct{ idx index.StoreIndex }
-
-func (t indexTarget) RegisterCustomIndex(ctx context.Context, ci customindex.CustomIndex) error {
-	host, ok := t.idx.(customindex.Host)
-	if !ok {
-		return nil
-	}
-	return host.CustomIndexes().Register(ctx, ci)
+// wrappedStore presents a full Store whose data plane is decorated by one
+// or more behavior wrappers (Tier 3) while administrative and maintenance
+// operations pass through to the underlying store unchanged. DataStore
+// and AdminStore have disjoint method sets, so embedding both is
+// unambiguous (engine/store/store.go).
+type wrappedStore struct {
+	store.DataStore
+	store.AdminStore
 }
