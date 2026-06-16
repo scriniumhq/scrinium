@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -63,30 +64,32 @@ func TestDialDriver_TildeBare(t *testing.T) {
 	}
 }
 
-// TestDialDriver_FileURI_TildeHostRejected verifies the P1.12
-// removal is honoured: file://~/path used to expand the host slot
-// as a tilde alias. After P1.12 only file:///abs/path is accepted
-// and any other host (including "~" and ".") returns
-// ErrUnsupportedHost.
-func TestDialDriver_FileURI_TildeHostRejected(t *testing.T) {
-	_, err := driver.DialDriver("file://~/scrinium-dial-test-host")
-	if err == nil {
-		t.Fatal("DialDriver(file://~/...): want error, got nil")
+// TestDialDriver_FileURI_TildeHostExpands verifies that the
+// file://~/path host-tilde alias expands to $HOME. The alias is
+// resolved by the shared resolver (scrinium.dev/internal/uri),
+// uniformly with the bare ~/path form.
+func TestDialDriver_FileURI_TildeHostExpands(t *testing.T) {
+	if _, err := os.UserHomeDir(); err != nil {
+		t.Skipf("no home dir: %v", err)
 	}
-	if !strings.Contains(err.Error(), "host") {
-		t.Errorf("error %q does not mention 'host'", err)
+	d, err := driver.DialDriver("file://~/scrinium-dial-test-host")
+	if err != nil {
+		t.Fatalf("DialDriver(file://~/...): %v", err)
+	}
+	if d == nil {
+		t.Fatal("DialDriver(file://~/...): nil driver")
 	}
 }
 
-// TestDialDriver_FileURI_DotHostRejected mirrors the above for the
-// other historical alias.
-func TestDialDriver_FileURI_DotHostRejected(t *testing.T) {
-	_, err := driver.DialDriver("file://./scrinium-dial-test-cwd")
-	if err == nil {
-		t.Fatal("DialDriver(file://./...): want error, got nil")
+// TestDialDriver_FileURI_DotHostExpands mirrors the above for the
+// cwd-relative alias file://./path.
+func TestDialDriver_FileURI_DotHostExpands(t *testing.T) {
+	d, err := driver.DialDriver("file://./scrinium-dial-test-cwd")
+	if err != nil {
+		t.Fatalf("DialDriver(file://./...): %v", err)
 	}
-	if !strings.Contains(err.Error(), "host") {
-		t.Errorf("error %q does not mention 'host'", err)
+	if d == nil {
+		t.Fatal("DialDriver(file://./...): nil driver")
 	}
 }
 
@@ -121,8 +124,9 @@ func TestDialDriver_Empty(t *testing.T) {
 }
 
 // TestDialDriver_FileURI_BadHost rejects file://something/path
-// where something is non-empty. The localfs driver doesn't talk
-// to remote hosts, so accepting this would silently misroute.
+// where something is a real host (not the ~ or . aliases). The
+// localfs driver doesn't talk to remote hosts, so accepting this
+// would silently misroute.
 func TestDialDriver_FileURI_BadHost(t *testing.T) {
 	_, err := driver.DialDriver("file://example.com/store")
 	if err == nil {

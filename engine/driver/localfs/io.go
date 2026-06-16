@@ -14,6 +14,7 @@ import (
 
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/errs"
+	"scrinium.dev/internal/uri"
 )
 
 // Put writes a file atomically. The pattern is:
@@ -187,29 +188,32 @@ func (lf *limitedFile) Read(p []byte) (int, error) { return lf.r.Read(p) }
 func (lf *limitedFile) Close() error               { return lf.c.Close() }
 
 // Open implements direct-URI reads for Native locations.
-// The localfs driver supports  only the "file://" scheme.
+// The localfs driver supports only the "file://" scheme.
 // Other schemes return errs.ErrUnsupportedURIScheme so
 // higher layers can fall through to a different driver or
 // fail with a clear cause.
 //
-// The "file://" path is opened directly by absolute filesystem
-// path, NOT resolved against the driver root. This is intentional:
-// a Native location points outside the managed Store by design.
-func (d *Driver) Open(ctx context.Context, uri string) (io.ReadCloser, error) {
+// The "file://" path is resolved by the shared resolver
+// (scrinium.dev/internal/uri) to an absolute filesystem path —
+// including ~ / . expansion — and opened directly, NOT against
+// the driver root. This is intentional: a Native location points
+// outside the managed Store by design.
+func (d *Driver) Open(ctx context.Context, ref string) (io.ReadCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	u, err := url.Parse(uri)
+	u, err := url.Parse(ref)
 	if err != nil {
 		return nil, fmt.Errorf("localfs: parse URI: %w", err)
 	}
 	if u.Scheme != "file" {
 		return nil, errs.ErrUnsupportedURIScheme
 	}
-	if u.Path == "" {
-		return nil, fmt.Errorf("localfs: empty path in file URI")
+	abs, err := uri.ResolveLocalPath(u)
+	if err != nil {
+		return nil, fmt.Errorf("localfs: resolve %q: %w", ref, err)
 	}
-	return os.Open(u.Path)
+	return os.Open(abs)
 }
 
 // Remove deletes a file. Idempotent: removing a non-existent path

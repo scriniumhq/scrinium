@@ -3,11 +3,10 @@ package driver
 import (
 	"fmt"
 	"net/url"
-	"os"
-	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
+
+	"scrinium.dev/internal/uri"
 )
 
 // Dialer opens a Driver from a parsed URI. Implementations
@@ -77,28 +76,33 @@ func RegisteredSchemes() []string {
 // for ergonomics on the CLI. Requires the file:// dialer
 // to be registered (it is, by importing driver/localfs).
 //
+// Scheme detection and local-path resolution (including ~ / .
+// expansion) live in scrinium.dev/internal/uri — the single
+// resolver shared by every driver, index backend, the
+// assembler, and the daemons.
+//
 // Returned errors:
 //   - empty URI                       → "empty URI"
 //   - URL parse failure               → wrapped url.Parse error
 //   - unregistered scheme             → "scheme X not registered"
 //   - dialer-specific failures        → wrapped from the dialer
-func DialDriver(uri string) (Driver, error) {
-	if uri == "" {
+func DialDriver(rawURI string) (Driver, error) {
+	if rawURI == "" {
 		return nil, fmt.Errorf("driver: empty URI")
 	}
 
 	// Bare paths bypass URL parsing and route through file://.
-	if !looksLikeURI(uri) {
-		path, err := expandPath(uri)
+	if !uri.IsURI(rawURI) {
+		path, err := uri.ResolveLocalURI(rawURI)
 		if err != nil {
 			return nil, fmt.Errorf("driver: %w", err)
 		}
 		return dialBarePath(path)
 	}
 
-	u, err := url.Parse(uri)
+	u, err := url.Parse(rawURI)
 	if err != nil {
-		return nil, fmt.Errorf("driver: parse %q: %w", uri, err)
+		return nil, fmt.Errorf("driver: parse %q: %w", rawURI, err)
 	}
 
 	dialersMu.RLock()
@@ -126,54 +130,4 @@ func dialBarePath(absPath string) (Driver, error) {
 	}
 	u := &url.URL{Scheme: "file", Path: absPath}
 	return d(u)
-}
-
-// looksLikeURI reports whether s starts with what a URI parser
-// would recognise as a scheme: alpha character followed by
-// alphanumerics / "+-." / ":" then "://".
-//
-// Implemented manually rather than calling url.Parse to keep
-// classification independent of parser quirks (url.Parse will
-// happily accept "/path" and report Scheme="", which we want
-// to keep distinct from a true URI without a scheme).
-func looksLikeURI(s string) bool {
-	if len(s) < 4 { // shortest possible: "a://"
-		return false
-	}
-	if !isAlpha(s[0]) {
-		return false
-	}
-	for i := 1; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case isAlpha(c), c >= '0' && c <= '9', c == '+', c == '-', c == '.':
-			continue
-		case c == ':':
-			return strings.HasPrefix(s[i:], "://")
-		default:
-			return false
-		}
-	}
-	return false
-}
-
-func isAlpha(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
-}
-
-// expandPath does ~/ tilde expansion and resolves to an
-// absolute path. Used for bare-path inputs to DialDriver.
-func expandPath(p string) (string, error) {
-	if strings.HasPrefix(p, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("expand ~: %w", err)
-		}
-		p = filepath.Join(home, p[2:])
-	}
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return "", fmt.Errorf("absolute path: %w", err)
-	}
-	return abs, nil
 }

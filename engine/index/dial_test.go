@@ -85,31 +85,34 @@ func TestDialIndex_Empty(t *testing.T) {
 	}
 }
 
-// TestDialIndex_SQLiteRelativeRejected verifies the P1.12
-// removal is honoured for the sqlite scheme: sqlite://./path
-// (and sqlite://~/path) used to expand the host slot. After
-// P1.12 only sqlite:///abs/path is accepted; any other host
-// is rejected with an ErrUnsupportedHost wrap.
-func TestDialIndex_SQLiteRelativeRejected(t *testing.T) {
-	_, err := index.DialIndex(context.Background(), "sqlite://./idx.db")
-	if err == nil {
-		t.Fatal("DialIndex(sqlite://./...): want error, got nil")
+// TestDialIndex_SQLiteRelativeExpands verifies sqlite://./path
+// expands the host-dot alias to the current directory via the
+// shared resolver (scrinium.dev/internal/uri). cwd is moved into
+// a temp dir so the db file is cleaned up with the test.
+func TestDialIndex_SQLiteRelativeExpands(t *testing.T) {
+	t.Chdir(t.TempDir())
+	idx, err := index.DialIndex(context.Background(), "sqlite://./idx.db")
+	if err != nil {
+		t.Fatalf("DialIndex(sqlite://./...): %v", err)
 	}
-	if !strings.Contains(err.Error(), "host") {
-		t.Errorf("error %q does not mention 'host'", err)
+	if idx == nil {
+		t.Fatal("DialIndex(sqlite://./...): nil index")
 	}
+	defer idx.Close()
 }
 
-// TestDialIndex_SQLiteTildeRejected mirrors the above for the
-// tilde alias.
-func TestDialIndex_SQLiteTildeRejected(t *testing.T) {
-	_, err := index.DialIndex(context.Background(), "sqlite://~/idx.db")
-	if err == nil {
-		t.Fatal("DialIndex(sqlite://~/...): want error, got nil")
+// TestDialIndex_SQLiteTildeExpands mirrors the above for the
+// tilde alias; HOME is redirected so the db lands in a temp dir.
+func TestDialIndex_SQLiteTildeExpands(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	idx, err := index.DialIndex(context.Background(), "sqlite://~/idx.db")
+	if err != nil {
+		t.Fatalf("DialIndex(sqlite://~/...): %v", err)
 	}
-	if !strings.Contains(err.Error(), "host") {
-		t.Errorf("error %q does not mention 'host'", err)
+	if idx == nil {
+		t.Fatal("DialIndex(sqlite://~/...): nil index")
 	}
+	defer idx.Close()
 }
 
 // TestDialIndex_SQLiteBadHost rejects sqlite://example.com/db.
