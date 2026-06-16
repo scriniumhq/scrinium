@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
 
@@ -64,7 +64,7 @@ func (v *View) LookupLocations(id domain.ArtifactID) (Locations, bool) {
 // Search scans the View for artifacts matching the query.
 // Substring matching, case-insensitive, against:
 //
-//   - the artifact's by-path placement (covers fsmeta names);
+//   - the artifact's by-path placement (covers vfsmeta names);
 //   - the namespace field;
 //   - an exact ArtifactID match (so users can paste an id and
 //     jump straight to it).
@@ -119,7 +119,7 @@ func (v *View) Search(query string, limit int) []SearchResult {
 }
 
 // makeSearchResult populates a SearchResult from an artifact
-// record. MIME is best-effort from fsmeta; absence falls back
+// record. MIME is best-effort from vfsmeta; absence falls back
 // to empty (the UI is responsible for any custom index-based
 // inference it cares about).
 func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) SearchResult {
@@ -131,7 +131,7 @@ func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) 
 		CreatedAt:   rec.manifest.CreatedAt,
 		MatchReason: reason,
 	}
-	if fs, ok, err := fsmeta.Decode(rec.manifest.Ext); err == nil && ok {
+	if fs, ok, err := vfsmeta.Decode(rec.manifest.Ext); err == nil && ok {
 		r.MIME = fs.MIME
 	}
 	return r

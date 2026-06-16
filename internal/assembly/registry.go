@@ -2,11 +2,13 @@ package assembly
 
 import (
 	"context"
+	"sort"
 	"sync"
 
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/extension"
 )
 
 // CustomIndex factory signatures. Hosts register implementations through
@@ -37,24 +39,33 @@ type (
 	// AgentFactory builds a user background agent bound to the
 	// assembled stack, from its config block.
 	AgentFactory func(a Assembly, config map[string]any) (any, error)
+
+	// ExtensionFactory builds a fresh extension.Extension. The composition
+	// root registers one per built-in/third-party extension (ADR-63); build
+	// instantiates a fresh whole per assembly, so each store gets its own
+	// index handle. The assembler installs and discovers extensions
+	// generically (ADR-88/98) — it special-cases none.
+	ExtensionFactory func() extension.Extension
 )
 
 // registries holds the process-wide custom index tables. A single guard
 // covers all four — registration is a startup-time, low-contention
 // operation.
 type registries struct {
-	mu      sync.RWMutex
-	drivers map[string]DriverFactory
-	indexes map[string]IndexFactory
-	stages  map[string]PipelineStageFactory
-	agents  map[string]AgentFactory
+	mu         sync.RWMutex
+	drivers    map[string]DriverFactory
+	indexes    map[string]IndexFactory
+	stages     map[string]PipelineStageFactory
+	agents     map[string]AgentFactory
+	extensions map[string]ExtensionFactory
 }
 
 var reg = &registries{
-	drivers: map[string]DriverFactory{},
-	indexes: map[string]IndexFactory{},
-	stages:  map[string]PipelineStageFactory{},
-	agents:  map[string]AgentFactory{},
+	drivers:    map[string]DriverFactory{},
+	indexes:    map[string]IndexFactory{},
+	stages:     map[string]PipelineStageFactory{},
+	agents:     map[string]AgentFactory{},
+	extensions: map[string]ExtensionFactory{},
 }
 
 // RegisterDriver registers a custom index driver under a URI scheme
@@ -85,6 +96,17 @@ func RegisterPipelineStage(kind string, f PipelineStageFactory) {
 func RegisterAgent(kind string, f AgentFactory) {
 	mustRegister(kind, f == nil, "agent", func() {
 		reg.agents[kind] = f
+	})
+}
+
+// RegisterExtension registers an extension factory under its stable name
+// (the Descriptor name, e.g. "fs"). The composition root calls this —
+// typically from an init() — so the assembler stays extension-agnostic:
+// build pulls the registered set, installs each as a whole (ADR-88), and
+// discovers its index/view/wrapper/agent parts by assertion (ADR-98).
+func RegisterExtension(name string, f ExtensionFactory) {
+	mustRegister(name, f == nil, "extension", func() {
+		reg.extensions[name] = f
 	})
 }
 
@@ -126,4 +148,22 @@ func (r *registries) agent(kind string) (AgentFactory, bool) {
 	defer r.mu.RUnlock()
 	f, ok := r.agents[kind]
 	return f, ok
+}
+
+// extensionList instantiates every registered extension, in stable name
+// order, as fresh wholes for one assembly. build installs them through the
+// generic extension loop; no extension is special-cased in the assembler.
+func (r *registries) extensionList() []extension.Extension {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	names := make([]string, 0, len(r.extensions))
+	for name := range r.extensions {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]extension.Extension, 0, len(names))
+	for _, name := range names {
+		out = append(out, r.extensions[name]())
+	}
+	return out
 }

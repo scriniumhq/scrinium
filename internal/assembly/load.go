@@ -9,35 +9,37 @@ import (
 )
 
 // LoadYAML parses a YAML config and opens the described store,
-// returning a assembled stack. The store must already exist.
-func LoadYAML(ctx context.Context, data []byte) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalYAML, modeOpen)
+// returning a assembled stack. The store must already exist. opts are
+// the same build-time options Build accepts (e.g. WithExtension) and are
+// applied on top of the parsed config.
+func LoadYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
+	return loadAndBuild(ctx, data, unmarshalYAML, modeOpen, opts)
 }
 
 // LoadInitYAML parses a YAML config and creates a fresh store. Errors
 // if the store already exists.
-func LoadInitYAML(ctx context.Context, data []byte) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalYAML, modeInit)
+func LoadInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
+	return loadAndBuild(ctx, data, unmarshalYAML, modeInit, opts)
 }
 
 // LoadOrInitYAML opens the described store, creating it if absent.
-func LoadOrInitYAML(ctx context.Context, data []byte) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalYAML, modeOpenOrInit)
+func LoadOrInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
+	return loadAndBuild(ctx, data, unmarshalYAML, modeOpenOrInit, opts)
 }
 
 // LoadJSON parses a JSON config and opens the described store.
-func LoadJSON(ctx context.Context, data []byte) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalJSON, modeOpen)
+func LoadJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
+	return loadAndBuild(ctx, data, unmarshalJSON, modeOpen, opts)
 }
 
 // LoadInitJSON parses a JSON config and creates a fresh store.
-func LoadInitJSON(ctx context.Context, data []byte) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalJSON, modeInit)
+func LoadInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
+	return loadAndBuild(ctx, data, unmarshalJSON, modeInit, opts)
 }
 
 // LoadOrInitJSON opens the described store, creating it if absent.
-func LoadOrInitJSON(ctx context.Context, data []byte) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalJSON, modeOpenOrInit)
+func LoadOrInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
+	return loadAndBuild(ctx, data, unmarshalJSON, modeOpenOrInit, opts)
 }
 
 // Explain parses a config, resolves policy references, applies
@@ -81,15 +83,17 @@ func detectUnmarshal(data []byte) unmarshalFunc {
 	return unmarshalYAML
 }
 
-func loadAndBuild(ctx context.Context, data []byte, um unmarshalFunc, mode buildMode) (Assembly, error) {
+func loadAndBuild(ctx context.Context, data []byte, um unmarshalFunc, mode buildMode, opts []BuildOption) (Assembly, error) {
 	c, err := parse(data, um)
 	if err != nil {
 		return nil, err
 	}
 	// Load* is "parse, then Build": the byte-oriented entry points are
 	// thin wrappers over the programmatic one. modeToPublic keeps the
-	// internal enum out of Build's public signature.
-	return Build(ctx, *c, WithMode(modeToPublic(mode)))
+	// internal enum out of Build's public signature. The mode is forced
+	// here; caller opts (WithExtension, WithEventHandler, …) follow, so a
+	// caller cannot override the mode the Load* variant chose.
+	return Build(ctx, *c, append([]BuildOption{WithMode(modeToPublic(mode))}, opts...)...)
 }
 
 func modeToPublic(m buildMode) Mode {

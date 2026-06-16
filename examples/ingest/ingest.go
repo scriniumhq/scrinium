@@ -1,5 +1,5 @@
 // ingest scans a directory tree and stores every regular file as an
-// artifact, with its relative path attached as fsmeta so the
+// artifact, with its relative path attached as vfsmeta so the
 // projection View renders it under by-path/.
 //
 // Demonstrates:
@@ -7,7 +7,7 @@
 //   - scrinium.LoadOrInitYAML to assemble (creating on first run) a
 //     store from an inline config.
 //   - filepath.WalkDir for batch traversal.
-//   - Attaching fsmeta metadata so artifacts have a virtual path.
+//   - Attaching vfsmeta metadata so artifacts have a virtual path.
 //   - SessionID + RollbackSession idiom for atomic-ish batches: a
 //     failure mid-ingest leaves a known set of artifacts to roll back,
 //     not orphans scattered across timestamps.
@@ -36,7 +36,7 @@ import (
 	_ "scrinium.dev/engine/index/sqlite"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 )
 
 func main() {
@@ -100,7 +100,7 @@ func run(srcDir, storeURI, namespace string) error {
 		if err != nil {
 			return err
 		}
-		// Normalise to forward slashes (fsmeta's contract) and guard
+		// Normalise to forward slashes (vfsmeta's contract) and guard
 		// against accidental ".." parents.
 		virtualPath := filepath.ToSlash(rel)
 		if strings.HasPrefix(virtualPath, "../") || strings.Contains(virtualPath, "/../") {
@@ -124,14 +124,14 @@ func run(srcDir, storeURI, namespace string) error {
 
 		// Attach virtual-path metadata so the View can render the
 		// artifact under by-path/.
-		md, err := fsmeta.Encode(fsmeta.FileSystem{
-			Kind:    fsmeta.Marker,
+		md, err := vfsmeta.Encode(vfsmeta.FileSystem{
+			Kind:    vfsmeta.Marker,
 			Path:    virtualPath,
 			Mode:    uint32(info.Mode().Perm()),
 			ModTime: info.ModTime(),
 		})
 		if err != nil {
-			return fmt.Errorf("encode fsmeta: %w", err)
+			return fmt.Errorf("encode vfsmeta: %w", err)
 		}
 
 		id, err := asm.Store.Put(ctx,

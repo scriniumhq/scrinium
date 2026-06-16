@@ -43,8 +43,8 @@ type viewOptions struct {
 	// metadataSource is an optional bulk source of manifest
 	// metadata used by backfill to skip per-manifest
 	// Source.Get round-trips. Set via WithMetadataSource or
-	// WithFSIndex (the latter is a typed convenience for the
-	// common engine/index/fsindex case).
+	// WithFSPathIndex (the latter is a typed convenience for the
+	// common engine/index/fspathindex case).
 	metadataSource source.Metadata
 }
 
@@ -58,15 +58,15 @@ func WithMetadataSource(ms source.Metadata) Option {
 	return func(o *viewOptions) { o.metadataSource = ms }
 }
 
-// WithFSIndex is a typed convenience for the engine/index/fsindex
-// case: pass the registered *fs.CustomIndex and it doubles as
+// WithFSPathIndex is a typed convenience for the engine/index/fsindex
+// case: pass the registered *fspath.CustomIndex and it doubles as
 // a MetadataSource. Equivalent to WithMetadataSource(fsidx).
 //
 // Implemented at the package level via an interface to avoid
-// taking a hard dependency on engine/index/fsindex from
-// projection — fsindex imports projection's fsmeta, so a back-
+// taking a hard dependency on engine/index/fspathindex from
+// projection — fspathindex imports projection's vfsmeta, so a back-
 // edge would cycle.
-func WithFSIndex(fsidx source.Metadata) Option {
+func WithFSPathIndex(fsidx source.Metadata) Option {
 	return WithMetadataSource(fsidx)
 }
 

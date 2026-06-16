@@ -6,7 +6,7 @@ import (
 	"net/url"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/internal/uriresolve"
+	"scrinium.dev/internal/uri"
 )
 
 // init registers the file:// scheme with the driver registry
@@ -17,22 +17,23 @@ func init() {
 }
 
 // openFileURI builds a localfs Driver from a parsed file://
-// URI. The only accepted form is:
+// URI. Accepted forms (resolved by scrinium.dev/internal/uri,
+// the resolver shared with sqlite:// and the assembler):
 //
 //   - file:///abs/path             canonical absolute path
+//   - file://~/rel                 ~  → $HOME
+//   - file://./rel                 .  → current directory
 //
-// Earlier revisions accepted file://~/path and file://./path as
-// non-canonical aliases. Both abused the URI host slot to carry a
-// relative-path prefix and were removed in P1.12. Use bare paths
-// (which DialDriver routes through home-directory expansion) for
-// relative locations.
+// Any other host (file://example.com/path) is rejected. The
+// ~ and . aliases are resolved uniformly across every URI
+// consumer, so file://~/x and the bare path ~/x mean the same.
 func openFileURI(u *url.URL) (driver.Driver, error) {
-	abs, err := uriresolve.ResolveLocalPath(u)
+	abs, err := uri.ResolveLocalPath(u)
 	if err != nil {
 		switch {
-		case errors.Is(err, uriresolve.ErrUnsupportedHost):
-			return nil, fmt.Errorf("localfs: file:// host %q not supported (use file:///path)", u.Host)
-		case errors.Is(err, uriresolve.ErrEmptyPath):
+		case errors.Is(err, uri.ErrUnsupportedHost):
+			return nil, fmt.Errorf("localfs: file:// host %q not supported (file:///abs, file://~/rel, file://./rel)", u.Host)
+		case errors.Is(err, uri.ErrEmptyPath):
 			return nil, fmt.Errorf("localfs: file:// URI has empty path")
 		default:
 			return nil, fmt.Errorf("localfs: %w", err)

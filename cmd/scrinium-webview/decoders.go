@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 )
 
-// fsmetaDecoder renders Manifest.Metadata payloads that match
-// the scrinium.fs/v1 schema (the domain/fsmeta marker).
+// vfsmetaDecoder renders Manifest.Metadata payloads that match
+// the scrinium.fs/v1 schema (the domain/vfsmeta marker).
 // Registered with the web Handler at daemon startup so the
 // artifact details page surfaces filesystem metadata as a
 // nice table rather than raw JSON.
@@ -19,24 +19,24 @@ import (
 // Living in the cmd package, not in web/, is deliberate: web
 // stays schema-agnostic; hosts wire whichever decoders they
 // understand.
-type fsmetaDecoder struct{}
+type vfsmetaDecoder struct{}
 
-func (fsmetaDecoder) Marker() string { return fsmeta.Marker }
+func (vfsmetaDecoder) Marker() string { return vfsmeta.Marker }
 
-func (fsmetaDecoder) Render(raw json.RawMessage) (template.HTML, error) {
-	fs, ok, err := fsmeta.Decode(raw)
+func (vfsmetaDecoder) Render(raw json.RawMessage) (template.HTML, error) {
+	fs, ok, err := vfsmeta.Decode(raw)
 	if err != nil {
-		return "", fmt.Errorf("fsmeta.Decode: %w", err)
+		return "", fmt.Errorf("vfsmeta.Decode: %w", err)
 	}
 	if !ok {
 		// Marker matched at the dispatch site but Decode says
 		// no — likely a future v2 we don't understand. Let the
 		// caller fall through to JSON view.
-		return "", fmt.Errorf("fsmeta: payload not recognised by v1 decoder")
+		return "", fmt.Errorf("vfsmeta: payload not recognised by v1 decoder")
 	}
 
 	var b strings.Builder
-	b.WriteString(`<table class="schema-fsmeta"><tbody>`)
+	b.WriteString(`<table class="schema-vfsmeta"><tbody>`)
 	row(&b, "Path", template.HTMLEscapeString(fs.Path), true)
 	row(&b, "Mode", fmt.Sprintf("%#o", fs.Mode), true)
 	row(&b, "UID", fmt.Sprintf("%d", fs.UID), false)

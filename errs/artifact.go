@@ -54,7 +54,7 @@ var ErrSessionIDTooLong = errors.New("scrinium: session ID too long")
 var ErrEmptySessionID = errors.New("scrinium: empty session ID")
 
 // ErrExtTooLarge — Artifact.Ext > MaxExtSize (64 KB). Ext is the
-// engine-readable extension block (fsmeta and friends).
+// engine-readable extension block (vfsmeta and friends).
 var ErrExtTooLarge = errors.New("scrinium: ext metadata too large")
 
 // ErrUsrTooLarge — Artifact.Usr > MaxUsrSize (64 KB). Usr is the

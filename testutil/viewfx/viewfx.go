@@ -18,6 +18,7 @@ import (
 	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/vfsmeta"
 )
 
 // Stack wires an in-memory FakeSource into a built Projection (View +
@@ -41,9 +42,10 @@ func Stack(t testing.TB, manifests ...domain.Manifest) (*projection.Projection, 
 	}
 
 	proj, err := projection.Build(t.Context(), src, nil, projection.Config{
-		Namespace:  "files",
-		Editing:    "on",
-		ScratchDir: t.TempDir(),
+		Namespace:    "files",
+		Editing:      "on",
+		ScratchDir:   t.TempDir(),
+		PathResolver: vfsmeta.Resolver,
 	})
 	if err != nil {
 		t.Fatalf("viewfx.Stack: Build: %v", err)

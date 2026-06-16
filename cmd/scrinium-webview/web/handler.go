@@ -43,7 +43,7 @@ type BackingFS interface {
 	// don't have a path to OpenFile against.
 	//
 	// Returns the read handle, the artifact's display name
-	// (typically the fsmeta path's basename, for
+	// (typically the vfsmeta path's basename, for
 	// Content-Disposition), and a best-effort MIME type.
 	// (nil, _, _, err) when the artifact doesn't exist or
 	// can't be opened.

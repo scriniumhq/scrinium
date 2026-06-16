@@ -17,6 +17,13 @@ type Config struct {
 	// orphaned). Empty = by-path.
 	RootView string
 
+	// PathResolver extracts the by-path key from a manifest. The
+	// composition root supplies it from the view-providing extension
+	// (fspath) via its ViewProvider capability (ADR-98); the projection
+	// no longer hardcodes a metadata schema. nil ⇒ the by-path tree is
+	// fallback-only (empty under FallbackOrphaned).
+	PathResolver func(m domain.Manifest) (path string, ok bool)
+
 	// ByPathFallback controls what the by-path tree does with
 	// manifests that carry no path: "orphaned" or "synthetic".
 	ByPathFallback string

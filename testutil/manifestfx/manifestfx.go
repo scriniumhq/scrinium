@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 )
 
 // syntheticDigest derives a stable, valid-shaped ManifestDigest from an
@@ -120,21 +120,21 @@ func PhysAddr(path string) domain.PhysicalAddress {
 	}
 }
 
-// ManifestWithFsmetaPath builds a Blob manifest tagged with an fsmeta
+// ManifestWithVfsmetaPath builds a Blob manifest tagged with an vfsmeta
 // virtual path — the common fixture for projection and surface tests
 // that need an artifact placed at a known path in the by-path tree.
-func ManifestWithFsmetaPath(id, path string) domain.Manifest {
+func ManifestWithVfsmetaPath(id, path string) domain.Manifest {
 	m := Blob(id, strings.Repeat("b", 64))
-	if err := AddFsmetaPath(&m, path); err != nil {
-		panic("manifestfx.ManifestWithFsmetaPath: " + err.Error())
+	if err := AddVfsmetaPath(&m, path); err != nil {
+		panic("manifestfx.ManifestWithVfsmetaPath: " + err.Error())
 	}
 	return m
 }
 
-// AddFsmetaPath sets the manifest's Ext block to an fsmeta record
+// AddVfsmetaPath sets the manifest's Ext block to an fsmeta record
 // carrying path. Overwrites any existing Ext.
-func AddFsmetaPath(m *domain.Manifest, path string) error {
-	raw, err := fsmeta.Encode(fsmeta.FileSystem{Path: path})
+func AddVfsmetaPath(m *domain.Manifest, path string) error {
+	raw, err := vfsmeta.Encode(vfsmeta.FileSystem{Path: path})
 	if err != nil {
 		return err
 	}

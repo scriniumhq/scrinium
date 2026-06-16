@@ -107,7 +107,7 @@ func (v *View) allTrees() []map[string]*viewNode {
 //     (which keeps full manifests in memory anyway, so Get is
 //     cheap) and for backfills small enough that latency
 //     doesn't matter. Daemons with large stores configure
-//     WithMetadataSource (or WithFSIndex) to take the fast path.
+//     WithMetadataSource (or WithFSPathIndex) to take the fast path.
 func (v *View) backfill(ctx context.Context) error {
 	cb := func(m domain.Manifest) error {
 		if !v.passesFilter(m) {
@@ -149,7 +149,7 @@ func (v *View) populateExt(ctx context.Context, m *domain.Manifest) {
 	// Slow path: round-trip Source.Get for the full manifest.
 	// Walk-style sources (store.Store-backed) usually return a
 	// stripped manifest from the index — Ext, layout, inline
-	// blob, etc. are absent. Resolvers like fsmeta need Ext to
+	// blob, etc. are absent. Resolvers like vfsmeta need Ext to
 	// produce a path.
 	//
 	// FakeSource and similar in-memory test stubs already return

@@ -4,7 +4,7 @@
 // configurable Pipeline, places them on a backend through a Driver, and
 // keeps accounting in a StoreIndex. It operates on cryptographic
 // identifiers (ContentHash, BlobRef, ArtifactID). The two metadata blocks
-// (Ext for engine custom indexes like fsmeta, Usr for opaque host data) are
+// (Ext for engine custom indexes like vfsmeta, Usr for opaque host data) are
 // passed through but never interpreted.
 //
 // # Contract

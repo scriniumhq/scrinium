@@ -1,4 +1,4 @@
-package fs
+package fspath
 
 import (
 	"scrinium.dev/engine/customindex"
@@ -7,10 +7,10 @@ import (
 )
 
 // NewExtension returns the fs extension as one whole, backed by a fresh
-// fsindex CustomIndex. Equivalent to ExtensionFor(NewIndex()).
+// fspathindex CustomIndex. Equivalent to ExtensionFor(NewIndex()).
 func NewExtension() extension.Extension { return ExtensionFor(NewIndex()) }
 
-// ExtensionFor wraps an existing fsindex as an extension.Extension, so
+// ExtensionFor wraps an existing fspathindex as an extension.Extension, so
 // the same CustomIndex instance can be both installed and handed to the
 // projection (which consults it as a metadata source).
 func ExtensionFor(ci *CustomIndex) extension.Extension { return fsExtension{ci: ci} }

@@ -7,7 +7,7 @@ import (
 	"net/url"
 
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/uriresolve"
+	"scrinium.dev/internal/uri"
 )
 
 // init registers the sqlite:// scheme with the index registry.
@@ -17,18 +17,16 @@ func init() {
 }
 
 // openSQLiteURI builds a sqlite Index from a parsed URI.
-// Forms accepted:
+// Forms accepted (path resolution shared with file:// and the
+// assembler via scrinium.dev/internal/uri):
 //
 //   - sqlite:///abs/path/to.db        canonical absolute
+//   - sqlite://~/rel/to.db            ~ → $HOME
+//   - sqlite://./rel/to.db            . → current directory
 //   - sqlite://:memory:               in-memory database
 //
 // The :memory: form is special-cased so tests don't have to
 // resolve a path that doesn't exist.
-//
-// Earlier revisions accepted sqlite://~/path and sqlite://./path
-// as non-canonical aliases. Both abused the URI host slot to carry
-// a relative-path prefix and were removed in P1.12 (mirrors the
-// file:// scheme's cleanup for the same reasons).
 //
 // Query parameters: not currently honoured. SQLite tunables
 // (busy_timeout, journal_mode, synchronous) use NewStore's
@@ -45,12 +43,12 @@ func openSQLiteURI(ctx context.Context, u *url.URL, opts ...index.IndexOption) (
 		return NewStore(ctx, ":memory:", opts...)
 	}
 
-	abs, err := uriresolve.ResolveLocalPath(u)
+	abs, err := uri.ResolveLocalPath(u)
 	if err != nil {
 		switch {
-		case errors.Is(err, uriresolve.ErrUnsupportedHost):
-			return nil, fmt.Errorf("sqlite: sqlite:// host %q not supported (use sqlite:///path)", u.Host)
-		case errors.Is(err, uriresolve.ErrEmptyPath):
+		case errors.Is(err, uri.ErrUnsupportedHost):
+			return nil, fmt.Errorf("sqlite: sqlite:// host %q not supported (sqlite:///abs, sqlite://~/rel)", u.Host)
+		case errors.Is(err, uri.ErrEmptyPath):
 			return nil, fmt.Errorf("sqlite: sqlite:// URI has empty path")
 		default:
 			return nil, fmt.Errorf("sqlite: %w", err)

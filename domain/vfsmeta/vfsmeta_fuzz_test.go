@@ -1,14 +1,14 @@
-package fsmeta_test
+package vfsmeta_test
 
 import (
 	"bytes"
 	"encoding/json"
 	"testing"
 
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 )
 
-// FuzzDecode hardens the fsmeta metadata decoder against arbitrary
+// FuzzDecode hardens the vfsmeta metadata decoder against arbitrary
 // manifest-Ext bytes. Contract (TESTING.md category 1):
 //   - Decode never panics on any input;
 //   - anything it accepts (ok==true, no error) re-encodes and
@@ -18,7 +18,7 @@ import (
 // both fine — the decoder is a probe, not a validator of the whole
 // universe of JSON.
 func FuzzDecode(f *testing.F) {
-	if raw, err := fsmeta.Encode(fsmeta.FileSystem{
+	if raw, err := vfsmeta.Encode(vfsmeta.FileSystem{
 		Path: "photos/2024/01/sunrise.jpg",
 		MIME: "image/jpeg",
 	}); err == nil {
@@ -33,20 +33,20 @@ func FuzzDecode(f *testing.F) {
 	f.Add([]byte(`not json at all`))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		fs, ok, err := fsmeta.Decode(json.RawMessage(data))
+		fs, ok, err := vfsmeta.Decode(json.RawMessage(data))
 		if err != nil || !ok {
 			return // rejected or foreign schema — both acceptable
 		}
 		// Accepted payloads must round-trip to stable canonical bytes.
-		raw1, err := fsmeta.Encode(fs)
+		raw1, err := vfsmeta.Encode(fs)
 		if err != nil {
 			t.Fatalf("re-encode after successful Decode: %v", err)
 		}
-		fs2, ok2, err2 := fsmeta.Decode(raw1)
+		fs2, ok2, err2 := vfsmeta.Decode(raw1)
 		if err2 != nil || !ok2 {
 			t.Fatalf("re-decode of own output failed: ok=%v err=%v", ok2, err2)
 		}
-		raw2, err := fsmeta.Encode(fs2)
+		raw2, err := vfsmeta.Encode(fs2)
 		if err != nil {
 			t.Fatalf("re-encode (round 2): %v", err)
 		}

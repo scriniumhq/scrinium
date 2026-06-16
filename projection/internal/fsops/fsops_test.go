@@ -11,7 +11,7 @@ import (
 	"scrinium.dev/testutil/manifestfx"
 	"scrinium.dev/testutil/projectionfx"
 
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
 
@@ -42,11 +42,11 @@ func TestNewFSOps_DefaultsApplied(t *testing.T) {
 
 func TestStat_FileInRootView(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"photos/img.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -65,11 +65,11 @@ func TestStat_FileInRootView(t *testing.T) {
 
 func TestStat_VirtualDirectory(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"photos/2024/img.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -89,7 +89,7 @@ func TestStat_VirtualDirectory(t *testing.T) {
 func TestStat_NotFound(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -100,13 +100,13 @@ func TestStat_NotFound(t *testing.T) {
 }
 
 func TestStat_AppliesDefaultMode(t *testing.T) {
-	// Artifact with fsmeta.Mode = 0 should get the FSOps default.
+	// Artifact with vfsmeta.Mode = 0 should get the FSOps default.
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"a.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v,
@@ -123,11 +123,11 @@ func TestStat_AppliesDefaultMode(t *testing.T) {
 
 func TestStat_AppliesDefaultUIDGID(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"a.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v,
@@ -146,11 +146,11 @@ func TestStat_RoutesViaRootView_ByArtifact(t *testing.T) {
 	// When RootView is by-artifact, Stat takes paths in the
 	// by-artifact tree shape directly.
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"photos/img.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithPathResolver(vfsmeta.Resolver),
 		vw.WithRootView(vw.RootByArtifact))
 	defer v.Close()
 
@@ -171,13 +171,13 @@ func TestStat_RoutesViaRootView_ByArtifact(t *testing.T) {
 
 func TestListdir_ListsFiles(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aaaa1111",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aaaa1111",
 		"photos/a.jpg"), nil)
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-bbbb2222",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-bbbb2222",
 		"photos/b.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -199,11 +199,11 @@ func TestListdir_ListsFiles(t *testing.T) {
 
 func TestListdir_OnFile(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"a.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -220,7 +220,7 @@ func TestListdir_OnFile(t *testing.T) {
 func TestListdir_NotFound(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -238,11 +238,11 @@ func TestListdir_NotFound(t *testing.T) {
 
 func TestOpen_ReadOnly(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"hello.txt"), []byte("hello"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -267,11 +267,11 @@ func TestOpen_WriteModesRejectedWithoutPolicy(t *testing.T) {
 	// refused with ErrEditingDisabled. AllowAppend, AllowSetattr,
 	// AllowTruncate are all required by their own paths.
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("x"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -290,11 +290,11 @@ func TestOpen_WriteModesRejectedWithoutPolicy(t *testing.T) {
 
 func TestOpen_OnDirectory(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"d/file.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -308,7 +308,7 @@ func TestOpen_OnDirectory(t *testing.T) {
 func TestOpen_NotFound(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -323,11 +323,11 @@ func TestOpen_NotFound(t *testing.T) {
 
 func TestReadOnlyFile_WriteAtRefused(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("hello"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -343,11 +343,11 @@ func TestReadOnlyFile_WriteAtRefused(t *testing.T) {
 
 func TestReadOnlyFile_TruncateRefused(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("hello"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -362,11 +362,11 @@ func TestReadOnlyFile_TruncateRefused(t *testing.T) {
 
 func TestReadOnlyFile_ReadAtRandomAccess(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd",
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd",
 		"a.txt"), []byte("0123456789"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v)

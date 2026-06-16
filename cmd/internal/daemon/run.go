@@ -10,6 +10,7 @@ import (
 	"time"
 
 	scrinium "scrinium.dev"
+	"scrinium.dev/x/fspath"
 )
 
 // Command is a subcommand handler. It receives the args after the
@@ -66,7 +67,10 @@ func Load(name, configPath string, requireProjection bool) (*scrinium.ScriniumCl
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
-	asm, err := scrinium.LoadOrInitYAML(ctx, data)
+	// All three daemons (fuse/webdav/webview) serve the filesystem view,
+	// so they all need the by-path extension. Enabled here, in the shared
+	// loader, rather than per-daemon (ADR-98 — composition-root opt-in).
+	asm, err := scrinium.LoadOrInitYAML(ctx, data, scrinium.WithExtension(fspath.NewExtension()))
 	if err != nil {
 		cancel()
 		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)

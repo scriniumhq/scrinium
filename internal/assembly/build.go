@@ -14,12 +14,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"scrinium.dev/engine/customindex"
-	"scrinium.dev/extension"
-	"scrinium.dev/x/fs"
-
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
@@ -27,6 +24,7 @@ import (
 	"scrinium.dev/engine/wrapper"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
+	"scrinium.dev/extension"
 	"scrinium.dev/projection"
 )
 
@@ -55,6 +53,9 @@ type agentWiring struct {
 	// applied to the scheduler during assembly (§9.7). Last-wins per kind.
 	schedules    map[string]string
 	agentConfigs map[string]any
+	// extensions are the per-build extensions from WithExtension, installed
+	// alongside the process-wide registry set.
+	extensions []extension.Extension
 }
 
 // build turns a validated, defaulted Config into an assembled stack. It
@@ -120,20 +121,39 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	//    one-call Use over a live target). The index axis must precede
 	//    store open so the first IndexManifest dispatches into it; the
 	//    behavior wrapper is applied at open; paired agents join the
-	//    scheduler. fsidx is also handed to the projection below.
-	fsidx := fs.NewIndex()
-	exts := []extension.Extension{fs.ExtensionFor(fsidx)}
+	//    scheduler. The set comes from the registry (registered at the
+	//    composition root, ADR-63/98); the assembler special-cases no
+	//    extension — the by-path projection seam below is taken from
+	//    whichever extension provides that view.
+	//
+	// Two sources, installed identically below: the process-wide registry
+	// (RegisterExtension — e.g. third-party blank-import) and the per-build
+	// WithExtension options. A duplicate view Root across them is rejected
+	// by the install loop, so double-installing one extension is caught.
+	exts := append(reg.extensionList(), aw.extensions...)
 	var (
 		loadedExts    []extension.Descriptor
 		wrapFactories []wrapper.Factory
 		extAgents     []extension.Agent
 	)
+	// View contributions discovered across installed extensions (ADR-98);
+	// the composition root unions them with the native views and feeds the
+	// projection below. Root is unique per view.
+	providedViews := map[string]customindex.ProvidedView{}
 	for _, e := range exts {
 		loadedExts = append(loadedExts, e.Descriptor())
 		if ci, ok := e.CustomIndex(); ok {
 			if host, ok := idx.(customindex.Host); ok {
 				if err := host.CustomIndexes().Register(ctx, ci); err != nil {
 					return nil, fmt.Errorf("scrinium: extension %q custom index: %w", e.Descriptor().Name, err)
+				}
+			}
+			if vp, ok := ci.(customindex.ViewProvider); ok {
+				for _, pv := range vp.ProvidedViews() {
+					if _, dup := providedViews[pv.Root]; dup {
+						return nil, fmt.Errorf("scrinium: view %q provided by more than one extension", pv.Root)
+					}
+					providedViews[pv.Root] = pv
 				}
 			}
 		}
@@ -323,7 +343,17 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		if cfgErr != nil {
 			return nil, fmt.Errorf("scrinium: %w", cfgErr)
 		}
-		p, buildErr := projection.Build(ctx, st, fsidx, pcfg)
+		// The by-path view's seam comes entirely from the view-providing
+		// extension (ADR-98): both the resolver and the bulk metadata
+		// source. The assembler holds no direct index handle.
+		var metaSrc projection.MetadataIndex
+		if pv, ok := providedViews["by-path"]; ok {
+			pcfg.PathResolver = pv.Resolve
+			if pv.Metadata != nil {
+				metaSrc = pv.Metadata
+			}
+		}
+		p, buildErr := projection.Build(ctx, st, metaSrc, pcfg)
 		if buildErr != nil {
 			return nil, fmt.Errorf("scrinium: %w", buildErr)
 		}

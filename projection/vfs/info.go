@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	fso "scrinium.dev/projection/internal/fsops"
 	"scrinium.dev/projection/internal/view"
 )
@@ -29,14 +29,14 @@ func (p projectionFileInfo) Sys() any           { return nil }
 // type-assert this method to discover info-link targets.
 func (p projectionFileInfo) ArtifactID() domain.ArtifactID { return p.fi.ArtifactID }
 
-// MIME surfaces the fsmeta-recorded MIME type. Surfaces use
+// MIME surfaces the vfsmeta-recorded MIME type. Surfaces use
 // it to decide whether to advertise an inline [view] link for
 // the row.
 func (p projectionFileInfo) MIME() string { return p.fi.MIME }
 
 // projectionNodeInfo wraps a node.Node as os.FileInfo
 // for the service-tree side. POSIX attributes are best-effort:
-// the service trees do not run through FSOps so fsmeta is not
+// the service trees do not run through FSOps so vfsmeta is not
 // decoded — we surface 0o555 for dirs and 0o444 for files.
 type projectionNodeInfo struct {
 	node         view.Node
@@ -67,15 +67,15 @@ func (p projectionNodeInfo) ArtifactID() domain.ArtifactID {
 	return p.node.Artifact.ArtifactID
 }
 
-// MIME decodes the fsmeta payload of the underlying artifact
+// MIME decodes the vfsmeta payload of the underlying artifact
 // and returns its MIME field. Empty when the artifact has no
-// fsmeta (or any decode failure) — surfaces use that as the
+// vfsmeta (or any decode failure) — surfaces use that as the
 // cue to omit the [view] button.
 func (p projectionNodeInfo) MIME() string {
 	if p.node.Artifact == nil {
 		return ""
 	}
-	fs, ok, err := fsmeta.Decode(p.node.Artifact.Ext)
+	fs, ok, err := vfsmeta.Decode(p.node.Artifact.Ext)
 	if err != nil || !ok {
 		return ""
 	}
