@@ -1,4 +1,4 @@
-package fs
+package fspath
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"fmt"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/engine/customindex"
 )
 
 // Tables under the custom index namespace. Two K/V groups:
 //
-//   - byID:   artifactID → fsmeta JSON (primary, source of truth)
+//   - byID:   artifactID → vfsmeta JSON (primary, source of truth)
 //   - byPath: "<path>\x00<artifactID>" → "" (reverse, supports
 //     LookupByPath and prefix scans through path-space)
 //
@@ -26,13 +26,13 @@ const (
 )
 
 // Name is the stable custom index identifier.
-const Name = "scrinium.fsindex"
+const Name = "scrinium.fspathindex"
 
 // schemaVersion is the on-disk layout version. Bump and add a
 // migration switch in Setup whenever the table layout changes.
 const schemaVersion = 1
 
-// CustomIndex is the fsmeta-aware projection of artifact metadata.
+// CustomIndex is the vfsmeta-aware projection of artifact metadata.
 // Implements customindex.CustomIndex. Construct via NewIndex, register
 // via *sqlite.Index.CustomIndexes().Register.
 type CustomIndex struct {
@@ -56,8 +56,8 @@ func (e *CustomIndex) Name() string { return Name }
 // SchemaVersion returns the current data layout version.
 func (e *CustomIndex) SchemaVersion() int { return schemaVersion }
 
-// Subscribe declares the index events fsindex reacts to.
-// ManifestIndexed: stash fsmeta; ManifestDeleted: drop it.
+// Subscribe declares the index events fspathindex reacts to.
+// ManifestIndexed: stash vfsmeta; ManifestDeleted: drop it.
 func (e *CustomIndex) Subscribe() []customindex.EventKind {
 	return []customindex.EventKind{
 		customindex.EventKindManifestIndexed,
@@ -74,7 +74,7 @@ func (e *CustomIndex) Setup(ctx context.Context, store customindex.Substrate, ol
 		// exist by virtue of ext_data being created at
 		// migration v2 in the sqlite backend).
 	default:
-		return fmt.Errorf("fsindex: unsupported old schema version: %d", oldVersion)
+		return fmt.Errorf("fspathindex: unsupported old schema version: %d", oldVersion)
 	}
 	e.store = store
 	return nil
@@ -90,38 +90,38 @@ func (e *CustomIndex) Apply(ctx context.Context, store customindex.Substrate, ki
 	case customindex.EventKindManifestDeleted:
 		return e.applyDeleted(store, args)
 	default:
-		return fmt.Errorf("fsindex: unexpected event kind %s", kind)
+		return fmt.Errorf("fspathindex: unexpected event kind %s", kind)
 	}
 }
 
-// applyIndexed stores the fsmeta payload (bytes verbatim) plus a
+// applyIndexed stores the vfsmeta payload (bytes verbatim) plus a
 // reverse-index entry for path lookup. Manifests that don't
-// carry a fsmeta payload (foreign schema, system artifacts) are
+// carry a vfsmeta payload (foreign schema, system artifacts) are
 // silently skipped — the custom index only indexes what it
 // understands.
 func (e *CustomIndex) applyIndexed(store customindex.Substrate, args customindex.EventArgs) error {
-	fs, ok, err := fsmeta.Decode(args.Manifest.Ext)
+	fs, ok, err := vfsmeta.Decode(args.Manifest.Ext)
 	if err != nil {
-		// Decode errors mean the ext block claims to be fsmeta
+		// Decode errors mean the ext block claims to be vfsmeta
 		// (right marker) but is structurally broken. We log via
 		// returning — the surrounding tx will roll back. Strict
 		// mode is the contract per ADR-49.
-		return fmt.Errorf("fsindex: decode ext for %q: %w",
+		return fmt.Errorf("fspathindex: decode ext for %q: %w",
 			args.ArtifactID, err)
 	}
 	if !ok {
-		// Foreign schema or no fsmeta — not our concern.
+		// Foreign schema or no vfsmeta — not our concern.
 		return nil
 	}
 
 	id := string(args.ArtifactID)
 
-	// Forward: id → raw fsmeta JSON (the bytes the manifest
+	// Forward: id → raw vfsmeta JSON (the bytes the manifest
 	// actually carries; we don't re-encode `fs` because that
-	// would lose forward-compatibility with future fsmeta
-	// versions that add fields fsindex doesn't understand).
+	// would lose forward-compatibility with future vfsmeta
+	// versions that add fields fspathindex doesn't understand).
 	if err := store.Put(tableByID, id, []byte(args.Manifest.Ext)); err != nil {
-		return fmt.Errorf("fsindex: put byID: %w", err)
+		return fmt.Errorf("fspathindex: put byID: %w", err)
 	}
 
 	// Reverse: <path>\x00<id> → id. The suffix disambiguates
@@ -130,21 +130,21 @@ func (e *CustomIndex) applyIndexed(store customindex.Substrate, args customindex
 	// are deterministic).
 	rkey := fs.Path + "\x00" + id
 	if err := store.Put(tableByPath, rkey, []byte(id)); err != nil {
-		return fmt.Errorf("fsindex: put byPath: %w", err)
+		return fmt.Errorf("fspathindex: put byPath: %w", err)
 	}
 	return nil
 }
 
 // applyDeleted removes both forward and reverse entries. We need
 // the path to delete the reverse key, so we read the stored
-// fsmeta first. If the artifact wasn't indexed (no fsmeta on
+// vfsmeta first. If the artifact wasn't indexed (no fsmeta on
 // write) the byID Get returns ok=false and we exit cleanly.
 func (e *CustomIndex) applyDeleted(store customindex.Substrate, args customindex.EventArgs) error {
 	id := string(args.ArtifactID)
 
 	raw, ok, err := store.Get(tableByID, id)
 	if err != nil {
-		return fmt.Errorf("fsindex: get byID for delete: %w", err)
+		return fmt.Errorf("fspathindex: get byID for delete: %w", err)
 	}
 	if !ok {
 		// Not indexed. Nothing to do.
@@ -154,30 +154,30 @@ func (e *CustomIndex) applyDeleted(store customindex.Substrate, args customindex
 	// Decode the stored payload to recover the path. We don't
 	// trust args.Manifest.Ext here — for deletion the
 	// backend passes a zero Manifest.
-	fs, ok, err := fsmeta.Decode(raw)
+	fs, ok, err := vfsmeta.Decode(raw)
 	if err != nil {
 		// Persisted bytes are corrupted. Forward is gone after
 		// Delete, but we can't undo the orphaned reverse entry —
 		// best effort: drop the forward and let an offline
 		// reconciler clean up later.
 		if delErr := store.Delete(tableByID, id); delErr != nil {
-			return fmt.Errorf("fsindex: delete byID after decode failure: %w", delErr)
+			return fmt.Errorf("fspathindex: delete byID after decode failure: %w", delErr)
 		}
-		return fmt.Errorf("fsindex: decode persisted fsmeta for %q: %w", id, err)
+		return fmt.Errorf("fspathindex: decode persisted vfsmeta for %q: %w", id, err)
 	}
 	if !ok {
-		// Persisted but not fsmeta-shaped — shouldn't happen
-		// because we only Put when fsmeta.Decode says ok.
+		// Persisted but not vfsmeta-shaped — shouldn't happen
+		// because we only Put when vfsmeta.Decode says ok.
 		// Treat defensively as "no reverse key to clean".
 		return store.Delete(tableByID, id)
 	}
 
 	if err := store.Delete(tableByID, id); err != nil {
-		return fmt.Errorf("fsindex: delete byID: %w", err)
+		return fmt.Errorf("fspathindex: delete byID: %w", err)
 	}
 	rkey := fs.Path + "\x00" + id
 	if err := store.Delete(tableByPath, rkey); err != nil {
-		return fmt.Errorf("fsindex: delete byPath: %w", err)
+		return fmt.Errorf("fspathindex: delete byPath: %w", err)
 	}
 	return nil
 }
@@ -191,20 +191,20 @@ func (e *CustomIndex) Close() error {
 
 // --- Read API ---
 
-// GetByID returns the persisted fsmeta JSON for the given
+// GetByID returns the persisted vfsmeta JSON for the given
 // artifact id, or (nil, false, nil) if not indexed.
 //
-// Returns the bytes verbatim — callers decode with fsmeta.Decode
+// Returns the bytes verbatim — callers decode with vfsmeta.Decode
 // (or any future schema decoder) themselves. The View backfill
 // fast-path uses this to materialise FilesystemFacet without
 // round-tripping to Source.Get.
 func (e *CustomIndex) GetByID(id domain.ArtifactID) (json.RawMessage, bool, error) {
 	if e.store == nil {
-		return nil, false, fmt.Errorf("fsindex: not registered")
+		return nil, false, fmt.Errorf("fspathindex: not registered")
 	}
 	value, ok, err := e.store.Get(tableByID, string(id))
 	if err != nil {
-		return nil, false, fmt.Errorf("fsindex: GetByID: %w", err)
+		return nil, false, fmt.Errorf("fspathindex: GetByID: %w", err)
 	}
 	if !ok {
 		return nil, false, nil
@@ -215,12 +215,12 @@ func (e *CustomIndex) GetByID(id domain.ArtifactID) (json.RawMessage, bool, erro
 // Ext implements source.Metadata (declared in the
 // projection package). Same shape as GetByID — separate method
 // kept so projection can reference an interface without taking
-// a concrete dependency on fsindex.
+// a concrete dependency on fspathindex.
 func (e *CustomIndex) Metadata(id domain.ArtifactID) (json.RawMessage, bool, error) {
 	return e.GetByID(id)
 }
 
-// LookupByPath returns the first ArtifactID whose fsmeta path
+// LookupByPath returns the first ArtifactID whose vfsmeta path
 // equals `path`. Lexicographic tiebreak when more than one
 // artifact shares the path (rare; usually a transient).
 //
@@ -229,7 +229,7 @@ func (e *CustomIndex) Metadata(id domain.ArtifactID) (json.RawMessage, bool, err
 // the third return.
 func (e *CustomIndex) LookupByPath(path string) (domain.ArtifactID, bool, error) {
 	if e.store == nil {
-		return "", false, fmt.Errorf("fsindex: not registered")
+		return "", false, fmt.Errorf("fspathindex: not registered")
 	}
 
 	prefix := path + "\x00"
@@ -239,7 +239,7 @@ func (e *CustomIndex) LookupByPath(path string) (domain.ArtifactID, bool, error)
 		return customindex.ErrStopScan
 	})
 	if err != nil {
-		return "", false, fmt.Errorf("fsindex: LookupByPath: %w", err)
+		return "", false, fmt.Errorf("fspathindex: LookupByPath: %w", err)
 	}
 	if found == "" {
 		return "", false, nil
@@ -247,7 +247,7 @@ func (e *CustomIndex) LookupByPath(path string) (domain.ArtifactID, bool, error)
 	return found, true, nil
 }
 
-// WalkAll iterates every (artifactID, fsmeta JSON) pair in
+// WalkAll iterates every (artifactID, vfsmeta JSON) pair in
 // lexicographic id order. Returning fs.SkipAll from cb (the
 // custom indexes sentinel customindex.ErrStopScan also works) ends the
 // walk cleanly.
@@ -256,7 +256,7 @@ func (e *CustomIndex) LookupByPath(path string) (domain.ArtifactID, bool, error)
 // node's fs metadata.
 func (e *CustomIndex) WalkAll(cb func(id domain.ArtifactID, raw json.RawMessage) error) error {
 	if e.store == nil {
-		return fmt.Errorf("fsindex: not registered")
+		return fmt.Errorf("fspathindex: not registered")
 	}
 	return e.store.Scan(tableByID, "", func(key string, value []byte) error {
 		return cb(domain.ArtifactID(key), json.RawMessage(value))

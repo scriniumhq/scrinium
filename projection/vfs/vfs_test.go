@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/projection/vfs"
 	"scrinium.dev/testutil/viewfx"
 )
@@ -245,11 +245,11 @@ func TestVFS_NameFilter_OmitsFromListing(t *testing.T) {
 // --- Helpers ---
 
 // mkManifest builds a minimal Manifest with the given path embedded in
-// fsmeta.
+// vfsmeta.
 func mkManifest(path, namespace, payload string) domain.Manifest {
 	id := domain.ArtifactID(strings.ReplaceAll(path, "/", "_") + "_id")
-	extMeta, _ := fsmeta.Encode(fsmeta.FileSystem{
-		Kind: fsmeta.Marker,
+	extMeta, _ := vfsmeta.Encode(vfsmeta.FileSystem{
+		Kind: vfsmeta.Marker,
 		Path: path,
 		Mode: 0o644,
 	})

@@ -11,7 +11,7 @@ import (
 	vw "scrinium.dev/projection/internal/view"
 	"scrinium.dev/testutil/projectionfx"
 
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
 
@@ -25,7 +25,7 @@ func newFSOpsForWrite(t *testing.T, opts ...fso.Option) (*fso.Ops, *projectionfx
 	t.Helper()
 	src := projectionfx.New()
 	v, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestCreate_InvalidPath(t *testing.T) {
 func TestCreate_NoNamespace(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v,
@@ -151,7 +151,7 @@ func TestCreate_NoNamespace(t *testing.T) {
 func TestCreate_NoStore(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	o, _ := fso.New(v,

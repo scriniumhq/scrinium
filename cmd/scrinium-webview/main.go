@@ -90,7 +90,7 @@ func runServe(args []string) int {
 		ServicePrefix: "",
 		BrowsePrefix:  *browsePrefix,
 	})
-	webHandler.RegisterDecoder(fsmetaDecoder{})
+	webHandler.RegisterDecoder(vfsmetaDecoder{})
 	webHandler.SetStatsProvider(htmlStats)
 
 	tree := *defaultTree

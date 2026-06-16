@@ -1,4 +1,4 @@
-package fsmeta
+package vfsmeta
 
 import (
 	"encoding/json"
@@ -132,7 +132,7 @@ func Encode(fs FileSystem) (json.RawMessage, error) {
 		// Marshalling a struct of basic types should not fail; if
 		// it does, the failure is a programming error in the
 		// schema definition rather than runtime data.
-		return nil, fmt.Errorf("fsmeta.Encode: %w", err)
+		return nil, fmt.Errorf("vfsmeta.Encode: %w", err)
 	}
 	return out, nil
 }
@@ -174,7 +174,7 @@ func Decode(raw json.RawMessage) (FileSystem, bool, error) {
 	}
 	var fs FileSystem
 	if err := json.Unmarshal(raw, &fs); err != nil {
-		return FileSystem{}, false, fmt.Errorf("fsmeta.Decode: %w", err)
+		return FileSystem{}, false, fmt.Errorf("vfsmeta.Decode: %w", err)
 	}
 	if err := ValidatePath(fs.Path); err != nil {
 		return FileSystem{}, false, err

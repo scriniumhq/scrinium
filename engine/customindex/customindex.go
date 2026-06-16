@@ -32,7 +32,7 @@ type CustomIndex interface {
 	// Name is the stable identifier for this custom index. Used
 	// as the namespace prefix in Substrate. Must be
 	// unique among custom indexes registered to the same backend.
-	// Recommended: dotted, lower-case, like "scrinium.fsindex".
+	// Recommended: dotted, lower-case, like "scrinium.fspathindex".
 	Name() string
 
 	// SchemaVersion is the current data layout version. The
@@ -236,7 +236,7 @@ type Projection struct {
 // (a) RETURNS Projections the core writes into proj_ext/proj_usr — equality
 // search, core-maintained (§9.5); and/or (b) writes the index's OWN tables via
 // store — prefix-trees, counters (§9.7), scanned later by the Accessor family.
-// namespace projects (ext "nsid"); fsindex writes an own path tree. Unindex is
+// namespace projects (ext "nsid"); fspathindex writes an own path tree. Unindex is
 // symmetric on Delete/Rollback, recomputing from the manifest — the index never
 // touches foreign rows by ArtifactID (Principle 8); the core removes the
 // manifest's proj_* rows by digest. Both sides are idempotent over the manifest

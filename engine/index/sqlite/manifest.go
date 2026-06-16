@@ -436,7 +436,7 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 
 		// Remove the manifest's штатные projections (core-owned, by digest).
 		// Own-table cleanup (Indexer.Unindex) needs the manifest at delete
-		// time and lands with the first own-table consumer (fsindex, M4.4).
+		// time and lands with the first own-table consumer (fspathindex, M4.4).
 		if err := deleteProjections(ctx, tx, dg); err != nil {
 			return err
 		}

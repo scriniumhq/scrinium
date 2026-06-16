@@ -88,7 +88,7 @@ func (i *Index) applyIndexers(ctx context.Context, tx *sql.Tx, m domain.Manifest
 // symmetric inverse of having written them, and robust to an index toggled off
 // since the write (no orphan rows). An index's OWN tables (Substrate, §9.7) are
 // cleaned by Unindex; that dispatch needs the manifest at delete time and lands
-// with the first own-table consumer (fsindex, M4.4). proj_* delete needs only
+// with the first own-table consumer (fspathindex, M4.4). proj_* delete needs only
 // the digest, so it is wired here.
 func deleteProjections(ctx context.Context, tx *sql.Tx, digest string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM proj_ext WHERE digest = ?`, digest); err != nil {

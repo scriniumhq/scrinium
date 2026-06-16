@@ -20,7 +20,7 @@ import (
 // grouping.
 //
 // POSIX attributes (mode, uid, gid) are NOT in this facet: they
-// belong to the filesystem schema (fsmeta.FileSystem) and are
+// belong to the filesystem schema (vfsmeta.FileSystem) and are
 // materialised by fsops at the transport boundary (FUSE/WebDAV).
 type FilesystemFacet struct {
 	Name    string
@@ -40,7 +40,7 @@ type ArtifactFacet struct {
 	SessionID   domain.SessionID
 	CreatedAt   time.Time
 
-	// Ext carries the engine-custom index metadata block (fsmeta and
+	// Ext carries the engine-custom index metadata block (vfsmeta and
 	// friends). Per ADR-54 the Usr block is intentionally not
 	// surfaced at facet level.
 	Ext json.RawMessage

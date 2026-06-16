@@ -29,7 +29,7 @@ type View struct {
 	byArtifact  map[string]*viewNode
 	// byOrphaned holds artifacts the path resolver couldn't
 	// place — typically system manifests or artifacts written
-	// without an fsmeta payload. Same id-shaped layout as
+	// without an vfsmeta payload. Same id-shaped layout as
 	// byArtifact (aa/bb/<id>) so the same lookup helpers work.
 	// Unlike byArtifact (which contains every artifact), this
 	// one only contains the ones missing from byPath.

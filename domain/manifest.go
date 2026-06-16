@@ -11,7 +11,7 @@ import (
 // per ADR-54:
 //
 //   - Ext: Scrinium-custom index data the engine itself reads
-//     (fsmeta and friends).
+//     (vfsmeta and friends).
 //   - Usr: opaque host-application data — tags, business
 //     attributes; the engine never inspects them.
 //

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/projection/pathx"
@@ -88,9 +88,9 @@ func byArtifactPath(id domain.ArtifactID) string {
 
 // byDatePath: <YYYY>/<MM>/<DD>/<HH-MM-SS>-<id-short>.bin
 // byDatePath builds the by-date layout: <YYYY>/<MM>/<DD>/<HH-MM-SS>-<name>.
-// The trailing name is the fsmeta path's basename when available
+// The trailing name is the vfsmeta path's basename when available
 // (so the listing shows "12-34-56-sunset.jpg") or a short artifact
-// id otherwise (for non-fsmeta artifacts that have no human name).
+// id otherwise (for non-vfsmeta artifacts that have no human name).
 //
 // Time resolution is 1 second; same-second artifacts get a dash-id
 // suffix appended via the basename which is always unique.
@@ -104,12 +104,12 @@ func byDatePath(m domain.Manifest) string {
 }
 
 // byDateLabel picks the human-friendly suffix for a by-date path.
-// Priority: fsmeta path basename → short artifact id with ".bin"
+// Priority: vfsmeta path basename → short artifact id with ".bin"
 // custom index. Two artifacts created in the same second with the
-// same fsmeta basename collide; that's accepted — the by-date
+// same vfsmeta basename collide; that's accepted — the by-date
 // tree is a diagnostic aid, not an authoritative storage layout.
 func byDateLabel(m domain.Manifest) string {
-	if fs, ok, err := fsmeta.Decode(m.Ext); err == nil && ok {
+	if fs, ok, err := vfsmeta.Decode(m.Ext); err == nil && ok {
 		base := pathx.LastSegment(fs.Path)
 		if base != "" {
 			return base

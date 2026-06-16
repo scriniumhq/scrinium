@@ -1,4 +1,4 @@
-package fs_test
+package fspath_test
 
 import (
 	"context"
@@ -7,17 +7,17 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/index/sqlite"
-	fsExt "scrinium.dev/x/fs"
+	fsExt "scrinium.dev/x/fspath"
 )
 
 // --- helpers ---
 
-// newRegisteredFSIndex returns an in-memory sqlite Index plus a
-// freshly-registered fsindex.customindex. Cleanup closes both.
-func newRegisteredFSIndex(t *testing.T) (*sqlite.Index, *fsExt.CustomIndex) {
+// newRegisteredFSPathIndex returns an in-memory sqlite Index plus a
+// freshly-registered fspathindex.customindex. Cleanup closes both.
+func newRegisteredFSPathIndex(t *testing.T) (*sqlite.Index, *fsExt.CustomIndex) {
 	t.Helper()
 	idx, err := sqlite.NewStore(context.Background(), ":memory:")
 	if err != nil {
@@ -32,11 +32,11 @@ func newRegisteredFSIndex(t *testing.T) (*sqlite.Index, *fsExt.CustomIndex) {
 	return idx, ci
 }
 
-// makeFSManifest returns a Manifest with fsmeta-shaped Ext
+// makeFSManifest returns a Manifest with vfsmeta-shaped Ext
 // at the given path, plus a mode for diversity.
 func makeFSManifest(t *testing.T, id domain.ArtifactID, path string) domain.Manifest {
 	t.Helper()
-	raw, err := fsmeta.Encode(fsmeta.FileSystem{
+	raw, err := vfsmeta.Encode(vfsmeta.FileSystem{
 		Path: path,
 		Mode: 0o644,
 	})
@@ -56,7 +56,7 @@ func makeFSManifest(t *testing.T, id domain.ArtifactID, path string) domain.Mani
 }
 
 // makeForeignManifest returns a Manifest with metadata that does
-// NOT use the fsmeta schema. fsindex must skip it.
+// NOT use the vfsmeta schema. fspathindex must skip it.
 func makeForeignManifest(t *testing.T, id domain.ArtifactID) domain.Manifest {
 	t.Helper()
 	raw, _ := json.Marshal(map[string]string{"kind": "email/v1", "subject": "hi"})
@@ -81,7 +81,7 @@ func physAddr() domain.PhysicalAddress {
 // --- registration ---
 
 func TestRegister_Succeeds(t *testing.T) {
-	idx, ext := newRegisteredFSIndex(t)
+	idx, ext := newRegisteredFSPathIndex(t)
 	if ext == nil {
 		t.Fatal("nil custom index")
 	}
@@ -91,7 +91,7 @@ func TestRegister_Succeeds(t *testing.T) {
 }
 
 func TestRegister_DoubleRegister_Rejects(t *testing.T) {
-	idx, _ := newRegisteredFSIndex(t)
+	idx, _ := newRegisteredFSPathIndex(t)
 	ci := idx.CustomIndexes().Register(context.Background(), fsExt.NewIndex())
 	if ci == nil {
 		t.Error("expected error on second register, got nil")
@@ -100,9 +100,9 @@ func TestRegister_DoubleRegister_Rejects(t *testing.T) {
 
 // --- ManifestIndexed handler.go ---
 
-func TestApply_Indexed_FSMetadata_Stored(t *testing.T) {
+func TestApply_Indexed_VFSMetadata_Stored(t *testing.T) {
 	ctx := t.Context()
-	idx, ext := newRegisteredFSIndex(t)
+	idx, ext := newRegisteredFSPathIndex(t)
 
 	m := makeFSManifest(t, "art-1", "photos/2024/sunset.jpg")
 	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
@@ -116,7 +116,7 @@ func TestApply_Indexed_FSMetadata_Stored(t *testing.T) {
 	if !ok {
 		t.Fatal("GetByID: ok=false; expected to find indexed manifest")
 	}
-	fs, ok, err := fsmeta.Decode(raw)
+	fs, ok, err := vfsmeta.Decode(raw)
 	if err != nil || !ok {
 		t.Fatalf("Decode persisted bytes: ok=%v err=%v", ok, err)
 	}
@@ -127,7 +127,7 @@ func TestApply_Indexed_FSMetadata_Stored(t *testing.T) {
 
 func TestApply_Indexed_ForeignSchema_Skipped(t *testing.T) {
 	ctx := t.Context()
-	idx, ext := newRegisteredFSIndex(t)
+	idx, ext := newRegisteredFSPathIndex(t)
 
 	m := makeForeignManifest(t, "email-1")
 	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
@@ -139,13 +139,13 @@ func TestApply_Indexed_ForeignSchema_Skipped(t *testing.T) {
 		t.Fatalf("GetByID: %v", err)
 	}
 	if ok {
-		t.Error("foreign-schema artifact was indexed by fsindex; expected skip")
+		t.Error("foreign-schema artifact was indexed by fspathindex; expected skip")
 	}
 }
 
 func TestApply_Indexed_NoMetadata_Skipped(t *testing.T) {
 	ctx := t.Context()
-	idx, ext := newRegisteredFSIndex(t)
+	idx, ext := newRegisteredFSPathIndex(t)
 
 	m := domain.Manifest{
 		ArtifactID:   "bare-1",
@@ -170,7 +170,7 @@ func TestApply_Indexed_NoMetadata_Skipped(t *testing.T) {
 
 func TestLookupByPath_Hit(t *testing.T) {
 	ctx := t.Context()
-	idx, ext := newRegisteredFSIndex(t)
+	idx, ext := newRegisteredFSPathIndex(t)
 
 	m := makeFSManifest(t, "art-photo", "photos/2024/sunset.jpg")
 	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
@@ -190,7 +190,7 @@ func TestLookupByPath_Hit(t *testing.T) {
 }
 
 func TestLookupByPath_Miss(t *testing.T) {
-	_, ext := newRegisteredFSIndex(t)
+	_, ext := newRegisteredFSPathIndex(t)
 	_, ok, err := ext.LookupByPath("nonexistent/path.txt")
 	if err != nil {
 		t.Fatalf("LookupByPath: %v", err)
@@ -204,7 +204,7 @@ func TestLookupByPath_Miss(t *testing.T) {
 
 func TestWalkAll_VisitsAll(t *testing.T) {
 	ctx := t.Context()
-	idx, ext := newRegisteredFSIndex(t)
+	idx, ext := newRegisteredFSPathIndex(t)
 
 	pairs := map[domain.ArtifactID]string{
 		"a-1": "alpha/file1",
@@ -220,7 +220,7 @@ func TestWalkAll_VisitsAll(t *testing.T) {
 
 	visited := map[domain.ArtifactID]string{}
 	err := ext.WalkAll(func(id domain.ArtifactID, raw json.RawMessage) error {
-		fs, _, err := fsmeta.Decode(raw)
+		fs, _, err := vfsmeta.Decode(raw)
 		if err != nil {
 			return err
 		}
@@ -244,7 +244,7 @@ func TestWalkAll_VisitsAll(t *testing.T) {
 
 func TestApply_Deleted_RemovesEntries(t *testing.T) {
 	ctx := t.Context()
-	idx, ext := newRegisteredFSIndex(t)
+	idx, ext := newRegisteredFSPathIndex(t)
 
 	m := makeFSManifest(t, "art-del", "tmp/file.txt")
 	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
@@ -274,9 +274,9 @@ func TestApply_Deleted_RemovesEntries(t *testing.T) {
 
 func TestApply_Deleted_NotIndexed_NoOp(t *testing.T) {
 	ctx := t.Context()
-	idx, _ := newRegisteredFSIndex(t)
+	idx, _ := newRegisteredFSPathIndex(t)
 
-	// Index a non-fsmeta manifest then delete; fsindex should
+	// Index a non-vfsmeta manifest then delete; fspathindex should
 	// silently no-op since we never indexed it.
 	m := makeForeignManifest(t, "email-2")
 	if err := idx.IndexManifest(ctx, m, physAddr()); err != nil {
@@ -289,12 +289,12 @@ func TestApply_Deleted_NotIndexed_NoOp(t *testing.T) {
 
 // --- Strict consistency: Apply error rolls back the main write ---
 
-// applyError makes the fsindex fail on a specific artifact id by
-// passing in a malformed metadata payload that decodes as fsmeta
+// applyError makes the fspathindex fail on a specific artifact id by
+// passing in a malformed metadata payload that decodes as vfsmeta
 // (right marker) but has an invalid type for Path.
-func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
+func TestApply_BrokenVFSMeta_RollsBackMainWrite(t *testing.T) {
 	ctx := t.Context()
-	idx, _ := newRegisteredFSIndex(t)
+	idx, _ := newRegisteredFSPathIndex(t)
 
 	// Construct a payload with the right marker but wrong type
 	// for Path: Decode will return an error.
@@ -320,7 +320,7 @@ func TestApply_BrokenFSMeta_RollsBackMainWrite(t *testing.T) {
 		t.Fatalf("ResolveManifestDigest: %v", err)
 	}
 	if exists {
-		t.Error("manifest committed despite fsindex failure (atomicity broken)")
+		t.Error("manifest committed despite fspathindex failure (atomicity broken)")
 	}
 }
 
@@ -344,7 +344,7 @@ func TestReadAPI_NotRegistered_Errs(t *testing.T) {
 
 // --- Schema regression rejection at backend level ---
 
-// We can't easily exercise this at the projection/fsindex level
+// We can't easily exercise this at the projection/fspathindex level
 // because schemaVersion is a package-private constant. The test
 // in index/sqlite/extension_test.go (TestRegister_SchemaRegression)
 // covers the mechanism generally.

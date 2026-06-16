@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"os"
 
-	"scrinium.dev/domain/fsmeta"
 	"scrinium.dev/projection/internal/fsops"
 	"scrinium.dev/projection/internal/source"
 	"scrinium.dev/projection/internal/view"
 )
 
 // MetadataIndex is the read-side contract the View consults for fast
-// ext/path lookups. It is satisfied by engine/index/fsindex's
+// ext/path lookups. It is satisfied by engine/index/fspathindex's
 // registered custom index. The composition root registers the custom index
 // with the store's index backend (which must happen before the store
 // opens) and then hands the same handle to Build.
@@ -30,7 +29,7 @@ type Backend interface {
 }
 
 // Build wires the read-side View and the read/write FSOps facade over
-// a store backend, per cfg. The backend must already have the fsindex
+// a store backend, per cfg. The backend must already have the fspathindex
 // custom index registered and fsidx must be that custom index's handle. The
 // returned Projection owns the View; Close releases it.
 func Build(ctx context.Context, backend Backend, fsidx MetadataIndex, cfg Config) (*Projection, error) {
@@ -50,8 +49,10 @@ func Build(ctx context.Context, backend Backend, fsidx MetadataIndex, cfg Config
 // tree and the by-path fallback; zero values leave engine defaults.
 func buildView(ctx context.Context, backend Backend, fsidx MetadataIndex, cfg Config) (*view.View, error) {
 	opts := []view.Option{
-		view.WithPathResolver(fsmeta.Resolver),
-		view.WithFSIndex(fsidx),
+		view.WithFSPathIndex(fsidx),
+	}
+	if cfg.PathResolver != nil {
+		opts = append(opts, view.WithPathResolver(cfg.PathResolver))
 	}
 	if cfg.RootView != "" {
 		opts = append(opts, view.WithRootView(view.RootView(cfg.RootView)))

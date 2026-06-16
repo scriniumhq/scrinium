@@ -319,10 +319,10 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 			if id != "" {
 				row.URL = h.prefix + "/_artifact/" + string(id)
 				row.DownloadURL = h.prefix + "/_download/" + string(id)
-				// MIME source priority: fsmeta first, then
+				// MIME source priority: vfsmeta first, then
 				// the filename extension as fallback. Many
 				// artifacts are written without an explicit
-				// fsmeta MIME (the producer didn't bother)
+				// vfsmeta MIME (the producer didn't bother)
 				// but the filename still gives us enough
 				// to advertise [view] for known types.
 				mimeType := inferMIME(e.Name, extractMIME(e.Info))

@@ -16,7 +16,7 @@ import (
 	"scrinium.dev/projection/pathx"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
 
@@ -106,8 +106,8 @@ type FileInfo struct {
 	// page; ignored by FUSE/WebDAV which don't need it.
 	ArtifactID domain.ArtifactID
 
-	// MIME carries the MIME type recorded in fsmeta.MIME, if
-	// any. Empty when the artifact has no fsmeta payload or
+	// MIME carries the MIME type recorded in vfsmeta.MIME, if
+	// any. Empty when the artifact has no vfsmeta payload or
 	// the payload didn't set a MIME. Surfaced by the web
 	// browser to decide whether a file is safe to advertise
 	// via an inline [view] link.
@@ -213,17 +213,17 @@ func WithScratchQuota(bytes int64) Option {
 }
 
 // WithDefaultMode is the POSIX mode applied to artifacts whose
-// fsmeta.Mode is zero. Default 0644.
+// vfsmeta.Mode is zero. Default 0644.
 func WithDefaultMode(mode uint32) Option {
 	return func(o *fsOpsOptions) { o.defaultMode = mode }
 }
 
-// WithDefaultUID applies to fsmeta.UID == 0.
+// WithDefaultUID applies to vfsmeta.UID == 0.
 func WithDefaultUID(uid uint32) Option {
 	return func(o *fsOpsOptions) { o.defaultUID = uid }
 }
 
-// WithDefaultGID applies to fsmeta.GID == 0.
+// WithDefaultGID applies to vfsmeta.GID == 0.
 func WithDefaultGID(gid uint32) Option {
 	return func(o *fsOpsOptions) { o.defaultGID = gid }
 }
@@ -405,7 +405,7 @@ func (o *Ops) Open(ctx context.Context, path string, mode OpenMode) (File, error
 }
 
 // openForEdit prepares a writeFile pre-loaded with the existing
-// artifact's content and fsmeta, ready for arbitrary WriteAt /
+// artifact's content and vfsmeta, ready for arbitrary WriteAt /
 // Truncate. On Close the result lands in the View through Move.
 func (o *Ops) openForEdit(ctx context.Context, path string, mode OpenMode) (File, error) {
 	lock := o.pathLocks.Get(path)
@@ -478,15 +478,15 @@ func (o *Ops) openInRoot(ctx context.Context, path string) (domain.ReadHandle, e
 // fileInfoFromNode converts a Node into a FileInfo, applying
 // Ops defaults to fields the artifact left zero.
 //
-// For file nodes, Ops reads fsmeta from Manifest.Ext directly
+// For file nodes, Ops reads vfsmeta from Manifest.Ext directly
 // — the View itself is schema-agnostic and does not surface
-// fsmeta.Mode/UID/GID/ModTime through FilesystemFacet. Ops is
+// vfsmeta.Mode/UID/GID/ModTime through FilesystemFacet. Ops is
 // the layer that knows about the filesystem schema and applies
 // defaults at the boundary where they have to be visible to
 // FUSE/WebDAV.
 //
 // Decode errors are silently swallowed: the same hot-path policy
-// as fsmeta.Resolver inside View. A single bad ext payload must
+// as vfsmeta.Resolver inside View. A single bad ext payload must
 // not poison Stat/Listdir for the whole tree.
 func (o *Ops) fileInfoFromNode(n vw.Node) FileInfo {
 	fi := FileInfo{
@@ -497,12 +497,12 @@ func (o *Ops) fileInfoFromNode(n vw.Node) FileInfo {
 		IsDir:   n.FS.IsDir,
 	}
 
-	// For files, prefer fsmeta-encoded attributes when present.
+	// For files, prefer vfsmeta-encoded attributes when present.
 	// For virtual directories, n.Artifact is nil — defaults are
 	// the only available source.
 	if n.Artifact != nil {
 		fi.ArtifactID = n.Artifact.ArtifactID
-		if fs, ok, err := fsmeta.Decode(n.Artifact.Ext); err == nil && ok {
+		if fs, ok, err := vfsmeta.Decode(n.Artifact.Ext); err == nil && ok {
 			fi.Mode = fs.Mode
 			fi.UID = fs.UID
 			fi.GID = fs.GID
@@ -537,7 +537,7 @@ func (o *Ops) fileInfoFromNode(n vw.Node) FileInfo {
 // manifest is added to the View.
 //
 // Errors:
-//   - ErrInvalidPath if path fails fsmeta validation.
+//   - ErrInvalidPath if path fails vfsmeta validation.
 //   - ErrEditingDisabled if Ops was constructed with WithReadOnly.
 //   - "WithNamespace not configured" if Namespace is empty.
 //   - "WithStore not configured" if no StoreClient was supplied.
@@ -550,7 +550,7 @@ func (o *Ops) Create(ctx context.Context, path string, mode uint32) (File, error
 	if o.readOnly {
 		return nil, fmt.Errorf("%w: Create on read-only Ops", errs.ErrEditingDisabled)
 	}
-	if err := fsmeta.ValidatePath(path); err != nil {
+	if err := vfsmeta.ValidatePath(path); err != nil {
 		return nil, err
 	}
 	if o.namespace == "" {
@@ -650,7 +650,7 @@ func (o *Ops) Mkdir(path string, mode uint32) error {
 	if o.readOnly {
 		return fmt.Errorf("%w: Mkdir on read-only Ops", errs.ErrEditingDisabled)
 	}
-	if err := fsmeta.ValidatePath(path); err != nil {
+	if err := vfsmeta.ValidatePath(path); err != nil {
 		return err
 	}
 	if _, err := o.lookupInRoot(path); err == nil {
@@ -717,7 +717,7 @@ func (o *Ops) Rmdir(path string) error {
 // --- Editing existing artifacts ---
 
 // Rename moves an artifact from oldPath to newPath. In CAS terms
-// the operation is a Put-with-new-fsmeta-Path followed by a
+// the operation is a Put-with-new-vfsmeta-Path followed by a
 // Delete of the old artifact, atomically reflected in the View
 // via View.Move.
 //
@@ -735,7 +735,7 @@ func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 	if !o.editing.AllowRename {
 		return fmt.Errorf("%w: Rename without AllowRename", errs.ErrEditingDisabled)
 	}
-	if err := fsmeta.ValidatePath(newPath); err != nil {
+	if err := vfsmeta.ValidatePath(newPath); err != nil {
 		return err
 	}
 	if oldPath == newPath {
@@ -758,7 +758,7 @@ func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 		return fmt.Errorf("%w: %q is a pending directory", errs.ErrPathExists, newPath)
 	}
 
-	// Stage the old artifact's content and fsmeta into a scratch
+	// Stage the old artifact's content and vfsmeta into a scratch
 	// editing handle whose Close performs Put+Delete+Move.
 	wf, err := o.prepareEditingScratch(ctx, oldPath)
 	if err != nil {
@@ -775,7 +775,7 @@ func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 
 // Setattr changes POSIX attributes (mode, uid, gid, mtime) of an
 // existing artifact. Each non-nil field of attrs is applied;
-// other fsmeta fields (Path, MIME) are preserved. The operation
+// other vfsmeta fields (Path, MIME) are preserved. The operation
 // produces a new artifact with the same content (the underlying
 // blob is deduplicated by the Store) and removes the old.
 //
@@ -803,17 +803,17 @@ func (o *Ops) Setattr(ctx context.Context, path string, attrs Attrs) error {
 	wf.unlock = func() {} // already locked; release in our defer
 
 	if attrs.Mode != nil {
-		wf.inheritedFsmeta.Mode = *attrs.Mode
+		wf.inheritedVfsmeta.Mode = *attrs.Mode
 		wf.mode = *attrs.Mode // also influence Close's fsm.Mode override path
 	}
 	if attrs.UID != nil {
-		wf.inheritedFsmeta.UID = *attrs.UID
+		wf.inheritedVfsmeta.UID = *attrs.UID
 	}
 	if attrs.GID != nil {
-		wf.inheritedFsmeta.GID = *attrs.GID
+		wf.inheritedVfsmeta.GID = *attrs.GID
 	}
 	if attrs.ModTime != nil {
-		wf.inheritedFsmeta.ModTime = *attrs.ModTime
+		wf.inheritedVfsmeta.ModTime = *attrs.ModTime
 	}
 	wf.forceDirty = true
 
@@ -866,12 +866,12 @@ func (o *Ops) Truncate(ctx context.Context, path string, size int64) error {
 
 // prepareEditingScratch assembles a writeFile for editing the
 // artifact at path: it allocates a scratch file, copies the
-// existing content into it, decodes the existing fsmeta, and
+// existing content into it, decodes the existing vfsmeta, and
 // returns the handle ready for further mutation by the caller.
 //
 // Caller responsibilities (filled in after the call):
 //   - wf.unlock — overwrite if the caller manages locks externally.
-//   - wf.path / wf.mode / wf.inheritedFsmeta — mutate as the
+//   - wf.path / wf.mode / wf.inheritedVfsmeta — mutate as the
 //     editing operation requires.
 //   - wf.forceDirty — set to true when no WriteAt will follow
 //     (Setattr, Rename) so Close still performs a Put.
@@ -886,14 +886,14 @@ func (o *Ops) prepareEditingScratch(ctx context.Context, path string) (*writeFil
 		return nil, fmt.Errorf("%w: %q", errs.ErrIsADirectory, path)
 	}
 
-	// Decode old fsmeta to inherit non-mutated fields. A clean
-	// failure here (no fsmeta on the artifact) is acceptable —
+	// Decode old vfsmeta to inherit non-mutated fields. A clean
+	// failure here (no vfsmeta on the artifact) is acceptable —
 	// the inherited struct stays zero, and Close re-encodes from
-	// scratch; the artifact gains a fresh fsmeta with only the
+	// scratch; the artifact gains a fresh vfsmeta with only the
 	// mutated fields plus path.
-	var inherited fsmeta.FileSystem
+	var inherited vfsmeta.FileSystem
 	if n.Artifact != nil {
-		if fs, ok, _ := fsmeta.Decode(n.Artifact.Ext); ok {
+		if fs, ok, _ := vfsmeta.Decode(n.Artifact.Ext); ok {
 			inherited = fs
 		}
 	}
@@ -935,7 +935,7 @@ func (o *Ops) prepareEditingScratch(ctx context.Context, path string) (*writeFil
 		unlock:            func() {}, // caller-managed by default
 		replaceArtifactID: n.Artifact.ArtifactID,
 		oldPath:           path,
-		inheritedFsmeta:   inherited,
+		inheritedVfsmeta:  inherited,
 		size:              written,
 	}, nil
 }
@@ -1020,7 +1020,7 @@ func (o *Ops) newScratchFile() (string, *os.File, error) {
 // Editing existing artifacts: when replaceArtifactID is non-empty,
 // Close treats the operation as a replace — after the new Put it
 // also calls Store.Delete(replaceArtifactID) and uses View.Move
-// instead of View.Add. inheritedFsmeta carries the fsmeta of the
+// instead of View.Add. inheritedVfsmeta carries the vfsmeta of the
 // pre-existing artifact so callers (Setattr, Rename) can inherit
 // fields they don't explicitly mutate.
 //
@@ -1041,9 +1041,9 @@ type writeFile struct {
 	unlock func()
 
 	// Editing fields.
-	replaceArtifactID domain.ArtifactID // empty for new files
-	oldPath           string            // empty for new files
-	inheritedFsmeta   fsmeta.FileSystem // base for fsmeta on Close
+	replaceArtifactID domain.ArtifactID  // empty for new files
+	oldPath           string             // empty for new files
+	inheritedVfsmeta  vfsmeta.FileSystem // base for vfsmeta on Close
 
 	// markDirty=true forces Close to perform a Put even when no
 	// WriteAt happened. Used by Setattr/Rename where the content
@@ -1177,27 +1177,27 @@ func (f *writeFile) Close() error {
 		return fmt.Errorf("projection.Ops: seek scratch: %w", err)
 	}
 
-	// Build fsmeta. For editing, start from the inherited fsmeta
+	// Build vfsmeta. For editing, start from the inherited vfsmeta
 	// (preserves MIME, plus any field not explicitly mutated by
 	// the caller) and overlay the new path/mode. For new files,
-	// inheritedFsmeta is the zero value.
-	fsm := f.inheritedFsmeta
-	fsm.Path = f.path
+	// inheritedVfsmeta is the zero value.
+	vfsm := f.inheritedVfsmeta
+	vfsm.Path = f.path
 	if f.mode != 0 {
-		fsm.Mode = f.mode
+		vfsm.Mode = f.mode
 	}
 	// ModTime: for new files (no predecessor), stamp with the
 	// current time. For editing, the caller has already placed
-	// the desired ModTime into inheritedFsmeta — Setattr writes
+	// the desired ModTime into inheritedVfsmeta — Setattr writes
 	// the user's value there explicitly, Rename inherits the old
 	// artifact's value, and an arbitrary write through
 	// openForEdit also keeps the inherited value. Overwriting
 	// here would clobber Setattr's intent.
 	if f.replaceArtifactID == "" {
-		fsm.ModTime = time.Now().UTC()
+		vfsm.ModTime = time.Now().UTC()
 	}
 
-	metadata, err := fsmeta.Encode(fsm)
+	metadata, err := vfsmeta.Encode(vfsm)
 	if err != nil {
 		return err
 	}
@@ -1206,7 +1206,7 @@ func (f *writeFile) Close() error {
 		context.Background(),
 		domain.Artifact{
 			Payload: f.handle,
-			// fsmeta is engine-custom index data per ADR-54 — Ext
+			// vfsmeta is engine-custom index data per ADR-54 — Ext
 			// block, not Usr (host-opaque).
 			Ext: metadata,
 		},

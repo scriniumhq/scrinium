@@ -131,7 +131,7 @@ func TestNode_Lookup_Missing(t *testing.T) {
 
 func TestNode_Readdir_SurfacesEntries(t *testing.T) {
 	root := newTestRoot(t,
-		manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
+		manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "alpha"))
 
 	stream, errno := root.Readdir(context.Background())
 	if errno != 0 {

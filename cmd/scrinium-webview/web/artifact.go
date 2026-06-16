@@ -17,7 +17,7 @@ import (
 
 	"scrinium.dev/cmd/internal/humanize"
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/pathx"
 )
@@ -313,13 +313,13 @@ func formatHexDump(data []byte) string {
 }
 
 // previewMIME picks the MIME used to choose a preview format.
-// fsmeta is the authoritative source; filename extension is the
+// vfsmeta is the authoritative source; filename extension is the
 // fallback. Empty when neither yields anything — caller treats
 // that as "use hex".
 func previewMIME(m domain.Manifest) string {
 	mimeType := ""
 	name := ""
-	if fs, ok, err := fsmeta.Decode(m.Ext); err == nil && ok {
+	if fs, ok, err := vfsmeta.Decode(m.Ext); err == nil && ok {
 		mimeType = fs.MIME
 		name = pathx.LastSegment(fs.Path)
 	}
@@ -671,7 +671,7 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	}
 
 	// Schema rendering targets the engine-custom index block (Ext
-	// per ADR-54) where fsmeta and similar schemas live. Three
+	// per ADR-54) where vfsmeta and similar schemas live. Three
 	// branches:
 	//
 	//   1. Ext is empty → no Schema section.

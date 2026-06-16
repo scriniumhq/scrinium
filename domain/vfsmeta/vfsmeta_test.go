@@ -1,4 +1,4 @@
-package fsmeta_test
+package vfsmeta_test
 
 import (
 	"encoding/json"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
 
@@ -26,7 +26,7 @@ func TestValidatePath_Valid(t *testing.T) {
 	}
 	for _, p := range cases {
 		t.Run(p, func(t *testing.T) {
-			if err := fsmeta.ValidatePath(p); err != nil {
+			if err := vfsmeta.ValidatePath(p); err != nil {
 				t.Errorf("expected valid, got %v", err)
 			}
 		})
@@ -52,7 +52,7 @@ func TestValidatePath_Invalid(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := fsmeta.ValidatePath(tc.path)
+			err := vfsmeta.ValidatePath(tc.path)
 			if err == nil {
 				t.Fatalf("expected error for %q, got nil", tc.path)
 			}
@@ -78,7 +78,7 @@ func TestValidatePathWithReserved_Allowed(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
-			if err := fsmeta.ValidatePathWithReserved(tc.path, tc.reserved); err != nil {
+			if err := vfsmeta.ValidatePathWithReserved(tc.path, tc.reserved); err != nil {
 				t.Errorf("expected valid, got %v", err)
 			}
 		})
@@ -96,7 +96,7 @@ func TestValidatePathWithReserved_Rejected(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.path, func(t *testing.T) {
-			err := fsmeta.ValidatePathWithReserved(tc.path, tc.reserved)
+			err := vfsmeta.ValidatePathWithReserved(tc.path, tc.reserved)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
 			}
@@ -110,7 +110,7 @@ func TestValidatePathWithReserved_Rejected(t *testing.T) {
 // --- Encode ---
 
 func TestEncode_HappyPath(t *testing.T) {
-	fs := fsmeta.FileSystem{
+	fs := vfsmeta.FileSystem{
 		Path:    "photos/2024/img.jpg",
 		Mode:    0644,
 		UID:     1000,
@@ -118,7 +118,7 @@ func TestEncode_HappyPath(t *testing.T) {
 		ModTime: time.Date(2024, 5, 1, 10, 0, 0, 0, time.UTC),
 		MIME:    "image/jpeg",
 	}
-	raw, err := fsmeta.Encode(fs)
+	raw, err := vfsmeta.Encode(fs)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -129,8 +129,8 @@ func TestEncode_HappyPath(t *testing.T) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatalf("json.Unmarshal: %v", err)
 	}
-	if got := m["kind"]; got != fsmeta.Marker {
-		t.Errorf("kind: got %q, want %q", got, fsmeta.Marker)
+	if got := m["kind"]; got != vfsmeta.Marker {
+		t.Errorf("kind: got %q, want %q", got, vfsmeta.Marker)
 	}
 	if got := m["path"]; got != "photos/2024/img.jpg" {
 		t.Errorf("path: got %q, want %q", got, "photos/2024/img.jpg")
@@ -142,12 +142,12 @@ func TestEncode_HappyPath(t *testing.T) {
 
 func TestEncode_FillsKindWhenEmpty(t *testing.T) {
 	// Caller may leave Kind unset; Encode injects Marker.
-	fs := fsmeta.FileSystem{Path: "a"}
-	raw, err := fsmeta.Encode(fs)
+	fs := vfsmeta.FileSystem{Path: "a"}
+	raw, err := vfsmeta.Encode(fs)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	if !strings.Contains(string(raw), `"kind":"`+fsmeta.Marker+`"`) {
+	if !strings.Contains(string(raw), `"kind":"`+vfsmeta.Marker+`"`) {
 		t.Errorf("expected kind to be auto-filled; got %s", raw)
 	}
 }
@@ -156,12 +156,12 @@ func TestEncode_OverridesKindWhenSet(t *testing.T) {
 	// If a caller passes a wrong Kind, Encode overwrites it. The
 	// emitted bytes always carry the canonical Marker — the schema
 	// is the contract, not the input.
-	fs := fsmeta.FileSystem{Kind: "wrong/v999", Path: "a"}
-	raw, err := fsmeta.Encode(fs)
+	fs := vfsmeta.FileSystem{Kind: "wrong/v999", Path: "a"}
+	raw, err := vfsmeta.Encode(fs)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	if !strings.Contains(string(raw), `"kind":"`+fsmeta.Marker+`"`) {
+	if !strings.Contains(string(raw), `"kind":"`+vfsmeta.Marker+`"`) {
 		t.Errorf("expected kind override; got %s", raw)
 	}
 	if strings.Contains(string(raw), "wrong/v999") {
@@ -170,7 +170,7 @@ func TestEncode_OverridesKindWhenSet(t *testing.T) {
 }
 
 func TestEncode_RejectsInvalidPath(t *testing.T) {
-	cases := []fsmeta.FileSystem{
+	cases := []vfsmeta.FileSystem{
 		{Path: ""},
 		{Path: "/leading"},
 		{Path: "double//slash"},
@@ -178,7 +178,7 @@ func TestEncode_RejectsInvalidPath(t *testing.T) {
 		{Path: "with/.."},
 	}
 	for i, fs := range cases {
-		_, err := fsmeta.Encode(fs)
+		_, err := vfsmeta.Encode(fs)
 		if err == nil {
 			t.Errorf("case %d (%q): expected error, got nil", i, fs.Path)
 			continue
@@ -192,8 +192,8 @@ func TestEncode_RejectsInvalidPath(t *testing.T) {
 func TestEncode_OmitemptyOptionalFields(t *testing.T) {
 	// Mode/UID/GID = 0 and empty MIME/zero ModTime should not
 	// appear in the JSON. Keeps the wire format compact.
-	fs := fsmeta.FileSystem{Path: "a"}
-	raw, err := fsmeta.Encode(fs)
+	fs := vfsmeta.FileSystem{Path: "a"}
+	raw, err := vfsmeta.Encode(fs)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestEncode_OmitemptyOptionalFields(t *testing.T) {
 // --- Decode ---
 
 func TestDecode_RoundTrip(t *testing.T) {
-	in := fsmeta.FileSystem{
+	in := vfsmeta.FileSystem{
 		Path:    "photos/img.jpg",
 		Mode:    0644,
 		UID:     1000,
@@ -216,11 +216,11 @@ func TestDecode_RoundTrip(t *testing.T) {
 		ModTime: time.Date(2024, 5, 1, 10, 0, 0, 0, time.UTC),
 		MIME:    "image/jpeg",
 	}
-	raw, err := fsmeta.Encode(in)
+	raw, err := vfsmeta.Encode(in)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	out, ok, err := fsmeta.Decode(raw)
+	out, ok, err := vfsmeta.Decode(raw)
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
@@ -242,15 +242,15 @@ func TestDecode_RoundTrip(t *testing.T) {
 	if out.MIME != in.MIME {
 		t.Errorf("MIME: got %q, want %q", out.MIME, in.MIME)
 	}
-	if out.Kind != fsmeta.Marker {
-		t.Errorf("Kind: got %q, want %q", out.Kind, fsmeta.Marker)
+	if out.Kind != vfsmeta.Marker {
+		t.Errorf("Kind: got %q, want %q", out.Kind, vfsmeta.Marker)
 	}
 }
 
 func TestDecode_EmptyExt(t *testing.T) {
 	// Empty ext is the common "no schema" case. Not an error.
 	for _, raw := range []json.RawMessage{nil, {}, json.RawMessage("")} {
-		fs, ok, err := fsmeta.Decode(raw)
+		fs, ok, err := vfsmeta.Decode(raw)
 		if err != nil {
 			t.Errorf("expected no error for empty ext, got %v", err)
 		}
@@ -274,7 +274,7 @@ func TestDecode_ForeignSchema(t *testing.T) {
 		[]byte(`{"kind":"scrinium.fs/v2","path":"x"}`), // future version
 	}
 	for _, raw := range cases {
-		fs, ok, err := fsmeta.Decode(raw)
+		fs, ok, err := vfsmeta.Decode(raw)
 		if err != nil {
 			t.Errorf("input %s: expected no error, got %v", raw, err)
 		}
@@ -297,7 +297,7 @@ func TestDecode_BrokenJSON(t *testing.T) {
 		[]byte(`null garbage`),
 	}
 	for _, raw := range cases {
-		fs, ok, err := fsmeta.Decode(raw)
+		fs, ok, err := vfsmeta.Decode(raw)
 		if err != nil {
 			t.Errorf("input %s: expected no error (foreign-treatment), got %v", raw, err)
 		}
@@ -311,8 +311,8 @@ func TestDecode_BrokenJSON(t *testing.T) {
 func TestDecode_MarkerMatchInvalidPath(t *testing.T) {
 	// Kind matches Marker but Path is broken — the artifact
 	// intended this schema and got it wrong; surface as error.
-	raw := []byte(`{"kind":"` + fsmeta.Marker + `","path":"/leading/slash"}`)
-	_, ok, err := fsmeta.Decode(raw)
+	raw := []byte(`{"kind":"` + vfsmeta.Marker + `","path":"/leading/slash"}`)
+	_, ok, err := vfsmeta.Decode(raw)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -326,8 +326,8 @@ func TestDecode_MarkerMatchInvalidPath(t *testing.T) {
 
 func TestDecode_MarkerMatchEmptyPath(t *testing.T) {
 	// Same idea: Path is required.
-	raw := []byte(`{"kind":"` + fsmeta.Marker + `"}`)
-	_, ok, err := fsmeta.Decode(raw)
+	raw := []byte(`{"kind":"` + vfsmeta.Marker + `"}`)
+	_, ok, err := vfsmeta.Decode(raw)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -342,8 +342,8 @@ func TestDecode_MarkerMatchEmptyPath(t *testing.T) {
 func TestDecode_MarkerMatchBrokenBody(t *testing.T) {
 	// Kind matches but the rest of the JSON is broken (mode is a
 	// string instead of a number). Decode returns (zero, false, err).
-	raw := []byte(`{"kind":"` + fsmeta.Marker + `","path":"a","mode":"not-a-number"}`)
-	_, ok, err := fsmeta.Decode(raw)
+	raw := []byte(`{"kind":"` + vfsmeta.Marker + `","path":"a","mode":"not-a-number"}`)
+	_, ok, err := vfsmeta.Decode(raw)
 	if err == nil {
 		t.Fatalf("expected error, got nil")
 	}
@@ -357,12 +357,12 @@ func TestDecode_MarkerMatchBrokenBody(t *testing.T) {
 // --- Resolver ---
 
 func TestResolver_Found(t *testing.T) {
-	raw, err := fsmeta.Encode(fsmeta.FileSystem{Path: "photos/img.jpg"})
+	raw, err := vfsmeta.Encode(vfsmeta.FileSystem{Path: "photos/img.jpg"})
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
 	m := domain.Manifest{Ext: raw}
-	path, ok := fsmeta.Resolver(m)
+	path, ok := vfsmeta.Resolver(m)
 	if !ok {
 		t.Fatalf("expected ok=true")
 	}
@@ -373,7 +373,7 @@ func TestResolver_Found(t *testing.T) {
 
 func TestResolver_EmptyMetadata(t *testing.T) {
 	m := domain.Manifest{Ext: nil}
-	path, ok := fsmeta.Resolver(m)
+	path, ok := vfsmeta.Resolver(m)
 	if ok {
 		t.Errorf("expected ok=false, got path=%q", path)
 	}
@@ -381,20 +381,20 @@ func TestResolver_EmptyMetadata(t *testing.T) {
 
 func TestResolver_ForeignSchema(t *testing.T) {
 	m := domain.Manifest{Ext: []byte(`{"kind":"email/v1","subject":"hi"}`)}
-	path, ok := fsmeta.Resolver(m)
+	path, ok := vfsmeta.Resolver(m)
 	if ok {
 		t.Errorf("expected ok=false for foreign schema, got path=%q", path)
 	}
 }
 
 func TestResolver_SwallowsDecodeErrors(t *testing.T) {
-	// A malformed payload that *says* it is fsmeta — Resolver must
+	// A malformed payload that *says* it is vfsmeta — Resolver must
 	// silently return ("", false). This is the hot-path
 	// requirement: a single bad artifact must not break the View
 	// backfill.
-	raw := []byte(`{"kind":"` + fsmeta.Marker + `","path":"/leading"}`)
+	raw := []byte(`{"kind":"` + vfsmeta.Marker + `","path":"/leading"}`)
 	m := domain.Manifest{Ext: raw}
-	path, ok := fsmeta.Resolver(m)
+	path, ok := vfsmeta.Resolver(m)
 	if ok {
 		t.Errorf("expected ok=false for invalid path, got path=%q", path)
 	}

@@ -133,7 +133,7 @@ func TestRename_SamePathIsNoop(t *testing.T) {
 	}
 }
 
-func TestRename_PreservesNonPathFsmetaFields(t *testing.T) {
+func TestRename_PreservesNonPathVfsmetaFields(t *testing.T) {
 	o, _ := newEditingFSOps(t)
 	f, _ := o.Create(context.Background(), "a.txt", 0o600)
 	writeAll(t, f, []byte("x"))

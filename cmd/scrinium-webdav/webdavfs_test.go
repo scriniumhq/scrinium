@@ -42,7 +42,7 @@ func TestStat_Root(t *testing.T) {
 
 func TestStat_File(t *testing.T) {
 	w := newTestFS(t,
-		manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
+		manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "alpha"))
 	fi, err := w.Stat(context.Background(), "/alpha")
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
@@ -180,7 +180,7 @@ func TestOpenFile_CreateWriteRead(t *testing.T) {
 
 func TestRootDir_ListsServicePrefix(t *testing.T) {
 	w := newTestFS(t,
-		manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "alpha"))
+		manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "alpha"))
 
 	f, err := w.OpenFile(context.Background(), "/", os.O_RDONLY, 0)
 	if err != nil {

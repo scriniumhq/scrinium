@@ -12,7 +12,7 @@ import (
 	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 )
 
 // --- helpers ---
@@ -55,11 +55,11 @@ func strippedManifest(id domain.ArtifactID, namespace string) domain.Manifest {
 	}
 }
 
-func encodeFSMeta(t *testing.T, path string) json.RawMessage {
+func encodeVFSMeta(t *testing.T, path string) json.RawMessage {
 	t.Helper()
-	raw, err := fsmeta.Encode(fsmeta.FileSystem{Path: path, Mode: 0o644})
+	raw, err := vfsmeta.Encode(vfsmeta.FileSystem{Path: path, Mode: 0o644})
 	if err != nil {
-		t.Fatalf("fsmeta.Encode: %v", err)
+		t.Fatalf("vfsmeta.Encode: %v", err)
 	}
 	return raw
 }
@@ -80,11 +80,11 @@ func TestBackfill_FastPath_UsesExtSource(t *testing.T) {
 		// Walk-side: stripped (no Ext).
 		src.Add(strippedManifest(id, "files"), nil)
 		// Fast-path side: full metadata.
-		ms.put(id, encodeFSMeta(t, path))
+		ms.put(id, encodeVFSMeta(t, path))
 	}
 
 	v, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithPathResolver(vfsmeta.Resolver),
 		vw.WithMetadataSource(ms),
 	)
 	if err != nil {
@@ -119,9 +119,9 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		Ext:          encodeFSMeta(t, "in-source.txt"),
+		Ext:          encodeVFSMeta(t, "in-source.txt"),
 	}, nil)
-	ms.put(idHit, encodeFSMeta(t, "in-source.txt"))
+	ms.put(idHit, encodeVFSMeta(t, "in-source.txt"))
 
 	// Another artifact NOT in MetadataSource. FakeSource keeps the
 	// full manifest in-memory; the slow-path Get returns it,
@@ -134,12 +134,12 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		Ext:          encodeFSMeta(t, "fallback.txt"),
+		Ext:          encodeVFSMeta(t, "fallback.txt"),
 	}, nil)
 	// Intentionally NOT calling ms.put for idMiss.
 
 	v, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithPathResolver(vfsmeta.Resolver),
 		vw.WithMetadataSource(ms),
 	)
 	if err != nil {
@@ -180,7 +180,7 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 	src.SetGetErr(errors.New("get unavailable"))
 
 	v, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithPathResolver(vfsmeta.Resolver),
 		// No WithMetadataSource here.
 	)
 	if err != nil {
@@ -228,20 +228,20 @@ func indexByte(s string, b byte) int {
 	return -1
 }
 
-// TestWithFSIndex_Convenience verifies WithFSIndex is just a
+// TestWithFSPathIndex_Convenience verifies WithFSPathIndex is just a
 // pass-through for WithMetadataSource. We confirm by passing a
-// counting source through WithFSIndex and observing the calls.
-func TestWithFSIndex_Convenience(t *testing.T) {
+// counting source through WithFSPathIndex and observing the calls.
+func TestWithFSPathIndex_Convenience(t *testing.T) {
 	src := projectionfx.New()
 	ms := newCountingMetadataSource()
 
 	id := domain.ArtifactID("a")
 	src.Add(strippedManifest(id, "files"), nil)
-	ms.put(id, encodeFSMeta(t, "fs.txt"))
+	ms.put(id, encodeVFSMeta(t, "fs.txt"))
 
 	_, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver),
-		vw.WithFSIndex(ms),
+		vw.WithPathResolver(vfsmeta.Resolver),
+		vw.WithFSPathIndex(ms),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)

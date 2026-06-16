@@ -12,15 +12,15 @@ import (
 	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/fsmeta"
+	"scrinium.dev/domain/vfsmeta"
 )
 
-// withCreatedAt builds a manifest at a specific time. fsmeta path
+// withCreatedAt builds a manifest at a specific time. vfsmeta path
 // applied. Local helper because the time override pattern is
 // only needed in collision tests; TestByPath_HappyPath calls it
 // without overriding time.
 func withCreatedAt(id, path string, createdAt time.Time) domain.Manifest {
-	m := manifestfx.ManifestWithFsmetaPath(id, path)
+	m := manifestfx.ManifestWithVfsmetaPath(id, path)
 	m.CreatedAt = createdAt
 	return m
 }
@@ -30,13 +30,13 @@ func withCreatedAt(id, path string, createdAt time.Time) domain.Manifest {
 func TestByPath_HappyPath(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(
-		manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/2024/sunrise.jpg"),
+		manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "photos/2024/sunrise.jpg"),
 		nil,
 	)
 
 	v, err := vw.New(
 		context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithPathResolver(vfsmeta.Resolver),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
@@ -60,9 +60,9 @@ func TestByPath_HappyPath(t *testing.T) {
 
 func TestByPath_VirtualDirsExist(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithFsmetaPath("sha256-aabbccdd", "photos/2024/img.jpg"), nil)
+	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "photos/2024/img.jpg"), nil)
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	for _, dir := range []string{"photos", "photos/2024"} {
@@ -83,7 +83,7 @@ func TestByPath_OrphanedNotPresent(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	if v.Stats.OrphanedCount != 1 {
@@ -148,7 +148,7 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 
 	bus := eventfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver),
+		vw.WithPathResolver(vfsmeta.Resolver),
 		vw.WithEventBus(bus))
 	defer v.Close()
 
@@ -196,7 +196,7 @@ func TestByPath_CollisionEqualCreatedAt(t *testing.T) {
 	src.Add(withCreatedAt("sha256-bbbb2222", "shared", t0), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	n, _ := v.GetIn(vw.RootByPath, "shared")
@@ -216,7 +216,7 @@ func TestByPath_OrderedArrival(t *testing.T) {
 	src.Add(withCreatedAt("sha256-aaaa1111", "shared", older), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(fsmeta.Resolver))
+		vw.WithPathResolver(vfsmeta.Resolver))
 	defer v.Close()
 
 	n, _ := v.GetIn(vw.RootByPath, "shared")

@@ -81,7 +81,7 @@ func isImageInlineable(mimeType string) bool {
 
 // inferMIME picks the best available MIME for a file. Priority:
 //
-//  1. The fsmeta-encoded MIME, if non-empty. Authoritative —
+//  1. The vfsmeta-encoded MIME, if non-empty. Authoritative —
 //     the producer set it explicitly.
 //  2. The filename extension via mime.TypeByExtension. Fast,
 //     no I/O, covers the common cases.
@@ -93,9 +93,9 @@ func isImageInlineable(mimeType string) bool {
 // which the listing pipeline would do once per row. Sniffing is
 // fine for the actual /_view/<id> endpoint, where we already
 // have the bytes open.
-func inferMIME(filename, fsmetaMIME string) string {
-	if fsmetaMIME != "" {
-		return fsmetaMIME
+func inferMIME(filename, vfsmetaMIME string) string {
+	if vfsmetaMIME != "" {
+		return vfsmetaMIME
 	}
 	ext := path.Ext(filename)
 	if ext == "" {

@@ -171,11 +171,11 @@ func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 //
 // FilesystemFacet carries only the schema-agnostic fields: Name,
 // Path, Size, ModTime, IsDir. POSIX attributes (mode/uid/gid)
-// live in fsmeta.FileSystem inside Manifest.Ext and are
+// live in vfsmeta.FileSystem inside Manifest.Ext and are
 // materialised by FSOps at the transport boundary.
 //
 // ModTime here is seeded from m.CreatedAt as a baseline; FSOps
-// overrides with fsmeta.ModTime when non-zero.
+// overrides with vfsmeta.ModTime when non-zero.
 func (v *View) insertFile(tree map[string]*viewNode, path string, m domain.Manifest) {
 	v.ensureDirs(tree, pathx.Parent(path))
 	name := pathx.LastSegment(path)

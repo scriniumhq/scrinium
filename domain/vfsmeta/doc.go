@@ -1,4 +1,4 @@
-// Package fsmeta is the standard filesystem schema for
+// Package vfsmeta is the standard filesystem schema for
 // Manifest.Ext. It defines a structure that maps each artifact
 // to a POSIX-shaped node (path, mode, owner, mtime, MIME) and the
 // encoder/decoder/resolver that ingester and projection-side
@@ -9,4 +9,4 @@
 // store may contain a mix of versions.
 //
 // Specification: docs/3 §5.5, docs/4 §13.4.2.
-package fsmeta
+package vfsmeta
