@@ -14,12 +14,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"scrinium.dev/engine/customindex"
-	"scrinium.dev/extension"
-	"scrinium.dev/x/fspath"
-
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
+	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
@@ -27,6 +24,7 @@ import (
 	"scrinium.dev/engine/wrapper"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
+	"scrinium.dev/extension"
 	"scrinium.dev/projection"
 )
 
@@ -120,9 +118,11 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	//    one-call Use over a live target). The index axis must precede
 	//    store open so the first IndexManifest dispatches into it; the
 	//    behavior wrapper is applied at open; paired agents join the
-	//    scheduler. fsidx is also handed to the projection below.
-	fsidx := fspath.NewIndex()
-	exts := []extension.Extension{fspath.ExtensionFor(fsidx)}
+	//    scheduler. The set comes from the registry (registered at the
+	//    composition root, ADR-63/98); the assembler special-cases no
+	//    extension — the by-path projection seam below is taken from
+	//    whichever extension provides that view.
+	exts := reg.extensionList()
 	var (
 		loadedExts    []extension.Descriptor
 		wrapFactories []wrapper.Factory
@@ -335,12 +335,17 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		if cfgErr != nil {
 			return nil, fmt.Errorf("scrinium: %w", cfgErr)
 		}
-		// Feed the by-path resolver from the view-providing extension
-		// (ADR-98) instead of a projection-layer default.
+		// The by-path view's seam comes entirely from the view-providing
+		// extension (ADR-98): both the resolver and the bulk metadata
+		// source. The assembler holds no direct index handle.
+		var metaSrc projection.MetadataIndex
 		if pv, ok := providedViews["by-path"]; ok {
 			pcfg.PathResolver = pv.Resolve
+			if pv.Metadata != nil {
+				metaSrc = pv.Metadata
+			}
 		}
-		p, buildErr := projection.Build(ctx, st, fsidx, pcfg)
+		p, buildErr := projection.Build(ctx, st, metaSrc, pcfg)
 		if buildErr != nil {
 			return nil, fmt.Errorf("scrinium: %w", buildErr)
 		}

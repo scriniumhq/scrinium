@@ -435,10 +435,24 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 		}
 
 		// Remove the manifest's штатные projections (core-owned, by digest).
-		// Own-table cleanup (Indexer.Unindex) needs the manifest at delete
-		// time and lands with the first own-table consumer (fspathindex, M4.4).
 		if err := deleteProjections(ctx, tx, dg); err != nil {
 			return err
+		}
+
+		// Own-table cleanup: every Indexer's Unindex removes the rows it
+		// wrote to its own tables (§9.2.1). The delete path has no manifest
+		// body, so we hand Unindex the indexed identity; an Indexer that
+		// needs the payload recovers it from its own tables (fspathindex).
+		// Skipped for headless containers (empty artifact_id) — custom
+		// indexes index user-visible artifacts only, symmetric with the
+		// write-side !IsContainer() guard.
+		if artifactID != "" {
+			if err := i.applyUnindexers(ctx, tx, domain.Manifest{
+				ArtifactID: domain.ArtifactID(artifactID),
+				Digest:     digest,
+			}); err != nil {
+				return err
+			}
 		}
 
 		// Dispatch to custom indexes before commit. EventArgs carries the

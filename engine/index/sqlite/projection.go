@@ -83,13 +83,36 @@ func (i *Index) applyIndexers(ctx context.Context, tx *sql.Tx, m domain.Manifest
 	return nil
 }
 
+// applyUnindexers runs every registered Indexer's Unindex over the manifest
+// being deleted, in the delete transaction (§9.2.1) — the symmetric inverse of
+// applyIndexers. Each index removes the rows it wrote to its OWN tables through
+// its Substrate. The core has already removed the штатные proj_* rows by digest
+// (deleteProjections); this covers the own-table side a digest alone cannot
+// reach. The manifest passed carries the indexed identity (ArtifactID/Digest);
+// its body (Ext) is not available at delete time, so an Unindex that needs the
+// payload recovers it from its own tables (as fspathindex does).
+func (i *Index) applyUnindexers(ctx context.Context, tx *sql.Tx, m domain.Manifest) error {
+	idxs := i.snapshotIndexers()
+	if len(idxs) == 0 {
+		return nil
+	}
+	for _, ci := range idxs {
+		name := ci.Name()
+		store := newSqliteSubstrate(name)
+		store.useTx(tx)
+		if err := ci.(customindex.Indexer).Unindex(ctx, store, m); err != nil {
+			return fmt.Errorf("indexer %q unindex: %w", name, err)
+		}
+	}
+	return nil
+}
+
 // deleteProjections removes every штатная-проекция row for digest, in the
 // delete transaction. The core owns proj_*, so it removes them by digest — the
 // symmetric inverse of having written them, and robust to an index toggled off
 // since the write (no orphan rows). An index's OWN tables (Substrate, §9.7) are
-// cleaned by Unindex; that dispatch needs the manifest at delete time and lands
-// with the first own-table consumer (fspathindex, M4.4). proj_* delete needs only
-// the digest, so it is wired here.
+// cleaned by Unindex (applyUnindexers, wired in deleteManifestTx). proj_* delete
+// needs only the digest, so it is handled here.
 func deleteProjections(ctx context.Context, tx *sql.Tx, digest string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM proj_ext WHERE digest = ?`, digest); err != nil {
 		return fmt.Errorf("delete proj_ext: %w", err)
