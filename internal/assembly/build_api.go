@@ -5,6 +5,7 @@ import (
 
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/event"
+	"scrinium.dev/extension"
 )
 
 // Mode selects what Build does when the described store does or does
@@ -63,6 +64,7 @@ func Build(ctx context.Context, cfg Config, opts ...BuildOption) (Assembly, erro
 		cronParser:   o.cronParser,
 		schedules:    o.schedules,
 		agentConfigs: o.agentConfigs,
+		extensions:   o.extensions,
 	})
 }
 
@@ -87,6 +89,10 @@ type Options struct {
 	// applied to the scheduler during assembly (§9.7).
 	schedules    map[string]string
 	agentConfigs map[string]any
+	// extensions are the per-build extensions supplied via WithExtension.
+	// They are installed alongside any registered process-wide
+	// (RegisterExtension); the assembler special-cases none (ADR-88/98).
+	extensions []extension.Extension
 }
 
 // SetCronParser installs the cron expression parser used by ScheduleCron.
@@ -155,5 +161,22 @@ func WithAgentConfig(kind string, cfg any) BuildOption {
 			o.agentConfigs = make(map[string]any)
 		}
 		o.agentConfigs[kind] = cfg
+	}
+}
+
+// WithExtension installs one or more extensions into the client being
+// built, in addition to any registered process-wide (RegisterExtension).
+// Each is installed as a whole (ADR-88); its parts — index axis, view
+// (ViewProvider), behavior wrapper, paired agents — are discovered by
+// assertion at assembly (ADR-98). It works on every build entry point
+// (Build, Open, and the Load* functions, which thread it through). Pass it
+// more than once to accumulate; a nil extension is ignored.
+func WithExtension(exts ...extension.Extension) BuildOption {
+	return func(o *Options) {
+		for _, e := range exts {
+			if e != nil {
+				o.extensions = append(o.extensions, e)
+			}
+		}
 	}
 }

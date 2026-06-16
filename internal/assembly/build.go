@@ -53,6 +53,9 @@ type agentWiring struct {
 	// applied to the scheduler during assembly (§9.7). Last-wins per kind.
 	schedules    map[string]string
 	agentConfigs map[string]any
+	// extensions are the per-build extensions from WithExtension, installed
+	// alongside the process-wide registry set.
+	extensions []extension.Extension
 }
 
 // build turns a validated, defaulted Config into an assembled stack. It
@@ -122,7 +125,12 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	//    composition root, ADR-63/98); the assembler special-cases no
 	//    extension — the by-path projection seam below is taken from
 	//    whichever extension provides that view.
-	exts := reg.extensionList()
+	//
+	// Two sources, installed identically below: the process-wide registry
+	// (RegisterExtension — e.g. third-party blank-import) and the per-build
+	// WithExtension options. A duplicate view Root across them is rejected
+	// by the install loop, so double-installing one extension is caught.
+	exts := append(reg.extensionList(), aw.extensions...)
 	var (
 		loadedExts    []extension.Descriptor
 		wrapFactories []wrapper.Factory

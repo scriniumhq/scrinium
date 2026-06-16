@@ -23,6 +23,13 @@
 //	    _ "scrinium.dev/engine/driver/localfs"
 //	    _ "scrinium.dev/engine/index/sqlite"
 //	)
+//
+// Extensions are installed at build time with WithExtension, e.g. the
+// by-path filesystem view:
+//
+//	import "scrinium.dev/x/fspath"
+//	c, err := scrinium.Open(ctx, "file:///data/app",
+//	    scrinium.WithExtension(fspath.NewExtension()))
 package scrinium
 
 import (
@@ -217,7 +224,7 @@ func Build(ctx context.Context, cfg Config, opts ...BuildOption) (*ScriniumClien
 	return wrap(a), nil
 }
 
-// BuildOption tunes Build/Open (e.g. WithMode).
+// BuildOption tunes Build/Open/Load* (e.g. WithMode, WithExtension).
 type BuildOption = assembly.BuildOption
 
 // WithMode sets the open/init behaviour (default ModeOpenOrInit).
@@ -247,30 +254,40 @@ func WithSchedule(kind, expr string) BuildOption { return assembly.WithSchedule(
 // to an agent's factory. A repeat call for the same kind replaces it.
 func WithAgentConfig(kind string, cfg any) BuildOption { return assembly.WithAgentConfig(kind, cfg) }
 
+// WithExtension installs extensions into the client being built, e.g.
+// scrinium.WithExtension(fspath.NewExtension()) to enable the by-path
+// projection view. It works with Open, Build, and the Load* functions.
+// Accumulates across calls; a nil extension is ignored.
+func WithExtension(exts ...extension.Extension) BuildOption {
+	return assembly.WithExtension(exts...)
+}
+
 // LoadYAML / LoadInitYAML / LoadOrInitYAML assemble from a YAML
-// configuration document. JSON variants mirror them.
-func LoadYAML(ctx context.Context, data []byte) (*ScriniumClient, error) {
-	return wrapErr(assembly.LoadYAML(ctx, data))
+// configuration document. JSON variants mirror them. opts are the same
+// build-time options Open/Build accept (e.g. WithExtension), applied on
+// top of the parsed config.
+func LoadYAML(ctx context.Context, data []byte, opts ...BuildOption) (*ScriniumClient, error) {
+	return wrapErr(assembly.LoadYAML(ctx, data, opts...))
 }
 
-func LoadInitYAML(ctx context.Context, data []byte) (*ScriniumClient, error) {
-	return wrapErr(assembly.LoadInitYAML(ctx, data))
+func LoadInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (*ScriniumClient, error) {
+	return wrapErr(assembly.LoadInitYAML(ctx, data, opts...))
 }
 
-func LoadOrInitYAML(ctx context.Context, data []byte) (*ScriniumClient, error) {
-	return wrapErr(assembly.LoadOrInitYAML(ctx, data))
+func LoadOrInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (*ScriniumClient, error) {
+	return wrapErr(assembly.LoadOrInitYAML(ctx, data, opts...))
 }
 
-func LoadJSON(ctx context.Context, data []byte) (*ScriniumClient, error) {
-	return wrapErr(assembly.LoadJSON(ctx, data))
+func LoadJSON(ctx context.Context, data []byte, opts ...BuildOption) (*ScriniumClient, error) {
+	return wrapErr(assembly.LoadJSON(ctx, data, opts...))
 }
 
-func LoadInitJSON(ctx context.Context, data []byte) (*ScriniumClient, error) {
-	return wrapErr(assembly.LoadInitJSON(ctx, data))
+func LoadInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (*ScriniumClient, error) {
+	return wrapErr(assembly.LoadInitJSON(ctx, data, opts...))
 }
 
-func LoadOrInitJSON(ctx context.Context, data []byte) (*ScriniumClient, error) {
-	return wrapErr(assembly.LoadOrInitJSON(ctx, data))
+func LoadOrInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (*ScriniumClient, error) {
+	return wrapErr(assembly.LoadOrInitJSON(ctx, data, opts...))
 }
 
 func wrapErr(a assembly.Assembly, err error) (*ScriniumClient, error) {
