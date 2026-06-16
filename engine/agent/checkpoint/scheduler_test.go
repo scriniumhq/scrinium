@@ -6,7 +6,7 @@ import (
 
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/checkpoint"
-	"scrinium.dev/engine/agent/internal/schedfx"
+	"scrinium.dev/testutil/schedfx"
 )
 
 // TestCheckpoint_Scheduled verifies the Scheduler builds and invokes the

@@ -1,4 +1,4 @@
-// Package systemlayout is the pointer-free on-disk layout for system
+// Package namedstore is the pointer-free on-disk layout for system
 // artifacts (ADR-85). It is the single source of truth for where a
 // system artifact lives and how its active version is chosen, shared by
 // the two callers that previously each carried their own copy of the
@@ -45,7 +45,7 @@
 // pass. Config is read at every store-open and the few other system
 // names on each touch — frequent enough that verify-on-read is the
 // whole integrity story.
-package systemlayout
+package namedstore
 
 import (
 	"bytes"

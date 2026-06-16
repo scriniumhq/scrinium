@@ -10,7 +10,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent/internal/checkpointfmt"
-	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/agent/rebuild"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -20,6 +19,7 @@ import (
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/eventfx"
 	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/leasefx"
 	"scrinium.dev/testutil/storefx"
 )
 

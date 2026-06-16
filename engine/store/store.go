@@ -199,7 +199,7 @@ type AdminStore interface {
 // version of the name; Get reads the active version; Delete removes the
 // name. Versioning, activation (max seq), exclusive-create publishing,
 // and verify-on-read integrity live in
-// engine/store/internal/systemlayout (ADR-85).
+// engine/namedstore (ADR-85).
 //
 // Named addressing is a deliberately small facility for the engine's
 // own data — not a general user-facing primitive — which is why it
@@ -213,7 +213,27 @@ type SystemArtifact struct {
 	// Payload is the artifact body. System payloads are small enough to
 	// buffer in memory.
 	Payload io.Reader
+
+	// Keep selects the storage form (ADR-100/101). It is optional:
+	//   nil             → the default, keep=1 (atomic versioned "latest",
+	//                     no history). Forgetting Keep is safe — it never
+	//                     yields the exclusive-cell (lock) form.
+	//   *Keep == 0      → exclusive cell: one fixed slot (<name>), no
+	//                     versions, overwrite in place (the keep=0 / lock
+	//                     form). Opt-in only — build it with KeepCell().
+	//   *Keep ∈ [1,255] → versions: <name>/<seq>, active = max(seq),
+	//                     pruned to *Keep retained. Build with KeepVersions(n).
+	Keep *uint8
 }
+
+// KeepCell marks a SystemArtifact as a keep=0 exclusive cell: a single
+// fixed slot, overwritten in place (ADR-100/101). The lock form.
+func KeepCell() *uint8 { var k uint8; return &k }
+
+// KeepVersions marks a SystemArtifact as keep=n versioned storage
+// (<name>/<seq>, active = max, pruned to n retained). n must be ≥ 1; n=0
+// is the cell form — use KeepCell for that.
+func KeepVersions(n uint8) *uint8 { return &n }
 
 // SystemStore is the facade for engine-internal service artifacts:
 // versioned configuration, agent cursors, index snapshots, and the
@@ -221,20 +241,23 @@ type SystemArtifact struct {
 // outside the content-addressed index, in their own address space, and
 // are invisible to Store.Walk.
 type SystemStore interface {
-	// Put writes a SystemArtifact as a new version of its Name. The
-	// active version becomes the one just written (max seq); older
-	// versions are retained for a bounded history and otherwise pruned.
+	// Put writes a SystemArtifact in the form its Keep selects (ADR-101):
+	// keep=0 overwrites the exclusive cell in place; keep≥1 publishes a
+	// new version (active = max seq) and prunes to Keep retained. Keep is
+	// optional — nil defaults to keep=1 (versioned latest, no history).
 	Put(ctx context.Context, a SystemArtifact) error
 
-	// Get opens the active version of name. Returns
-	// errs.ErrArtifactNotFound when the name has never been written.
+	// Get opens the active version (max seq) or, for a keep=0 name, the
+	// cell. Returns errs.ErrArtifactNotFound when the name has never been
+	// written.
 	Get(ctx context.Context, name string) (domain.ReadHandle, error)
 
-	// Delete removes every version of name. Idempotent: deleting an
-	// absent name returns nil.
+	// Delete removes every version AND any cell of name. Idempotent:
+	// deleting an absent name returns nil.
 	Delete(ctx context.Context, name string) error
 
 	// Walk iterates over every name with the given prefix in
-	// alphabetical order, yielding the active manifest for each.
+	// alphabetical order, yielding the active manifest for each — both
+	// versioned actives and keep=0 cells (e.g. the lease).
 	Walk(ctx context.Context, prefix string, cb func(name string, m domain.Manifest) error) error
 }

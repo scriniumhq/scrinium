@@ -10,7 +10,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/agent/scrub"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver/localfs"
@@ -18,6 +17,7 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/eventfx"
+	"scrinium.dev/testutil/leasefx"
 	"scrinium.dev/testutil/storefx"
 )
 

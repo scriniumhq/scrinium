@@ -94,7 +94,7 @@
 // System and config plumbing:
 //
 //   - system_store.go    — the systemStore facade (Put/Get/Delete/Walk),
-//     a thin adapter over internal/systemlayout. System artifacts are
+//     a thin adapter over namedstore. System artifacts are
 //     addressed by name in their own system/ address space and are never
 //     indexed (ADR-85), so there is no pointer file and no opt-out flag.
 //
@@ -106,12 +106,12 @@
 //     and manifest load, blob open, and verification (read).
 //   - descriptor   — the on-disk descriptor and its L2 cache.
 //   - keyring      — the KDF (Argon2id) and KEK/DEK wrap/unwrap kernels.
-//   - systemlayout — the system/<name>/<seq> address-space mechanics
+//   - namedstore — the system/<name>/<seq> address-space mechanics
 //     (name validation, seq claim via atomic create, inline-manifest
 //     build, verify-on-read) shared by the systemStore facade and the
 //     storeconfig bootstrap path (ADR-85).
 //   - storeconfig  — the StoreConfig format, defaults, validation, and
-//     persistence (over systemlayout).
+//     persistence (over namedstore).
 //   - orphanscan   — bootstrap-time orphan recovery.
 //   - reconcile    — replica reconciliation.
 //   - recoverykit  — the recovery-kit format.

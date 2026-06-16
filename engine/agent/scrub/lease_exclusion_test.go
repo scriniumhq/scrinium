@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/eventfx"
+	"scrinium.dev/testutil/leasefx"
 	"scrinium.dev/testutil/storefx"
 )
 

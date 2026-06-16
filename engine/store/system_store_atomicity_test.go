@@ -26,8 +26,8 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/namedstore"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/store/internal/systemlayout"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
 	"scrinium.dev/testutil/storefx"
@@ -70,7 +70,7 @@ func (f *faultDriver) Remove(ctx context.Context, path string) error {
 // versionPath is the driver path of a specific system-artifact version.
 func versionPath(t *testing.T, name string, seq uint64) string {
 	t.Helper()
-	p, err := systemlayout.VersionPath(name, seq)
+	p, err := namedstore.VersionPath(name, seq)
 	if err != nil {
 		t.Fatalf("VersionPath(%q, %d): %v", name, seq, err)
 	}

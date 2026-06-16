@@ -10,9 +10,9 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
 	sqliteindex "scrinium.dev/engine/index/sqlite"
+	"scrinium.dev/engine/namedstore"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
-	"scrinium.dev/engine/store/internal/systemlayout"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/storefx"
 )
@@ -77,7 +77,7 @@ func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 	if _, err := os.Stat(descPath); err != nil {
 		t.Fatalf("descriptor not on disk after Init: %v", err)
 	}
-	cfgVersion, err := systemlayout.VersionPath("config", 1)
+	cfgVersion, err := namedstore.VersionPath("config", 1)
 	if err != nil {
 		t.Fatalf("VersionPath: %v", err)
 	}

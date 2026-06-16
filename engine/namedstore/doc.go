@@ -23,4 +23,4 @@
 // slot, and a per-hold nonce plus read-after-write verification settles
 // races to take over an expired lease and detects a stale previous
 // owner returning with a late Renew.
-package lease
+package namedstore

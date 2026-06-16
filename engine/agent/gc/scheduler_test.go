@@ -8,7 +8,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/gc"
-	"scrinium.dev/engine/agent/internal/schedfx"
+	"scrinium.dev/testutil/schedfx"
 )
 
 // TestGC_Scheduled verifies the Scheduler builds the registered gc agent

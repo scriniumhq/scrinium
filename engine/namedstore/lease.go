@@ -1,4 +1,4 @@
-package lease
+package namedstore
 
 import (
 	"context"

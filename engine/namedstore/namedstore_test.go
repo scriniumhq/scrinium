@@ -1,4 +1,4 @@
-package systemlayout
+package namedstore
 
 import (
 	"bytes"

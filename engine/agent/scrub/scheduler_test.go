@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/agent/internal/schedfx"
 	"scrinium.dev/engine/agent/scrub"
+	"scrinium.dev/testutil/schedfx"
 )
 
 // TestScrub_Scheduled verifies the Scheduler builds and invokes the
