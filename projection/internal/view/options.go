@@ -40,6 +40,13 @@ type viewOptions struct {
 	filter   Filter
 	bus      event.EventBus
 
+	// nsResolver extracts the by-namespace key (nsid) from a manifest;
+	// nsLabel maps that nsid to a display name. Both supplied by the
+	// namespace extension's ViewProvider (ADR-98). nil nsResolver ⇒ the
+	// by-namespace tree falls back to the transitional manifest namespace.
+	nsResolver source.Resolver
+	nsLabel    func(string) (string, bool)
+
 	// metadataSource is an optional bulk source of manifest
 	// metadata used by backfill to skip per-manifest
 	// Source.Get round-trips. Set via WithMetadataSource or
@@ -75,6 +82,21 @@ func WithFSPathIndex(fsidx source.Metadata) Option {
 // fallback (when FallbackSynthetic) or is empty.
 func WithPathResolver(r source.Resolver) Option {
 	return func(o *viewOptions) { o.resolver = r }
+}
+
+// WithNamespaceResolver registers the by-namespace key extractor (nsid
+// from a manifest), supplied by the namespace extension (ADR-98). Without
+// it the by-namespace tree falls back to the transitional manifest
+// namespace label.
+func WithNamespaceResolver(r source.Resolver) Option {
+	return func(o *viewOptions) { o.nsResolver = r }
+}
+
+// WithNamespaceLabel registers the nsid→display-name mapping for the
+// by-namespace tree (the registry name). Without it nodes are labelled
+// with the verbatim nsid.
+func WithNamespaceLabel(l func(string) (string, bool)) Option {
+	return func(o *viewOptions) { o.nsLabel = l }
 }
 
 // WithRootView selects the tree that occupies the View root. The

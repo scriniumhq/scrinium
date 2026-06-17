@@ -251,7 +251,7 @@ func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
 	v.insertFile(v.byDate, rec.pathByDate, m)
 
 	// by-namespace — always (synthetic _default for empty Namespace).
-	rec.pathByNamespace = byNamespacePath(m)
+	rec.pathByNamespace = v.byNamespacePath(m)
 	v.insertFile(v.byNamespace, rec.pathByNamespace, m)
 
 	// by-session — only if SessionID present.
@@ -283,9 +283,9 @@ func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
 			v.Stats.SessionCount++
 		}
 	}
-	if m.Namespace != "" {
-		if _, seen := v.seenNamespaces[m.Namespace]; !seen {
-			v.seenNamespaces[m.Namespace] = struct{}{}
+	if ns := v.namespaceLabel(m); ns != "" {
+		if _, seen := v.seenNamespaces[ns]; !seen {
+			v.seenNamespaces[ns] = struct{}{}
 			v.Stats.NamespaceCount++
 		}
 	}

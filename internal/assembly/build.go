@@ -353,6 +353,13 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 				metaSrc = pv.Metadata
 			}
 		}
+		// The by-namespace view's seam (ADR-98): nsid resolver + nsid→name
+		// label from the namespace extension. The assembler stays agnostic —
+		// it forwards whatever the extension provided, keyed by Root.
+		if pv, ok := providedViews["by-namespace"]; ok {
+			pcfg.NamespaceResolver = pv.Resolve
+			pcfg.NamespaceLabel = pv.Label
+		}
 		p, buildErr := projection.Build(ctx, st, metaSrc, pcfg)
 		if buildErr != nil {
 			return nil, fmt.Errorf("scrinium: %w", buildErr)

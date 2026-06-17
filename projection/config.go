@@ -24,6 +24,15 @@ type Config struct {
 	// fallback-only (empty under FallbackOrphaned).
 	PathResolver func(m domain.Manifest) (path string, ok bool)
 
+	// NamespaceResolver extracts the by-namespace key (the nsid) from a
+	// manifest; NamespaceLabel maps that nsid to its display name. Both are
+	// supplied by the namespace extension via its ViewProvider (ADR-98),
+	// mirroring PathResolver for by-path: the tree is keyed by nsid (stable
+	// across rename), labelled by name. nil ⇒ the by-namespace tree falls
+	// back to the transitional manifest namespace label.
+	NamespaceResolver func(m domain.Manifest) (nsid string, ok bool)
+	NamespaceLabel    func(nsid string) (name string, ok bool)
+
 	// ByPathFallback controls what the by-path tree does with
 	// manifests that carry no path: "orphaned" or "synthetic".
 	ByPathFallback string

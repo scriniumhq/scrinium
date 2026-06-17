@@ -54,6 +54,12 @@ func buildView(ctx context.Context, backend Backend, fsidx MetadataIndex, cfg Co
 	if cfg.PathResolver != nil {
 		opts = append(opts, view.WithPathResolver(cfg.PathResolver))
 	}
+	if cfg.NamespaceResolver != nil {
+		opts = append(opts, view.WithNamespaceResolver(cfg.NamespaceResolver))
+	}
+	if cfg.NamespaceLabel != nil {
+		opts = append(opts, view.WithNamespaceLabel(cfg.NamespaceLabel))
+	}
 	if cfg.RootView != "" {
 		opts = append(opts, view.WithRootView(view.RootView(cfg.RootView)))
 	}
