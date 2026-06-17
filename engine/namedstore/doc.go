@@ -8,14 +8,14 @@
 //
 // A system artifact is identified by a NAME — a flat, dot-separated
 // key: "store.config", "store.checkpoint.<ts>", "store.state.gc.lease".
-// The name maps deterministically to a driver directory (system/<name>/);
-// each write of that name lands in a new, monotonically increasing SEQ file inside
-// that directory:
+// The name maps deterministically to a flat file under the named root;
+// each write of that name claims a new, monotonically increasing SEQ,
+// stored as a dot-suffixed flat file (no per-artifact subdirectory):
 //
-//	system/<name>/<seq>     e.g. system/config/00000000000000000003
-//	                             system/scrub/cursor/00000000000000000012
+//	named/<name>.<seq>     e.g. named/store.config.0000000001
+//	                            named/store.checkpoint.<ts>.0000000001
 //
-// The file at <name>/<seq> IS the (inline) manifest — system artifacts
+// The file at named/<name>.<seq> IS the (inline) manifest — system artifacts
 // are short and unique per write, so they carry their payload inline
 // with an empty Pipeline (ContentHash == BlobRef). There is no separate
 // blob file, no content-addressed manifests/ entry, and no StoreIndex

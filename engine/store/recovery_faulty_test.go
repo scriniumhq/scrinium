@@ -90,7 +90,7 @@ func TestRecoverOrphans_TransientResolveError_DoesNotAbortSweep(t *testing.T) {
 			t.Fatalf("blob %d: %v", i, err)
 		}
 	}
-	stagingPath := "system.state/staging/leftover-from-crashed-put"
+	stagingPath := ".staging/leftover-from-crashed-put"
 	if err := drv.Put(context.Background(), stagingPath, strings.NewReader("staging")); err != nil {
 		t.Fatalf("staging: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestRecoverOrphans_RemoveFails_OrphanStays(t *testing.T) {
 		faulty.WithFailureRate(faulty.MethodRemove, 1.0),
 	)
 
-	stagingPath := "system.state/staging/leftover-from-crash"
+	stagingPath := ".staging/leftover-from-crash"
 	if err := inner.Put(context.Background(), stagingPath, strings.NewReader("x")); err != nil {
 		t.Fatalf("inner.Put: %v", err)
 	}

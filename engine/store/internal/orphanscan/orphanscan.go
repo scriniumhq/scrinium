@@ -44,7 +44,7 @@ func RecoverOrphans(ctx context.Context, drv driver.Driver, idx index.StoreIndex
 	start := time.Now()
 	report := OrphanReport{}
 
-	// 1. Sweep system.state/staging/. Unconditional removal: any
+	// 1. Sweep .staging/. Unconditional removal: any
 	// file here is from a crashed prior process. Per-file Remove
 	// errors do not stop the sweep.
 	if err := drv.ListObjectsWithModTime(ctx, domain.StagingPrefix, time.Time{},

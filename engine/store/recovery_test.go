@@ -254,7 +254,7 @@ func TestRecovery_RemovesOrphanManifest_AtInit(t *testing.T) {
 func TestRecovery_RemovesStaging_AtInit(t *testing.T) {
 	f := newRecoveryFixture(t)
 
-	stagingPath := "system.state/staging/leftover-deadbeef"
+	stagingPath := ".staging/leftover-deadbeef"
 	f.stageFile(t, stagingPath, "stale staging from a crashed prior write")
 
 	_ = f.initStore(t)
@@ -422,7 +422,7 @@ func TestRecovery_PublishesEvent_PayloadShape(t *testing.T) {
 	// Stage one of each to populate every counter.
 	f.stageFile(t, blobPathForRef(t, fakeRef('1')), "x")
 	f.stageFile(t, manifestPathForID(t, domain.ManifestDigest(fakeRef('2'))), "{}")
-	f.stageFile(t, "system.state/staging/leftover-3", "x")
+	f.stageFile(t, ".staging/leftover-3", "x")
 
 	_ = f.initStore(t)
 

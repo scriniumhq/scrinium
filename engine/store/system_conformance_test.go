@@ -176,13 +176,13 @@ func TestSystemStore_PutDoesNotIndex(t *testing.T) {
 	ctx := context.Background()
 	body := []byte("snapshot-payload-1234")
 
-	before := countNamespace(t, idx, domain.NamespaceSystemState)
+	before := countNamespace(t, idx, domain.NamespaceWildcard)
 
 	if err := ss.Put(ctx, store.SystemArtifact{Name: "index_checkpoint/2026-04-01", Payload: bytes.NewReader(body)}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	// Get round-trips: system artifacts live in their own system/
+	// Get round-trips: system artifacts live in their own named/
 	// address space, read back by name → seq → file.
 	rh, err := ss.Get(ctx, "index_checkpoint/2026-04-01")
 	if err != nil {
@@ -195,7 +195,7 @@ func TestSystemStore_PutDoesNotIndex(t *testing.T) {
 	}
 
 	// System artifacts are never indexed (ADR-85): the index must not grow.
-	if d := countNamespace(t, idx, domain.NamespaceSystemState) - before; d != 0 {
+	if d := countNamespace(t, idx, domain.NamespaceWildcard) - before; d != 0 {
 		t.Errorf("system artifact appeared in index (delta %d, want 0)", d)
 	}
 }

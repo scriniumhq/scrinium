@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io/fs"
-	"strings"
 	"testing"
 	"time"
 
@@ -78,10 +77,10 @@ func runListByNamespace(t *testing.T, f Factory) {
 		}
 	})
 
-	t.Run("Wildcard_ExcludesSystem", func(t *testing.T) {
+	t.Run("Wildcard_ReturnsAllUser", func(t *testing.T) {
 		ctx := t.Context()
-		// "*" is the user-namespace wildcard: everything except
-		// the reserved "system." prefix.
+		// "*" is the user-namespace wildcard: it returns every
+		// indexed user artifact across namespaces.
 		idx := f.New(t)
 		stage := []struct {
 			id, ref, ns string
@@ -89,8 +88,6 @@ func runListByNamespace(t *testing.T, f Factory) {
 		}{
 			{"u1", "blob-u1", "alpha", 'a'},
 			{"u2", "blob-u2", "beta", 'b'},
-			{"s1", "blob-s1", domain.NamespaceSystemConfig, 'c'},
-			{"s2", "blob-s2", domain.NamespaceSystemState, 'd'},
 		}
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
@@ -102,12 +99,7 @@ func runListByNamespace(t *testing.T, f Factory) {
 
 		got := collectByNamespace(t, idx, domain.NamespaceWildcard)
 		if len(got) != 2 {
-			t.Fatalf("got %d, want 2 (system.* excluded)", len(got))
-		}
-		for _, m := range got {
-			if strings.HasPrefix(m.Namespace, domain.NamespaceSystemPrefix) {
-				t.Errorf("system.* leaked: %s", m.Namespace)
-			}
+			t.Fatalf("got %d, want 2", len(got))
 		}
 	})
 

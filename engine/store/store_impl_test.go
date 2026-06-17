@@ -170,17 +170,6 @@ func TestStore_Walk_EmptyStore(t *testing.T) {
 	}
 }
 
-func TestStore_Walk_RejectsSystemPrefix(t *testing.T) {
-	s := newStore(t)
-	err := s.Walk(context.Background(), "system.config", func(m domain.Manifest) error {
-		t.Fatal("callback must not run for reserved namespace")
-		return nil
-	})
-	if !errors.Is(err, errs.ErrReservedNamespace) {
-		t.Fatalf("expected errs.ErrReservedNamespace, got %v", err)
-	}
-}
-
 func TestStore_Walk_RejectsTooLongNamespace(t *testing.T) {
 	s := newStore(t)
 	long := strings.Repeat("a", 256)

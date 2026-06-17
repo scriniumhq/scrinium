@@ -39,8 +39,8 @@ var ErrRetentionNotExpired = errors.New("scrinium: retention not expired")
 // Backup with ReadPolicy: Never; AllowColdRead is required.
 var ErrArchivedArtifact = errors.New("scrinium: archived artifact")
 
-// ErrReservedNamespace — an attempt to use "*" or the "system."
-// prefix without a CapabilityToken.
+// ErrReservedNamespace — an attempt to use the "*" wildcard namespace
+// where a concrete namespace is required.
 var ErrReservedNamespace = errors.New("scrinium: reserved namespace")
 
 // ErrNamespaceTooLong — namespace > 255 bytes.

@@ -130,8 +130,6 @@ func TestPut_InputValidation(t *testing.T) {
 		opts    []domain.PutOption
 		wantErr error // nil means "any non-nil error"
 	}{
-		{"reserved system namespace", payload("x"),
-			[]domain.PutOption{domain.WithNamespace("system.config")}, errs.ErrReservedNamespace},
 		{"wildcard namespace", payload("x"),
 			[]domain.PutOption{domain.WithNamespace("*")}, errs.ErrReservedNamespace},
 		{"namespace too long", payload("x"),
