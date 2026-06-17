@@ -247,7 +247,7 @@ func TestGC_SingleHostTakesNoLease(t *testing.T) {
 func TestGC_LeaderElectionBlockedByForeignLease(t *testing.T) {
 	f := newGCFixture(t, time.Hour, domain.GCLeaseLeaderElection)
 	f.putAndOrphan(t, "data")
-	leasefx.StageForeign(t, f.drv, "system.state/gc/lease", "other-host", "GC", time.Hour)
+	leasefx.StageForeign(t, f.drv, "store/state/gc/lease", "other-host", "GC", time.Hour)
 	a := newGC(t, f, gc.GCConfig{LeaseTTL: time.Minute})
 	if _, err := a.RunOnce(context.Background()); err == nil {
 		t.Fatal("LeaderElection RunOnce with a live foreign lease = nil, want lease-held failure")

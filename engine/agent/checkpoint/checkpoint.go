@@ -70,7 +70,7 @@ type CheckpointAgent interface {
 }
 
 const (
-	checkpointLeasePath       = "system.state/checkpoint/lease"
+	checkpointLeaseName       = "store/state/checkpoint/lease"
 	defaultCheckpointIntv     = 6 * time.Hour
 	defaultCheckpointKeep     = 3
 	defaultCheckpointLeaseTTL = 15 * time.Minute
@@ -168,7 +168,7 @@ func (a *checkpointAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
 		AgentType:    "checkpoint",
 		StoreID:      a.storeID,
-		Lease:        namedstore.Config{Path: checkpointLeasePath, HostID: a.hostID, AgentType: "checkpoint", TTL: defaultCheckpointLeaseTTL},
+		Lease:        namedstore.Config{Name: checkpointLeaseName, HostID: a.hostID, AgentType: "checkpoint", TTL: defaultCheckpointLeaseTTL},
 		LeaseEnabled: true,
 		Terminal:     event.EventAgentCompleted,
 		TerminalMode: agent.TerminalOnSuccess,

@@ -68,7 +68,7 @@ type RebuildConfig struct {
 }
 
 const (
-	rebuildLeasePath        = "system.state/maintenance/lease"
+	rebuildLeasePath        = "store/state/maintenance/lease"
 	defaultRebuildBatchSize = 1000
 	defaultRebuildParallel  = 8
 	defaultRebuildLeaseTTL  = 30 * time.Minute

@@ -255,7 +255,7 @@ func TestScrub_BlockedByForeignLease(t *testing.T) {
 	f := newScrubFixture(t)
 	f.put(t, "v", "data")
 	// Stage a live foreign scrub lease.
-	leasefx.StageForeign(t, f.drv, "system.state/scrub/lease", "other-host", "Scrub", time.Hour)
+	leasefx.StageForeign(t, f.drv, "store/state/scrub/lease", "other-host", "Scrub", time.Hour)
 
 	a := newScrub(t, f, forceCfg())
 	if _, err := a.RunOnce(context.Background()); err == nil {

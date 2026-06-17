@@ -58,7 +58,7 @@ func (a *rebuildAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
 		AgentType:    "rebuild",
 		StoreID:      a.storeID,
-		Lease:        namedstore.Config{Path: rebuildLeasePath, HostID: a.hostID, AgentType: "rebuild", TTL: a.cfg.LeaseTTL},
+		Lease:        namedstore.Config{Name: rebuildLeasePath, HostID: a.hostID, AgentType: "rebuild", TTL: a.cfg.LeaseTTL},
 		LeaseEnabled: true,
 		Terminal:     event.EventAgentCompleted,
 		TerminalMode: agent.TerminalOnSuccess,

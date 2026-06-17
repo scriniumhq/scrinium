@@ -74,7 +74,7 @@ func RunLeased(
 		}
 		if prev != nil {
 			spec.Bus.Publish(event.Event{Type: event.EventAgentStaleLease, Payload: event.LeaseTakeoverPayload{
-				LeaseKey: spec.Lease.Path, PreviousHolder: prev.HostID,
+				LeaseKey: spec.Lease.Name, PreviousHolder: prev.HostID,
 				ExpiredAt: prev.ExpiresAt, TakenBy: spec.Lease.HostID,
 			}})
 		}

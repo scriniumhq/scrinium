@@ -14,7 +14,7 @@ import (
 	"scrinium.dev/testutil/storefx"
 )
 
-// Internal (checkpoint) test: it references the unexported checkpointLeasePath. A
+// Internal (checkpoint) test: it references the unexported checkpointLeaseName. A
 // foreign host holds the lease (staged via leasefx); the agent runs on
 // the local host and must refuse with ErrLeaseHeld rather than run
 // concurrently.
@@ -25,7 +25,7 @@ func TestCheckpoint_LeaseExclusion(t *testing.T) {
 	st, drv, idx := storefx.InitShared(t, store.WithPublisher(rec))
 	ctx := context.Background()
 
-	leasefx.StageForeign(t, drv, checkpointLeasePath, "host-b-squatter-0002", "checkpoint", time.Hour)
+	leasefx.StageForeign(t, drv, checkpointLeaseName, "host-b-squatter-0002", "checkpoint", time.Hour)
 
 	a, err := NewCheckpointAgent(st, drv, idx, rec, exclHostAgent, "store-snap", CheckpointConfig{})
 	if err != nil {

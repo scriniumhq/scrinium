@@ -166,7 +166,7 @@ func TestCheckpoint_RetentionPrunesOldest(t *testing.T) {
 func TestCheckpoint_BlockedByForeignLease(t *testing.T) {
 	f := newCheckpointFixture(t)
 	f.put(t, "payload")
-	leasefx.StageForeign(t, f.drv, "system.state/checkpoint/lease", "other-host", "Checkpoint", time.Hour)
+	leasefx.StageForeign(t, f.drv, "store/state/checkpoint/lease", "other-host", "Checkpoint", time.Hour)
 	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{})
 	if _, err := a.TakeCheckpoint(context.Background()); err == nil {
 		t.Fatal("TakeCheckpoint with a live foreign lease = nil, want lease-held failure")
