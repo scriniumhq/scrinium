@@ -12,29 +12,23 @@ import "scrinium.dev/domain"
 // by-path tree, a zero ScratchQuota is unlimited, zero DefaultUID/GID
 // fall back to the running process.
 type Config struct {
-	// RootView selects the tree presented at the mount root
-	// (by-path, by-date, by-session, by-namespace, by-artifact,
-	// orphaned). Empty = by-path.
+	// RootView selects the tree presented at the mount root by its
+	// name; an empty RootView selects the engine's default root. Valid
+	// names are the intrinsic views plus whatever the active extensions
+	// provide (see ProvidedViews).
 	RootView string
 
-	// PathResolver extracts the by-path key from a manifest. The
-	// composition root supplies it from the view-providing extension
-	// (fspath) via its ViewProvider capability (ADR-98); the projection
-	// no longer hardcodes a metadata schema. nil ⇒ the by-path tree is
-	// fallback-only (empty under FallbackOrphaned).
-	PathResolver func(m domain.Manifest) (path string, ok bool)
+	// ProvidedViews are the views the host's extensions back, collected
+	// at the composition root from each extension's ViewProvider
+	// capability (ADR-98) and forwarded here verbatim. The projection
+	// unions them with its intrinsic views and materialises each from the
+	// supplied Path/CountKey without knowing the view's concept — it
+	// names no extension view (ADR-89, Principle 10). Empty ⇒ only the
+	// intrinsic views exist.
+	ProvidedViews []ProvidedView
 
-	// NamespaceResolver extracts the by-namespace key (the nsid) from a
-	// manifest; NamespaceLabel maps that nsid to its display name. Both are
-	// supplied by the namespace extension via its ViewProvider (ADR-98),
-	// mirroring PathResolver for by-path: the tree is keyed by nsid (stable
-	// across rename), labelled by name. nil ⇒ the by-namespace tree falls
-	// back to the transitional manifest namespace label.
-	NamespaceResolver func(m domain.Manifest) (nsid string, ok bool)
-	NamespaceLabel    func(nsid string) (name string, ok bool)
-
-	// ByPathFallback controls what the by-path tree does with
-	// manifests that carry no path: "orphaned" or "synthetic".
+	// ByPathFallback controls what the orphaning root view does with
+	// manifests it cannot place: "orphaned" or "synthetic".
 	ByPathFallback string
 
 	// Editing controls in-place edits: "off" (strict CAS), "on", or
@@ -68,4 +62,34 @@ type Config struct {
 
 	// MountSession tags writes from this projection instance.
 	MountSession domain.SessionID
+}
+
+// ProvidedView is the projection-layer description of one view an
+// extension backs (ADR-98). The composition root adapts each
+// engine-level provided view onto this type and lists them in
+// Config.ProvidedViews; Build forwards them to the read-side View. The
+// type carries the view's whole layout as opaque functions so the
+// projection materialises the tree without knowing its addressing
+// scheme — it never names the view (ADR-89, Principle 10). It is a
+// distinct type from the engine's so the projection takes no dependency
+// on the extension/engine layer.
+type ProvidedView struct {
+	// Root is the view's name (its RootView). Unique across the set.
+	Root string
+
+	// Path maps a manifest to its placement path in this tree; ("", false)
+	// when the manifest is opaque to the view (orphaned when Orphans).
+	Path func(m domain.Manifest) (path string, ok bool)
+
+	// Collide marks a tree whose Path keys are not artifact-unique, so the
+	// View runs collision arbitration for it (freshest wins).
+	Collide bool
+
+	// Orphans routes a Path()=!ok manifest to the orphan tree; otherwise a
+	// miss is skipped.
+	Orphans bool
+
+	// CountKey, when non-nil, supplies the view's distinct-cardinality key
+	// so the View can maintain the view's count. nil ⇒ not counted.
+	CountKey func(m domain.Manifest) (key string, ok bool)
 }

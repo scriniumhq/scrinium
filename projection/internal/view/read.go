@@ -52,12 +52,12 @@ func (v *View) LookupLocations(id domain.ArtifactID) (Locations, bool) {
 		return Locations{}, false
 	}
 	return Locations{
-		ByArtifact:  rec.pathByArtifact,
-		BySession:   rec.pathBySession,
-		ByNamespace: rec.pathByNamespace,
-		ByDate:      rec.pathByDate,
-		ByPath:      rec.pathByPath,
-		ByOrphaned:  rec.pathByOrphaned,
+		ByArtifact:  rec.paths[RootByArtifact],
+		BySession:   rec.paths[RootBySession],
+		ByNamespace: rec.paths[RootByNamespace],
+		ByDate:      rec.paths[RootByDate],
+		ByPath:      rec.paths[RootByPath],
+		ByOrphaned:  rec.paths[RootByOrphaned],
 	}, true
 }
 
@@ -100,7 +100,7 @@ func (v *View) Search(query string, limit int) []SearchResult {
 			continue
 		}
 
-		path := strings.ToLower(rec.pathByPath)
+		path := strings.ToLower(rec.paths[RootByPath])
 		ns := strings.ToLower(rec.manifest.Namespace)
 
 		switch {
@@ -125,7 +125,7 @@ func (v *View) Search(query string, limit int) []SearchResult {
 func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) SearchResult {
 	r := SearchResult{
 		ArtifactID:  id,
-		Path:        rec.pathByPath,
+		Path:        rec.paths[RootByPath],
 		Namespace:   rec.manifest.Namespace,
 		SessionID:   rec.manifest.SessionID,
 		CreatedAt:   rec.manifest.CreatedAt,
@@ -169,7 +169,7 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 		}
 		out = append(out, RelatedArtifact{
 			ArtifactID: id,
-			Path:       rec.pathByPath,
+			Path:       rec.paths[RootByPath],
 			Namespace:  rec.manifest.Namespace,
 			SessionID:  rec.manifest.SessionID,
 			CreatedAt:  rec.manifest.CreatedAt,
@@ -242,24 +242,10 @@ func (v *View) WalkIn(rv RootView, prefix string) Seq {
 }
 
 // treeFor returns the internal tree for the given RootView, or
-// nil for an unknown enum value. Private — outside callers go
-// through GetIn/ListIn/OpenIn, which absorb the nil check.
+// nil for a root no active view populates. Private — outside callers
+// go through GetIn/ListIn/OpenIn, which absorb the nil check.
 func (v *View) treeFor(rv RootView) map[string]*viewNode {
-	switch rv {
-	case RootByPath:
-		return v.byPath
-	case RootBySession:
-		return v.bySession
-	case RootByNamespace:
-		return v.byNamespace
-	case RootByDate:
-		return v.byDate
-	case RootByArtifact:
-		return v.byArtifact
-	case RootByOrphaned:
-		return v.byOrphaned
-	}
-	return nil
+	return v.trees[rv]
 }
 
 // --- Per-tree implementations ---
@@ -374,5 +360,3 @@ func (v *View) openInTree(
 	}
 	return rh, nil
 }
-
-// --- Mutation methods ---

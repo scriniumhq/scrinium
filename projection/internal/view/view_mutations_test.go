@@ -14,7 +14,6 @@ import (
 	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
 
@@ -79,7 +78,8 @@ func TestByNamespace_Populated(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "photos", "s", 100, time.Now().UTC()), nil)
 
-	v, _ := vw.New(context.Background(), src)
+	v, _ := vw.New(context.Background(), src,
+		vw.WithProvidedViews(byNamespaceProvided()))
 	defer v.Close()
 
 	if _, err := v.GetIn(vw.RootByNamespace, "photos/aa/bb/sha256-aabbccdd"); err != nil {
@@ -94,7 +94,8 @@ func TestByNamespace_EmptyBucketsAsDefault(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(makeManifest("sha256-aabbccdd", "", "s", 100, time.Now().UTC()), nil)
 
-	v, _ := vw.New(context.Background(), src)
+	v, _ := vw.New(context.Background(), src,
+		vw.WithProvidedViews(byNamespaceProvided()))
 	defer v.Close()
 
 	if _, err := v.GetIn(vw.RootByNamespace, "_default/aa/bb/sha256-aabbccdd"); err != nil {
@@ -144,7 +145,7 @@ func TestEvent_ViewRebuilt(t *testing.T) {
 func TestAdd_AppearsInAllTrees(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided(), byNamespaceProvided()))
 	defer v.Close()
 
 	m := manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "photos/img.jpg")
@@ -176,7 +177,7 @@ func TestAdd_AppearsInAllTrees(t *testing.T) {
 func TestAdd_Idempotent(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided(), byNamespaceProvided()))
 	defer v.Close()
 
 	m := manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "a")
@@ -214,7 +215,7 @@ func TestRemove_DropsFromAllTrees(t *testing.T) {
 	src.Add(m, nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided(), byNamespaceProvided()))
 	defer v.Close()
 
 	if err := v.Remove("sha256-aabbccdd"); err != nil {
@@ -244,7 +245,7 @@ func TestRemove_PromotesLoserOnOwnerRemove(t *testing.T) {
 	src.Add(b, nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided(), byNamespaceProvided()))
 	defer v.Close()
 
 	if err := v.Remove("sha256-bbbb2222"); err != nil {
@@ -272,7 +273,7 @@ func TestRemove_LoserDoesNotAffectOwner(t *testing.T) {
 	src.Add(b, nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided(), byNamespaceProvided()))
 	defer v.Close()
 
 	if err := v.Remove("sha256-aaaa1111"); err != nil {
@@ -303,7 +304,7 @@ func TestMove_RenameFile(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aaaa1111", "old/path.txt"), nil)
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided(), byNamespaceProvided()))
 	defer v.Close()
 
 	newM := manifestfx.ManifestWithVfsmetaPath("sha256-bbbb2222", "new/path.txt")
@@ -332,7 +333,7 @@ func TestNewView_FilterPrefix(t *testing.T) {
 
 	v, _ := vw.New(
 		context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver),
+		vw.WithProvidedViews(byPathProvided(), byNamespaceProvided()),
 		vw.WithFilter(vw.Filter{Prefix: "photos/"}),
 	)
 	defer v.Close()

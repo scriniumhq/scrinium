@@ -51,14 +51,18 @@ func buildView(ctx context.Context, backend Backend, fsidx MetadataIndex, cfg Co
 	opts := []view.Option{
 		view.WithFSPathIndex(fsidx),
 	}
-	if cfg.PathResolver != nil {
-		opts = append(opts, view.WithPathResolver(cfg.PathResolver))
-	}
-	if cfg.NamespaceResolver != nil {
-		opts = append(opts, view.WithNamespaceResolver(cfg.NamespaceResolver))
-	}
-	if cfg.NamespaceLabel != nil {
-		opts = append(opts, view.WithNamespaceLabel(cfg.NamespaceLabel))
+	if len(cfg.ProvidedViews) > 0 {
+		pvs := make([]view.ProvidedView, 0, len(cfg.ProvidedViews))
+		for _, p := range cfg.ProvidedViews {
+			pvs = append(pvs, view.ProvidedView{
+				Root:     view.RootView(p.Root),
+				Path:     p.Path,
+				Collide:  p.Collide,
+				Orphans:  p.Orphans,
+				CountKey: p.CountKey,
+			})
+		}
+		opts = append(opts, view.WithProvidedViews(pvs...))
 	}
 	if cfg.RootView != "" {
 		opts = append(opts, view.WithRootView(view.RootView(cfg.RootView)))

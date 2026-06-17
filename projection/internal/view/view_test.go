@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
 
@@ -387,5 +389,49 @@ func TestNewView_FilterByNamespace(t *testing.T) {
 
 	if got := v.Stats.TotalNodes; got != 1 {
 		t.Errorf("TotalNodes: got %d, want 1", got)
+	}
+}
+
+// byPathProvided is the by-path view exactly as the fspath extension
+// supplies it through the provided-view rail (ADR-98): vfsmeta resolver,
+// collidable (logical paths are not artifact-unique), orphaning. Used by
+// tests now that the View no longer hardcodes by-path.
+func byPathProvided() vw.ProvidedView {
+	return vw.ProvidedView{
+		Root:    vw.RootByPath,
+		Path:    vfsmeta.Resolver,
+		Collide: true,
+		Orphans: true,
+	}
+}
+
+// byNamespaceProvided mirrors the namespace extension's by-namespace
+// layout (<segment>/<aa>/<bb>/<id>, "_default" when the manifest carries
+// no namespace) so view tests can drive a provided counting view without
+// importing the extension. Keyed off the manifest namespace, matching what
+// the tests stamp on their fixtures.
+func byNamespaceProvided() vw.ProvidedView {
+	shard := func(id string) string {
+		h := id
+		if i := strings.IndexByte(id, '-'); i >= 0 {
+			h = id[i+1:]
+		}
+		if len(h) < 4 {
+			return "_short/" + id
+		}
+		return h[:2] + "/" + h[2:4] + "/" + id
+	}
+	return vw.ProvidedView{
+		Root: vw.RootByNamespace,
+		Path: func(m domain.Manifest) (string, bool) {
+			ns := m.Namespace
+			if ns == "" {
+				ns = "_default"
+			}
+			return ns + "/" + shard(string(m.ArtifactID)), true
+		},
+		CountKey: func(m domain.Manifest) (string, bool) {
+			return m.Namespace, m.Namespace != ""
+		},
 	}
 }

@@ -63,64 +63,57 @@ func (v *View) Remove(id domain.ArtifactID) error {
 // removeArtifactFromTrees does the actual fan-out delete. Caller
 // holds the write lock.
 func (v *View) removeArtifactFromTrees(id domain.ArtifactID, rec *artifactRecord) {
-	if rec.pathByArtifact != "" {
-		v.removeFile(v.byArtifact, rec.pathByArtifact)
-	}
-	if rec.pathByDate != "" {
-		v.removeFile(v.byDate, rec.pathByDate)
-	}
-	if rec.pathByNamespace != "" {
-		v.removeFile(v.byNamespace, rec.pathByNamespace)
-	}
-	if rec.pathBySession != "" {
-		v.removeFile(v.bySession, rec.pathBySession)
-	}
-	if rec.pathByPath != "" {
-		v.removeFromByPath(id, rec)
-	}
-	if rec.pathByOrphaned != "" {
-		v.removeFile(v.byOrphaned, rec.pathByOrphaned)
+	orphaned := rec.paths[RootByOrphaned] != ""
+	for root, path := range rec.paths {
+		if path == "" {
+			continue
+		}
+		if v.collide[root] {
+			v.removeFromCollisionTree(root, id, rec)
+		} else {
+			v.removeFile(v.trees[root], path)
+		}
 	}
 
 	delete(v.artifacts, id)
 	v.Stats.TotalNodes--
 	v.Stats.TotalBytes -= rec.manifest.OriginalSize
-	if rec.pathByPath == "" {
+	if orphaned {
 		v.Stats.OrphanedCount--
 	}
-	// SessionCount and NamespaceCount: we do not decrement because
-	// tracking "last artifact in this session" requires a counter
-	// per session, which is a 3b-future complication. Stats remain
+	// SessionCount and NamespaceCount: we do not decrement (see
+	// seenKeys — distinct keys are tracked monotonically). Stats remain
 	// monotonic for those two counters across the View's lifetime —
 	// callers use them for pacing, not for exact accounting.
 }
 
-// removeFromByPath drops an artifact from the by-path tree. If
-// it was the current owner of a path, the freshest loser (if any)
-// is promoted to owner.
-func (v *View) removeFromByPath(id domain.ArtifactID, rec *artifactRecord) {
-	path := rec.pathByPath
-	owner, claimed := v.pathOwner[path]
+// removeFromCollisionTree drops an artifact from a collidable tree
+// (keyed by root). If it was the current owner of a path, the freshest
+// loser (if any) is promoted to owner.
+func (v *View) removeFromCollisionTree(root RootView, id domain.ArtifactID, rec *artifactRecord) {
+	path := rec.paths[root]
+	owners := v.pathOwner[root]
+	tree := v.trees[root]
+	owner, claimed := owners[path]
 	if claimed && owner == id {
 		// Drop the file node and try to promote a loser.
-		v.removeFile(v.byPath, path)
-		delete(v.pathOwner, path)
-		losers := v.pathLosers[path]
+		v.removeFile(tree, path)
+		delete(owners, path)
+		losers := v.pathLosers[root][path]
 		if len(losers) > 0 {
 			promoted := losers[0]
-			v.pathLosers[path] = losers[1:]
-			if len(v.pathLosers[path]) == 0 {
-				delete(v.pathLosers, path)
+			v.pathLosers[root][path] = losers[1:]
+			if len(v.pathLosers[root][path]) == 0 {
+				delete(v.pathLosers[root], path)
 			}
-			promotedRec, ok := v.artifacts[promoted.id]
-			if ok {
-				v.pathOwner[path] = promoted.id
-				v.insertFile(v.byPath, path, promotedRec.manifest)
+			if promotedRec, ok := v.artifacts[promoted.id]; ok {
+				owners[path] = promoted.id
+				v.insertFile(tree, path, promotedRec.manifest)
 			}
 		}
 	} else {
 		// Removed artifact was a loser, not owner.
-		v.removeLoser(path, id)
+		v.removeLoser(root, path, id)
 	}
 }
 
@@ -145,7 +138,8 @@ func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 	// "old" side: remove if present, add new.
 
 	// Find old artifact by oldPath in by-path; if found, remove.
-	if oldOwner, ok := v.pathOwner[oldPath]; ok {
+	// Reading a nil inner map (no by-path view active) yields ok=false.
+	if oldOwner, ok := v.pathOwner[RootByPath][oldPath]; ok {
 		if rec, found := v.artifacts[oldOwner]; found {
 			v.removeArtifactFromTrees(oldOwner, rec)
 		}

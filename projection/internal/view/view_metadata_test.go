@@ -84,7 +84,7 @@ func TestBackfill_FastPath_UsesExtSource(t *testing.T) {
 	}
 
 	v, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver),
+		vw.WithProvidedViews(byPathProvided()),
 		vw.WithMetadataSource(ms),
 	)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	// Intentionally NOT calling ms.put for idMiss.
 
 	v, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver),
+		vw.WithProvidedViews(byPathProvided()),
 		vw.WithMetadataSource(ms),
 	)
 	if err != nil {
@@ -180,7 +180,7 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 	src.SetGetErr(errors.New("get unavailable"))
 
 	v, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver),
+		vw.WithProvidedViews(byPathProvided()),
 		// No WithMetadataSource here.
 	)
 	if err != nil {
@@ -240,7 +240,7 @@ func TestWithFSPathIndex_Convenience(t *testing.T) {
 	ms.put(id, encodeVFSMeta(t, "fs.txt"))
 
 	_, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver),
+		vw.WithProvidedViews(byPathProvided()),
 		vw.WithFSPathIndex(ms),
 	)
 	if err != nil {

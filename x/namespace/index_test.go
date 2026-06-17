@@ -126,29 +126,44 @@ func TestIndex_ProvidedViews_ByNamespace(t *testing.T) {
 	}
 	pv := views[0]
 
-	// Resolve: nsid is the key; an unstamped manifest is opaque.
-	if key, ok := pv.Resolve(domain.Manifest{Ext: json.RawMessage(`{"nsid":"` + string(id) + `"}`)}); !ok || key != string(id) {
-		t.Errorf("Resolve(stamped) = (%q,%v), want (%q,true)", key, ok, id)
+	// Path: a stamped manifest lands under its registry label, id-sharded.
+	stamped := domain.Manifest{
+		ArtifactID: "sha256-aabbccdd",
+		Ext:        json.RawMessage(`{"nsid":"` + string(id) + `"}`),
 	}
-	if _, ok := pv.Resolve(domain.Manifest{}); ok {
-		t.Error("Resolve(unstamped) = ok, want not ok")
+	if path, ok := pv.Path(stamped); !ok || path != "docs/aa/bb/sha256-aabbccdd" {
+		t.Errorf("Path(stamped) = (%q,%v), want (docs/aa/bb/sha256-aabbccdd,true)", path, ok)
+	}
+	// An unstamped manifest still gets placed, under _default.
+	unstamped := domain.Manifest{ArtifactID: "sha256-aabbccdd"}
+	if path, ok := pv.Path(unstamped); !ok || path != "_default/aa/bb/sha256-aabbccdd" {
+		t.Errorf("Path(unstamped) = (%q,%v), want (_default/aa/bb/sha256-aabbccdd,true)", path, ok)
 	}
 
-	// Label: nsid → human name; unknown nsid falls back (not ok).
-	if pv.Label == nil {
-		t.Fatal("Label nil despite registry present")
+	// CountKey: stamped → the label; unstamped → not counted.
+	if key, ok := pv.CountKey(stamped); !ok || key != "docs" {
+		t.Errorf("CountKey(stamped) = (%q,%v), want (docs,true)", key, ok)
 	}
-	if name, ok := pv.Label(string(id)); !ok || name != "docs" {
-		t.Errorf("Label(%q) = (%q,%v), want (docs,true)", id, name, ok)
-	}
-	if _, ok := pv.Label("00000000-0000-0000-0000-000000000000"); ok {
-		t.Error("Label(unknown) = ok, want not ok")
+	if _, ok := pv.CountKey(unstamped); ok {
+		t.Error("CountKey(unstamped) = ok, want not ok")
 	}
 }
 
 func TestIndex_ProvidedViews_NoRegistryLabelsVerbatim(t *testing.T) {
 	views := NewIndex(nil).ProvidedViews()
-	if len(views) != 1 || views[0].Label != nil {
-		t.Errorf("registry-less index must provide a by-namespace view with nil Label (verbatim nsids)")
+	if len(views) != 1 || views[0].Root != "by-namespace" {
+		t.Fatalf("registry-less index must still provide one by-namespace view")
+	}
+	pv := views[0]
+
+	// No registry ⇒ the verbatim nsid is the segment (no human label).
+	nsid := "11111111-2222-3333-4444-555555555555"
+	m := domain.Manifest{
+		ArtifactID: "sha256-aabbccdd",
+		Ext:        json.RawMessage(`{"nsid":"` + nsid + `"}`),
+	}
+	want := nsid + "/aa/bb/sha256-aabbccdd"
+	if path, ok := pv.Path(m); !ok || path != want {
+		t.Errorf("Path = (%q,%v), want (%q,true)", path, ok, want)
 	}
 }

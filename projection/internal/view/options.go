@@ -34,18 +34,10 @@ type Filter struct {
 type Option func(*viewOptions)
 
 type viewOptions struct {
-	resolver source.Resolver
 	rootView RootView
 	fallback Fallback
 	filter   Filter
 	bus      event.EventBus
-
-	// nsResolver extracts the by-namespace key (nsid) from a manifest;
-	// nsLabel maps that nsid to a display name. Both supplied by the
-	// namespace extension's ViewProvider (ADR-98). nil nsResolver ⇒ the
-	// by-namespace tree falls back to the transitional manifest namespace.
-	nsResolver source.Resolver
-	nsLabel    func(string) (string, bool)
 
 	// metadataSource is an optional bulk source of manifest
 	// metadata used by backfill to skip per-manifest
@@ -53,6 +45,47 @@ type viewOptions struct {
 	// WithFSPathIndex (the latter is a typed convenience for the
 	// common engine/index/fspathindex case).
 	metadataSource source.Metadata
+
+	// provided are the extension-contributed view definitions that
+	// make up the View's non-intrinsic trees (ADR-98). Set via
+	// WithProvidedViews — by-path (fspath) and by-namespace (the
+	// namespace extension) arrive here like any other. The View builds
+	// one tree per provided root with no knowledge of its domain.
+	provided []ProvidedView
+}
+
+// ProvidedView is an extension-contributed view definition (ADR-98). The
+// projection appends each active extension's provided views to its
+// intrinsic core set, building one tree per provided root. The projection
+// attaches no meaning to the root or to what Path computes — this is the
+// generic "by-ext" rail by which fspath contributes by-path, the namespace
+// extension contributes by-namespace, and so on.
+type ProvidedView struct {
+	// Root is the tree identifier (e.g. "by-path"). It is the key under
+	// which the tree is addressed via GetIn/ListIn and surfaced by
+	// transports.
+	Root RootView
+	// Path maps a manifest to its placement in this tree. ok=false means
+	// the manifest is absent from the tree (routed to the orphan tree when
+	// Orphans is set).
+	Path func(domain.Manifest) (string, bool)
+	// Collide marks a tree whose path keys are not artifact-unique, so
+	// inserts run collision arbitration (freshest CreatedAt wins, tie →
+	// larger ArtifactID). by-path sets this; id-shaped views do not.
+	Collide bool
+	// Orphans routes a Path()=!ok manifest to the orphan tree (by-path).
+	Orphans bool
+	// CountKey, when set, supplies the distinct-cardinality key the View
+	// uses to maintain this view's Stats counter.
+	CountKey func(domain.Manifest) (string, bool)
+}
+
+// WithProvidedViews appends extension-contributed view definitions to the
+// View's intrinsic set. This is the generic rail (ADR-98) by which the
+// assembler forwards every active extension's views; the View treats them
+// uniformly alongside its core trees.
+func WithProvidedViews(pvs ...ProvidedView) Option {
+	return func(o *viewOptions) { o.provided = append(o.provided, pvs...) }
 }
 
 // WithMetadataSource installs a bulk metadata source for
@@ -75,28 +108,6 @@ func WithMetadataSource(ms source.Metadata) Option {
 // edge would cycle.
 func WithFSPathIndex(fsidx source.Metadata) Option {
 	return WithMetadataSource(fsidx)
-}
-
-// WithPathResolver registers the path-extraction function. Without
-// it the by-path tree contains only artifacts produced by the
-// fallback (when FallbackSynthetic) or is empty.
-func WithPathResolver(r source.Resolver) Option {
-	return func(o *viewOptions) { o.resolver = r }
-}
-
-// WithNamespaceResolver registers the by-namespace key extractor (nsid
-// from a manifest), supplied by the namespace extension (ADR-98). Without
-// it the by-namespace tree falls back to the transitional manifest
-// namespace label.
-func WithNamespaceResolver(r source.Resolver) Option {
-	return func(o *viewOptions) { o.nsResolver = r }
-}
-
-// WithNamespaceLabel registers the nsid→display-name mapping for the
-// by-namespace tree (the registry name). Without it nodes are labelled
-// with the verbatim nsid.
-func WithNamespaceLabel(l func(string) (string, bool)) Option {
-	return func(o *viewOptions) { o.nsLabel = l }
 }
 
 // WithRootView selects the tree that occupies the View root. The

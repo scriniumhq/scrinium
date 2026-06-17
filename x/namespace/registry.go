@@ -35,6 +35,13 @@ const (
 	registryKeep = 8
 )
 
+// errRegistryUnbound is returned by load/persist when the Registry has no
+// scoped system store yet — i.e. an auto-wired extension (NewExtension)
+// touched the registry before the assembler delivered its Env (ADR-101
+// §4). It signals a wiring-order bug, not a missing-namespace condition,
+// so it is kept distinct from errs.ErrArtifactNotFound.
+var errRegistryUnbound = errors.New("namespace registry: no scoped system store bound (extension env not delivered)")
+
 // Registry is the per-store {NamespaceID → name} map (ADR-79/96),
 // persisted as a versioned system artifact through the extension's scoped
 // store. Resolution (name → id) drives both Walk and the Put-time nsid
@@ -48,10 +55,18 @@ type Registry struct {
 	sys *extension.ScopedSystemStore
 }
 
-// NewRegistry binds a Registry to an extension's scoped system store.
+// NewRegistry binds a Registry to an extension's scoped system store. sys
+// may be nil — the auto-wired extension (NewExtension) constructs the
+// Registry before the store opens and binds the real scoped store later
+// via bind, when the assembler delivers the Env (ADR-101 §4). A Registry
+// with no backing rejects load/persist with a clear error.
 func NewRegistry(sys *extension.ScopedSystemStore) *Registry {
 	return &Registry{sys: sys}
 }
+
+// bind attaches (or replaces) the scoped system store. Called from
+// Extension.UseEnv once the assembler delivers the post-open Env.
+func (r *Registry) bind(sys *extension.ScopedSystemStore) { r.sys = sys }
 
 // View is an immutable, resolved snapshot of the registry for lookups.
 // Hold one for a batch of resolutions rather than reloading per call.
@@ -166,6 +181,9 @@ type snapshot struct {
 }
 
 func (r *Registry) load(ctx context.Context) (snapshot, error) {
+	if r.sys == nil {
+		return snapshot{}, errRegistryUnbound
+	}
 	rh, err := r.sys.Get(ctx, registryArtifact)
 	if err != nil {
 		if errors.Is(err, errs.ErrArtifactNotFound) {
@@ -189,6 +207,9 @@ func (r *Registry) load(ctx context.Context) (snapshot, error) {
 }
 
 func (r *Registry) persist(ctx context.Context, snap snapshot) error {
+	if r.sys == nil {
+		return errRegistryUnbound
+	}
 	body, err := json.Marshal(snap)
 	if err != nil {
 		return fmt.Errorf("namespace registry: encode: %w", err)

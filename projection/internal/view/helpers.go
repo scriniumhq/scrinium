@@ -118,46 +118,6 @@ func byDateLabel(m domain.Manifest) string {
 	return shortID(m.ArtifactID) + ".bin"
 }
 
-// byNamespacePath: <ns-label>/<aa>/<bb>/<id>
-//
-// The namespace segment is the registry display name of the artifact's
-// nsid when a NamespaceResolver (+Label) is configured — keyed by nsid,
-// labelled by name, so a rename re-labels without moving artifacts —
-// otherwise the transitional manifest namespace label. Empty/unresolved
-// is bucketed under "_default" so the artifact stays visible.
-func (v *View) byNamespacePath(m domain.Manifest) string {
-	ns := v.namespaceLabel(m)
-	if ns == "" {
-		ns = "_default"
-	}
-	hash := hashPart(string(m.ArtifactID))
-	if len(hash) < 4 {
-		return ns + "/_short/" + string(m.ArtifactID)
-	}
-	return ns + "/" + hash[:2] + "/" + hash[2:4] + "/" + string(m.ArtifactID)
-}
-
-// namespaceLabel resolves the display namespace for the by-namespace tree
-// and stats. With a NamespaceResolver configured it keys on the nsid and
-// labels via the registry (verbatim nsid when no label, "" when the
-// manifest carries no nsid). Without one it falls back to the transitional
-// manifest namespace string.
-func (v *View) namespaceLabel(m domain.Manifest) string {
-	if v.opts.nsResolver != nil {
-		nsid, ok := v.opts.nsResolver(m)
-		if !ok {
-			return ""
-		}
-		if v.opts.nsLabel != nil {
-			if name, ok := v.opts.nsLabel(nsid); ok {
-				return name
-			}
-		}
-		return nsid
-	}
-	return m.Namespace
-}
-
 // bySessionPath: <aa>/<bb>/<sid>/<artifact-id>
 //
 // Sessions shorter than 4 characters bucket under "_short/<sid>/...".

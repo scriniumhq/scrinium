@@ -3,6 +3,7 @@ package namespace
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper"
 	"scrinium.dev/errs"
+	"scrinium.dev/extension"
 )
 
 // fakeHandle is a minimal ReadHandle exposing only a manifest; the scoped
@@ -231,12 +233,129 @@ func TestNewScoped_FailsOnUnknown(t *testing.T) {
 	}
 }
 
-func TestNew_UnscopedHasNoWrapper(t *testing.T) {
+func TestNew_UnboundHasOpenWrapper(t *testing.T) {
 	e, err := New(newMemSysStore())
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if _, ok := e.Wrapper(); ok {
-		t.Error("unbound extension must not occupy the wrapper axis")
+	f, ok := e.Wrapper()
+	if !ok {
+		t.Fatal("unbound extension must occupy the open wrapper axis (ADR-99)")
+	}
+	if _, isOpen := f.(openFactory); !isOpen {
+		t.Errorf("unbound wrapper = %T, want openFactory", f)
+	}
+}
+
+// backedExtension builds a namespace extension whose registry is bound to
+// a fresh in-memory scoped store, as the assembler would after open.
+func backedExtension(t *testing.T) *Extension {
+	t.Helper()
+	scoped, err := extension.NewScopedSystemStore("namespace", newMemSysStore())
+	if err != nil {
+		t.Fatalf("NewScopedSystemStore: %v", err)
+	}
+	e := NewExtension().(*Extension)
+	if err := e.UseEnv(extension.Env{SystemStore: scoped}); err != nil {
+		t.Fatalf("UseEnv: %v", err)
+	}
+	return e
+}
+
+func TestDeleteNamespace_K3RefusesNonEmpty(t *testing.T) {
+	e := backedExtension(t)
+	ctx := context.Background()
+	id, err := e.Registry().Create(ctx, "docs")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// A member still carries the nsid → refuse (K3), namespace survives.
+	members := &fakeDataStore{walk: []domain.Manifest{mfst(string(id))}}
+	if err := e.DeleteNamespace(ctx, members, "docs"); !errors.Is(err, ErrNamespaceNotEmpty) {
+		t.Fatalf("DeleteNamespace(non-empty) = %v, want ErrNamespaceNotEmpty", err)
+	}
+	if members.extName != "namespace" || members.field != "nsid" || members.value != string(id) {
+		t.Errorf("membership query = %q/%q/%q, want namespace/nsid/%s",
+			members.extName, members.field, members.value, id)
+	}
+	v, err := e.Registry().Load(ctx)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, ok := v.Resolve("docs"); !ok {
+		t.Error("namespace removed despite being non-empty")
+	}
+
+	// No members → delete proceeds.
+	empty := &fakeDataStore{}
+	if err := e.DeleteNamespace(ctx, empty, "docs"); err != nil {
+		t.Fatalf("DeleteNamespace(empty) = %v, want nil", err)
+	}
+	v, err = e.Registry().Load(ctx)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, ok := v.Resolve("docs"); ok {
+		t.Error("empty namespace not removed")
+	}
+}
+
+func TestDeleteNamespace_UnknownName(t *testing.T) {
+	e := backedExtension(t)
+	if err := e.DeleteNamespace(context.Background(), &fakeDataStore{}, "nope"); !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Fatalf("DeleteNamespace(unknown) = %v, want ErrArtifactNotFound", err)
+	}
+}
+
+func TestOpenWrapper_StampsResolvedNamespace(t *testing.T) {
+	e := backedExtension(t)
+	ctx := context.Background()
+	id, err := e.Registry().Create(ctx, "docs")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	f, _ := e.Wrapper()
+	inner := &fakeDataStore{}
+	ds, err := f.Wrap(inner, wrapper.Deps{})
+	if err != nil {
+		t.Fatalf("Wrap: %v", err)
+	}
+	if _, err := ds.Put(ctx, domain.Artifact{}, WithNamespace("docs")); err != nil {
+		t.Fatalf("Put(WithNamespace docs): %v", err)
+	}
+	got, ok, err := nsidOf(inner.lastExt)
+	if err != nil || !ok || got != id {
+		t.Errorf("stamped nsid = %q (ok=%v err=%v), want %q", got, ok, err, id)
+	}
+}
+
+func TestOpenWrapper_NoHintLeavesUnstamped(t *testing.T) {
+	e := backedExtension(t)
+	f, _ := e.Wrapper()
+	inner := &fakeDataStore{}
+	ds, _ := f.Wrap(inner, wrapper.Deps{})
+	if _, err := ds.Put(context.Background(), domain.Artifact{}); err != nil {
+		t.Fatalf("Put(no namespace): %v", err)
+	}
+	if _, ok, _ := nsidOf(inner.lastExt); ok {
+		t.Error("Put without WithNamespace must leave Ext unstamped")
+	}
+}
+
+func TestOpenWrapper_UnknownNamespaceErrors(t *testing.T) {
+	e := backedExtension(t)
+	f, _ := e.Wrapper()
+	ds, _ := f.Wrap(&fakeDataStore{}, wrapper.Deps{})
+	if _, err := ds.Put(context.Background(), domain.Artifact{}, WithNamespace("nope")); err == nil {
+		t.Error("Put(WithNamespace unknown): want error, got nil")
+	}
+}
+
+func TestScopedWrapper_RejectsWithNamespace(t *testing.T) {
+	ds := wrap(t, "ns-1", &fakeDataStore{})
+	_, err := ds.Put(context.Background(), domain.Artifact{}, WithNamespace("other"))
+	if !errors.Is(err, ErrNamespaceConflict) {
+		t.Fatalf("scoped Put(WithNamespace) = %v, want ErrNamespaceConflict", err)
 	}
 }

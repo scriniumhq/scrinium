@@ -19,46 +19,70 @@ type View struct {
 	// Internal state, guarded by mu.
 	mu sync.RWMutex
 
-	// Trees. Each map keys by full path (no leading slash, ""
-	// means tree root). Values are the canonical viewNode for
-	// that path.
-	byPath      map[string]*viewNode
-	bySession   map[string]*viewNode
-	byNamespace map[string]*viewNode
-	byDate      map[string]*viewNode
-	byArtifact  map[string]*viewNode
-	// byOrphaned holds artifacts the path resolver couldn't
-	// place — typically system manifests or artifacts written
-	// without an vfsmeta payload. Same id-shaped layout as
-	// byArtifact (aa/bb/<id>) so the same lookup helpers work.
-	// Unlike byArtifact (which contains every artifact), this
-	// one only contains the ones missing from byPath.
-	byOrphaned map[string]*viewNode
+	// trees holds one tree per active RootView (the intrinsic core
+	// set plus every extension-provided view, see defs). Each tree
+	// maps a full path (no leading slash, "" is the tree root) to
+	// the canonical viewNode. RootByOrphaned is always present as the
+	// sink for artifacts an orphaning view (by-path) could not place.
+	trees map[RootView]map[string]*viewNode
+
+	// defs is the active view set: the intrinsic definitions the View
+	// builds from core manifest fields, augmented by the views active
+	// extensions provide (ADR-98). indexArtifact iterates it; the View
+	// attaches no meaning to any individual root.
+	defs []viewDef
 
 	// Per-artifact tracking. Used by Remove/Move to fan out a
 	// deletion or move across every tree without re-deriving the
-	// paths.
+	// paths. paths maps each RootView the artifact appears in to its
+	// path there (including RootByOrphaned when orphaned).
 	artifacts map[domain.ArtifactID]*artifactRecord
 
-	// Path-collision bookkeeping for by-path. pathOwner records the
-	// ArtifactID currently holding each path; pathLosers stores
-	// every other ArtifactID claiming the same path, sorted by
-	// CreatedAt descending so the freshest loser is at index 0.
-	// On Remove of the current owner we promote pathLosers[path][0]
-	// to owner; on a new Add against an existing owner we compare
-	// CreatedAt to decide whether the newcomer becomes owner or
-	// joins the losers list.
-	pathOwner  map[string]domain.ArtifactID
-	pathLosers map[string][]loserEntry
+	// Path-collision bookkeeping, keyed by RootView then path, for
+	// the collidable views (those whose path keys are not artifact-
+	// unique — by-path). pathOwner records the ArtifactID currently
+	// holding each path; pathLosers stores every other ArtifactID
+	// claiming it, sorted by CreatedAt descending so the freshest
+	// loser is at index 0. On Remove of the owner we promote
+	// pathLosers[root][path][0]; on a new insert against an existing
+	// owner we compare CreatedAt to decide winner vs loser. collide
+	// marks which roots run this arbitration.
+	pathOwner  map[RootView]map[string]domain.ArtifactID
+	pathLosers map[RootView]map[string][]loserEntry
+	collide    map[RootView]bool
 
-	// For Stats: track unique sessions and namespaces seen.
-	seenSessions   map[domain.SessionID]struct{}
-	seenNamespaces map[string]struct{}
+	// seenKeys tracks, per counting view, the distinct cardinality
+	// keys observed (session ids, nsids), so Stats counters stay
+	// accurate without the View knowing the concept. Monotonic:
+	// entries are never removed (matching the existing Stats
+	// semantics for SessionCount/NamespaceCount).
+	seenKeys map[RootView]map[string]struct{}
 
 	src    source.Provider
 	bus    event.EventBus // nil = events not published
 	opts   viewOptions
 	closed atomic.Bool
+}
+
+// viewDef describes one logical tree. Intrinsic defs (by-artifact,
+// by-date, by-session) are built by the View from core manifest fields;
+// extension-provided defs (by-path, by-namespace, …) augment the set via
+// ProvidedView. The View is agnostic to what each def means.
+type viewDef struct {
+	root RootView
+	// path maps a manifest to its placement in this tree. ok=false (or a
+	// nil path) means the manifest has no place here: it is routed to the
+	// orphan tree when orphans is set, otherwise skipped.
+	path func(domain.Manifest) (string, bool)
+	// collide marks a tree whose path keys are NOT artifact-unique (the
+	// by-path logical namespace): inserts run collision arbitration.
+	collide bool
+	// orphans routes a path()=!ok manifest to the orphan tree (or a
+	// synthetic path under FallbackSynthetic); other defs skip a miss.
+	orphans bool
+	// countKey, when non-nil, supplies this view's distinct-cardinality
+	// key so the View maintains the matching Stats counter.
+	countKey func(domain.Manifest) (string, bool)
 }
 
 // viewNode is the internal node representation. The public Node
@@ -71,17 +95,13 @@ type viewNode struct {
 
 // artifactRecord is the cross-tree record of an artifact: the
 // manifest plus the path under which it appears in every tree.
-// Empty paths mean the artifact is absent from that tree (e.g.,
-// no by-path entry when Resolver returned !ok and fallback is
-// orphaned).
+// paths maps each RootView the artifact occupies to its path there;
+// a root absent from the map means the artifact is not in that tree
+// (e.g. no by-path entry when the resolver missed and it was
+// orphaned — then RootByOrphaned is present instead).
 type artifactRecord struct {
-	manifest        domain.Manifest
-	pathByArtifact  string
-	pathBySession   string
-	pathByNamespace string
-	pathByDate      string
-	pathByPath      string // "" if artifact is orphaned
-	pathByOrphaned  string // "" if artifact is in byPath
+	manifest domain.Manifest
+	paths    map[RootView]string
 }
 
 // loserEntry records a losing artifact in a path collision —

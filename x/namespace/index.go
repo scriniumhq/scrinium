@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/customindex"
@@ -131,18 +132,61 @@ func (e *Index) Unindex(ctx context.Context, store customindex.Substrate, m doma
 // (see the System-Artifact-Events rationale). A label miss falls back to
 // the verbatim nsid rather than dropping the artifact.
 func (e *Index) ProvidedViews() []customindex.ProvidedView {
-	pv := customindex.ProvidedView{
-		Root:    byNamespaceView,
-		Resolve: nsidKey,
-	}
+	// label maps an nsid to its current registry name; a miss falls back
+	// to the verbatim nsid. Snapshotted once here (at view-build time).
+	label := func(nsid string) (string, bool) { return "", false }
 	if e.reg != nil {
 		if view, err := e.reg.Load(context.Background()); err == nil {
-			pv.Label = func(key string) (string, bool) {
+			label = func(key string) (string, bool) {
 				return view.Name(NamespaceID(key))
 			}
 		}
 	}
-	return []customindex.ProvidedView{pv}
+	// segment picks the directory a manifest occupies: the registry name,
+	// else the verbatim nsid, else "_default" (manifest carries no nsid).
+	segment := func(m domain.Manifest) string {
+		nsid, ok := nsidKey(m)
+		if !ok {
+			return "_default"
+		}
+		if name, lok := label(nsid); lok {
+			return name
+		}
+		return nsid
+	}
+	return []customindex.ProvidedView{{
+		Root: byNamespaceView,
+		Path: func(m domain.Manifest) (string, bool) {
+			return namespaceTreePath(segment(m), string(m.ArtifactID)), true
+		},
+		CountKey: func(m domain.Manifest) (string, bool) {
+			nsid, ok := nsidKey(m)
+			if !ok {
+				return "", false
+			}
+			if name, lok := label(nsid); lok {
+				return name, true
+			}
+			return nsid, true
+		},
+	}}
+}
+
+// namespaceTreePath lays out the by-namespace tree:
+// <segment>/<aa>/<bb>/<id>, id-sharded so a namespace's artifacts fan out
+// under its directory and listings stay bounded. Ids whose hash part is
+// shorter than four chars bucket under <segment>/_short/<id>. This layout
+// belongs to the namespace extension (ADR-89): the projection only stores
+// whatever path this returns.
+func namespaceTreePath(segment, id string) string {
+	hash := id
+	if i := strings.IndexByte(id, '-'); i >= 0 {
+		hash = id[i+1:]
+	}
+	if len(hash) < 4 {
+		return segment + "/_short/" + id
+	}
+	return segment + "/" + hash[:2] + "/" + hash[2:4] + "/" + id
 }
 
 // nsidKey is the by-namespace view's Resolve: the artifact's nsid is its

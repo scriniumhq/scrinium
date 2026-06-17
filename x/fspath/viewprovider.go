@@ -20,7 +20,9 @@ import (
 func (e *CustomIndex) ProvidedViews() []customindex.ProvidedView {
 	return []customindex.ProvidedView{{
 		Root:     "by-path",
-		Resolve:  vfsmeta.Resolver,
+		Path:     vfsmeta.Resolver,
+		Collide:  true,
+		Orphans:  true,
 		Metadata: e,
 	}}
 }

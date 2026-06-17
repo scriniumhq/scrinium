@@ -12,7 +12,6 @@ import (
 	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/vfsmeta"
 )
 
 // withCreatedAt builds a manifest at a specific time. vfsmeta path
@@ -36,7 +35,7 @@ func TestByPath_HappyPath(t *testing.T) {
 
 	v, err := vw.New(
 		context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver),
+		vw.WithProvidedViews(byPathProvided()),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
@@ -62,7 +61,7 @@ func TestByPath_VirtualDirsExist(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "photos/2024/img.jpg"), nil)
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()))
 	defer v.Close()
 
 	for _, dir := range []string{"photos", "photos/2024"} {
@@ -83,7 +82,7 @@ func TestByPath_OrphanedNotPresent(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()))
 	defer v.Close()
 
 	if v.Stats.OrphanedCount != 1 {
@@ -110,6 +109,7 @@ func TestByPath_SyntheticFallback(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "photos", "s12345", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
+		vw.WithProvidedViews(byPathProvided()),
 		vw.WithFallback(vw.FallbackSynthetic))
 	defer v.Close()
 
@@ -127,6 +127,7 @@ func TestByPath_SyntheticAnonymous(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "", "", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
+		vw.WithProvidedViews(byPathProvided()),
 		vw.WithFallback(vw.FallbackSynthetic))
 	defer v.Close()
 
@@ -148,7 +149,7 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 
 	bus := eventfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver),
+		vw.WithProvidedViews(byPathProvided()),
 		vw.WithEventBus(bus))
 	defer v.Close()
 
@@ -196,7 +197,7 @@ func TestByPath_CollisionEqualCreatedAt(t *testing.T) {
 	src.Add(withCreatedAt("sha256-bbbb2222", "shared", t0), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()))
 	defer v.Close()
 
 	n, _ := v.GetIn(vw.RootByPath, "shared")
@@ -216,7 +217,7 @@ func TestByPath_OrderedArrival(t *testing.T) {
 	src.Add(withCreatedAt("sha256-aaaa1111", "shared", older), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()))
 	defer v.Close()
 
 	n, _ := v.GetIn(vw.RootByPath, "shared")
