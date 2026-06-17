@@ -10,7 +10,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent/internal/checkpointfmt"
-	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/agent/rebuild"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -20,6 +19,7 @@ import (
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/eventfx"
 	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/leasefx"
 	"scrinium.dev/testutil/storefx"
 )
 
@@ -337,7 +337,7 @@ func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
 func TestRebuild_BlockedByForeignLease(t *testing.T) {
 	f := newRebuildFixture(t)
 	f.put(t, "r", "data large enough to be a target blob payload")
-	leasefx.StageForeign(t, f.drv, "system.state/maintenance/lease", "other-host", "RebuildIndex", time.Hour)
+	leasefx.StageForeign(t, f.drv, "store.state.maintenance.lease", "other-host", "RebuildIndex", time.Hour)
 	a := newRebuild(t, f, rebuild.RebuildConfig{})
 	if _, err := a.Run(context.Background()); err == nil {
 		t.Fatal("Run with a live foreign maintenance lease = nil, want lease-held failure")

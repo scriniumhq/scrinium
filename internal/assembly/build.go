@@ -601,7 +601,7 @@ func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
 
 // dialIndex resolves the index along the default ladder (ADR-63): an
 // explicit spec.Index wins; else Config.Defaults.Index; else a built-in
-// sqlite under a local store dir. The resolved URI is dialled through an
+// sqlite in the store's index/ dir. The resolved URI is dialled through an
 // custom index factory if one is registered for its scheme, otherwise the
 // engine's built-in DialIndex.
 func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.StoreIndex, error) {
@@ -614,7 +614,7 @@ func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.
 		if err != nil {
 			return nil, fmt.Errorf("index URI is empty and cannot default for store %q (set index explicitly)", spec.Driver)
 		}
-		uri = "sqlite:///" + filepath.Join(p, "index.db")
+		uri = "sqlite:///" + filepath.Join(p, "index", "index.db")
 	}
 	if f, ok := reg.indexFor(schemeOf(uri)); ok {
 		creds, err := resolveCredentials(ctx, spec.Credentials)

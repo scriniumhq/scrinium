@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/eventfx"
+	"scrinium.dev/testutil/leasefx"
 	"scrinium.dev/testutil/storefx"
 )
 
-// Internal (scrub) test: it references the unexported scrubLeasePath. A
+// Internal (scrub) test: it references the unexported scrubLeaseName. A
 // foreign host holds the lease (staged via leasefx); the agent runs on
 // the local host and must refuse with ErrLeaseHeld rather than run
 // concurrently.
@@ -25,7 +25,7 @@ func TestScrub_LeaseExclusion(t *testing.T) {
 	st, drv, idx := storefx.InitShared(t, store.WithPublisher(rec))
 	ctx := context.Background()
 
-	leasefx.StageForeign(t, drv, scrubLeasePath, "host-b-squatter-0002", "scrub", time.Hour)
+	leasefx.StageForeign(t, drv, scrubLeaseName, "host-b-squatter-0002", "scrub", time.Hour)
 
 	a, err := NewScrubAgent(st, drv, idx, rec, exclHostAgent, "store-scrub", ScrubConfig{Force: true})
 	if err != nil {

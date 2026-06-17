@@ -8,9 +8,9 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/namedstore"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -102,7 +102,7 @@ func NewScrubAgent(
 }
 
 const (
-	scrubLeasePath           = "system.state/scrub/lease"
+	scrubLeaseName           = "store.state.scrub.lease"
 	defaultScrubScanInterval = 24 * time.Hour
 	defaultScrubMaxAge       = 30 * 24 * time.Hour
 	defaultScrubBatchSize    = 1000
@@ -192,7 +192,7 @@ func (a *scrubAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
 		AgentType:    "scrub",
 		StoreID:      a.storeID,
-		Lease:        lease.Config{Path: scrubLeasePath, HostID: a.hostID, AgentType: "scrub", TTL: defaultScrubLeaseTTL},
+		Lease:        namedstore.Config{Name: scrubLeaseName, HostID: a.hostID, AgentType: "scrub", TTL: defaultScrubLeaseTTL},
 		LeaseEnabled: true,
 		Terminal:     event.EventAgentCycle,
 		TerminalMode: agent.TerminalEveryCycle,

@@ -1,29 +1,45 @@
-package lease
+package namedstore
 
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"hash"
 	"io/fs"
 	"strings"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/timefmt"
 	"scrinium.dev/errs"
 )
 
-// Record is the in-memory lease body. On disk it is one line of JSON
-// (§11.2); the AcquiredAt/ExpiresAt timestamps are encoded through
-// timefmt — the canonical RFC3339-second-UTC format the durable layer
-// (index/sqlite, engine/artifact) shares — so a lease written by one
-// subsystem parses byte-identically in another. Custom JSON methods
-// keep callers working with time.Time while the wire form stays
-// canonical.
+// The lease is the keep=0 exclusive cell in its policy form (ADR-100/101):
+// a single fixed slot (CellPath(Name)) acquired by exclusive-create and
+// overwritten in place, with TTL / heartbeat / nonce-takeover layered on
+// top. It is the sole consumer of the exclusive-cell semantics that also
+// needs a lifetime, so it lives here, beside the cell primitive it wraps.
+//
+// Bootstrap note: a lease is acquired before the store's configurable
+// HashRegistry is wired (location.lock at OpenStore). The lease therefore
+// does NOT use that registry — it builds and verifies its cell with a
+// compiled-in sha256 (leaseHashes), so it has no bootstrap dependency.
+// The cell is nonetheless a standard inline manifest: any store can read
+// it later through SystemStore.Get/Walk because sha256 is universal.
+
+// Record is the in-memory lease body. On disk it is the inline payload
+// of the cell's manifest, one line of JSON (§11.2); the
+// AcquiredAt/ExpiresAt timestamps are encoded through timefmt — the
+// canonical RFC3339-second-UTC format the durable layer (index/sqlite,
+// engine/artifact) shares — so a lease written by one subsystem parses
+// byte-identically in another. Custom JSON methods keep callers working
+// with time.Time while the wire form stays canonical.
 type Record struct {
 	HostID     string
 	AcquiredAt time.Time
@@ -84,7 +100,7 @@ func (r Record) expired(now time.Time) bool { return !now.Before(r.ExpiresAt) }
 // goroutine while the holder reads the immutable identity fields.
 type Lease struct {
 	drv       driver.Driver
-	path      string
+	name      string
 	hostID    string
 	agentType string
 	ttl       time.Duration
@@ -93,9 +109,10 @@ type Lease struct {
 
 // Config configures Acquire.
 type Config struct {
-	// Path is the full Driver path of the lease file, e.g.
-	// "system.state/maintenance/lease". Required.
-	Path string
+	// Name is the system-artifact name of the lease cell, e.g.
+	// "store.state.gc.lease". The cell lives at CellPath(Name).
+	// Required and must be a valid name (see ValidateName).
+	Name string
 
 	// HostID is the UUID v4 the process generated in-memory at
 	// OpenStore. Shared across every lease the process holds, so a
@@ -120,8 +137,11 @@ type Config struct {
 // overwritten (so the caller can emit a stale-lease takeover event);
 // prev is nil when the slot was empty.
 func Acquire(ctx context.Context, drv driver.Driver, cfg Config) (l *Lease, prev *Record, err error) {
-	if cfg.Path == "" || cfg.HostID == "" || cfg.TTL <= 0 {
-		return nil, nil, fmt.Errorf("lease.Acquire: Path, HostID and TTL>0 are required")
+	if cfg.Name == "" || cfg.HostID == "" || cfg.TTL <= 0 {
+		return nil, nil, fmt.Errorf("lease.Acquire: Name, HostID and TTL>0 are required")
+	}
+	if err := ValidateName(cfg.Name); err != nil {
+		return nil, nil, fmt.Errorf("lease.Acquire: %w", err)
 	}
 	nonce, err := newNonce()
 	if err != nil {
@@ -129,7 +149,7 @@ func Acquire(ctx context.Context, drv driver.Driver, cfg Config) (l *Lease, prev
 	}
 	l = &Lease{
 		drv:       drv,
-		path:      cfg.Path,
+		name:      cfg.Name,
 		hostID:    cfg.HostID,
 		agentType: cfg.AgentType,
 		ttl:       cfg.TTL,
@@ -212,7 +232,7 @@ func (l *Lease) Release(ctx context.Context) error {
 	if current.HostID != l.hostID || current.Nonce != l.nonce {
 		return nil // taken over — not ours to delete
 	}
-	if err := l.drv.Remove(ctx, l.path); err != nil && !isNotFound(err) {
+	if err := RemoveCell(ctx, l.drv, l.name); err != nil {
 		return fmt.Errorf("lease.Release: remove: %w", err)
 	}
 	return nil
@@ -255,33 +275,38 @@ func (l *Lease) record() Record {
 	}
 }
 
+// write builds the lease record as a standard inline manifest (sha256
+// computed through the compiled-in leaseHashes, no store registry) and
+// writes it to the cell. exclusive=true is the empty-slot acquire;
+// exclusive=false is renew/takeover overwrite.
 func (l *Lease) write(ctx context.Context, exclusive bool) error {
-	body, err := json.Marshal(l.record())
+	recordJSON, err := json.Marshal(l.record())
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
-	var opts []driver.PutOption
-	if exclusive {
-		opts = append(opts, driver.WithExclusive())
+	fileBytes, _, err := BuildInlineManifest(recordJSON, leaseHashAlgo, leaseHashes)
+	if err != nil {
+		return fmt.Errorf("build lease manifest: %w", err)
 	}
-	return l.drv.Put(ctx, l.path, strings.NewReader(string(body)), opts...)
+	return WriteCell(ctx, l.drv, l.name, fileBytes, exclusive)
 }
 
+// read loads and verifies the lease cell, returning the decoded Record.
+// An absent cell surfaces as errs.ErrArtifactNotFound (an empty slot to
+// Acquire). A cell that fails to decode/verify, or whose inline payload
+// is not a valid Record, is treated as reclaimable — ErrAlreadyExists
+// routes Acquire to the exclusive-create path, which a concurrent
+// writer guards (same contract as the previous raw-JSON form).
 func (l *Lease) read(ctx context.Context) (Record, error) {
-	rc, err := l.drv.Get(ctx, l.path)
+	m, err := LoadCell(ctx, l.drv, leaseHashes, l.name)
 	if err != nil {
-		return Record{}, err
-	}
-	defer rc.Close()
-	body, err := io.ReadAll(rc)
-	if err != nil {
-		return Record{}, fmt.Errorf("read body: %w", err)
+		if errors.Is(err, errs.ErrArtifactNotFound) {
+			return Record{}, err
+		}
+		return Record{}, errs.ErrAlreadyExists
 	}
 	var r Record
-	if err := json.Unmarshal(body, &r); err != nil {
-		// A corrupt/partial lease body is treated as absent: the slot
-		// is reclaimable. Returning ErrAlreadyExists routes Acquire to
-		// the exclusive-create path, which a concurrent writer guards.
+	if err := json.Unmarshal(m.InlineBlob, &r); err != nil {
 		return Record{}, errs.ErrAlreadyExists
 	}
 	return r, nil
@@ -295,9 +320,49 @@ func newNonce() (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-// isNotFound reports whether err signals an absent lease file. Drivers
-// return an fs.ErrNotExist-wrapping error from Get/Remove on a missing
-// path (localfs returns the raw os.Open error; see engine/driver/localfs).
+// isNotFound reports whether err signals an absent lease cell. LoadCell
+// maps an absent cell to errs.ErrArtifactNotFound; fs.ErrNotExist is
+// also accepted defensively for any driver that surfaces it directly.
 func isNotFound(err error) bool {
-	return errors.Is(err, fs.ErrNotExist)
+	return errors.Is(err, errs.ErrArtifactNotFound) || errors.Is(err, fs.ErrNotExist)
 }
+
+// --- bootstrap hash ---
+
+// leaseHashAlgo is the fixed content-hash algorithm for lease cells.
+const leaseHashAlgo = "sha256"
+
+// leaseHashes is a minimal, sha256-only HashRegistry compiled into the
+// binary. A lease is acquired before the store's configurable registry
+// is wired (location.lock at OpenStore), so it cannot depend on that
+// registry; sha256 is always linked in. Because sha256 is universal, a
+// cell written here is still readable later through any store's registry
+// (verify-on-read in SystemStore.Get/Walk).
+var leaseHashes domain.HashRegistry = sha256Registry{}
+
+type sha256Registry struct{}
+
+func (sha256Registry) Parse(h string) (string, []byte, error) {
+	i := strings.IndexByte(h, '-')
+	if i <= 0 {
+		return "", nil, fmt.Errorf("lease: malformed hash id %q", h)
+	}
+	raw, err := hex.DecodeString(h[i+1:])
+	if err != nil {
+		return "", nil, err
+	}
+	return h[:i], raw, nil
+}
+
+func (sha256Registry) NewHasher(algo string) (hash.Hash, error) {
+	if algo == leaseHashAlgo {
+		return sha256.New(), nil
+	}
+	return nil, fmt.Errorf("lease: unknown hash algo %q", algo)
+}
+
+func (sha256Registry) Format(algo string, raw []byte) string {
+	return algo + "-" + hex.EncodeToString(raw)
+}
+
+func (r sha256Registry) Register(string, func() hash.Hash) domain.HashRegistry { return r }

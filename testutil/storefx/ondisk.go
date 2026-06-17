@@ -111,10 +111,10 @@ func (d OnDisk) BlobFiles() []string {
 }
 
 // StagingFiles returns regular files under
-// <root>/system.state/staging/. A non-empty result after a
+// <root>/.staging/. A non-empty result after a
 // completed operation indicates a leak.
 func (d OnDisk) StagingFiles() []string {
-	dir := filepath.Join(d.Root, filepath.FromSlash(domain.NamespaceSystemState), "staging")
+	dir := filepath.Join(d.Root, filepath.FromSlash(domain.StagingPrefix))
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil

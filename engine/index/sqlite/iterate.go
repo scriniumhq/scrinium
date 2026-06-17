@@ -52,7 +52,7 @@ func (i *Index) ListByNamespace(
 			SELECT ` + manifestProjection + `
 			FROM manifests m
 			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
-			WHERE m.artifact_id IS NOT NULL AND m.namespace NOT LIKE 'system.%'
+			WHERE m.artifact_id IS NOT NULL
 			ORDER BY m.namespace, m.created_at`
 		queryExact = `
 			SELECT ` + manifestProjection + `

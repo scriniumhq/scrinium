@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/agent/internal/schedfx"
 	"scrinium.dev/engine/agent/rebuild"
+	"scrinium.dev/testutil/schedfx"
 )
 
 // TestRebuild_Scheduled verifies the Scheduler builds and invokes the

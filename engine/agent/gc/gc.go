@@ -8,9 +8,9 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/agent/internal/lease"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/namedstore"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -104,7 +104,7 @@ func NewGCAgent(
 }
 
 const (
-	gcLeasePath           = "system.state/gc/lease"
+	gcLeaseName           = "store.state.gc.lease"
 	defaultGCScanInterval = 1 * time.Hour
 	defaultGCBatchSize    = 100
 	defaultGCLeaseTTL     = 5 * time.Minute
@@ -197,7 +197,7 @@ func (a *gcAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
 		AgentType:    "gc",
 		StoreID:      a.storeID,
-		Lease:        lease.Config{Path: gcLeasePath, HostID: a.hostID, AgentType: "gc", TTL: a.cfg.LeaseTTL},
+		Lease:        namedstore.Config{Name: gcLeaseName, HostID: a.hostID, AgentType: "gc", TTL: a.cfg.LeaseTTL},
 		LeaseEnabled: a.leaseRequired(a.store.Config().GCLeasePolicy),
 		Terminal:     event.EventAgentCycle,
 		TerminalMode: agent.TerminalEveryCycle,

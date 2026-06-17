@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"strings"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
@@ -153,7 +152,7 @@ func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	if len(opts.Namespace) > domain.MaxNamespaceLen {
 		return errs.ErrNamespaceTooLong
 	}
-	if strings.HasPrefix(opts.Namespace, domain.NamespaceSystemPrefix) || opts.Namespace == domain.NamespaceWildcard {
+	if opts.Namespace == domain.NamespaceWildcard {
 		return errs.ErrReservedNamespace
 	}
 	if len(opts.SessionID) > domain.MaxSessionIDLen {

@@ -19,7 +19,10 @@ import (
 )
 
 // Prefix is the System() namespace every checkpoint artifact lives under.
-const Prefix = "index_checkpoint/"
+// It is a flat, dot-separated key prefix (not a directory): a checkpoint
+// is named "store.checkpoint.<ts>" and the set is enumerated by a
+// string-prefix Walk over the system root.
+const Prefix = "store.checkpoint."
 
 // TimeLayout encodes the checkpoint instant. It is path-safe and
 // lexicographically sortable (no colons, fixed-width nanoseconds, trailing

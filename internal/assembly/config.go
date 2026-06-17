@@ -39,7 +39,7 @@ type Config struct {
 type Defaults struct {
 	// Index is the index URI used when a StoreSpec leaves index empty
 	// (e.g. "sqlite:///var/lib/app/index.db"). Empty → the built-in
-	// "sqlite next to the store" default.
+	// "sqlite in the store's index/ dir" default.
 	Index string `yaml:"index,omitempty" json:"index,omitempty"`
 	// Driver is reserved for a future zero-store default. Every store
 	// currently names its own driver, so this is accepted but unused;

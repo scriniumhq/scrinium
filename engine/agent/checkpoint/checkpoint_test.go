@@ -11,12 +11,12 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/checkpoint"
-	"scrinium.dev/engine/agent/internal/leasefx"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/eventfx"
+	"scrinium.dev/testutil/leasefx"
 	"scrinium.dev/testutil/storefx"
 )
 
@@ -46,7 +46,7 @@ func (f checkpointFixture) put(t *testing.T, data string) {
 func (f checkpointFixture) checkpointNames(t *testing.T) []string {
 	t.Helper()
 	var names []string
-	if err := f.store.System().Walk(context.Background(), "index_checkpoint/",
+	if err := f.store.System().Walk(context.Background(), "store.checkpoint.",
 		func(name string, _ domain.Manifest) error {
 			names = append(names, name)
 			return nil
@@ -166,7 +166,7 @@ func TestCheckpoint_RetentionPrunesOldest(t *testing.T) {
 func TestCheckpoint_BlockedByForeignLease(t *testing.T) {
 	f := newCheckpointFixture(t)
 	f.put(t, "payload")
-	leasefx.StageForeign(t, f.drv, "system.state/checkpoint/lease", "other-host", "Checkpoint", time.Hour)
+	leasefx.StageForeign(t, f.drv, "store.state.checkpoint.lease", "other-host", "Checkpoint", time.Hour)
 	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{})
 	if _, err := a.TakeCheckpoint(context.Background()); err == nil {
 		t.Fatal("TakeCheckpoint with a live foreign lease = nil, want lease-held failure")
