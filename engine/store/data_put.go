@@ -48,7 +48,7 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...domain.Pu
 	// Resolve the write KeyID once and thread it through both the blob
 	// pipeline and the manifest body, so a blob and its manifest encrypt
 	// under the same key.
-	writeKeyID := d.resolveWriteKeyID(dopts.Namespace)
+	writeKeyID := d.resolveWriteKeyID()
 
 	blob, err := aio.Materialize(ctx, cfg, a, dopts, writeKeyID)
 	if err != nil {
@@ -111,17 +111,17 @@ func (c *core) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) e
 	return fn(dek)
 }
 
-// resolveWriteKeyID asks the resolver which KeyID a new artifact in this
-// namespace encrypts under. The resolver reference is snapshotted under
+// resolveWriteKeyID asks the resolver which KeyID a new artifact
+// encrypts under. The resolver reference is snapshotted under
 // the crypto lock but ResolveWriteKey runs without it
 // — it must be a cheap, non-blocking lookup. Returns "" for an
 // unencrypted store.
-func (c *core) resolveWriteKeyID(namespace string) string {
+func (c *core) resolveWriteKeyID() string {
 	r := c.crypto.resolver()
 	if r == nil {
 		return ""
 	}
-	return r.ResolveWriteKey(pipeline.KeyContext{Namespace: namespace})
+	return r.ResolveWriteKey(pipeline.KeyContext{})
 }
 
 // checkPutSupported rejects configurations and options whose support is

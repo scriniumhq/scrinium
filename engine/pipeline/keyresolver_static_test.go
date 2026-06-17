@@ -10,7 +10,7 @@ import (
 func TestStaticKeyResolver_ResolveWriteKey(t *testing.T) {
 	r := NewStaticKeyResolver([]byte("dek"))
 	// Non-empty namespace asserts the static resolver ignores ctx.
-	if got := r.ResolveWriteKey(KeyContext{Namespace: "ns"}); got != "" {
+	if got := r.ResolveWriteKey(KeyContext{}); got != "" {
 		t.Errorf("ResolveWriteKey: got %q, want empty string", got)
 	}
 }
