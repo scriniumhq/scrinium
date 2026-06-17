@@ -20,8 +20,7 @@ const NamespaceSystemPrefix = "system."
 // token.
 const (
 	// NamespaceSystemState holds engine-managed state artifacts:
-	// staging blobs (system.state/staging/), the scrub cursor,
-	// index snapshots, agent leases.
+	// the scrub cursor, index snapshots, agent leases.
 	NamespaceSystemState = "system.state"
 
 	// NamespaceSystemConfig holds the active StoreConfig artifact;

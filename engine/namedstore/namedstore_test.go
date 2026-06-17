@@ -162,9 +162,9 @@ func TestVersionPath_Format(t *testing.T) {
 		seq  uint64
 		want string
 	}{
-		{"config", 1, "system/config/0000000001"},
-		{"scrub/cursor", 12, "system/scrub/cursor/0000000012"},
-		{"ingester/state/main", 0, "system/ingester/state/main/0000000000"},
+		{"config", 1, "named/config.0000000001"},
+		{"scrub/cursor", 12, "named/scrub/cursor.0000000012"},
+		{"ingester/state/main", 0, "named/ingester/state/main.0000000000"},
 	}
 	for _, c := range cases {
 		got, err := VersionPath(c.name, c.seq)

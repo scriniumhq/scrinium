@@ -14,25 +14,24 @@ import (
 	"scrinium.dev/engine/driver"
 )
 
-// cellLeaf is the reserved directory leaf that holds a name's keep=0
-// exclusive cell (ADR-100/101). It is deliberately NOT seqWidth decimal
-// digits, so parseSeq("cell") is false and ResolveActiveSeq/ListVersions
-// skip it: a name is therefore EITHER a cell (one <name>/cell file) OR a
-// versioned series (<name>/<seq> files), never both, and the two forms
-// never collide on a single driver path.
+// cellLeaf is the reserved trailing leaf that marks a name's keep=0
+// exclusive cell (ADR-100/101): the flat file "named/<name>.cell". It is
+// deliberately NOT seqWidth decimal digits, so parseSeq("cell") is false
+// and ResolveActiveSeq/ListVersions skip it: a name is therefore EITHER a
+// cell ("<name>.cell") OR a versioned series ("<name>.<seq>"), never both,
+// and the two forms never collide on a single driver path.
 //
 // The cell is the keep=0 form: a single fixed slot (no seq) — the single
-// point of contention a lock needs. Versions (any suffix) would split
-// that point and break mutual exclusion, so the lock form has none.
+// point of contention a lock needs. Versions would split that point and
+// break mutual exclusion, so the lock form has none.
 const cellLeaf = "cell"
 
 // CellPath returns the driver path of name's keep=0 exclusive cell.
 func CellPath(name string) (string, error) {
-	d, err := dir(name)
-	if err != nil {
+	if err := ValidateName(name); err != nil {
 		return "", err
 	}
-	return d + "/" + cellLeaf, nil
+	return root + "/" + name + "." + cellLeaf, nil
 }
 
 // WriteCell writes body (an encoded inline manifest from
@@ -99,19 +98,16 @@ func ListCells(ctx context.Context, drv driver.Driver, prefix string) ([]Active,
 	rootSlash := root + "/"
 
 	var out []Active
-	// Names are flat, dot-separated keys, so prefix is matched as a string
-	// over the name, not as a parent directory (see ListActive).
+	// Cells are flat files "named/<name>.cell". Split each entry at its
+	// last '.'; keep those whose leaf is the cell marker (see ListActive).
 	err := drv.ListObjectsWithModTime(ctx, root, time.Time{}, func(o driver.ObjectMeta) error {
 		rel := strings.TrimPrefix(o.Path, rootSlash)
 		if rel == o.Path || rel == "" {
-			return nil // not under the system root
+			return nil // not under the named root
 		}
-		if leafOf(rel) != cellLeaf {
+		name, leaf, ok := splitLeaf(rel)
+		if !ok || leaf != cellLeaf {
 			return nil // not a cell file (a version, or a stray object)
-		}
-		name := strings.TrimSuffix(rel, "/"+cellLeaf)
-		if name == "" || name == rel {
-			return nil // a bare "cell" directly under system/ has no name
 		}
 		if !strings.HasPrefix(name, prefix) {
 			return nil // outside the requested name prefix

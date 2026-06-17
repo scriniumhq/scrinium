@@ -24,8 +24,10 @@ const (
 	// name's first segment ("config", "scrub", "index_checkpoint", ...)
 	// categorises the artifact (ADR-85: category is a name prefix, not a
 	// separate namespace), so the old system.config/system.state split
-	// is gone — everything hangs off this one root.
-	root = "system"
+	// is gone — everything is a flat file directly under this one root:
+	// "named/<name>.<seq>" for a version, "named/<name>.cell" for a
+	// keep=0 cell. No per-artifact subdirectory; the layout is planar.
+	root = "named"
 
 	// seqWidth zero-pads the seq component to a fixed width. Active
 	// selection compares seq numerically, so the width is the recognised
@@ -84,22 +86,14 @@ func ValidateName(name string) error {
 	return nil
 }
 
-// dir returns the driver directory holding every version of name.
-func dir(name string) (string, error) {
+// VersionPath returns the driver path of a specific version of name:
+// the flat file "named/<name>.<seq>" — no per-artifact subdirectory.
+// Used both to claim a new seq and to read a known one.
+func VersionPath(name string, seq uint64) (string, error) {
 	if err := ValidateName(name); err != nil {
 		return "", err
 	}
-	return root + "/" + name, nil
-}
-
-// VersionPath returns the driver path of a specific version of name.
-// Used both to claim a new seq and to read a known one.
-func VersionPath(name string, seq uint64) (string, error) {
-	d, err := dir(name)
-	if err != nil {
-		return "", err
-	}
-	return d + "/" + formatSeq(seq), nil
+	return root + "/" + name + "." + formatSeq(seq), nil
 }
 
 // formatSeq renders a seq as a fixed-width, zero-padded decimal so
@@ -123,31 +117,45 @@ func parseSeq(leaf string) (uint64, bool) {
 	return n, true
 }
 
+// scanSeqs returns every version seq present for name. Versions are flat
+// files "named/<name>.<seq>", so it walks the named root and keeps the
+// entries whose path, relative to the root, is exactly name + '.' + a
+// seq leaf. The root is small (a handful of system artifacts), so the
+// full walk is cheap. An absent root yields no seqs (not an error).
+func scanSeqs(ctx context.Context, drv driver.Driver, name string) ([]uint64, error) {
+	rootSlash := root + "/"
+	pfx := name + "."
+	var seqs []uint64
+	err := drv.ListObjectsWithModTime(ctx, root, time.Time{}, func(o driver.ObjectMeta) error {
+		rel := strings.TrimPrefix(o.Path, rootSlash)
+		if rel == o.Path || !strings.HasPrefix(rel, pfx) {
+			return nil
+		}
+		// The remainder after "<name>." must be exactly a seq leaf; a
+		// cell ("cell") or a longer-named artifact's suffix fails parseSeq.
+		if n, ok := parseSeq(rel[len(pfx):]); ok {
+			seqs = append(seqs, n)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("system artifact %q: scan versions: %w", name, err)
+	}
+	return seqs, nil
+}
+
 // ResolveActiveSeq reports the highest seq present for name (its active
-// version). found is false when the directory is absent or holds no
-// version files — i.e. the name has never been written.
-//
-// The scan tolerates a mixed directory: for a shallow name like "scrub"
-// the directory may hold both seq files (versions of "scrub") and a
-// subdirectory (versions of "scrub/cursor"). Only entries that parse as
-// a seq count; everything else is ignored.
+// version). found is false when no version file exists — i.e. the name
+// has never been written.
 func ResolveActiveSeq(ctx context.Context, drv driver.Driver, name string) (seq uint64, found bool, err error) {
-	d, err := dir(name)
+	if err := ValidateName(name); err != nil {
+		return 0, false, err
+	}
+	seqs, err := scanSeqs(ctx, drv, name)
 	if err != nil {
 		return 0, false, err
 	}
-	entries, err := drv.List(ctx, d)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return 0, false, nil
-		}
-		return 0, false, fmt.Errorf("system artifact %q: list versions: %w", name, err)
-	}
-	for _, e := range entries {
-		n, ok := parseSeq(leafOf(e))
-		if !ok {
-			continue
-		}
+	for _, n := range seqs {
 		if !found || n > seq {
 			seq, found = n, true
 		}
@@ -159,22 +167,12 @@ func ResolveActiveSeq(ctx context.Context, drv driver.Driver, name string) (seq 
 // An absent name yields an empty slice (not an error). Used by callers
 // that need the full version history (e.g. ConfigHistory).
 func ListVersions(ctx context.Context, drv driver.Driver, name string) ([]uint64, error) {
-	d, err := dir(name)
-	if err != nil {
+	if err := ValidateName(name); err != nil {
 		return nil, err
 	}
-	entries, err := drv.List(ctx, d)
+	seqs, err := scanSeqs(ctx, drv, name)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("system artifact %q: list versions: %w", name, err)
-	}
-	var seqs []uint64
-	for _, e := range entries {
-		if n, ok := parseSeq(leafOf(e)); ok {
-			seqs = append(seqs, n)
-		}
+		return nil, err
 	}
 	sort.Slice(seqs, func(i, j int) bool { return seqs[i] < seqs[j] })
 	return seqs, nil
@@ -321,22 +319,22 @@ func ListActive(ctx context.Context, drv driver.Driver, prefix string) ([]Active
 	rootSlash := root + "/"
 
 	best := map[string]Active{}
-	// Names are flat, dot-separated keys, so prefix is matched as a string
-	// over the name, not as a parent directory: walk the whole system root
-	// and filter. system/ is small, so the full walk is cheap.
+	// Versions are flat files "named/<name>.<seq>". Split each entry at
+	// its last '.': the trailing leaf is the seq, the rest is the (dotted)
+	// name. prefix is matched as a string over the name. The root is
+	// small, so the full walk is cheap.
 	err := drv.ListObjectsWithModTime(ctx, root, time.Time{}, func(o driver.ObjectMeta) error {
 		rel := strings.TrimPrefix(o.Path, rootSlash)
 		if rel == o.Path || rel == "" {
-			return nil // path was not under the system root
+			return nil // path was not under the named root
 		}
-		leaf := leafOf(rel)
+		name, leaf, ok := splitLeaf(rel)
+		if !ok {
+			return nil
+		}
 		seq, ok := parseSeq(leaf)
 		if !ok {
-			return nil // not a version file (a stray object under system/)
-		}
-		name := strings.TrimSuffix(rel, "/"+leaf)
-		if name == "" || name == rel {
-			return nil // a seq file directly under system/ has no name
+			return nil // a cell, or a stray object
 		}
 		if !strings.HasPrefix(name, prefix) {
 			return nil // outside the requested name prefix
@@ -412,12 +410,14 @@ func RemoveAll(ctx context.Context, drv driver.Driver, name string) error {
 	return errors.Join(failures...)
 }
 
-// leafOf returns the final '/'-separated segment of a driver path or
-// listing entry. Drivers may report either full paths or bare leaf names
-// from List; taking the last segment normalises both.
-func leafOf(p string) string {
-	if i := strings.LastIndexByte(p, '/'); i >= 0 {
-		return p[i+1:]
+// splitLeaf splits a flat artifact filename "<name>.<leaf>" at its LAST
+// '.' into the (dotted) name and the trailing leaf — a seq or the cell
+// marker. The name itself may contain dots; only the final segment is
+// the leaf. ok is false when there is no dot.
+func splitLeaf(rel string) (name, leaf string, ok bool) {
+	i := strings.LastIndexByte(rel, '.')
+	if i < 0 {
+		return "", "", false
 	}
-	return p
+	return rel[:i], rel[i+1:], true
 }

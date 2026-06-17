@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -156,6 +157,15 @@ func newStoreForTests(ctx context.Context, path string, mut func(*options)) (*In
 func newStoreInternal(ctx context.Context, path string, o options) (*Index, error) {
 	if path == "" {
 		return nil, fmt.Errorf("sqlite: empty path")
+	}
+
+	// Create the parent directory for a file-backed DB. SQLite creates
+	// the database file but not the directories above it, so an index
+	// path like "<store>/index/index.db" needs its dir made first.
+	if path != ":memory:" {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return nil, fmt.Errorf("sqlite: create dir for %q: %w", path, err)
+		}
 	}
 
 	dsn := buildDSN(path, o)
