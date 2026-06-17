@@ -12,12 +12,12 @@ import (
 )
 
 // configName is the system-artifact name under which the active
-// StoreConfig and its history live: system/config/<seq> (ADR-85). The
+// StoreConfig and its history live: system/store.config/<seq> (ADR-85). The
 // active config is max(seq); a new config is published by claiming the
 // next seq. There is no pointer file — the config path uses the same
 // name→seq mechanism as every other system artifact (namedstore),
 // which is what removed the bespoke pointer this package used to carry.
-const configName = "config"
+const configName = "store.config"
 
 // Write persists cfg as a new system/config version and returns once the
 // version is durably written. The active config becomes the one just

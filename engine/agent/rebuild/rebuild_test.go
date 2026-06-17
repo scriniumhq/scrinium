@@ -337,7 +337,7 @@ func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
 func TestRebuild_BlockedByForeignLease(t *testing.T) {
 	f := newRebuildFixture(t)
 	f.put(t, "r", "data large enough to be a target blob payload")
-	leasefx.StageForeign(t, f.drv, "store/state/maintenance/lease", "other-host", "RebuildIndex", time.Hour)
+	leasefx.StageForeign(t, f.drv, "store.state.maintenance.lease", "other-host", "RebuildIndex", time.Hour)
 	a := newRebuild(t, f, rebuild.RebuildConfig{})
 	if _, err := a.Run(context.Background()); err == nil {
 		t.Fatal("Run with a live foreign maintenance lease = nil, want lease-held failure")

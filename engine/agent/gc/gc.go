@@ -104,7 +104,7 @@ func NewGCAgent(
 }
 
 const (
-	gcLeaseName           = "store/state/gc/lease"
+	gcLeaseName           = "store.state.gc.lease"
 	defaultGCScanInterval = 1 * time.Hour
 	defaultGCBatchSize    = 100
 	defaultGCLeaseTTL     = 5 * time.Minute

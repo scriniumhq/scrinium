@@ -96,11 +96,12 @@ func RemoveCell(ctx context.Context, drv driver.Driver, name string) error {
 // system view. A name is exactly one form, so the two lists never
 // overlap.
 func ListCells(ctx context.Context, drv driver.Driver, prefix string) ([]Active, error) {
-	listPath := root + "/" + prefix
 	rootSlash := root + "/"
 
 	var out []Active
-	err := drv.ListObjectsWithModTime(ctx, listPath, time.Time{}, func(o driver.ObjectMeta) error {
+	// Names are flat, dot-separated keys, so prefix is matched as a string
+	// over the name, not as a parent directory (see ListActive).
+	err := drv.ListObjectsWithModTime(ctx, root, time.Time{}, func(o driver.ObjectMeta) error {
 		rel := strings.TrimPrefix(o.Path, rootSlash)
 		if rel == o.Path || rel == "" {
 			return nil // not under the system root
@@ -112,11 +113,14 @@ func ListCells(ctx context.Context, drv driver.Driver, prefix string) ([]Active,
 		if name == "" || name == rel {
 			return nil // a bare "cell" directly under system/ has no name
 		}
+		if !strings.HasPrefix(name, prefix) {
+			return nil // outside the requested name prefix
+		}
 		out = append(out, Active{Name: name, Path: o.Path})
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("system artifact: list cells %q: %w", listPath, err)
+		return nil, fmt.Errorf("system artifact: list cells %q: %w", prefix, err)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil

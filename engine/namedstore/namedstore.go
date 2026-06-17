@@ -1,50 +1,3 @@
-// Package namedstore is the pointer-free on-disk layout for system
-// artifacts (ADR-85). It is the single source of truth for where a
-// system artifact lives and how its active version is chosen, shared by
-// the two callers that previously each carried their own copy of the
-// rule: the SystemStore facade (engine/store) and the bootstrap config
-// path (engine/store/internal/storeconfig). Putting the layout here is
-// what collapses that duplication into one mechanism.
-//
-// A system artifact is identified by a NAME — a slash-separated,
-// path-like token: "config", "scrub/cursor", "index_checkpoint/<ts>".
-// The name maps deterministically to a driver directory; each write of
-// that name lands in a new, monotonically increasing SEQ file inside
-// that directory:
-//
-//	system/<name>/<seq>     e.g. system/config/00000000000000000003
-//	                             system/scrub/cursor/00000000000000000012
-//
-// The file at <name>/<seq> IS the (inline) manifest — system artifacts
-// are short and unique per write, so they carry their payload inline
-// with an empty Pipeline (ContentHash == BlobRef). There is no separate
-// blob file, no content-addressed manifests/ entry, and no StoreIndex
-// row: system artifacts live ONLY here, in their own address space.
-//
-// This replaces the previous mutable-pointer model (a "<name> → digest"
-// file plus a content-addressed manifest). Dropping the pointer has
-// three consequences:
-//
-//   - Active version = max(seq), discovered by reading the directory.
-//     No pointer to flip, so no window in which the pointer and the
-//     file it names disagree. (This is already the StoreConfig
-//     activation model — see the concurrency model §3.1 — so the
-//     config path stops being a special case.)
-//   - A new version is published by CLAIMING the next seq with an
-//     exclusive create (driver.WithExclusive — the Layer-1 atomic
-//     commit primitive). Two racing writers cannot occupy one seq: the
-//     loser gets errs.ErrAlreadyExists and re-reads max(seq).
-//   - Rollback is "write a copy as the new max(seq)"; GC is keep-N by
-//     version (Prune), never by ref-count — system artifacts are
-//     outside the content-addressed GC regime.
-//
-// Integrity: with no index row to drive the scrub schedule, system
-// artifacts are verified ON READ. Load re-hashes the inline payload
-// against the manifest's embedded ContentHash, so a silently corrupted
-// file is rejected at the point of use without any background scrub
-// pass. Config is read at every store-open and the few other system
-// names on each touch — frequent enough that verify-on-read is the
-// whole integrity story.
 package namedstore
 
 import (
@@ -74,11 +27,12 @@ const (
 	// is gone — everything hangs off this one root.
 	root = "system"
 
-	// seqWidth zero-pads the seq component to a fixed width so the
-	// driver's lexicographic directory order equals numeric order:
-	// max(seq) is then "the lexically last entry". 20 digits holds the
-	// full uint64 range (math.MaxUint64 is 20 digits).
-	seqWidth = 20
+	// seqWidth zero-pads the seq component to a fixed width. Active
+	// selection compares seq numerically, so the width is the recognised
+	// seq-file length (parseSeq is strict on it), not a sort key. 10
+	// digits (up to 10^10 writes) is far beyond any system artifact's
+	// version count: config is rare, checkpoints keep one version each.
+	seqWidth = 10
 
 	// maxClaimAttempts bounds the claim retry loop. Each lost race
 	// against another writer consumes one attempt; the bound turns
@@ -364,11 +318,13 @@ func verifyInlinePayload(m domain.Manifest, hashes domain.HashRegistry) error {
 // recursive (names are nested), driven by ListObjectsWithModTime, which
 // reports files only and treats a missing prefix as an empty walk.
 func ListActive(ctx context.Context, drv driver.Driver, prefix string) ([]Active, error) {
-	listPath := root + "/" + prefix
 	rootSlash := root + "/"
 
 	best := map[string]Active{}
-	err := drv.ListObjectsWithModTime(ctx, listPath, time.Time{}, func(o driver.ObjectMeta) error {
+	// Names are flat, dot-separated keys, so prefix is matched as a string
+	// over the name, not as a parent directory: walk the whole system root
+	// and filter. system/ is small, so the full walk is cheap.
+	err := drv.ListObjectsWithModTime(ctx, root, time.Time{}, func(o driver.ObjectMeta) error {
 		rel := strings.TrimPrefix(o.Path, rootSlash)
 		if rel == o.Path || rel == "" {
 			return nil // path was not under the system root
@@ -382,13 +338,16 @@ func ListActive(ctx context.Context, drv driver.Driver, prefix string) ([]Active
 		if name == "" || name == rel {
 			return nil // a seq file directly under system/ has no name
 		}
+		if !strings.HasPrefix(name, prefix) {
+			return nil // outside the requested name prefix
+		}
 		if cur, seen := best[name]; !seen || seq > cur.Seq {
 			best[name] = Active{Name: name, Seq: seq, Path: o.Path}
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("system artifact: list %q: %w", listPath, err)
+		return nil, fmt.Errorf("system artifact: list %q: %w", prefix, err)
 	}
 
 	out := make([]Active, 0, len(best))

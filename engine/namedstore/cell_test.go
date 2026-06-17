@@ -27,10 +27,10 @@ func TestCell_WriteExclusiveRoundTrip(t *testing.T) {
 	drv := newDriver(t)
 	payload := []byte("lease-record-v1")
 
-	if err := WriteCell(ctx, drv, "store/state/gc/lease", buildCellBody(t, payload), true); err != nil {
+	if err := WriteCell(ctx, drv, "store.state.gc.lease", buildCellBody(t, payload), true); err != nil {
 		t.Fatalf("WriteCell exclusive: %v", err)
 	}
-	m, err := LoadCell(ctx, drv, testHashes{}, "store/state/gc/lease")
+	m, err := LoadCell(ctx, drv, testHashes{}, "store.state.gc.lease")
 	if err != nil {
 		t.Fatalf("LoadCell: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestCell_WriteExclusiveRoundTrip(t *testing.T) {
 func TestCell_ExclusiveOnExistingFails(t *testing.T) {
 	ctx := context.Background()
 	drv := newDriver(t)
-	name := "store/state/gc/lease"
+	name := "store.state.gc.lease"
 
 	if err := WriteCell(ctx, drv, name, buildCellBody(t, []byte("holder-A")), true); err != nil {
 		t.Fatalf("first exclusive WriteCell: %v", err)
@@ -68,7 +68,7 @@ func TestCell_ExclusiveOnExistingFails(t *testing.T) {
 func TestCell_OverwriteReplaces(t *testing.T) {
 	ctx := context.Background()
 	drv := newDriver(t)
-	name := "store/state/gc/lease"
+	name := "store.state.gc.lease"
 
 	if err := WriteCell(ctx, drv, name, buildCellBody(t, []byte("A")), true); err != nil {
 		t.Fatalf("acquire: %v", err)
@@ -89,7 +89,7 @@ func TestCell_OverwriteReplaces(t *testing.T) {
 func TestCell_LoadAbsent(t *testing.T) {
 	ctx := context.Background()
 	drv := newDriver(t)
-	if _, err := LoadCell(ctx, drv, testHashes{}, "store/state/never"); !errors.Is(err, errs.ErrArtifactNotFound) {
+	if _, err := LoadCell(ctx, drv, testHashes{}, "store.state.never"); !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Fatalf("LoadCell absent = %v, want ErrArtifactNotFound", err)
 	}
 }
@@ -99,7 +99,7 @@ func TestCell_LoadAbsent(t *testing.T) {
 func TestCell_RemoveIdempotent(t *testing.T) {
 	ctx := context.Background()
 	drv := newDriver(t)
-	name := "store/state/gc/lease"
+	name := "store.state.gc.lease"
 
 	if err := WriteCell(ctx, drv, name, buildCellBody(t, []byte("x")), true); err != nil {
 		t.Fatalf("WriteCell: %v", err)

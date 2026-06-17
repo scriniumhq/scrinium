@@ -77,7 +77,7 @@ func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 	if _, err := os.Stat(descPath); err != nil {
 		t.Fatalf("descriptor not on disk after Init: %v", err)
 	}
-	cfgVersion, err := namedstore.VersionPath("config", 1)
+	cfgVersion, err := namedstore.VersionPath("store.config", 1)
 	if err != nil {
 		t.Fatalf("VersionPath: %v", err)
 	}

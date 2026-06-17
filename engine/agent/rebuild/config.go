@@ -44,7 +44,7 @@ type RebuildConfig struct {
 	// sense, for LocalFS 4–8.
 	Parallelism int
 
-	// LeaseTTL is the hold time for system.state/maintenance/lease.
+	// LeaseTTL is the hold time for store.state.maintenance.lease.
 	// Default 30m. For very large Stores (millions of manifests)
 	// it makes sense to extend it — losing the lease aborts the
 	// operation.
@@ -68,7 +68,7 @@ type RebuildConfig struct {
 }
 
 const (
-	rebuildLeasePath        = "store/state/maintenance/lease"
+	rebuildLeasePath        = "store.state.maintenance.lease"
 	defaultRebuildBatchSize = 1000
 	defaultRebuildParallel  = 8
 	defaultRebuildLeaseTTL  = 30 * time.Minute
