@@ -342,11 +342,19 @@ func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
 	v.Stats.TotalNodes++
 	v.Stats.TotalBytes += m.OriginalSize
 	// Distinct-cardinality counters from the per-view seen-key sets.
-	// The named mapping below is transitional public-surface glue
-	// (RootBySession→SessionCount, RootByNamespace→NamespaceCount);
-	// it goes away with the Stats rename.
+	// by-session is an intrinsic view and keeps a named counter; every
+	// other counting view (including any extension-provided one) lands
+	// in ViewCounts under its own root, so this stays generic.
 	v.Stats.SessionCount = int64(len(v.seenKeys[RootBySession]))
-	v.Stats.NamespaceCount = int64(len(v.seenKeys[RootByNamespace]))
+	for root, keys := range v.seenKeys {
+		if root == RootBySession {
+			continue
+		}
+		if v.Stats.ViewCounts == nil {
+			v.Stats.ViewCounts = make(map[RootView]int64)
+		}
+		v.Stats.ViewCounts[root] = int64(len(keys))
+	}
 	_ = duringBackfill
 }
 

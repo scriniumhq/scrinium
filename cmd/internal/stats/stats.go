@@ -102,7 +102,14 @@ func writeViewSection(b *strings.Builder, stats projection.Stats) {
 	fmt.Fprintf(b, "TotalNodes:       %d\n", stats.TotalNodes)
 	fmt.Fprintf(b, "TotalBytes:       %s\n", humanize.BytesWithRaw(stats.TotalBytes))
 	fmt.Fprintf(b, "SessionCount:     %d\n", stats.SessionCount)
-	fmt.Fprintf(b, "NamespaceCount:   %d\n", stats.NamespaceCount)
+	vcRoots := make([]string, 0, len(stats.ViewCounts))
+	for r := range stats.ViewCounts {
+		vcRoots = append(vcRoots, string(r))
+	}
+	slices.Sort(vcRoots)
+	for _, r := range vcRoots {
+		fmt.Fprintf(b, "ViewCount[%s]:  %d\n", r, stats.ViewCounts[projection.RootView(r)])
+	}
 	fmt.Fprintf(b, "OrphanedCount:    %d\n", stats.OrphanedCount)
 	fmt.Fprintf(b, "CollisionCount:   %d\n", stats.CollisionCount)
 	fmt.Fprintf(b, "TransitCount:     %d\n", stats.TransitCount)

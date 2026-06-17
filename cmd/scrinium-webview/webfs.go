@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	pathpkg "path"
+
 	"scrinium.dev/projection"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
@@ -169,12 +170,5 @@ func (b *webBackingFS) LookupLocations(ctx context.Context, id domain.ArtifactID
 	if !ok {
 		return projection.Locations{}, false, nil
 	}
-	return projection.Locations{
-		ByArtifact:  locs.ByArtifact,
-		BySession:   locs.BySession,
-		ByNamespace: locs.ByNamespace,
-		ByDate:      locs.ByDate,
-		ByPath:      locs.ByPath,
-		ByOrphaned:  locs.ByOrphaned,
-	}, true, nil
+	return locs, true, nil
 }

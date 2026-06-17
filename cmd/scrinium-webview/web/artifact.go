@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -220,43 +221,45 @@ func (h *Handler) tryPreview(ctx context.Context, id domain.ArtifactID, m domain
 // RootView=byDate (so byDate is at the URL root), the by-path
 // link still works via /_browse/_scrinium/by-path/...
 func (h *Handler) buildLocationViews(locs projection.Locations) []locationView {
-	out := make([]locationView, 0, 6)
 	servicePrefix := h.cfg.ServicePrefix
-	if servicePrefix == "" {
-		// Without a service prefix the only navigable tree is
-		// the root view. Show whichever placement we have.
-		if locs.ByPath != "" {
-			out = append(out, locationView{
-				Tree: "by-path",
-				Path: locs.ByPath,
-				URL:  parentURL(h.prefix+"/", locs.ByPath),
-			})
-		}
-		return out
-	}
 
-	add := func(label, path, treeSegment string) {
+	roots := make([]string, 0, len(locs.Paths))
+	for r := range locs.Paths {
+		roots = append(roots, string(r))
+	}
+	sort.Strings(roots)
+
+	out := make([]locationView, 0, len(roots))
+	for _, r := range roots {
+		path := locs.Paths[projection.RootView(r)]
 		if path == "" {
-			return
+			continue
 		}
-		base := h.prefix + "/" + servicePrefix + "/" + treeSegment + "/"
+		if servicePrefix == "" {
+			// Without a service prefix only the root view is mounted at
+			// the bare prefix; we don't know which root that is here, so
+			// surface each placement against it. The root view's link
+			// resolves; others are informational.
+			out = append(out, locationView{
+				Tree: r,
+				Path: path,
+				URL:  parentURL(h.prefix+"/", path),
+			})
+			continue
+		}
+		// The URL segment matches the root name. by-orphaned is the one
+		// intrinsic view whose mount segment ("orphaned") differs.
+		seg := r
+		if r == "by-orphaned" {
+			seg = "orphaned"
+		}
+		base := h.prefix + "/" + servicePrefix + "/" + seg + "/"
 		out = append(out, locationView{
-			Tree: label,
+			Tree: r,
 			Path: path,
 			URL:  parentURL(base, path),
 		})
 	}
-
-	// Order goes from "most useful" to "diagnostic": users
-	// usually want by-path or by-date first, by-artifact /
-	// by-orphaned are infrastructure peeks.
-	add("by-path", locs.ByPath, "by-path")
-	add("by-orphaned", locs.ByOrphaned, "orphaned")
-	add("by-date", locs.ByDate, "by-date")
-	add("by-namespace", locs.ByNamespace, "by-namespace")
-	add("by-session", locs.BySession, "by-session")
-	add("by-artifact", locs.ByArtifact, "by-artifact")
-
 	return out
 }
 

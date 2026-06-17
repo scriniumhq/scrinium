@@ -49,7 +49,7 @@ type StatsView struct {
 	TotalBytes     int64
 	TotalBytesText string // pre-formatted "39359055 (37.5 MiB)"
 	SessionCount   int64
-	NamespaceCount int64
+	ViewCounts     map[string]int64
 	OrphanedCount  int64
 	CollisionCount int64
 	TransitCount   int64
@@ -217,7 +217,9 @@ const statsPageHTML = `<!DOCTYPE html>
     <tr><td class="label">TotalNodes</td><td class="value">{{.View.TotalNodes}}</td></tr>
     <tr><td class="label">TotalBytes</td><td class="value">{{.View.TotalBytesText}}</td></tr>
     <tr><td class="label">SessionCount</td><td class="value">{{.View.SessionCount}}</td></tr>
-    <tr><td class="label">NamespaceCount</td><td class="value">{{.View.NamespaceCount}}</td></tr>
+    {{range $k := sortedKeys .View.ViewCounts}}
+    <tr><td class="label">ViewCount[{{$k}}]</td><td class="value">{{index $.View.ViewCounts $k}}</td></tr>
+    {{end}}
     <tr><td class="label">OrphanedCount</td><td class="value">{{.View.OrphanedCount}}</td></tr>
     <tr><td class="label">CollisionCount</td><td class="value">{{.View.CollisionCount}}</td></tr>
     <tr><td class="label">TransitCount</td><td class="value">{{.View.TransitCount}}</td></tr>

@@ -2,7 +2,10 @@ package vfs
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+
+	"scrinium.dev/projection/internal/view"
 )
 
 // statsBody returns the bytes served at _scrinium/stats. When a host
@@ -22,7 +25,14 @@ func (v *VFS) statsBody() []byte {
 	fmt.Fprintf(&b, "TotalNodes:       %d\n", s.TotalNodes)
 	fmt.Fprintf(&b, "TotalBytes:       %d\n", s.TotalBytes)
 	fmt.Fprintf(&b, "SessionCount:     %d\n", s.SessionCount)
-	fmt.Fprintf(&b, "NamespaceCount:   %d\n", s.NamespaceCount)
+	vcRoots := make([]string, 0, len(s.ViewCounts))
+	for r := range s.ViewCounts {
+		vcRoots = append(vcRoots, string(r))
+	}
+	sort.Strings(vcRoots)
+	for _, r := range vcRoots {
+		fmt.Fprintf(&b, "ViewCount[%s]:  %d\n", r, s.ViewCounts[view.RootView(r)])
+	}
 	fmt.Fprintf(&b, "OrphanedCount:    %d\n", s.OrphanedCount)
 	fmt.Fprintf(&b, "CollisionCount:   %d\n", s.CollisionCount)
 	fmt.Fprintf(&b, "TransitCount:     %d\n", s.TransitCount)

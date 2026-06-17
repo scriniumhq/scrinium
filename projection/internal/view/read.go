@@ -51,14 +51,11 @@ func (v *View) LookupLocations(id domain.ArtifactID) (Locations, bool) {
 	if !ok {
 		return Locations{}, false
 	}
-	return Locations{
-		ByArtifact:  rec.paths[RootByArtifact],
-		BySession:   rec.paths[RootBySession],
-		ByNamespace: rec.paths[RootByNamespace],
-		ByDate:      rec.paths[RootByDate],
-		ByPath:      rec.paths[RootByPath],
-		ByOrphaned:  rec.paths[RootByOrphaned],
-	}, true
+	locs := Locations{Paths: make(map[RootView]string, len(rec.paths))}
+	for root, p := range rec.paths {
+		locs.Paths[root] = p
+	}
+	return locs, true
 }
 
 // Search scans the View for artifacts matching the query.
@@ -360,3 +357,5 @@ func (v *View) openInTree(
 	}
 	return rh, nil
 }
+
+// --- Mutation methods ---

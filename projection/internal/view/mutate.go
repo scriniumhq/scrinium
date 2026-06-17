@@ -81,10 +81,10 @@ func (v *View) removeArtifactFromTrees(id domain.ArtifactID, rec *artifactRecord
 	if orphaned {
 		v.Stats.OrphanedCount--
 	}
-	// SessionCount and NamespaceCount: we do not decrement (see
-	// seenKeys — distinct keys are tracked monotonically). Stats remain
-	// monotonic for those two counters across the View's lifetime —
-	// callers use them for pacing, not for exact accounting.
+	// SessionCount and ViewCounts: we do not decrement (see seenKeys —
+	// distinct keys are tracked monotonically). Those distinct-key
+	// counters stay monotonic across the View's lifetime — callers use
+	// them for pacing, not for exact accounting.
 }
 
 // removeFromCollisionTree drops an artifact from a collidable tree

@@ -143,14 +143,19 @@ func (r RootView) IsValid() bool {
 
 // Stats holds aggregated projection-wide storage and node metrics.
 type Stats struct {
-	TotalNodes     int64            `json:"totalNodes"`
-	TotalBytes     int64            `json:"totalBytes"`
-	SessionCount   int64            `json:"sessionCount"`
-	NamespaceCount int64            `json:"namespaceCount"`
-	OrphanedCount  int64            `json:"orphanedCount"`
-	CollisionCount int64            `json:"collisionCount"`
-	ByStore        map[string]int64 `json:"byStore"`
-	TransitCount   int64            `json:"transitCount"`
+	TotalNodes   int64 `json:"totalNodes"`
+	TotalBytes   int64 `json:"totalBytes"`
+	SessionCount int64 `json:"sessionCount"`
+	// ViewCounts holds the distinct-key cardinality of each counting
+	// view, keyed by root. by-session keeps its own named counter
+	// above (it is an intrinsic view); every other counting view —
+	// including any extension-provided one — lands here, so the
+	// projection names none of them.
+	ViewCounts     map[RootView]int64 `json:"viewCounts"`
+	OrphanedCount  int64              `json:"orphanedCount"`
+	CollisionCount int64              `json:"collisionCount"`
+	ByStore        map[string]int64   `json:"byStore"`
+	TransitCount   int64              `json:"transitCount"`
 }
 
 // SearchResult represents a single item found during index lookups.
@@ -173,12 +178,10 @@ type RelatedArtifact struct {
 	CreatedAt  time.Time         `json:"createdAt"`
 }
 
-// Locations specifies target directory mappings for different root structures.
+// Locations maps each root view a manifest appears in to its path
+// within that view. Keys are whatever roots are active — intrinsic
+// (by-artifact/by-date/by-session/by-orphaned) plus any extension-
+// provided — so the projection names none of them.
 type Locations struct {
-	ByArtifact  string `json:"byArtifact"`
-	BySession   string `json:"bySession"`
-	ByNamespace string `json:"byNamespace"`
-	ByDate      string `json:"byDate"`
-	ByPath      string `json:"byPath"`
-	ByOrphaned  string `json:"byOrphaned"`
+	Paths map[RootView]string `json:"paths"`
 }
