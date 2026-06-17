@@ -10,7 +10,7 @@ import (
 )
 
 func TestIndex_ProjectsNSID(t *testing.T) {
-	e := NewIndex()
+	e := NewIndex(nil)
 	m := domain.Manifest{
 		ArtifactID: "art-1",
 		Ext:        json.RawMessage(`{"nsid":"ns-uuid-1"}`),
@@ -35,7 +35,7 @@ func TestIndex_ProjectsNSID(t *testing.T) {
 }
 
 func TestIndex_SkipsWithoutNSID(t *testing.T) {
-	e := NewIndex()
+	e := NewIndex(nil)
 	cases := map[string]json.RawMessage{
 		"nil ext":      nil,
 		"empty object": json.RawMessage(`{}`),
@@ -56,7 +56,7 @@ func TestIndex_SkipsWithoutNSID(t *testing.T) {
 }
 
 func TestIndex_CoexistsWithOtherExtKeys(t *testing.T) {
-	e := NewIndex()
+	e := NewIndex(nil)
 	// A vfsmeta payload that also carries the namespace stamp: the index
 	// reads only its own "nsid" key and ignores the rest.
 	m := domain.Manifest{
@@ -73,7 +73,7 @@ func TestIndex_CoexistsWithOtherExtKeys(t *testing.T) {
 }
 
 func TestIndex_InvalidExtErrors(t *testing.T) {
-	e := NewIndex()
+	e := NewIndex(nil)
 	m := domain.Manifest{ArtifactID: "bad", Ext: json.RawMessage(`{"nsid":123}`)}
 	if _, err := e.Index(context.Background(), nil, m); err == nil {
 		t.Error("Index with malformed nsid: want error, got nil")
@@ -81,7 +81,7 @@ func TestIndex_InvalidExtErrors(t *testing.T) {
 }
 
 func TestIndex_UnindexNoop(t *testing.T) {
-	e := NewIndex()
+	e := NewIndex(nil)
 	m := domain.Manifest{ArtifactID: "art-1", Ext: json.RawMessage(`{"nsid":"ns-uuid-1"}`)}
 	if err := e.Unindex(context.Background(), nil, m); err != nil {
 		t.Errorf("Unindex: %v", err)
@@ -89,7 +89,7 @@ func TestIndex_UnindexNoop(t *testing.T) {
 }
 
 func TestIndex_Contract(t *testing.T) {
-	e := NewIndex()
+	e := NewIndex(nil)
 	if e.Name() != "namespace" {
 		t.Errorf("Name = %q, want namespace", e.Name())
 	}
@@ -108,5 +108,47 @@ func TestIndex_Contract(t *testing.T) {
 	}
 	if err := e.Close(); err != nil {
 		t.Errorf("Close: %v", err)
+	}
+}
+
+func TestIndex_ProvidedViews_ByNamespace(t *testing.T) {
+	mem := newMemSysStore()
+	ctx := context.Background()
+	ext, _ := New(mem)
+	id, err := ext.Registry().Create(ctx, "docs")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	views := NewIndex(ext.Registry()).ProvidedViews()
+	if len(views) != 1 || views[0].Root != "by-namespace" {
+		t.Fatalf("ProvidedViews = %+v, want one by-namespace view", views)
+	}
+	pv := views[0]
+
+	// Resolve: nsid is the key; an unstamped manifest is opaque.
+	if key, ok := pv.Resolve(domain.Manifest{Ext: json.RawMessage(`{"nsid":"` + string(id) + `"}`)}); !ok || key != string(id) {
+		t.Errorf("Resolve(stamped) = (%q,%v), want (%q,true)", key, ok, id)
+	}
+	if _, ok := pv.Resolve(domain.Manifest{}); ok {
+		t.Error("Resolve(unstamped) = ok, want not ok")
+	}
+
+	// Label: nsid → human name; unknown nsid falls back (not ok).
+	if pv.Label == nil {
+		t.Fatal("Label nil despite registry present")
+	}
+	if name, ok := pv.Label(string(id)); !ok || name != "docs" {
+		t.Errorf("Label(%q) = (%q,%v), want (docs,true)", id, name, ok)
+	}
+	if _, ok := pv.Label("00000000-0000-0000-0000-000000000000"); ok {
+		t.Error("Label(unknown) = ok, want not ok")
+	}
+}
+
+func TestIndex_ProvidedViews_NoRegistryLabelsVerbatim(t *testing.T) {
+	views := NewIndex(nil).ProvidedViews()
+	if len(views) != 1 || views[0].Label != nil {
+		t.Errorf("registry-less index must provide a by-namespace view with nil Label (verbatim nsids)")
 	}
 }

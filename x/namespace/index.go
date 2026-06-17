@@ -23,21 +23,32 @@ const (
 	// no own tables (it projects into the core proj_ext store), so a bump
 	// here only ever signals a change in WHAT it projects.
 	indexSchemaVersion = 1
+
+	// byNamespaceView is the RootView this extension backs (ADR-98): the
+	// by-namespace tree, keyed by nsid and labelled with human names.
+	byNamespaceView = "by-namespace"
 )
 
 // Index is the namespace custom index (ADR-79/88; 09 §9.2). It occupies
-// the Indexer (write-side) capability only: on each Put it projects the
-// artifact's nsid (read from Manifest.Ext) into the core-maintained
-// proj_ext equality store under ext_name="namespace", field="nsid". It
-// keeps NO own tables and exposes no Accessor — Walk(ns) is the core's
-// proj_ext equality query on the resolved nsid, not an own-tree lookup
-// ("namespace projects nsid; fspathindex writes an own path tree").
-type Index struct{}
+// the Indexer (write-side) capability and the ViewProvider capability: on
+// each Put it projects the artifact's nsid (read from Manifest.Ext) into
+// the core-maintained proj_ext equality store under ext_name="namespace",
+// field="nsid"; and it backs the by-namespace projection view (ADR-98),
+// keyed by nsid with human-name labels from the registry. It keeps NO own
+// tables and exposes no Accessor — Walk(ns) is the core's proj_ext equality
+// query on the resolved nsid, not an own-tree lookup.
+type Index struct {
+	// reg backs the by-namespace view's nsid→name Label. nil ⇒ the view
+	// labels each node with the verbatim nsid (the Indexer path never uses
+	// it, so a registry-less Index is still a valid write-side index).
+	reg *Registry
+}
 
-// NewIndex returns a fresh namespace index. Register it via
-// *sqlite.Index.CustomIndexes().Register, or install it as part of the
+// NewIndex returns a fresh namespace index. reg is used only by the
+// by-namespace view's Label (pass nil for a write-only index). Register it
+// via *sqlite.Index.CustomIndexes().Register, or install it as part of the
 // namespace Extension.
-func NewIndex() *Index { return &Index{} }
+func NewIndex(reg *Registry) *Index { return &Index{reg: reg} }
 
 // Name returns the stable identifier; it is also the proj_ext ext_name.
 func (e *Index) Name() string { return indexName }
@@ -102,6 +113,48 @@ func (e *Index) Unindex(ctx context.Context, store customindex.Substrate, m doma
 	return nil
 }
 
+// --- ViewProvider (read-side view contribution, ADR-98) ---
+
+// ProvidedViews backs the by-namespace projection view (ADR-98), mirroring
+// how fspath backs by-path. The tree is keyed by nsid — stable across a
+// rename — and Label maps each nsid to its current human name via the
+// registry, so renaming a namespace re-labels the directory without moving
+// any artifact. Resolve reads the nsid from a manifest's Ext during
+// backfill (the full manifest is available there, unlike the index-only
+// Walk row). No Metadata source: the index keeps no own ext blocks (it
+// projects into the shared proj_ext), so the backfill reads the manifest
+// via the store.
+//
+// The registry is snapshotted once here (at view-build time); a rename
+// after the view is built re-labels on the next rebuild, not live —
+// live relabelling needs the system-artifact version event still deferred
+// (see the System-Artifact-Events rationale). A label miss falls back to
+// the verbatim nsid rather than dropping the artifact.
+func (e *Index) ProvidedViews() []customindex.ProvidedView {
+	pv := customindex.ProvidedView{
+		Root:    byNamespaceView,
+		Resolve: nsidKey,
+	}
+	if e.reg != nil {
+		if view, err := e.reg.Load(context.Background()); err == nil {
+			pv.Label = func(key string) (string, bool) {
+				return view.Name(NamespaceID(key))
+			}
+		}
+	}
+	return []customindex.ProvidedView{pv}
+}
+
+// nsidKey is the by-namespace view's Resolve: the artifact's nsid is its
+// key. A manifest with no nsid stamp belongs to no namespace (key absent).
+func nsidKey(m domain.Manifest) (string, bool) {
+	id, ok, err := nsidOf(m.Ext)
+	if err != nil || !ok {
+		return "", false
+	}
+	return string(id), true
+}
+
 // nsidOf extracts the namespace stamp from an artifact's Ext. The nsid is
 // one key in the shared Ext JSON object (other extensions keep their own
 // keys alongside it); an absent or empty "nsid" means "no namespace".
@@ -122,8 +175,10 @@ func nsidOf(ext json.RawMessage) (NamespaceID, bool, error) {
 }
 
 // Compile-time conformance: the namespace index is a CustomIndex that
-// occupies the Indexer (write) capability and exposes no Accessor.
+// occupies the Indexer (write) and ViewProvider (by-namespace) capabilities
+// and exposes no Accessor.
 var (
-	_ customindex.CustomIndex = (*Index)(nil)
-	_ customindex.Indexer     = (*Index)(nil)
+	_ customindex.CustomIndex  = (*Index)(nil)
+	_ customindex.Indexer      = (*Index)(nil)
+	_ customindex.ViewProvider = (*Index)(nil)
 )

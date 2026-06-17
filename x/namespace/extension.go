@@ -42,9 +42,10 @@ func New(sys store.SystemStore) (*Extension, error) {
 	if err != nil {
 		return nil, err
 	}
+	reg := NewRegistry(scoped)
 	return &Extension{
-		idx:      NewIndex(),
-		registry: NewRegistry(scoped),
+		idx:      NewIndex(reg),
+		registry: reg,
 	}, nil
 }
 
