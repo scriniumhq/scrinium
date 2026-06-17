@@ -103,6 +103,15 @@ type StoreIndex interface {
 	// callback may return fs.SkipAll to stop early without an error.
 	QueryByExtField(ctx context.Context, extName, field, value string, cb func(domain.ArtifactID) error) error
 
+	// ListByExtField is the manifest-yielding form of QueryByExtField: it
+	// streams the index-resident Manifest of each artifact whose projected
+	// ext field extName.field equals value (proj_ext, §9.6), no manifest-file
+	// I/O. It is the proj_ext-backed listing primitive behind a namespace
+	// Walk (extName="namespace", field="nsid") and any equality listing over
+	// a projected ext field; the core attaches no meaning to extName/field.
+	// Handle-less rows are excluded (artifact_id IS NULL). Equality only (v1).
+	ListByExtField(ctx context.Context, extName, field, value string, cb func(domain.Manifest) error) error
+
 	// QueryByUsrField is the same over proj_usr (user-pocket fields). It
 	// returns an empty result (no error) unless the global usr_indexing
 	// switch is on — when off, proj_usr is not maintained.
