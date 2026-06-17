@@ -12,7 +12,6 @@ import (
 	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/vfsmeta"
 )
 
 // --- helpers ---
@@ -55,11 +54,15 @@ func strippedManifest(id domain.ArtifactID, namespace string) domain.Manifest {
 	}
 }
 
-func encodeVFSMeta(t *testing.T, path string) json.RawMessage {
+// encodeTestPath builds the neutral Ext payload the fake provided view
+// (testProvided) reads — a logical path under "_p". This stands in for
+// whatever ext block a real extension's index would supply via the bulk
+// metadata source; the projection does not know the schema.
+func encodeTestPath(t *testing.T, path string) json.RawMessage {
 	t.Helper()
-	raw, err := vfsmeta.Encode(vfsmeta.FileSystem{Path: path, Mode: 0o644})
+	raw, err := json.Marshal(map[string]string{"_p": path})
 	if err != nil {
-		t.Fatalf("vfsmeta.Encode: %v", err)
+		t.Fatalf("marshal test ext: %v", err)
 	}
 	return raw
 }
@@ -80,11 +83,11 @@ func TestBackfill_FastPath_UsesExtSource(t *testing.T) {
 		// Walk-side: stripped (no Ext).
 		src.Add(strippedManifest(id, "files"), nil)
 		// Fast-path side: full metadata.
-		ms.put(id, encodeVFSMeta(t, path))
+		ms.put(id, encodeTestPath(t, path))
 	}
 
 	v, err := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()),
+		vw.WithProvidedViews(testProvided()),
 		vw.WithMetadataSource(ms),
 	)
 	if err != nil {
@@ -119,9 +122,9 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		Ext:          encodeVFSMeta(t, "in-source.txt"),
+		Ext:          encodeTestPath(t, "in-source.txt"),
 	}, nil)
-	ms.put(idHit, encodeVFSMeta(t, "in-source.txt"))
+	ms.put(idHit, encodeTestPath(t, "in-source.txt"))
 
 	// Another artifact NOT in MetadataSource. FakeSource keeps the
 	// full manifest in-memory; the slow-path Get returns it,
@@ -134,12 +137,12 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
-		Ext:          encodeVFSMeta(t, "fallback.txt"),
+		Ext:          encodeTestPath(t, "fallback.txt"),
 	}, nil)
 	// Intentionally NOT calling ms.put for idMiss.
 
 	v, err := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()),
+		vw.WithProvidedViews(testProvided()),
 		vw.WithMetadataSource(ms),
 	)
 	if err != nil {
@@ -147,10 +150,10 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	}
 
 	// Both artifacts should be findable by their resolved paths.
-	if _, err := v.GetIn(vw.RootByPath, "in-source.txt"); err != nil {
+	if _, err := v.GetIn(testRoot, "in-source.txt"); err != nil {
 		t.Errorf("fast-path artifact not in View by path: %v", err)
 	}
-	if _, err := v.GetIn(vw.RootByPath, "fallback.txt"); err != nil {
+	if _, err := v.GetIn(testRoot, "fallback.txt"); err != nil {
 		t.Errorf("fallback (Source.Get) artifact not in View by path: %v", err)
 	}
 
@@ -180,7 +183,7 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 	src.SetGetErr(errors.New("get unavailable"))
 
 	v, err := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()),
+		vw.WithProvidedViews(testProvided()),
 		// No WithMetadataSource here.
 	)
 	if err != nil {
@@ -189,7 +192,7 @@ func TestBackfill_NoExtSource_FallsBackToGet(t *testing.T) {
 
 	// Path resolution failed (no Ext reached the resolver), so
 	// the artifact must be absent from by-path.
-	if _, err := v.GetIn(vw.RootByPath, "only-walk"); err == nil {
+	if _, err := v.GetIn(testRoot, "only-walk"); err == nil {
 		t.Error("artifact unexpectedly indexed under by-path")
 	}
 
@@ -237,10 +240,10 @@ func TestWithFSPathIndex_Convenience(t *testing.T) {
 
 	id := domain.ArtifactID("a")
 	src.Add(strippedManifest(id, "files"), nil)
-	ms.put(id, encodeVFSMeta(t, "fs.txt"))
+	ms.put(id, encodeTestPath(t, "fs.txt"))
 
 	_, err := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()),
+		vw.WithProvidedViews(testProvided()),
 		vw.WithFSPathIndex(ms),
 	)
 	if err != nil {

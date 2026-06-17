@@ -2,10 +2,10 @@ package view_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +15,6 @@ import (
 	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
 
@@ -392,46 +391,55 @@ func TestNewView_FilterByNamespace(t *testing.T) {
 	}
 }
 
-// byPathProvided is the by-path view exactly as the fspath extension
-// supplies it through the provided-view rail (ADR-98): vfsmeta resolver,
-// collidable (logical paths are not artifact-unique), orphaning. Used by
-// tests now that the View no longer hardcodes by-path.
-func byPathProvided() vw.ProvidedView {
+// testRoot is the root of the neutral fake provided view the projection
+// tests use to exercise the generic provided-view rail (ADR-98). It is
+// deliberately NOT by-path or by-namespace — those are extension views,
+// tested with their extensions (x/fspath, x/namespace). The projection
+// attaches no meaning to it.
+const testRoot vw.RootView = "by-test"
+
+// testProvided is a neutral collidable, orphaning provided view standing
+// in for "some extension's view". Its path is a logical path the test
+// stamps into the manifest Ext under "_p"; a manifest with no stamp misses
+// (orphaned, or synthetic under FallbackSynthetic). The projection never
+// knows what computes it.
+func testProvided() vw.ProvidedView {
 	return vw.ProvidedView{
-		Root:    vw.RootByPath,
-		Path:    vfsmeta.Resolver,
+		Root:    testRoot,
+		Path:    testPath,
 		Collide: true,
 		Orphans: true,
 	}
 }
 
-// byNamespaceProvided mirrors the namespace extension's by-namespace
-// layout (<segment>/<aa>/<bb>/<id>, "_default" when the manifest carries
-// no namespace) so view tests can drive a provided counting view without
-// importing the extension. Keyed off the manifest namespace, matching what
-// the tests stamp on their fixtures.
-func byNamespaceProvided() vw.ProvidedView {
-	shard := func(id string) string {
-		h := id
-		if i := strings.IndexByte(id, '-'); i >= 0 {
-			h = id[i+1:]
-		}
-		if len(h) < 4 {
-			return "_short/" + id
-		}
-		return h[:2] + "/" + h[2:4] + "/" + id
+func testPath(m domain.Manifest) (string, bool) {
+	if len(m.Ext) == 0 {
+		return "", false
 	}
-	return vw.ProvidedView{
-		Root: vw.RootByNamespace,
-		Path: func(m domain.Manifest) (string, bool) {
-			ns := m.Namespace
-			if ns == "" {
-				ns = "_default"
-			}
-			return ns + "/" + shard(string(m.ArtifactID)), true
-		},
-		CountKey: func(m domain.Manifest) (string, bool) {
-			return m.Namespace, m.Namespace != ""
-		},
+	var x struct {
+		Path string `json:"_p"`
 	}
+	if err := json.Unmarshal(m.Ext, &x); err != nil || x.Path == "" {
+		return "", false
+	}
+	return x.Path, true
+}
+
+// testManifest builds a neutral blob manifest carrying a logical path in
+// Ext under "_p" (empty path ⇒ no stamp, so the view misses it). The other
+// fields a test cares about (namespace, session, time) are set by the
+// caller afterwards.
+func testManifest(id, path string, createdAt time.Time) domain.Manifest {
+	m := manifestfx.Blob(id, "sha256-"+repeatChar('b', 64))
+	m.CreatedAt = createdAt
+	if path != "" {
+		m.Ext, _ = json.Marshal(map[string]string{"_p": path})
+	}
+	return m
+}
+
+// pathManifest is testManifest at the current time, for tests that do not
+// care about CreatedAt.
+func pathManifest(id, path string) domain.Manifest {
+	return testManifest(id, path, time.Now().UTC())
 }

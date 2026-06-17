@@ -118,13 +118,14 @@ func (v *View) removeFromCollisionTree(root RootView, id domain.ArtifactID, rec 
 }
 
 // Move atomically replaces an old artifact with a new one — used
-// by FSOps to emulate rename. The old artifact's by-path entry
-// is dropped (with collision re-election), and the new manifest
-// is added through the standard Add path.
+// by FSOps to emulate rename. The old artifact's entry in the
+// root view is dropped (with collision re-election), and the new
+// manifest is added through the standard Add path.
 //
 // oldPath/newPath are passed for documentation and future use
 // (FSOps wants to log the user-level rename); the actual location
-// in by-path comes from the new manifest's resolver result.
+// in the root view comes from the new manifest's provided-view
+// Path() result.
 func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 	if v.closed.Load() {
 		return os.ErrClosed
@@ -137,9 +138,10 @@ func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 	// only failed to find the manifest. Move is idempotent on the
 	// "old" side: remove if present, add new.
 
-	// Find old artifact by oldPath in by-path; if found, remove.
-	// Reading a nil inner map (no by-path view active) yields ok=false.
-	if oldOwner, ok := v.pathOwner[RootByPath][oldPath]; ok {
+	// Find the old artifact by oldPath in the configured root view;
+	// if found, remove. Reading a nil inner map (no such view active)
+	// yields ok=false.
+	if oldOwner, ok := v.pathOwner[v.opts.rootView][oldPath]; ok {
 		if rec, found := v.artifacts[oldOwner]; found {
 			v.removeArtifactFromTrees(oldOwner, rec)
 		}

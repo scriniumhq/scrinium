@@ -8,20 +8,16 @@ import (
 	"scrinium.dev/event"
 	vw "scrinium.dev/projection/internal/view"
 	"scrinium.dev/testutil/eventfx"
-	"scrinium.dev/testutil/manifestfx"
 	"scrinium.dev/testutil/projectionfx"
 
 	"scrinium.dev/domain"
 )
 
-// withCreatedAt builds a manifest at a specific time. vfsmeta path
-// applied. Local helper because the time override pattern is
-// only needed in collision tests; TestByPath_HappyPath calls it
-// without overriding time.
+// withCreatedAt builds a neutral path-bearing manifest at a specific
+// time, for the collision tests (freshest-wins arbitration keys on
+// CreatedAt). The logical path rides in Ext under "_p" via testManifest.
 func withCreatedAt(id, path string, createdAt time.Time) domain.Manifest {
-	m := manifestfx.ManifestWithVfsmetaPath(id, path)
-	m.CreatedAt = createdAt
-	return m
+	return testManifest(id, path, createdAt)
 }
 
 // --- by-path: happy path and orphaned ---
@@ -29,20 +25,20 @@ func withCreatedAt(id, path string, createdAt time.Time) domain.Manifest {
 func TestByPath_HappyPath(t *testing.T) {
 	src := projectionfx.New()
 	src.Add(
-		manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "photos/2024/sunrise.jpg"),
+		pathManifest("sha256-aabbccdd", "photos/2024/sunrise.jpg"),
 		nil,
 	)
 
 	v, err := vw.New(
 		context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()),
+		vw.WithProvidedViews(testProvided()),
 	)
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
 	defer v.Close()
 
-	node, err := v.GetIn(vw.RootByPath, "photos/2024/sunrise.jpg")
+	node, err := v.GetIn(testRoot, "photos/2024/sunrise.jpg")
 	if err != nil {
 		t.Fatalf("GetByPath: %v", err)
 	}
@@ -59,13 +55,13 @@ func TestByPath_HappyPath(t *testing.T) {
 
 func TestByPath_VirtualDirsExist(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(manifestfx.ManifestWithVfsmetaPath("sha256-aabbccdd", "photos/2024/img.jpg"), nil)
+	src.Add(pathManifest("sha256-aabbccdd", "photos/2024/img.jpg"), nil)
 	v, _ := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()))
+		vw.WithProvidedViews(testProvided()))
 	defer v.Close()
 
 	for _, dir := range []string{"photos", "photos/2024"} {
-		n, err := v.GetIn(vw.RootByPath, dir)
+		n, err := v.GetIn(testRoot, dir)
 		if err != nil {
 			t.Errorf("GetByPath(%q): %v", dir, err)
 			continue
@@ -82,14 +78,14 @@ func TestByPath_OrphanedNotPresent(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()))
+		vw.WithProvidedViews(testProvided()))
 	defer v.Close()
 
 	if v.Stats.OrphanedCount != 1 {
 		t.Errorf("OrphanedCount: got %d, want 1", v.Stats.OrphanedCount)
 	}
 	count := 0
-	for n, err := range v.WalkIn(vw.RootByPath, "") {
+	for n, err := range v.WalkIn(testRoot, "") {
 		if err != nil {
 			t.Fatalf("walk: %v", err)
 		}
@@ -109,12 +105,12 @@ func TestByPath_SyntheticFallback(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "photos", "s12345", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()),
+		vw.WithProvidedViews(testProvided()),
 		vw.WithFallback(vw.FallbackSynthetic))
 	defer v.Close()
 
 	expected := "photos/s1/23/s12345/aabbccdd.bin"
-	if _, err := v.GetIn(vw.RootByPath, expected); err != nil {
+	if _, err := v.GetIn(testRoot, expected); err != nil {
 		t.Fatalf("GetByPath(%q): %v", expected, err)
 	}
 	if v.Stats.OrphanedCount != 0 {
@@ -127,12 +123,12 @@ func TestByPath_SyntheticAnonymous(t *testing.T) {
 	src.Add(makeManifest("sha256-aabbccdd", "", "", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()),
+		vw.WithProvidedViews(testProvided()),
 		vw.WithFallback(vw.FallbackSynthetic))
 	defer v.Close()
 
 	expected := "_anonymous/aabbccdd.bin"
-	if _, err := v.GetIn(vw.RootByPath, expected); err != nil {
+	if _, err := v.GetIn(testRoot, expected); err != nil {
 		t.Fatalf("GetByPath(%q): %v", expected, err)
 	}
 }
@@ -149,11 +145,11 @@ func TestByPath_CollisionFresherWins(t *testing.T) {
 
 	bus := eventfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()),
+		vw.WithProvidedViews(testProvided()),
 		vw.WithEventBus(bus))
 	defer v.Close()
 
-	n, err := v.GetIn(vw.RootByPath, "shared/path.txt")
+	n, err := v.GetIn(testRoot, "shared/path.txt")
 	if err != nil {
 		t.Fatalf("GetByPath: %v", err)
 	}
@@ -197,10 +193,10 @@ func TestByPath_CollisionEqualCreatedAt(t *testing.T) {
 	src.Add(withCreatedAt("sha256-bbbb2222", "shared", t0), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()))
+		vw.WithProvidedViews(testProvided()))
 	defer v.Close()
 
-	n, _ := v.GetIn(vw.RootByPath, "shared")
+	n, _ := v.GetIn(testRoot, "shared")
 	if n.Artifact.ArtifactID != domain.ArtifactID("sha256-bbbb2222") {
 		t.Errorf("lex-larger ID should win, got %q", n.Artifact.ArtifactID)
 	}
@@ -217,10 +213,10 @@ func TestByPath_OrderedArrival(t *testing.T) {
 	src.Add(withCreatedAt("sha256-aaaa1111", "shared", older), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithProvidedViews(byPathProvided()))
+		vw.WithProvidedViews(testProvided()))
 	defer v.Close()
 
-	n, _ := v.GetIn(vw.RootByPath, "shared")
+	n, _ := v.GetIn(testRoot, "shared")
 	if n.Artifact.ArtifactID != domain.ArtifactID("sha256-bbbb2222") {
 		t.Errorf("winner should still be newer (bbbb2222), got %q",
 			n.Artifact.ArtifactID)
