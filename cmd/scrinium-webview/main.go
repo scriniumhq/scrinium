@@ -61,7 +61,7 @@ func runServe(args []string) int {
 		ShowOrphaned:           true,
 		ShowByDate:             true,
 		ShowBySession:          true,
-		ShowByNamespace:        true,
+		ShowProvidedViews:      true,
 		ShowRaw:                true,
 		UnprefixedServiceTrees: true,
 	}

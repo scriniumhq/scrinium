@@ -113,19 +113,18 @@ type loserEntry struct {
 type RootView string
 
 const (
-	RootByPath      RootView = "by-path"
-	RootBySession   RootView = "by-session"
-	RootByNamespace RootView = "by-namespace"
-	RootByDate      RootView = "by-date"
-	RootByArtifact  RootView = "by-artifact"
-	RootByOrphaned  RootView = "by-orphaned"
+	RootBySession  RootView = "by-session"
+	RootByDate     RootView = "by-date"
+	RootByArtifact RootView = "by-artifact"
+	RootByOrphaned RootView = "by-orphaned"
 )
 
-// AllRootViews contains a slice of all supported RootView types for iteration.
+// AllRootViews lists the intrinsic root views the projection owns. Roots
+// contributed by extensions (via the provided-view rail) are NOT listed
+// here — the projection names none of them; enumerate them at runtime via
+// View.ProvidedRoots.
 var AllRootViews = []RootView{
-	RootByPath,
 	RootBySession,
-	RootByNamespace,
 	RootByDate,
 	RootByArtifact,
 	RootByOrphaned,

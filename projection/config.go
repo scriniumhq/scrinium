@@ -9,8 +9,8 @@ import "scrinium.dev/domain"
 // no store/policy concerns — only what the View and FSOps need.
 //
 // Zero values mean "engine default": an empty RootView selects the
-// by-path tree, a zero ScratchQuota is unlimited, zero DefaultUID/GID
-// fall back to the running process.
+// first available root, a zero ScratchQuota is unlimited, zero
+// DefaultUID/GID fall back to the running process.
 type Config struct {
 	// RootView selects the tree presented at the mount root by its
 	// name; an empty RootView selects the engine's default root. Valid

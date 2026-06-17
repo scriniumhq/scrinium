@@ -18,9 +18,10 @@ import (
 	"scrinium.dev/projection"
 )
 
-// RootViewFlag binds a CLI flag to *projection.RootView with
-// allowed-value validation: by-path | by-session | by-namespace
-// | by-date | by-artifact.
+// RootViewFlag binds a CLI flag to *projection.RootView. Any name is
+// accepted here; the View validates at build that it names an active
+// root (intrinsic or extension-provided) and errors otherwise. The flag
+// parser does not enumerate the roots, so it names none of them.
 type RootViewFlag struct{ P *projection.RootView }
 
 func (f RootViewFlag) String() string {
@@ -31,14 +32,8 @@ func (f RootViewFlag) String() string {
 }
 
 func (f RootViewFlag) Set(s string) error {
-	rv := projection.RootView(s)
-	switch rv {
-	case projection.RootByPath, projection.RootBySession,
-		projection.RootByNamespace, projection.RootByDate, projection.RootByArtifact:
-		*f.P = rv
-		return nil
-	}
-	return fmt.Errorf("invalid root-view %q", s)
+	*f.P = projection.RootView(s)
+	return nil
 }
 
 // BoolPtrFlag binds a CLI flag to **bool — nil means "not set",

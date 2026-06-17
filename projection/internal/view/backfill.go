@@ -20,7 +20,7 @@ import (
 // the source has been fully traversed.
 //
 // Default options:
-//   - root view: RootByPath (informational only)
+//   - root view: the first available root (intrinsic or provided)
 //   - fallback: FallbackOrphaned
 //   - filter: empty
 //
@@ -32,7 +32,6 @@ func New(ctx context.Context, src source.Provider, opts ...Option) (*View, error
 	}
 
 	o := viewOptions{
-		rootView: RootByPath,
 		fallback: FallbackOrphaned,
 	}
 	for _, opt := range opts {
@@ -69,6 +68,23 @@ func New(ctx context.Context, src source.Provider, opts ...Option) (*View, error
 		if d.countKey != nil {
 			v.seenKeys[d.root] = make(map[string]struct{})
 		}
+	}
+
+	// Resolve the root view. The client picks it by name (via config);
+	// when unset we default to the first available root, and a named
+	// root that does not exist is an error. The projection itself names
+	// none of the roots.
+	if v.opts.rootView == "" {
+		rs := make([]RootView, 0, len(roots))
+		for r := range roots {
+			rs = append(rs, r)
+		}
+		sort.Slice(rs, func(i, j int) bool { return rs[i] < rs[j] })
+		if len(rs) > 0 {
+			v.opts.rootView = rs[0]
+		}
+	} else if !roots[v.opts.rootView] {
+		return nil, fmt.Errorf("projection.New: root view %q is not available", v.opts.rootView)
 	}
 
 	// Initialise tree roots so List on an empty tree returns

@@ -8,30 +8,30 @@ import (
 )
 
 func TestRootViewFlag_Set(t *testing.T) {
+	// The flag accepts any name; existence is validated by the View at
+	// build time, not by the flag parser. So every value parses and is
+	// stored verbatim.
 	tests := []struct {
-		name    string
-		input   string
-		want    projection.RootView
-		wantErr bool
+		name  string
+		input string
 	}{
-		{"by-path", "by-path", projection.RootByPath, false},
-		{"by-session", "by-session", projection.RootBySession, false},
-		{"by-namespace", "by-namespace", projection.RootByNamespace, false},
-		{"by-date", "by-date", projection.RootByDate, false},
-		{"by-artifact", "by-artifact", projection.RootByArtifact, false},
-		{"invalid", "by-something", "", true},
-		{"empty", "", "", true},
+		{"by-path", "by-path"},
+		{"by-session", "by-session"},
+		{"by-namespace", "by-namespace"},
+		{"by-date", "by-date"},
+		{"by-artifact", "by-artifact"},
+		{"extension-supplied", "by-something"},
+		{"empty", ""},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var rv projection.RootView
 			f := RootViewFlag{P: &rv}
-			err := f.Set(tc.input)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("Set(%q) err = %v, wantErr = %v", tc.input, err, tc.wantErr)
+			if err := f.Set(tc.input); err != nil {
+				t.Fatalf("Set(%q) err = %v, want nil", tc.input, err)
 			}
-			if !tc.wantErr && rv != tc.want {
-				t.Errorf("Set(%q) = %q, want %q", tc.input, rv, tc.want)
+			if rv != projection.RootView(tc.input) {
+				t.Errorf("Set(%q) = %q, want %q", tc.input, rv, tc.input)
 			}
 		})
 	}

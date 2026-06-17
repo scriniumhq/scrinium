@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"scrinium.dev/domain"
@@ -22,6 +23,18 @@ import (
 // Stable for the lifetime of the View — the option is set at
 // New time and never mutated.
 func (v *View) RootView() RootView { return v.opts.rootView }
+
+// ProvidedRoots returns the roots contributed by extensions through the
+// provided-view rail (ADR-98), sorted. The projection names none of them;
+// transports enumerate this to surface whatever views are connected.
+func (v *View) ProvidedRoots() []RootView {
+	out := make([]RootView, 0, len(v.opts.provided))
+	for _, pv := range v.opts.provided {
+		out = append(out, pv.Root)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
 
 // StatsSnapshot returns a copy of the View's current counters. It is
 // the method form of the Stats field, so the read-only projection
@@ -90,21 +103,21 @@ func (v *View) Search(query string, limit int) []SearchResult {
 	for id, rec := range v.artifacts {
 		// Exact id match — strongest signal, surface first.
 		if string(id) == query {
-			out = append(out, makeSearchResult(id, rec, "id"))
+			out = append(out, v.makeSearchResult(id, rec, "id"))
 			if limit > 0 && len(out) >= limit {
 				return out
 			}
 			continue
 		}
 
-		path := strings.ToLower(rec.paths[RootByPath])
+		path := strings.ToLower(rec.paths[v.opts.rootView])
 		ns := strings.ToLower(rec.manifest.Namespace)
 
 		switch {
 		case path != "" && strings.Contains(path, q):
-			out = append(out, makeSearchResult(id, rec, "path"))
+			out = append(out, v.makeSearchResult(id, rec, "path"))
 		case ns != "" && strings.Contains(ns, q):
-			out = append(out, makeSearchResult(id, rec, "namespace"))
+			out = append(out, v.makeSearchResult(id, rec, "namespace"))
 		default:
 			continue
 		}
@@ -119,10 +132,10 @@ func (v *View) Search(query string, limit int) []SearchResult {
 // record. MIME is best-effort from vfsmeta; absence falls back
 // to empty (the UI is responsible for any custom index-based
 // inference it cares about).
-func makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) SearchResult {
+func (v *View) makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reason string) SearchResult {
 	r := SearchResult{
 		ArtifactID:  id,
-		Path:        rec.paths[RootByPath],
+		Path:        rec.paths[v.opts.rootView],
 		Namespace:   rec.manifest.Namespace,
 		SessionID:   rec.manifest.SessionID,
 		CreatedAt:   rec.manifest.CreatedAt,
@@ -166,7 +179,7 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 		}
 		out = append(out, RelatedArtifact{
 			ArtifactID: id,
-			Path:       rec.paths[RootByPath],
+			Path:       rec.paths[v.opts.rootView],
 			Namespace:  rec.manifest.Namespace,
 			SessionID:  rec.manifest.SessionID,
 			CreatedAt:  rec.manifest.CreatedAt,
@@ -357,5 +370,3 @@ func (v *View) openInTree(
 	}
 	return rh, nil
 }
-
-// --- Mutation methods ---

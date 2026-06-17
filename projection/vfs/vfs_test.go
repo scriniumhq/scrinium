@@ -26,13 +26,13 @@ func newTestVFS(t *testing.T, manifests ...domain.Manifest) *vfs.VFS {
 	t.Helper()
 	proj, _ := viewfx.Stack(t, manifests...)
 	cfg := vfs.Config{
-		ServicePrefix:   "_scrinium",
-		ShowStats:       true,
-		ShowByArtifact:  true,
-		ShowOrphaned:    true,
-		ShowByDate:      true,
-		ShowBySession:   true,
-		ShowByNamespace: true,
+		ServicePrefix:     "_scrinium",
+		ShowStats:         true,
+		ShowByArtifact:    true,
+		ShowOrphaned:      true,
+		ShowByDate:        true,
+		ShowBySession:     true,
+		ShowProvidedViews: true,
 	}
 	return vfs.New(proj, cfg)
 }
@@ -197,13 +197,13 @@ func TestVFS_StatsProvider(t *testing.T) {
 
 	const customBody = "stats injected by test"
 	v := vfs.New(proj, vfs.Config{
-		ServicePrefix:   "_scrinium",
-		ShowStats:       true,
-		ShowByArtifact:  true,
-		ShowOrphaned:    true,
-		ShowByDate:      true,
-		ShowBySession:   true,
-		ShowByNamespace: true,
+		ServicePrefix:     "_scrinium",
+		ShowStats:         true,
+		ShowByArtifact:    true,
+		ShowOrphaned:      true,
+		ShowByDate:        true,
+		ShowBySession:     true,
+		ShowProvidedViews: true,
 	}, vfs.WithStatsProvider(func() []byte { return []byte(customBody) }))
 
 	f, err := v.OpenFile(context.Background(), "/_scrinium/stats", os.O_RDONLY, 0)
@@ -272,11 +272,11 @@ func TestVFS_ServicePrefixListing_SkipsDisabled(t *testing.T) {
 	proj, _ := viewfx.Stack(t)
 	// by-session and by-date disabled; the rest on.
 	v := vfs.New(proj, vfs.Config{
-		ServicePrefix:   "_scrinium",
-		ShowStats:       true,
-		ShowByArtifact:  true,
-		ShowOrphaned:    true,
-		ShowByNamespace: true,
+		ServicePrefix:     "_scrinium",
+		ShowStats:         true,
+		ShowByArtifact:    true,
+		ShowOrphaned:      true,
+		ShowProvidedViews: true,
 	})
 
 	d, err := v.OpenFile(context.Background(), "/_scrinium", os.O_RDONLY, 0)

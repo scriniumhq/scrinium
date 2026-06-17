@@ -7,9 +7,9 @@ import "scrinium.dev/projection/internal/view"
 // names; the view package that defines them is a projection internal
 // and is never named outside the projection tree.
 type (
-	// RootView selects which materialised tree backs a lookup
-	// (by-path, by-date, by-session, by-namespace, by-artifact,
-	// orphaned).
+	// RootView selects which materialised tree backs a lookup. The
+	// intrinsic trees are by-date, by-session, by-artifact, and
+	// orphaned; extensions contribute further roots at runtime.
 	RootView = view.RootView
 
 	// Stats is a snapshot of projection counters.
@@ -25,13 +25,13 @@ type (
 	Locations = view.Locations
 )
 
-// RootView values, re-exported so flag parsers and configs can name
-// the enum without reaching into the view package.
+// RootView values, re-exported so flag parsers and configs can name the
+// intrinsic enum without reaching into the view package. Extension-
+// contributed roots (by-path, by-namespace, …) are not re-exported — the
+// projection names none of them; they are discovered at runtime.
 const (
-	RootByPath      = view.RootByPath
-	RootBySession   = view.RootBySession
-	RootByNamespace = view.RootByNamespace
-	RootByDate      = view.RootByDate
-	RootByArtifact  = view.RootByArtifact
-	RootByOrphaned  = view.RootByOrphaned
+	RootBySession  = view.RootBySession
+	RootByDate     = view.RootByDate
+	RootByArtifact = view.RootByArtifact
+	RootByOrphaned = view.RootByOrphaned
 )

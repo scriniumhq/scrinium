@@ -52,14 +52,14 @@ func runMount(args []string) int {
 	// FUSE is a desktop browse target: every service tree is on, rooted
 	// at by-path under the _scrinium prefix.
 	routingCfg := vfs.Config{
-		ServicePrefix:   "_scrinium",
-		ShowStats:       true,
-		ShowByArtifact:  true,
-		ShowOrphaned:    true,
-		ShowByDate:      true,
-		ShowBySession:   true,
-		ShowByNamespace: true,
-		ShowRaw:         true,
+		ServicePrefix:     "_scrinium",
+		ShowStats:         true,
+		ShowByArtifact:    true,
+		ShowOrphaned:      true,
+		ShowByDate:        true,
+		ShowBySession:     true,
+		ShowProvidedViews: true,
+		ShowRaw:           true,
 	}
 	fsys := vfs.New(
 		asm.Projection,

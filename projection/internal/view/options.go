@@ -110,10 +110,11 @@ func WithFSPathIndex(fsidx source.Metadata) Option {
 	return WithMetadataSource(fsidx)
 }
 
-// WithRootView selects the tree that occupies the View root. The
-// default is RootByPath. The choice is informational for the View
-// itself; transports (FUSE) react to it by hiding the same tree
-// from the service directory.
+// WithRootView selects the tree that occupies the View root, by name.
+// When unset the View defaults to the first available root; a name that
+// does not match any active root is an error at New. The choice is
+// otherwise informational for the View itself; transports (FUSE) react
+// to it by hiding the same tree from the service directory.
 func WithRootView(rv RootView) Option {
 	return func(o *viewOptions) { o.rootView = rv }
 }

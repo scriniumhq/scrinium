@@ -33,7 +33,7 @@ func TestPolicyDefaults(t *testing.T) {
 func TestProjectionDefaults(t *testing.T) {
 	p := &Projection{}
 	applyProjectionDefaults(p)
-	if p.Editing != "off" || p.RootView != "by-path" || p.ByPathFallback != "orphaned" || p.DefaultMode != 0o644 {
+	if p.Editing != "off" || p.RootView != "" || p.ByPathFallback != "orphaned" || p.DefaultMode != 0o644 {
 		t.Errorf("projection defaults wrong: %+v", p)
 	}
 	// Explicit values are preserved.
