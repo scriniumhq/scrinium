@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/reconcile"
@@ -157,7 +158,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		return nil, fmt.Errorf("store.OpenStore: %w: WithAutoUnlock requires WithPassphrase",
 			errs.ErrPassphraseRequired)
 	}
-	passphrase, err := callProvider(ctx, o.passphrase, PassphraseHint{
+	passphrase, err := crypto.CallProvider(ctx, o.passphrase, domain.PassphraseHint{
 		StoreID: desc.StoreID,
 		Reason:  "unlock",
 	})

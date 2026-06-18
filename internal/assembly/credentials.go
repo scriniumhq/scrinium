@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"scrinium.dev/engine/store"
+	"scrinium.dev/domain"
 )
 
 func resolveCredentials(ctx context.Context, creds Credentials) (map[string][]byte, error) {
@@ -22,11 +22,11 @@ func resolveCredentials(ctx context.Context, creds Credentials) (map[string][]by
 	return out, nil
 }
 
-// passphraseProvider builds a store.PassphraseProvider from the
+// passphraseProvider builds a domain.PassphraseProvider from the
 // policy's encryption secret. The secret is resolved once at load
 // time; the provider returns the same bytes on every prompt (init,
 // unlock, rotation) — adequate for the file/env/plain schemes.
-func passphraseProvider(ctx context.Context, p *Policy) (store.PassphraseProvider, error) {
+func passphraseProvider(ctx context.Context, p *Policy) (domain.PassphraseProvider, error) {
 	if p == nil || p.Encryption == nil {
 		return nil, nil
 	}
@@ -34,7 +34,7 @@ func passphraseProvider(ctx context.Context, p *Policy) (store.PassphraseProvide
 	if err != nil {
 		return nil, err
 	}
-	return func(_ context.Context, _ store.PassphraseHint) ([]byte, error) {
+	return func(_ context.Context, _ domain.PassphraseHint) ([]byte, error) {
 		// Hand back a copy: the engine zeroes the buffer after KEK
 		// derivation, and we must survive a second prompt.
 		cp := make([]byte, len(secret))

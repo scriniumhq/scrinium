@@ -1,7 +1,6 @@
 package store
 
 import (
-	"context"
 	"log/slog"
 
 	"scrinium.dev/domain"
@@ -9,35 +8,6 @@ import (
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/event"
 )
-
-// PassphraseHint is the call context for a PassphraseProvider.
-//
-// Reason takes one of:
-//
-//   - "init"           — InitStore is generating a fresh Store and
-//     needs the passphrase that will wrap the
-//     just-generated DEK. StoreID carries the
-//     freshly generated UUID.
-//   - "unlock"         — OpenStore, Store.Unlock, or the first half
-//     of Store.RotateKEK needs the current
-//     passphrase to unwrap the DEK. Hosts that
-//     cache passphrases in a keychain key off
-//     this Reason for both unlock paths.
-//   - "set_passphrase" — Store.SetPassphrase is wrapping a DEK that
-//     is currently in plaintext. The provider
-//     returns the NEW passphrase.
-//   - "kek_rotation"   — the second half of Store.RotateKEK; the
-//     provider returns the NEW passphrase that
-//     will wrap the existing DEK.
-type PassphraseHint struct {
-	StoreID string
-	Reason  string
-}
-
-// PassphraseProvider returns a passphrase used to derive the KEK
-// through the KDF. The buffer is zeroed by the engine after the KEK
-// has been derived.
-type PassphraseProvider func(ctx context.Context, hint PassphraseHint) ([]byte, error)
 
 // StoreOption is an option for the Store constructor. It applies to
 // InitStore and OpenStore. The order in which options are passed is
@@ -54,7 +24,7 @@ type storeOptions struct {
 	hashRegistry  domain.HashRegistry
 	readRegistry  pipeline.TransformerRegistry
 	keyResolver   pipeline.KeyResolver
-	passphrase    PassphraseProvider
+	passphrase    domain.PassphraseProvider
 	autoUnlock    bool
 	identityMode  domain.IdentityMode
 	logger        *slog.Logger
@@ -115,7 +85,7 @@ func WithKeyResolver(r pipeline.KeyResolver) StoreOption {
 
 // WithPassphrase provides the KEK provider. Required when
 // ManifestCrypto != Plain. With Plain it is ignored.
-func WithPassphrase(provider PassphraseProvider) StoreOption {
+func WithPassphrase(provider domain.PassphraseProvider) StoreOption {
 	return func(o *storeOptions) { o.passphrase = provider }
 }
 

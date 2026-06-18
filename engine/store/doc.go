@@ -76,9 +76,10 @@
 // Admin plane (AdminStore):
 //
 //   - admin_config.go      — Config, UpdateConfig, ConfigHistory.
-//   - admin_crypto.go — Unlock, RotateKEK, SetPassphrase,
-//     ExportRecoveryKit, and callProvider; holds crypto.mu for the whole
-//     operation.
+//   - admin_crypto.go — Unlock, RotateKEK, SetPassphrase, and
+//     ExportRecoveryKit; holds crypto.mu for the whole operation. The
+//     pure mechanics (CallProvider, BuildRecoveryKit, InitEncryptedDEK)
+//     live in internal/crypto.
 //   - admin_close.go       — Close.
 //   - crypto_state.go      — the cryptoState component: DEK, descriptor,
 //     provider, and resolver under crypto.mu.
@@ -89,7 +90,6 @@
 //   - lifecycle_open.go      — OpenStore.
 //   - lifecycle_construct.go — buildStore, unlockBootstrap, and replica
 //     healing, the tail shared by both constructors.
-//   - bootstrap_dek.go       — initEncryptedDEK and buildRecoveryKit.
 //
 // System and config plumbing:
 //

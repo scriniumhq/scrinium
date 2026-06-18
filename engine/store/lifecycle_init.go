@@ -12,6 +12,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/storeconfig"
@@ -161,7 +162,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	var kit []byte
 	if o.passphrase != nil {
-		wrapped, kdfParams, kitBytes, ierr := initEncryptedDEK(
+		wrapped, kdfParams, kitBytes, ierr := crypto.InitEncryptedDEK(
 			ctx, storeID, dek, o.passphrase, cfg.KDFParams)
 		if ierr != nil {
 			aead.Wipe(dek)

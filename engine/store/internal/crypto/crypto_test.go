@@ -1,4 +1,4 @@
-package store
+package crypto
 
 import (
 	"bytes"
@@ -6,24 +6,25 @@ import (
 	"errors"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 )
 
 func TestCallProvider_NilProvider(t *testing.T) {
-	_, err := callProvider(context.Background(), nil, PassphraseHint{Reason: "init"})
+	_, err := CallProvider(context.Background(), nil, domain.PassphraseHint{Reason: "init"})
 	if !errors.Is(err, errs.ErrPassphraseRequired) {
 		t.Fatalf("expected ErrPassphraseRequired, got %v", err)
 	}
 }
 
 func TestCallProvider_ReturnsPassphrase(t *testing.T) {
-	p := PassphraseProvider(func(_ context.Context, h PassphraseHint) ([]byte, error) {
+	p := domain.PassphraseProvider(func(_ context.Context, h domain.PassphraseHint) ([]byte, error) {
 		if h.Reason != "unlock" {
 			t.Errorf("Reason: got %q, want unlock", h.Reason)
 		}
 		return []byte("hello"), nil
 	})
-	got, err := callProvider(context.Background(), p, PassphraseHint{Reason: "unlock"})
+	got, err := CallProvider(context.Background(), p, domain.PassphraseHint{Reason: "unlock"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,10 +35,10 @@ func TestCallProvider_ReturnsPassphrase(t *testing.T) {
 
 func TestCallProvider_PropagatesError(t *testing.T) {
 	sentinel := errors.New("user cancelled")
-	p := PassphraseProvider(func(_ context.Context, _ PassphraseHint) ([]byte, error) {
+	p := domain.PassphraseProvider(func(_ context.Context, _ domain.PassphraseHint) ([]byte, error) {
 		return nil, sentinel
 	})
-	_, err := callProvider(context.Background(), p, PassphraseHint{})
+	_, err := CallProvider(context.Background(), p, domain.PassphraseHint{})
 	if !errors.Is(err, errs.ErrPassphraseProvider) {
 		t.Fatalf("expected ErrPassphraseProvider, got %v", err)
 	}
@@ -53,18 +54,18 @@ func TestCallProvider_PropagatesError(t *testing.T) {
 }
 
 func TestCallProvider_RejectsEmptyPassphrase(t *testing.T) {
-	p := PassphraseProvider(func(_ context.Context, _ PassphraseHint) ([]byte, error) {
+	p := domain.PassphraseProvider(func(_ context.Context, _ domain.PassphraseHint) ([]byte, error) {
 		return []byte{}, nil
 	})
-	_, err := callProvider(context.Background(), p, PassphraseHint{})
+	_, err := CallProvider(context.Background(), p, domain.PassphraseHint{})
 	if !errors.Is(err, errs.ErrPassphraseRequired) {
 		t.Fatalf("expected ErrPassphraseRequired, got %v", err)
 	}
 
-	p = func(_ context.Context, _ PassphraseHint) ([]byte, error) {
+	p = func(_ context.Context, _ domain.PassphraseHint) ([]byte, error) {
 		return nil, nil
 	}
-	_, err = callProvider(context.Background(), p, PassphraseHint{})
+	_, err = CallProvider(context.Background(), p, domain.PassphraseHint{})
 	if !errors.Is(err, errs.ErrPassphraseRequired) {
 		t.Fatalf("expected ErrPassphraseRequired on nil from provider, got %v", err)
 	}

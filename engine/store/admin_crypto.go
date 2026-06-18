@@ -8,6 +8,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/errs"
@@ -114,7 +115,7 @@ func (c *core) unlockEncrypted(ctx context.Context) error {
 	}
 
 	provider := c.crypto.provider
-	passphrase, err := callProvider(ctx, provider, PassphraseHint{
+	passphrase, err := crypto.CallProvider(ctx, provider, domain.PassphraseHint{
 		StoreID: c.storeID,
 		Reason:  "unlock",
 	})
@@ -190,7 +191,7 @@ func (c *core) setPassphraseImpl(ctx context.Context) error {
 		return fmt.Errorf("%w: Plain Store has no plaintext DEK", errs.ErrStoreCorrupted)
 	}
 
-	passphrase, err := callProvider(ctx, c.crypto.provider, PassphraseHint{
+	passphrase, err := crypto.CallProvider(ctx, c.crypto.provider, domain.PassphraseHint{
 		StoreID: c.storeID,
 		Reason:  "set_passphrase",
 	})
@@ -272,7 +273,7 @@ func (c *core) rotateKEKImpl(ctx context.Context) error {
 	// "unlock" reason mirrors Store.Unlock — host implementations
 	// that retrieve passphrases from a keychain key off Reason and
 	// expect the same lookup as a regular unlock.
-	currentPass, err := callProvider(ctx, c.crypto.provider, PassphraseHint{
+	currentPass, err := crypto.CallProvider(ctx, c.crypto.provider, domain.PassphraseHint{
 		StoreID: c.storeID,
 		Reason:  "unlock",
 	})
@@ -298,7 +299,7 @@ func (c *core) rotateKEKImpl(ctx context.Context) error {
 	// Second half: obtain new passphrase, wrap with the same
 	// cost parameters as before (rotation does not retune
 	// cost; that would be a separate operation).
-	newPass, err := callProvider(ctx, c.crypto.provider, PassphraseHint{
+	newPass, err := crypto.CallProvider(ctx, c.crypto.provider, domain.PassphraseHint{
 		StoreID: c.storeID,
 		Reason:  "kek_rotation",
 	})
@@ -373,7 +374,7 @@ func (c *core) exportRecoveryKitImpl(ctx context.Context) ([]byte, error) {
 			errs.ErrPassphraseRequired)
 	}
 
-	return buildRecoveryKit(c.crypto.desc, c.crypto.desc.DEK)
+	return crypto.BuildRecoveryKit(c.crypto.desc, c.crypto.desc.DEK)
 }
 
 // commitDescriptor is the shared tail of SetPassphrase and
@@ -396,27 +397,4 @@ func (c *core) commitDescriptor(ctx context.Context, next *descriptor.Descriptor
 	}
 	c.crypto.desc = next
 	return nil
-}
-
-// callProvider invokes the configured PassphraseProvider with the
-// given hint, classifying its error returns. A nil provider
-// surfaces ErrPassphraseRequired; a provider that returns an error
-// gets that error wrapped with ErrPassphraseProvider so callers
-// can branch with errors.Is.
-//
-// The returned slice is owned by the caller and MUST be wiped with
-// aead.Wipe once the KEK has been derived. callProvider
-// does not retain a reference.
-func callProvider(ctx context.Context, p PassphraseProvider, hint PassphraseHint) ([]byte, error) {
-	if p == nil {
-		return nil, errs.ErrPassphraseRequired
-	}
-	pass, err := p(ctx, hint)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", errs.ErrPassphraseProvider, err)
-	}
-	if len(pass) == 0 {
-		return nil, errs.ErrPassphraseRequired
-	}
-	return pass, nil
 }

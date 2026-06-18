@@ -18,7 +18,7 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
-	storefx2 "scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
 )
 
 // --- InitStore happy path ---
@@ -28,7 +28,7 @@ func TestInitStore_FreshLocation_Succeeds(t *testing.T) {
 
 	s, kit, err := store.InitStore(context.Background(), drv,
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
@@ -106,10 +106,10 @@ func TestInitStore_RequiresStoreIndex(t *testing.T) {
 
 func TestInitStore_AlreadyExists(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	storefx2.InitPlainOn(t, drv)
+	storefx.InitPlainOn(t, drv)
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrStoreAlreadyExists) {
 		t.Fatalf("expected errs.ErrStoreAlreadyExists, got %v", err)
@@ -118,14 +118,14 @@ func TestInitStore_AlreadyExists(t *testing.T) {
 
 func TestInitStore_ForceReinit(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	storefx2.InitPlainOn(t, drv)
+	storefx.InitPlainOn(t, drv)
 	desc1, _ := descriptor.Read(context.Background(), drv)
 	id1 := desc1.StoreID
 
 	s2, _, err := store.InitStore(context.Background(), drv,
 		store.WithForceReinit(),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("force-reinit InitStore: %v", err)
@@ -147,7 +147,7 @@ func TestInitStore_CorruptedDescriptor_NoForce(t *testing.T) {
 	}
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrStoreCorrupted) {
 		t.Fatalf("expected errs.ErrStoreCorrupted, got %v", err)
@@ -163,7 +163,7 @@ func TestInitStore_CorruptedDescriptor_WithForce(t *testing.T) {
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithForceReinit(),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("WithForceReinit must clobber corrupted descriptor: %v", err)
@@ -181,7 +181,7 @@ func TestInitStore_CustomConfigPersisted(t *testing.T) {
 	s, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
@@ -204,7 +204,7 @@ func TestInitStore_RejectsInvalidConfig(t *testing.T) {
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
@@ -223,7 +223,7 @@ func TestInitStore_RejectsBinaryManifestEncoding(t *testing.T) {
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
@@ -240,7 +240,7 @@ func TestInitStore_RejectsInlineBlobLimitTooLarge(t *testing.T) {
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
@@ -255,7 +255,7 @@ func TestInitStore_AcceptsInlineBlobLimitAtBoundary(t *testing.T) {
 	s, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("InlineBlobLimit at boundary should be accepted, got %v", err)
@@ -275,7 +275,7 @@ func TestInitStore_RejectsRetentionPeriodTooShort(t *testing.T) {
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Fatalf("expected errs.ErrInvalidConfig, got %v", err)
@@ -290,7 +290,7 @@ func TestInitStore_AcceptsRetentionPeriodAtBoundary(t *testing.T) {
 	s, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("RetentionPeriod at boundary should be accepted, got %v", err)
@@ -309,7 +309,7 @@ func TestInitStore_AcceptsRetentionPeriodZero(t *testing.T) {
 	s, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("RetentionPeriod=0 should be accepted, got %v", err)
@@ -331,7 +331,7 @@ func TestInitStore_DiskBackedIndex(t *testing.T) {
 
 	s, _, err := store.InitStore(context.Background(), drv,
 		store.WithStoreIndex(idx),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
@@ -359,7 +359,7 @@ func TestInitStore_GeneratesUniqueStoreIDs(t *testing.T) {
 		drv := driverfx.LocalFS(t)
 		_, _, err := store.InitStore(context.Background(), drv,
 			store.WithStoreIndex(indexfx.Memory(t)),
-			store.WithHashRegistry(storefx2.Hashes()),
+			store.WithHashRegistry(storefx.Hashes()),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -383,7 +383,7 @@ func TestOpenStore_NilDriver(t *testing.T) {
 
 func TestOpenStore_FreshLocation_NotFound(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	_, err := storefx2.TryOpenOn(t, drv)
+	_, err := storefx.TryOpenOn(t, drv)
 	if !errors.Is(err, errs.ErrStoreNotFound) {
 		t.Fatalf("expected errs.ErrStoreNotFound, got %v", err)
 	}
@@ -395,7 +395,7 @@ func TestOpenStore_CorruptedDescriptor(t *testing.T) {
 		strings.NewReader(`{not json`)); err != nil {
 		t.Fatal(err)
 	}
-	_, err := storefx2.TryOpenOn(t, drv)
+	_, err := storefx.TryOpenOn(t, drv)
 	if !errors.Is(err, errs.ErrStoreCorrupted) {
 		t.Fatalf("expected errs.ErrStoreCorrupted, got %v", err)
 	}
@@ -404,7 +404,7 @@ func TestOpenStore_CorruptedDescriptor(t *testing.T) {
 func TestOpenStore_RequiresStoreIndex(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	// Init first so the descriptor is in place.
-	storefx2.InitPlainOn(t, drv)
+	storefx.InitPlainOn(t, drv)
 	_, err := store.OpenStore(context.Background(), drv)
 	if err == nil {
 		t.Fatal("expected error when WithStoreIndex is not provided")
@@ -428,13 +428,13 @@ func TestOpenStore_NoConfig_Succeeds(t *testing.T) {
 	if _, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(custom),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
 
 	// Open without WithConfig — legitimate diagnostic-style open.
-	s, err := storefx2.TryOpenOn(t, drv)
+	s, err := storefx.TryOpenOn(t, drv)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -452,7 +452,7 @@ func TestOpenStore_MatchingConfig_Succeeds(t *testing.T) {
 	if _, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(custom),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +461,7 @@ func TestOpenStore_MatchingConfig_Succeeds(t *testing.T) {
 	s, err := store.OpenStore(context.Background(), drv,
 		store.WithConfig(custom),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
@@ -478,7 +478,7 @@ func TestOpenStore_ConfigMismatch_PathTopology(t *testing.T) {
 	if _, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(domain.StoreConfig{PathTopology: domain.PathTopologyFlat}),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +487,7 @@ func TestOpenStore_ConfigMismatch_PathTopology(t *testing.T) {
 	_, err := store.OpenStore(context.Background(), drv,
 		store.WithConfig(domain.StoreConfig{PathTopology: domain.PathTopologySharded}),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Fatalf("expected errs.ErrConfigMismatch, got %v", err)
@@ -499,7 +499,7 @@ func TestOpenStore_ConfigMismatch_ContentHasher(t *testing.T) {
 	if _, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(domain.StoreConfig{ContentHasher: domain.HashSHA256}),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -507,7 +507,7 @@ func TestOpenStore_ConfigMismatch_ContentHasher(t *testing.T) {
 	_, err := store.OpenStore(context.Background(), drv,
 		store.WithConfig(domain.StoreConfig{ContentHasher: domain.HashBLAKE3}),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Fatalf("expected errs.ErrConfigMismatch, got %v", err)
@@ -526,7 +526,7 @@ func TestOpenStore_PartialConfig_NoMismatchOnUnsetFields(t *testing.T) {
 			ContentHasher: domain.HashBLAKE3,
 		}),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +539,7 @@ func TestOpenStore_PartialConfig_NoMismatchOnUnsetFields(t *testing.T) {
 			// PathTopology omitted — must not be checked.
 		}),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Errorf("partial WithConfig should not trigger mismatch, got %v", err)
@@ -556,7 +556,7 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 	if _, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(domain.StoreConfig{DeletionPolicyLock: false}),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -566,7 +566,7 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 	_, err := store.OpenStore(context.Background(), drv,
 		store.WithConfig(domain.StoreConfig{DeletionPolicyLock: true}),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Fatalf("expected errs.ErrConfigMismatch on stricter lock request, got %v", err)
@@ -576,7 +576,7 @@ func TestOpenStore_DeletionPolicyLock_OnlyChecksWhenSet(t *testing.T) {
 	_, err = store.OpenStore(context.Background(), drv,
 		store.WithConfig(domain.StoreConfig{DeletionPolicyLock: false}),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Errorf("opening with relaxed lock request must succeed, got %v", err)
@@ -602,19 +602,19 @@ func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
 
 			if _, _, err := store.InitStore(context.Background(), drv,
 				store.WithConfig(cfg),
-				store.WithPassphrase(storefx2.StaticPP("pw")),
+				store.WithPassphrase(storefx.StaticPP("pw")),
 				store.WithStoreIndex(idx),
-				store.WithHashRegistry(storefx2.Hashes()),
+				store.WithHashRegistry(storefx.Hashes()),
 			); err != nil {
 				t.Fatalf("InitStore: %v", err)
 			}
 
 			s, err := store.OpenStore(context.Background(), drv,
 				store.WithConfig(cfg),
-				store.WithPassphrase(storefx2.StaticPP("pw")),
+				store.WithPassphrase(storefx.StaticPP("pw")),
 				store.WithAutoUnlock(),
 				store.WithStoreIndex(idx),
-				store.WithHashRegistry(storefx2.Hashes()),
+				store.WithHashRegistry(storefx.Hashes()),
 			)
 			if err != nil {
 				t.Fatalf("OpenStore: %v", err)
@@ -639,12 +639,12 @@ func TestOpenStore_RestoresImmutableConfigFromSystemConfig(t *testing.T) {
 	if _, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(custom),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	); err != nil {
 		t.Fatal(err)
 	}
 
-	s, err := storefx2.TryOpenOn(t, drv)
+	s, err := storefx.TryOpenOn(t, drv)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -660,9 +660,9 @@ func TestInitStore_WithPassphrase_ReturnsRecoveryKit(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 
 	s, kit, err := store.InitStore(context.Background(), drv,
-		store.WithPassphrase(storefx2.StaticPP("hunter2")),
+		store.WithPassphrase(storefx.StaticPP("hunter2")),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
@@ -677,7 +677,7 @@ func TestInitStore_WithPassphrase_ReturnsRecoveryKit(t *testing.T) {
 
 func TestInitStore_WithPassphrase_DescriptorIsEncrypted(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	storefx2.InitEncryptedOn(t, drv, "hunter2")
+	storefx.InitEncryptedOn(t, drv, "hunter2")
 
 	desc, err := descriptor.Read(context.Background(), drv)
 	if err != nil {
@@ -703,9 +703,9 @@ func TestInitStore_WithPassphrase_DescriptorIsEncrypted(t *testing.T) {
 func TestInitStore_WithPassphrase_RecoveryKitIsValid(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	_, kit, err := store.InitStore(context.Background(), drv,
-		store.WithPassphrase(storefx2.StaticPP("hunter2")),
+		store.WithPassphrase(storefx.StaticPP("hunter2")),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -734,9 +734,9 @@ func TestInitStore_WithPassphrase_RecoveryKitIsValid(t *testing.T) {
 func TestInitStore_WithPassphrase_KitMatchesDescriptor(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	_, kit, err := store.InitStore(context.Background(), drv,
-		store.WithPassphrase(storefx2.StaticPP("hunter2")),
+		store.WithPassphrase(storefx.StaticPP("hunter2")),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -768,7 +768,7 @@ func TestInitStore_WithPassphrase_KitMatchesDescriptor(t *testing.T) {
 // existing DEK, no key generation needed.
 func TestInitStore_PlainGeneratesPlaintextDEK(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	storefx2.InitPlainOn(t, drv)
+	storefx.InitPlainOn(t, drv)
 
 	desc, _ := descriptor.Read(context.Background(), drv)
 	if desc.DEKEncrypted {
@@ -796,7 +796,7 @@ func TestInitStore_NonPlainCryptoWithoutPassphrase(t *testing.T) {
 			_, _, err := store.InitStore(context.Background(), drv,
 				store.WithConfig(cfg),
 				store.WithStoreIndex(indexfx.Memory(t)),
-				store.WithHashRegistry(storefx2.Hashes()),
+				store.WithHashRegistry(storefx.Hashes()),
 			)
 			if !errors.Is(err, errs.ErrPassphraseRequired) {
 				t.Fatalf("expected ErrPassphraseRequired, got %v", err)
@@ -810,13 +810,13 @@ func TestInitStore_NonPlainCryptoWithoutPassphrase(t *testing.T) {
 func TestInitStore_PassphraseProviderError(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	sentinel := errors.New("user cancelled")
-	failing := func(_ context.Context, _ store.PassphraseHint) ([]byte, error) {
+	failing := func(_ context.Context, _ domain.PassphraseHint) ([]byte, error) {
 		return nil, sentinel
 	}
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithPassphrase(failing),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if !errors.Is(err, errs.ErrPassphraseProvider) {
 		t.Fatalf("expected ErrPassphraseProvider, got %v", err)
@@ -828,15 +828,15 @@ func TestInitStore_PassphraseProviderError(t *testing.T) {
 // StoreID. Future PassphraseProviders may dispatch on Reason.
 func TestInitStore_HintCarriesInitReason(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	var seenHint store.PassphraseHint
-	provider := func(_ context.Context, h store.PassphraseHint) ([]byte, error) {
+	var seenHint domain.PassphraseHint
+	provider := func(_ context.Context, h domain.PassphraseHint) ([]byte, error) {
 		seenHint = h
 		return []byte("pw"), nil
 	}
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithPassphrase(provider),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -858,9 +858,9 @@ func TestInitStore_KDFParamsOverride(t *testing.T) {
 	cfg := domain.StoreConfig{KDFParams: cost}
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
-		store.WithPassphrase(storefx2.StaticPP("pw")),
+		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -883,7 +883,7 @@ func TestInitStore_KDFParamsOverride(t *testing.T) {
 // ReadReplica is the simplest check.
 func TestInitStore_WritesL1Replica(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	storefx2.InitEncryptedOn(t, drv, "pw")
+	storefx.InitEncryptedOn(t, drv, "pw")
 
 	d, status, err := reconcile.ReadReplica(context.Background(), drv, descriptor.BackupPath)
 	if err != nil {

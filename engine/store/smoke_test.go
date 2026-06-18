@@ -260,7 +260,7 @@ func newEncryptedDiskStore(t *testing.T, crypto domain.ManifestCrypto) (store.St
 	// and OpenStore directly so the smoke factory stays in this
 	// file.
 	cfg := domain.StoreConfig{ManifestCrypto: crypto}
-	provider := func(_ context.Context, _ store.PassphraseHint) ([]byte, error) {
+	provider := func(_ context.Context, _ domain.PassphraseHint) ([]byte, error) {
 		return []byte("smoke-pw"), nil
 	}
 	if _, _, err := store.InitStore(context.Background(), drv,

@@ -50,7 +50,7 @@ type cryptoState struct {
 	// kept for the Store's lifetime so later admin operations
 	// (RotateKEK after a sleep, etc.) can re-prompt without the host
 	// threading the provider through every call.
-	provider PassphraseProvider
+	provider domain.PassphraseProvider
 
 	// keyResolver resolves DEKs on the read/write crypto paths.
 	// Either injected via WithKeyResolver or promoted from dek by
