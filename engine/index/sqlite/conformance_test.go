@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/index"
-	"scrinium.dev/testutil/indextest"
+	"scrinium.dev/engine/index/indextest"
 )
 
 // TestConformance runs the shared StoreIndex conformance suite
