@@ -9,6 +9,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
+	"scrinium.dev/internal/keyedlock"
 	vw "scrinium.dev/projection/internal/view"
 )
 
@@ -44,7 +45,7 @@ type Ops struct {
 
 	// Path locks: per-path RWMutex serialising mutations on a
 	// single path while permitting concurrent readers.
-	pathLocks *pathLockManager
+	pathLocks *keyedlock.Map
 
 	// quota tracks the total bytes held across all live scratch
 	// files. Reserve/Release pair around each WriteAt.
@@ -103,7 +104,7 @@ func New(v *vw.View, opts ...Option) (*Ops, error) {
 		editing:      o.editing,
 		mountSession: o.mountSession,
 		readOnly:     o.readOnly,
-		pathLocks:    newPathLockManager(),
+		pathLocks:    keyedlock.New(),
 		quota:        &quotaTracker{quota: o.scratchQuota},
 		pendingDirs:  make(map[string]struct{}),
 	}, nil
@@ -553,7 +554,7 @@ func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 		return fmt.Errorf("projection.Ops.Rename: WithStore not configured")
 	}
 
-	unlock := o.pathLocks.lockOrdered(oldPath, newPath)
+	unlock := o.pathLocks.LockAll(oldPath, newPath)
 	defer unlock()
 
 	// newPath must not exist (file or pending dir).
@@ -574,9 +575,9 @@ func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 	}
 	wf.path = newPath
 	wf.forceDirty = true // content unchanged; metadata change alone triggers Put
-	// Lock has already been taken by lockOrdered; substitute the
+	// Lock has already been taken by LockAll; substitute the
 	// closer used by the writeFile so it does not double-unlock.
-	wf.unlock = func() {} // unlock is handled by the deferred lockOrdered
+	wf.unlock = func() {} // unlock is handled by the deferred LockAll
 
 	return wf.Close()
 }

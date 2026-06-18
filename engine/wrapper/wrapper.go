@@ -2,10 +2,10 @@ package wrapper
 
 import (
 	"fmt"
-	"sync"
 
 	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
+	reg "scrinium.dev/internal/registry"
 )
 
 // Deps are the dependencies the assembler/multistore provides to a
@@ -66,10 +66,7 @@ type Factory interface {
 	Descriptor() Descriptor
 }
 
-var (
-	registryMu sync.RWMutex
-	registry   = map[string]Factory{}
-)
+var registry = reg.New[Factory]()
 
 // Register installs a Factory under its Descriptor().Name for
 // blank-import wiring (ADR-63), the way drivers and agents register. It
@@ -83,18 +80,12 @@ func Register(f Factory) {
 	if name == "" {
 		panic("wrapper.Register: empty wrapper name")
 	}
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	if _, dup := registry[name]; dup {
+	if !registry.SetFirstWins(name, f) {
 		panic(fmt.Sprintf("wrapper.Register: duplicate wrapper %q", name))
 	}
-	registry[name] = f
 }
 
 // Lookup returns the Factory registered under name.
 func Lookup(name string) (Factory, bool) {
-	registryMu.RLock()
-	defer registryMu.RUnlock()
-	f, ok := registry[name]
-	return f, ok
+	return registry.Get(name)
 }

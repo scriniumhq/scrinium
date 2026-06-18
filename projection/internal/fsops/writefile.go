@@ -26,7 +26,7 @@ import (
 // fields they don't explicitly mutate.
 //
 // Locks: a single-path Open holds one lock; Rename holds two
-// (old + new) acquired in lex order via pathLocks.lockOrdered.
+// (old + new) acquired in lex order via pathLocks.LockAll.
 // The unlock function lives in `unlock` and is called once on
 // Close regardless of which path produced the lock.
 type writeFile struct {
