@@ -9,7 +9,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/faulty"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/store/internal/orphanscan"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
@@ -60,7 +60,7 @@ func TestRecoverOrphans_TransientResolveError_PreservesBlob(t *testing.T) {
 		t.Fatalf("Put blob: %v", err)
 	}
 
-	report, err := store.RecoverOrphans(context.Background(), drv, idx)
+	report, err := orphanscan.RecoverOrphans(context.Background(), drv, idx)
 	if err != nil {
 		t.Fatalf("RecoverOrphans: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestRecoverOrphans_TransientResolveError_DoesNotAbortSweep(t *testing.T) {
 		t.Fatalf("staging: %v", err)
 	}
 
-	report, err := store.RecoverOrphans(context.Background(), drv, idx)
+	report, err := orphanscan.RecoverOrphans(context.Background(), drv, idx)
 	if err != nil {
 		t.Fatalf("RecoverOrphans: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestRecoverOrphans_TransientManifestExistsError_PreservesManifest(t *testin
 		t.Fatalf("Put manifest: %v", err)
 	}
 
-	report, err := store.RecoverOrphans(context.Background(), drv, idx)
+	report, err := orphanscan.RecoverOrphans(context.Background(), drv, idx)
 	if err != nil {
 		t.Fatalf("RecoverOrphans: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestRecoverOrphans_RemoveFails_OrphanStays(t *testing.T) {
 		t.Fatalf("inner.Put: %v", err)
 	}
 
-	report, err := store.RecoverOrphans(context.Background(), drv, indexfx.Memory(t))
+	report, err := orphanscan.RecoverOrphans(context.Background(), drv, indexfx.Memory(t))
 	if err != nil {
 		t.Fatalf("RecoverOrphans: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestRecoverOrphans_Default_RemovesUnknownBlob(t *testing.T) {
 		t.Fatalf("Put: %v", err)
 	}
 
-	report, err := store.RecoverOrphans(context.Background(), drv, idx)
+	report, err := orphanscan.RecoverOrphans(context.Background(), drv, idx)
 	if err != nil {
 		t.Fatalf("RecoverOrphans: %v", err)
 	}

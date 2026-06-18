@@ -82,7 +82,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 	emit("config: N=%d, payload=%dB, heap-ceiling=%s",
 		n, payloadSize, humanize_Bytes(heapDeltaCeiling))
 
-	s, _ := newDiskStore(t)
+	s, _ := storefx.InitDisk(t)
 	ctx := context.Background()
 
 	// --- Baseline heap, before the loop ---
@@ -224,22 +224,6 @@ func readAllAndClose(t *testing.T, rh domain.ReadHandle) []byte {
 		t.Fatalf("Close: %v", err)
 	}
 	return buf.Bytes()
-}
-
-// newDiskStore returns a Store whose index lives on disk, not in
-// memory. Required for the million-files smoke: with :memory: the
-// pure-Go modernc.org/sqlite holds every row in Go heap (~1+ GiB
-// at 1M), which both blows our heap ceiling and risks OOM. A disk-
-// backed index keeps page cache bounded (~8 MiB by default) and
-// pushes data into the file, so HeapAlloc actually measures Put-
-// side streaming behaviour.
-func newDiskStore(t *testing.T) (store.Store, string) {
-	t.Helper()
-	drv := driverfx.LocalFS(t)
-	root := drv.Root()
-	idx := indexfx.Disk(t, filepath.Join(t.TempDir(), "store.idx"))
-	s := storefx.InitOn(t, drv, store.WithStoreIndex(idx))
-	return s, root
 }
 
 // newEncryptedDiskStore creates a disk-backed Store with encrypted

@@ -73,7 +73,7 @@ func TestVerify_TargetBlob_Roundtrip(t *testing.T) {
 }
 
 func TestVerify_InlineBlob_Roundtrip(t *testing.T) {
-	s, _ := newInlineStore(t, 1024)
+	s, _ := storefx.InitInline(t, 1024)
 	id, err := s.Put(context.Background(),
 		payload("inline data"),
 	)

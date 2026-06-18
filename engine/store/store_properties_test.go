@@ -12,7 +12,8 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	"scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/artifactfx"
+	storefx2 "scrinium.dev/testutil/storefx"
 	"scrinium.dev/testutil/storekit"
 )
 
@@ -37,16 +38,6 @@ import (
 // behaviour is pinned by the bounded matrix test at the bottom of this
 // file.
 
-// mkArtifact wraps bytes as a domain.Artifact body.
-func mkArtifact(b []byte) domain.Artifact {
-	return domain.Artifact{Payload: bytes.NewReader(b)}
-}
-
-// getBytes Gets id and returns the full payload, failing the test on
-// any error. The handle is always closed.
-
-// walkIDs returns the set of ArtifactIDs the store reports.
-
 // randBytes returns n pseudo-random bytes from rng. Shared by the
 // seeded property drivers below.
 func randBytes(rng *rand.Rand, n int) []byte {
@@ -59,8 +50,8 @@ func randBytes(rng *rand.Rand, n int) []byte {
 // target and the seeded driver: for any payload, Get(Put(x)) == x.
 func checkRoundTrip(t *testing.T, payload []byte) {
 	t.Helper()
-	s := storefx.Init(t)
-	id, err := s.Put(context.Background(), mkArtifact(payload))
+	s := storefx2.Init(t)
+	id, err := s.Put(context.Background(), artifactfx.PayloadBytes(payload))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -96,21 +87,21 @@ func TestStore_RoundTrip_Seeded(t *testing.T) {
 // lives at the blob layer, which is what we assert.
 func checkContentAddressing(t *testing.T, a, b []byte) {
 	t.Helper()
-	s, root := storefx.InitWithRoot(t)
+	s, root := storefx2.InitWithRoot(t)
 	ctx := context.Background()
 
-	id1, err := s.Put(ctx, mkArtifact(a))
+	id1, err := s.Put(ctx, artifactfx.PayloadBytes(a))
 	if err != nil {
 		t.Fatalf("Put a #1: %v", err)
 	}
 	// A second Put of the same bytes must not create a second blob,
 	// whether it reuses the manifest (same second) or writes a new one
 	// (the blob is still deduped on content hash).
-	if _, err := s.Put(ctx, mkArtifact(a)); err != nil {
+	if _, err := s.Put(ctx, artifactfx.PayloadBytes(a)); err != nil {
 		t.Fatalf("Put a #2: %v", err)
 	}
 
-	id2, err := s.Put(ctx, mkArtifact(b))
+	id2, err := s.Put(ctx, artifactfx.PayloadBytes(b))
 	if err != nil {
 		t.Fatalf("Put b: %v", err)
 	}
@@ -126,7 +117,7 @@ func checkContentAddressing(t *testing.T, a, b []byte) {
 	if !bytes.Equal(a, b) {
 		wantBlobs = 2
 	}
-	if n := storefx.OnDiskAt(root).BlobCount(); n != wantBlobs {
+	if n := storefx2.OnDiskAt(root).BlobCount(); n != wantBlobs {
 		t.Fatalf("blob count: got %d, want %d (a==b: %v)", n, wantBlobs, bytes.Equal(a, b))
 	}
 
@@ -160,10 +151,10 @@ func TestStore_ContentAddressing_Seeded(t *testing.T) {
 // and reopening preserves every artifact's content and the Walk set.
 func checkReopenStable(t *testing.T, payload []byte) {
 	t.Helper()
-	s, r := storefx.InitPlain(t)
+	s, r := storefx2.InitPlain(t)
 	ctx := context.Background()
 
-	id, err := s.Put(ctx, mkArtifact(payload))
+	id, err := s.Put(ctx, artifactfx.PayloadBytes(payload))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -223,9 +214,9 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 		tc := tc
 		t.Run(string(tc.mode), func(t *testing.T) {
 			cfg := domain.StoreConfig{ManifestCrypto: tc.mode}
-			_, r := storefx.InitEncrypted(t, "correct-horse", store.WithConfig(cfg))
+			_, r := storefx2.InitEncrypted(t, "correct-horse", store.WithConfig(cfg))
 			s := r.Open(t,
-				store.WithPassphrase(storefx.StaticPP("correct-horse")),
+				store.WithPassphrase(storefx2.StaticPP("correct-horse")),
 				store.WithAutoUnlock(),
 				store.WithConfig(cfg),
 			)
@@ -247,7 +238,7 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 			}
 
 			// Inspect the raw manifest file on disk.
-			mp := storefx.OnDiskAt(r.Root()).ManifestPath(storekit.MustDigest(t, s, id))
+			mp := storefx2.OnDiskAt(r.Root()).ManifestPath(storekit.MustDigest(t, s, id))
 			if mp == "" {
 				t.Fatalf("ManifestPath returned empty for %s", id)
 			}
@@ -263,7 +254,7 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 
 			// Wrong passphrase must fail closed.
 			_, err = r.TryOpen(t,
-				store.WithPassphrase(storefx.StaticPP("wrong")),
+				store.WithPassphrase(storefx2.StaticPP("wrong")),
 				store.WithAutoUnlock(),
 				store.WithConfig(cfg),
 			)

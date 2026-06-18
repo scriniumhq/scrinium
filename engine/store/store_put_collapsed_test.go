@@ -170,7 +170,7 @@ func TestPut_InlinePolicy(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			s, root := newInlineStore(t, tc.limit)
+			s, root := storefx.InitInline(t, tc.limit)
 			id, err := s.Put(context.Background(),
 				payload(tc.content),
 			)
@@ -192,7 +192,7 @@ func TestPut_InlinePolicy(t *testing.T) {
 	}
 
 	t.Run("no dedup for inline", func(t *testing.T) {
-		s, root := newInlineStore(t, 100)
+		s, root := storefx.InitInline(t, 100)
 		const content = "shared inline"
 		for _, sid := range []domain.SessionID{"a", "b"} {
 			if _, err := s.Put(context.Background(), payload(content),

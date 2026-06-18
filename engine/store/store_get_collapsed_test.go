@@ -19,7 +19,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	storefx "scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
 	"scrinium.dev/testutil/storekit"
 )
 
@@ -41,7 +41,7 @@ func TestGet_ReadAt(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var s store.Store
 			if tc.inline {
-				s, _ = newInlineStore(t, 100)
+				s, _ = storefx.InitInline(t, 100)
 			} else {
 				s, _ = storefx.InitWithRoot(t)
 			}

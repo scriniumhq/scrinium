@@ -11,7 +11,8 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	storefx "scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/artifactfx"
+	"scrinium.dev/testutil/storefx"
 	"scrinium.dev/testutil/storekit"
 )
 
@@ -122,7 +123,7 @@ func runModelProgram(t *testing.T, program []byte) {
 			content := bytes.Repeat([]byte{fillB}, int(sizeB)) // 0..255 bytes, content == fill*size
 			ns := namespaces[int(nsB)%len(namespaces)]
 
-			id, err := s.Put(ctx, mkArtifact(content))
+			id, err := s.Put(ctx, artifactfx.PayloadBytes(content))
 			if err != nil {
 				t.Fatalf("step %d Put(ns=%s,len=%d): %v", step, ns, len(content), err)
 			}

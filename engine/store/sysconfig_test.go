@@ -6,7 +6,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
-	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/testutil/storefx"
 )
 
@@ -30,7 +30,7 @@ func mustWriteSysConfig(t *testing.T) (string, domain.StoreConfig) {
 		ManifestCrypto:   domain.ManifestCryptoPlain,
 	}
 
-	if err := store.WriteSystemConfig(context.Background(), drv, storefx.Hashes(), cfg); err != nil {
+	if err := storeconfig.Write(context.Background(), drv, storefx.Hashes(), cfg); err != nil {
 		t.Fatalf("WriteSystemConfig: %v", err)
 	}
 	return root, cfg
@@ -44,7 +44,7 @@ func TestWriteReadSystemConfig_RoundTrip(t *testing.T) {
 		t.Fatalf("localfs.New: %v", err)
 	}
 
-	got, err := store.ReadSystemConfig(context.Background(), drv, storefx.Hashes())
+	got, err := storeconfig.Read(context.Background(), drv, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("ReadSystemConfig: %v", err)
 	}

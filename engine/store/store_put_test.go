@@ -90,26 +90,6 @@ func TestPut_DefaultNamespace(t *testing.T) {
 	}
 }
 
-// --- Inline blobs (M1.4 pack 3) ---
-//
-// Inline mode kicks in when StoreConfig.BlobStorage is
-// Inline mode AND the payload size is at most InlineBlobLimit.
-// The payload bytes are stored inside the manifest; no separate
-// blob file appears under blobs/. Deduplication is disabled for
-// inline manifests (their bytes have no row in the blobs table).
-
-// helper: build a Store configured for Inline mode. The limit
-// is small enough that tests can exercise both sides of it
-// cheaply.
-func newInlineStore(t *testing.T, limit int64) (store.Store, string) {
-	t.Helper()
-	cfg := domain.StoreConfig{
-		BlobStorage:     domain.BlobStorageInline,
-		InlineBlobLimit: limit,
-	}
-	return storefx.InitWithRoot(t, store.WithConfig(cfg))
-}
-
 // --- Pipeline round-trip (M2.1) ---
 
 func TestPut_Pipeline_ZstdRoundTrip(t *testing.T) {

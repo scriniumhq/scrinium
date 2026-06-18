@@ -43,7 +43,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 				root string
 			)
 			if tc.inline {
-				s, root = newInlineStore(t, 100)
+				s, root = storefx.InitInline(t, 100)
 			} else {
 				s, root = storefx.InitWithRoot(t)
 			}

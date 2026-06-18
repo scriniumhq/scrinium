@@ -11,6 +11,7 @@ import (
 
 	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"
+	"scrinium.dev/testutil/storefx"
 	"scrinium.dev/testutil/storekit"
 )
 
@@ -24,7 +25,7 @@ import (
 // assertions can be absolute.
 
 func TestSystemStore_CellPutGetRoundTrip(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 	body := []byte("lease-holder-A")
 
@@ -50,7 +51,7 @@ func TestSystemStore_CellPutGetRoundTrip(t *testing.T) {
 }
 
 func TestSystemStore_CellOverwriteReplaces(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 	put := func(b string) {
 		t.Helper()
@@ -79,7 +80,7 @@ func TestSystemStore_CellOverwriteReplaces(t *testing.T) {
 // TestSystemStore_CellAndVersionedGetRoute: a cell and a versioned name
 // coexist, and Get resolves each to its own form.
 func TestSystemStore_CellAndVersionedGetRoute(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 
 	if err := ss.Put(ctx, systemstore.Artifact{
@@ -107,7 +108,7 @@ func TestSystemStore_CellAndVersionedGetRoute(t *testing.T) {
 }
 
 func TestSystemStore_DeleteCell(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 
 	if err := ss.Put(ctx, systemstore.Artifact{
@@ -126,7 +127,7 @@ func TestSystemStore_DeleteCell(t *testing.T) {
 // TestSystemStore_WalkIncludesCells: Walk surfaces both versioned actives
 // and keep=0 cells under a prefix (so the lease is visible in the view).
 func TestSystemStore_WalkIncludesCells(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 
 	if err := ss.Put(ctx, systemstore.Artifact{

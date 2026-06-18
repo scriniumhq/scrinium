@@ -17,36 +17,8 @@ import (
 	"scrinium.dev/testutil/storekit"
 )
 
-// SystemStore behavioural contract (ADR-57), exercised against the
-// engine's in-process implementation through the public API only.
-//
-// There is a single SystemStore implementation, so these live as
-// plain tests here rather than a shared conformance package: the
-// Factory indirection that internal/testutil/indextest needs (sqlite
-// + a future postgres backend) buys nothing with one implementation.
-// If a genuinely second backend ever lands (in-memory, network), hoist
-// the bodies back into a testutil suite and add a Factory then.
-//
-// Walk assertions are written relative to a baseline captured right
-// after init: a freshly initialised store already carries a bootstrap
-// system/config version, so the invariant under test is the delta a
-// single operation produces, not an absolute count or set. System
-// artifacts are never indexed (ADR-85), so the index assertion just
-// checks that a Put leaves the index unchanged.
-
-// newSystemStore builds a fresh Plain store and returns its System()
-// facade plus the same StoreIndex instance (via the Reopener) so
-// tests can assert on index routing. The store is closed on cleanup;
-// the driver and index register their own t.Cleanup inside storefx.
-func newSystemStore(t *testing.T) (systemstore.Store, index.StoreIndex) {
-	t.Helper()
-	s, r := storefx.InitPlain(t)
-	t.Cleanup(func() { _ = s.Close() })
-	return s.System(), r.Index()
-}
-
 func TestSystemStore_PutGetRoundTrip(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 	body := []byte("hello cursor 2026-04-01T12:00:00Z")
 
@@ -70,7 +42,7 @@ func TestSystemStore_PutGetRoundTrip(t *testing.T) {
 }
 
 func TestSystemStore_PutUpdateReplacesPredecessor(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 	v1 := []byte("version-1")
 	v2 := []byte("version-2-newer")
@@ -94,7 +66,7 @@ func TestSystemStore_PutUpdateReplacesPredecessor(t *testing.T) {
 }
 
 func TestSystemStore_GetAbsentReturnsNotFound(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	_, err := ss.Get(context.Background(), "gc/cursor-never-written")
 	if !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Errorf("Get absent: got %v, want errs.ErrArtifactNotFound", err)
@@ -102,7 +74,7 @@ func TestSystemStore_GetAbsentReturnsNotFound(t *testing.T) {
 }
 
 func TestSystemStore_DeleteIdempotent(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 
 	// Delete on absent — no-op.
@@ -128,7 +100,7 @@ func TestSystemStore_DeleteIdempotent(t *testing.T) {
 }
 
 func TestSystemStore_WalkByPrefix(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 	for _, name := range []string{
 		"scrub/cursor",
@@ -152,7 +124,7 @@ func TestSystemStore_WalkByPrefix(t *testing.T) {
 }
 
 func TestSystemStore_WalkEmptyPrefixScansAll(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 
 	// Baseline: a freshly initialised store already exposes
@@ -174,7 +146,7 @@ func TestSystemStore_WalkEmptyPrefixScansAll(t *testing.T) {
 }
 
 func TestSystemStore_PutDoesNotIndex(t *testing.T) {
-	ss, idx := newSystemStore(t)
+	ss, idx := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 	body := []byte("snapshot-payload-1234")
 
@@ -203,7 +175,7 @@ func TestSystemStore_PutDoesNotIndex(t *testing.T) {
 }
 
 func TestSystemStore_InvalidNamesRejected(t *testing.T) {
-	ss, _ := newSystemStore(t)
+	ss, _ := storefx.InitPlainSystem(t)
 	ctx := context.Background()
 	for _, name := range []string{
 		"",

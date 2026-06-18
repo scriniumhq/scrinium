@@ -10,6 +10,7 @@ import (
 	"scrinium.dev/engine/driver/faulty"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
 	"scrinium.dev/testutil/storefx"
@@ -94,7 +95,7 @@ func TestCrash_PutTornAtEveryWrite_IsAtomic(t *testing.T) {
 			base := env.fd.CallCount(faulty.MethodPut)
 			env.fd.SetFailOnCall(faulty.MethodPut, base+k)
 
-			id, putErr := s.Put(ctx, mkArtifact(payload))
+			id, putErr := s.Put(ctx, artifactfx.PayloadBytes(payload))
 			_ = s.Close()
 
 			// 3. Recover and reconcile.
@@ -138,7 +139,7 @@ func measurePutWrites(t *testing.T, payload []byte) int64 {
 	defer s.Close()
 
 	base := fd.CallCount(faulty.MethodPut)
-	if _, err := s.Put(context.Background(), mkArtifact(payload)); err != nil {
+	if _, err := s.Put(context.Background(), artifactfx.PayloadBytes(payload)); err != nil {
 		t.Fatalf("measure Put: %v", err)
 	}
 	return fd.CallCount(faulty.MethodPut) - base
