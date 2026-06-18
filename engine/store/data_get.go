@@ -6,8 +6,8 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/internal/artifactio"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/store/internal/artifactio"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )

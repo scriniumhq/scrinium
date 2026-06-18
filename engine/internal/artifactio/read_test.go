@@ -12,13 +12,13 @@ import (
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/internal/artifactio"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/store/internal/artifactio"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storecfgfx"
 )
 
 // rwHarness shares one (driver, index) pair between a Writer and a Reader,
@@ -31,7 +31,7 @@ func rwHarness(t *testing.T) (*artifactio.IO, *artifactio.IO, driver.Driver, ind
 	tr := pipeline.NewTransformerRegistry()
 	w := artifactio.New(drv, idx, artifactfx.Hashes(), tr)
 	r := artifactio.New(drv, idx, artifactfx.Hashes(), tr)
-	cfg := storeconfig.ApplyDefaults(domain.StoreConfig{})
+	cfg := storecfgfx.Plain()
 	return w, r, drv, idx, cfg
 }
 

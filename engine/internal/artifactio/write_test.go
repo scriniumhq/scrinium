@@ -8,12 +8,12 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/internal/artifactio"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/store/internal/artifactio"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
+	"scrinium.dev/testutil/storecfgfx"
 )
 
 // harness wires a Writer over a localfs driver, in-memory index, the
@@ -27,7 +27,7 @@ func harness(t *testing.T) (*artifactio.IO, domain.StoreConfig) {
 		artifactfx.Hashes(),
 		pipeline.NewTransformerRegistry(),
 	)
-	cfg := storeconfig.ApplyDefaults(domain.StoreConfig{})
+	cfg := storecfgfx.Plain()
 	return w, cfg
 }
 

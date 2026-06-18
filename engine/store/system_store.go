@@ -9,8 +9,8 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/internal/artifactio"
 	"scrinium.dev/engine/namedstore"
-	"scrinium.dev/engine/store/internal/artifactio"
 	"scrinium.dev/internal/slogx"
 )
 
