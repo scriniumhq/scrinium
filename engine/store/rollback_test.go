@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // putWithSession is a one-liner Put helper for rollback tests.
@@ -40,17 +41,6 @@ func putWithRetention(t *testing.T, s store.Store, sid domain.SessionID, payload
 }
 
 // walkCount returns the number of user-visible manifests.
-func walkCount(t *testing.T, s store.Store) int {
-	t.Helper()
-	n := 0
-	if err := s.Walk(context.Background(), func(domain.Manifest) error {
-		n++
-		return nil
-	}); err != nil {
-		t.Fatalf("Walk: %v", err)
-	}
-	return n
-}
 
 // --- Empty session ID guard ---
 
@@ -84,7 +74,7 @@ func TestRollbackSession_SingleArtifactDeleted(t *testing.T) {
 	if _, err := s.Get(context.Background(), id); !errors.Is(err, errs.ErrArtifactNotFound) {
 		t.Fatalf("artifact should be gone, got Get err = %v", err)
 	}
-	if got := walkCount(t, s); got != 0 {
+	if got := storekit.WalkCount(t, s); got != 0 {
 		t.Errorf("Walk count: got %d, want 0", got)
 	}
 }
@@ -101,7 +91,7 @@ func TestRollbackSession_AllArtifactsInSessionDeleted(t *testing.T) {
 	if err := s.RollbackSession(context.Background(), "imp-2"); err != nil {
 		t.Fatalf("RollbackSession: %v", err)
 	}
-	if got := walkCount(t, s); got != 0 {
+	if got := storekit.WalkCount(t, s); got != 0 {
 		t.Errorf("Walk count after rollback: got %d, want 0", got)
 	}
 }
@@ -124,7 +114,7 @@ func TestRollbackSession_OtherSessionsUntouched(t *testing.T) {
 			t.Errorf("artifact %q should still exist, got Get err = %v", kept, err)
 		}
 	}
-	if got := walkCount(t, s); got != 2 {
+	if got := storekit.WalkCount(t, s); got != 2 {
 		t.Errorf("Walk count: got %d, want 2", got)
 	}
 }
@@ -148,7 +138,7 @@ func TestRollbackSession_RetentionBlocksWholeSession(t *testing.T) {
 			t.Errorf("artifact %q must survive blocked rollback, got %v", id, err)
 		}
 	}
-	if got := walkCount(t, s); got != 3 {
+	if got := storekit.WalkCount(t, s); got != 3 {
 		t.Errorf("Walk count: got %d, want 3 (atomic refusal)", got)
 	}
 }
@@ -163,7 +153,7 @@ func TestRollbackSession_ExpiredRetentionAllowsRollback(t *testing.T) {
 	if err := s.RollbackSession(context.Background(), "imp-5"); err != nil {
 		t.Fatalf("RollbackSession: %v", err)
 	}
-	if got := walkCount(t, s); got != 0 {
+	if got := storekit.WalkCount(t, s); got != 0 {
 		t.Errorf("Walk count: got %d, want 0", got)
 	}
 }
@@ -272,7 +262,7 @@ func TestRollbackSession_ResumesAfterPartialDelete(t *testing.T) {
 			t.Errorf("artifact %q should be gone, got %v", id, err)
 		}
 	}
-	if got := walkCount(t, s); got != 0 {
+	if got := storekit.WalkCount(t, s); got != 0 {
 		t.Errorf("Walk count: got %d, want 0", got)
 	}
 }

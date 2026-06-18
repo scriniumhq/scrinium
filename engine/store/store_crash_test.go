@@ -13,6 +13,7 @@ import (
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
 	"scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // Crash-consistency: a Put interrupted at any single I/O write must
@@ -100,14 +101,14 @@ func TestCrash_PutTornAtEveryWrite_IsAtomic(t *testing.T) {
 			s2 := env.reopenClean(t)
 			defer s2.Close()
 
-			present := walkIDs(t, s2)
+			present := storekit.WalkIDs(t, s2)
 			if putErr == nil {
 				// The store completed (possibly via internal retry past
 				// the one-shot fault): artifact must be present & exact.
 				if _, ok := present[id]; !ok {
 					t.Fatalf("Put reported success but artifact %s absent after reopen", id)
 				}
-				if got := getBytes(t, s2, id); !bytes.Equal(got, payload) {
+				if got := storekit.GetBytes(t, s2, id); !bytes.Equal(got, payload) {
 					t.Fatalf("Put succeeded but content torn after reopen")
 				}
 				return
@@ -119,7 +120,7 @@ func TestCrash_PutTornAtEveryWrite_IsAtomic(t *testing.T) {
 				t.Fatalf("k=%d: %d artifacts visible after a failed Put, want 0 or 1", k, len(present))
 			}
 			for gotID := range present {
-				if got := getBytes(t, s2, gotID); !bytes.Equal(got, payload) {
+				if got := storekit.GetBytes(t, s2, gotID); !bytes.Equal(got, payload) {
 					t.Fatalf("k=%d: surviving artifact %s is torn (content mismatch)", k, gotID)
 				}
 			}

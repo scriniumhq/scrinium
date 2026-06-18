@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"sort"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // SystemStore behavioural contract (ADR-57), exercised against the
@@ -141,10 +143,10 @@ func TestSystemStore_WalkByPrefix(t *testing.T) {
 
 	// scrub/ is state-only and never touched by init, so an absolute
 	// assertion is safe here (unlike the empty-prefix case below).
-	got := walkNames(t, ss, "scrub/")
+	got := storekit.WalkNames(t, ss, "scrub/")
 	sort.Strings(got)
 	want := []string{"scrub/cursor", "scrub/last-failed"}
-	if !equalSlices(got, want) {
+	if !slices.Equal(got, want) {
 		t.Errorf("Walk(scrub/): got %v, want %v", got, want)
 	}
 }
@@ -155,7 +157,7 @@ func TestSystemStore_WalkEmptyPrefixScansAll(t *testing.T) {
 
 	// Baseline: a freshly initialised store already exposes
 	// its initial config version through Walk. Assert on the delta.
-	before := walkNames(t, ss, "")
+	before := storekit.WalkNames(t, ss, "")
 
 	for _, n := range []string{"config/v1", "scrub/cursor", "gc/cursor"} {
 		if err := ss.Put(ctx, systemstore.Artifact{Name: n, Payload: bytes.NewReader([]byte(n))}); err != nil {
@@ -163,10 +165,10 @@ func TestSystemStore_WalkEmptyPrefixScansAll(t *testing.T) {
 		}
 	}
 
-	got := setDiff(walkNames(t, ss, ""), before)
+	got := setDiff(storekit.WalkNames(t, ss, ""), before)
 	sort.Strings(got)
 	want := []string{"config/v1", "gc/cursor", "scrub/cursor"}
-	if !equalSlices(got, want) {
+	if !slices.Equal(got, want) {
 		t.Errorf(`Walk("") delta: got %v, want %v`, got, want)
 	}
 }
@@ -221,18 +223,6 @@ func TestSystemStore_InvalidNamesRejected(t *testing.T) {
 // --- helpers ---
 
 // walkNames collects every name Walk yields under prefix.
-func walkNames(t *testing.T, ss systemstore.Store, prefix string) []string {
-	t.Helper()
-	var names []string
-	err := ss.Walk(context.Background(), prefix, func(name string, _ domain.Manifest) error {
-		names = append(names, name)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("Walk(%q): %v", prefix, err)
-	}
-	return names
-}
 
 // countManifests returns the number of user manifest rows in the index.
 func countManifests(t *testing.T, idx index.StoreIndex) int {
@@ -261,17 +251,4 @@ func setDiff(got, base []string) []string {
 		}
 	}
 	return out
-}
-
-// equalSlices reports whether a and b hold the same elements in order.
-func equalSlices(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

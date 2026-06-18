@@ -18,6 +18,7 @@ import (
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
 	"scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // --- shared test fixtures and helpers ---------------------------
@@ -158,14 +159,6 @@ func (c *capturedReports) count() int {
 // stage orphan files at the same paths the real Put pipeline would
 // produce — the only difference is that nothing was inserted into
 // the index.
-func blobPathForRef(t *testing.T, ref string) string {
-	t.Helper()
-	p, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
-	if err != nil {
-		t.Fatalf("artifact.BlobPath(%q): %v", ref, err)
-	}
-	return p
-}
 
 // manifestPathForID is the manifest-side counterpart. It takes the
 // ManifestDigest, since manifest files are named by their digest.
@@ -212,7 +205,7 @@ func TestRecovery_RemovesOrphanBlob_AtInit(t *testing.T) {
 	f := newRecoveryFixture(t)
 
 	ref := fakeRef('a')
-	orphanPath := blobPathForRef(t, ref)
+	orphanPath := storekit.BlobPathForRef(t, ref)
 	f.stageFile(t, orphanPath, "orphan blob content")
 
 	_ = f.initStore(t)
@@ -335,13 +328,13 @@ func TestRecovery_OpenStore_RemovesOrphanInjectedAfterInit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	liveDigest := mustDigest(t, s, liveID)
+	liveDigest := storekit.MustDigest(t, s, liveID)
 
 	// Plant an orphan blob at a path the index does not know about
 	// — simulates a crash in Put after Driver.Rename(staging→final)
 	// but before IndexManifest.
 	orphanRef := fakeRef('z')
-	orphanBlob := blobPathForRef(t, orphanRef)
+	orphanBlob := storekit.BlobPathForRef(t, orphanRef)
 	f.stageFile(t, orphanBlob, "abandoned blob")
 
 	// Plant an orphan manifest similarly — crash after Driver.Put
@@ -418,7 +411,7 @@ func TestRecovery_PublishesEvent_PayloadShape(t *testing.T) {
 	f := newRecoveryFixture(t)
 
 	// Stage one of each to populate every counter.
-	f.stageFile(t, blobPathForRef(t, fakeRef('1')), "x")
+	f.stageFile(t, storekit.BlobPathForRef(t, fakeRef('1')), "x")
 	f.stageFile(t, manifestPathForID(t, domain.ManifestDigest(fakeRef('2'))), "{}")
 	f.stageFile(t, ".staging/leftover-3", "x")
 
@@ -448,7 +441,7 @@ func TestRecovery_NoPublisher_NoPanic(t *testing.T) {
 	d := driverfx.LocalFS(t)
 
 	ref := fakeRef('q')
-	orphan := blobPathForRef(t, ref)
+	orphan := storekit.BlobPathForRef(t, ref)
 	if err := d.Put(context.Background(), orphan, strings.NewReader("x")); err != nil {
 		t.Fatalf("Put: %v", err)
 	}

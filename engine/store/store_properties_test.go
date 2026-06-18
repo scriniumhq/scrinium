@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"math/rand"
 	"os"
 	"testing"
@@ -13,7 +12,8 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	storefx2 "scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // Store invariants — the laws that hold for ALL inputs. These subsume
@@ -44,33 +44,8 @@ func mkArtifact(b []byte) domain.Artifact {
 
 // getBytes Gets id and returns the full payload, failing the test on
 // any error. The handle is always closed.
-func getBytes(t *testing.T, s store.Store, id domain.ArtifactID) []byte {
-	t.Helper()
-	rh, err := s.Get(context.Background(), id)
-	if err != nil {
-		t.Fatalf("Get(%s): %v", id, err)
-	}
-	defer rh.Close()
-	got, err := io.ReadAll(rh)
-	if err != nil {
-		t.Fatalf("ReadAll(%s): %v", id, err)
-	}
-	return got
-}
 
 // walkIDs returns the set of ArtifactIDs the store reports.
-func walkIDs(t *testing.T, s store.Store) map[domain.ArtifactID]struct{} {
-	t.Helper()
-	out := make(map[domain.ArtifactID]struct{})
-	err := s.Walk(context.Background(), func(m domain.Manifest) error {
-		out[m.ArtifactID] = struct{}{}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("Walk: %v", err)
-	}
-	return out
-}
 
 // randBytes returns n pseudo-random bytes from rng. Shared by the
 // seeded property drivers below.
@@ -84,12 +59,12 @@ func randBytes(rng *rand.Rand, n int) []byte {
 // target and the seeded driver: for any payload, Get(Put(x)) == x.
 func checkRoundTrip(t *testing.T, payload []byte) {
 	t.Helper()
-	s := storefx2.Init(t)
+	s := storefx.Init(t)
 	id, err := s.Put(context.Background(), mkArtifact(payload))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	if got := getBytes(t, s, id); !bytes.Equal(got, payload) {
+	if got := storekit.GetBytes(t, s, id); !bytes.Equal(got, payload) {
 		t.Fatalf("round-trip mismatch: got %d bytes, want %d", len(got), len(payload))
 	}
 }
@@ -121,7 +96,7 @@ func TestStore_RoundTrip_Seeded(t *testing.T) {
 // lives at the blob layer, which is what we assert.
 func checkContentAddressing(t *testing.T, a, b []byte) {
 	t.Helper()
-	s, root := storefx2.InitWithRoot(t)
+	s, root := storefx.InitWithRoot(t)
 	ctx := context.Background()
 
 	id1, err := s.Put(ctx, mkArtifact(a))
@@ -151,15 +126,15 @@ func checkContentAddressing(t *testing.T, a, b []byte) {
 	if !bytes.Equal(a, b) {
 		wantBlobs = 2
 	}
-	if n := storefx2.OnDiskAt(root).BlobCount(); n != wantBlobs {
+	if n := storefx.OnDiskAt(root).BlobCount(); n != wantBlobs {
 		t.Fatalf("blob count: got %d, want %d (a==b: %v)", n, wantBlobs, bytes.Equal(a, b))
 	}
 
 	// Both artifacts still read back correctly.
-	if got := getBytes(t, s, id1); !bytes.Equal(got, a) {
+	if got := storekit.GetBytes(t, s, id1); !bytes.Equal(got, a) {
 		t.Fatalf("id1 read-back mismatch")
 	}
-	if got := getBytes(t, s, id2); !bytes.Equal(got, b) {
+	if got := storekit.GetBytes(t, s, id2); !bytes.Equal(got, b) {
 		t.Fatalf("id2 read-back mismatch")
 	}
 }
@@ -185,24 +160,24 @@ func TestStore_ContentAddressing_Seeded(t *testing.T) {
 // and reopening preserves every artifact's content and the Walk set.
 func checkReopenStable(t *testing.T, payload []byte) {
 	t.Helper()
-	s, r := storefx2.InitPlain(t)
+	s, r := storefx.InitPlain(t)
 	ctx := context.Background()
 
 	id, err := s.Put(ctx, mkArtifact(payload))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	before := getBytes(t, s, id)
-	beforeSet := walkIDs(t, s)
+	before := storekit.GetBytes(t, s, id)
+	beforeSet := storekit.WalkIDs(t, s)
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
 	s2 := r.Open(t)
-	if got := getBytes(t, s2, id); !bytes.Equal(got, before) {
+	if got := storekit.GetBytes(t, s2, id); !bytes.Equal(got, before) {
 		t.Fatalf("content changed across reopen")
 	}
-	afterSet := walkIDs(t, s2)
+	afterSet := storekit.WalkIDs(t, s2)
 	if len(afterSet) != len(beforeSet) {
 		t.Fatalf("Walk set changed across reopen: %d -> %d", len(beforeSet), len(afterSet))
 	}
@@ -248,9 +223,9 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 		tc := tc
 		t.Run(string(tc.mode), func(t *testing.T) {
 			cfg := domain.StoreConfig{ManifestCrypto: tc.mode}
-			_, r := storefx2.InitEncrypted(t, "correct-horse", store.WithConfig(cfg))
+			_, r := storefx.InitEncrypted(t, "correct-horse", store.WithConfig(cfg))
 			s := r.Open(t,
-				store.WithPassphrase(storefx2.StaticPP("correct-horse")),
+				store.WithPassphrase(storefx.StaticPP("correct-horse")),
 				store.WithAutoUnlock(),
 				store.WithConfig(cfg),
 			)
@@ -267,12 +242,12 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 			}
 
 			// Round-trip with the right key.
-			if got := getBytes(t, s, id); !bytes.Equal(got, payload) {
+			if got := storekit.GetBytes(t, s, id); !bytes.Equal(got, payload) {
 				t.Fatalf("encrypted round-trip mismatch")
 			}
 
 			// Inspect the raw manifest file on disk.
-			mp := storefx2.OnDiskAt(r.Root()).ManifestPath(mustDigest(t, s, id))
+			mp := storefx.OnDiskAt(r.Root()).ManifestPath(storekit.MustDigest(t, s, id))
 			if mp == "" {
 				t.Fatalf("ManifestPath returned empty for %s", id)
 			}
@@ -288,7 +263,7 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 
 			// Wrong passphrase must fail closed.
 			_, err = r.TryOpen(t,
-				store.WithPassphrase(storefx2.StaticPP("wrong")),
+				store.WithPassphrase(storefx.StaticPP("wrong")),
 				store.WithAutoUnlock(),
 				store.WithConfig(cfg),
 			)

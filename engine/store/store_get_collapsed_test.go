@@ -19,7 +19,8 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	storefx2 "scrinium.dev/testutil/storefx"
+	storefx "scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // TestGet_ReadAt: random access mid-stream for both layouts. Target
@@ -42,7 +43,7 @@ func TestGet_ReadAt(t *testing.T) {
 			if tc.inline {
 				s, _ = newInlineStore(t, 100)
 			} else {
-				s, _ = storefx2.InitWithRoot(t)
+				s, _ = storefx.InitWithRoot(t)
 			}
 			id, err := s.Put(context.Background(), payload(tc.content))
 			if err != nil {
@@ -75,14 +76,14 @@ func TestGet_ReadAt(t *testing.T) {
 // ErrCorruptedBlob.
 func TestGet_Integrity(t *testing.T) {
 	t.Run("corrupted manifest", func(t *testing.T) {
-		s, root := storefx2.InitWithRoot(t)
+		s, root := storefx.InitWithRoot(t)
 		id, err := s.Put(context.Background(), payload("tamper me"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		// The manifest file is named by its ManifestDigest, resolved from
 		// the floating handle through the store.
-		path := storefx2.OnDiskAt(root).ManifestPath(mustDigest(t, s, id))
+		path := storefx.OnDiskAt(root).ManifestPath(storekit.MustDigest(t, s, id))
 		raw, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("read manifest: %v", err)
@@ -100,12 +101,12 @@ func TestGet_Integrity(t *testing.T) {
 	})
 
 	t.Run("missing blob", func(t *testing.T) {
-		s, root := storefx2.InitWithRoot(t)
+		s, root := storefx.InitWithRoot(t)
 		id, err := s.Put(context.Background(), payload("blob will vanish"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, p := range storefx2.OnDiskAt(root).BlobFiles() {
+		for _, p := range storefx.OnDiskAt(root).BlobFiles() {
 			_ = os.Remove(p)
 		}
 		// Get reads only the manifest, so it still succeeds; the
@@ -124,7 +125,7 @@ func TestGet_Integrity(t *testing.T) {
 // TestGet_ReadHandleSemantics: the manifest is available before the
 // first Read, and Close is idempotent.
 func TestGet_ReadHandleSemantics(t *testing.T) {
-	s, _ := storefx2.InitWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(), payload("semantics"),
 		domain.WithSession("sess-x"))
 	if err != nil {

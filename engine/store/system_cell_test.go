@@ -5,11 +5,13 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"sort"
 	"testing"
 
 	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"
+	"scrinium.dev/testutil/storekit"
 )
 
 // SystemStore keep=0 (exclusive-cell) routing (ADR-100/101). The
@@ -138,10 +140,10 @@ func TestSystemStore_WalkIncludesCells(t *testing.T) {
 		t.Fatalf("Put versioned: %v", err)
 	}
 
-	got := walkNames(t, ss, "celltest/")
+	got := storekit.WalkNames(t, ss, "celltest/")
 	sort.Strings(got)
 	want := []string{"celltest/cfg", "celltest/lease"}
-	if !equalSlices(got, want) {
+	if !slices.Equal(got, want) {
 		t.Errorf("Walk(celltest/): got %v, want %v (cell must be included)", got, want)
 	}
 }

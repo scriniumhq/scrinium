@@ -11,7 +11,8 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	storefx2 "scrinium.dev/testutil/storefx"
+	storefx "scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // Model-based stateful test. A reference model (content the store
@@ -90,7 +91,7 @@ func runModelProgram(t *testing.T, program []byte) {
 	ctx := context.Background()
 	namespaces := []string{"alpha", "beta"}
 
-	s, r := storefx2.InitPlain(t)
+	s, r := storefx.InitPlain(t)
 	root := r.Root()
 	var m model
 
@@ -143,7 +144,7 @@ func runModelProgram(t *testing.T, program []byte) {
 			}
 			selB, _ := next()
 			e := m.live[int(selB)%len(m.live)]
-			if got := getBytes(t, s, e.id); !bytes.Equal(got, e.content) {
+			if got := storekit.GetBytes(t, s, e.id); !bytes.Equal(got, e.content) {
 				t.Fatalf("step %d Get(%s): content mismatch", step, e.id)
 			}
 
@@ -182,7 +183,7 @@ func reconcileModel(t *testing.T, s store.Store, root string, m *model, step int
 
 	// Every live artifact reads back exactly.
 	for _, e := range m.live {
-		if got := getBytes(t, s, e.id); !bytes.Equal(got, e.content) {
+		if got := storekit.GetBytes(t, s, e.id); !bytes.Equal(got, e.content) {
 			t.Fatalf("step %d reconcile: Get(%s) content mismatch", step, e.id)
 		}
 	}
@@ -192,7 +193,7 @@ func reconcileModel(t *testing.T, s store.Store, root string, m *model, step int
 	for _, e := range m.live {
 		want[e.id] = struct{}{}
 	}
-	got := walkIDs(t, s)
+	got := storekit.WalkIDs(t, s)
 	if len(got) != len(want) {
 		t.Fatalf("step %d reconcile: Walk size got %d want %d", step, len(got), len(want))
 	}
@@ -207,9 +208,9 @@ func reconcileModel(t *testing.T, s store.Store, root string, m *model, step int
 	// the *reachable* set, not the physical file count — assert the
 	// distinct-content lower bound is present and that we never have
 	// fewer blobs than distinct contents.
-	if want := m.distinctContents(); storefx2.OnDiskAt(root).BlobCount() < want {
+	if want := m.distinctContents(); storefx.OnDiskAt(root).BlobCount() < want {
 		t.Fatalf("step %d reconcile: blob count %d < distinct live contents %d",
-			step, storefx2.OnDiskAt(root).BlobCount(), want)
+			step, storefx.OnDiskAt(root).BlobCount(), want)
 	}
 }
 

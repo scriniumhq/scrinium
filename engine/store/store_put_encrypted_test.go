@@ -16,7 +16,8 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
-	storefx2 "scrinium.dev/testutil/storefx"
+	storefx "scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // initEncryptedWithCrypto bootstraps an encrypted Store with the
@@ -27,9 +28,9 @@ import (
 func initEncryptedWithCrypto(t *testing.T, crypto domain.ManifestCrypto) store.Store {
 	t.Helper()
 	cfg := domain.StoreConfig{ManifestCrypto: crypto}
-	_, r := storefx2.InitEncrypted(t, "pw", store.WithConfig(cfg))
+	_, r := storefx.InitEncrypted(t, "pw", store.WithConfig(cfg))
 	return r.Open(t,
-		store.WithPassphrase(storefx2.StaticPP("pw")),
+		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithAutoUnlock(),
 		store.WithConfig(cfg),
 	)
@@ -49,7 +50,7 @@ func payloadReader(s string) (a domain.Artifact, raw []byte) {
 // --- Put on Plain Store still works ---
 
 func TestPut_PlainStillWorks(t *testing.T) {
-	s, _ := storefx2.InitWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	a, _ := payloadReader("plain payload")
 	id, err := s.Put(context.Background(), a)
 	if err != nil {
@@ -92,10 +93,10 @@ func TestPut_Paranoid_Succeeds(t *testing.T) {
 
 func TestPut_EncryptedManifestRejectedWhenLocked(t *testing.T) {
 	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
-	_, r := storefx2.InitEncrypted(t, "pw", store.WithConfig(cfg))
+	_, r := storefx.InitEncrypted(t, "pw", store.WithConfig(cfg))
 	// Open WITHOUT AutoUnlock: Store is in StateLocked.
 	s := r.Open(t,
-		store.WithPassphrase(storefx2.StaticPP("pw")),
+		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithConfig(cfg),
 	)
 
@@ -132,7 +133,7 @@ func readManifestRaw(t *testing.T, s store.Store, id domain.ArtifactID) []byte {
 	// The manifest file is named by its ManifestDigest, not by the floating
 	// handle. Resolve the digest, then replicate the shard layout
 	// (manifests/<x>/<y>/<digest>) the way blobpath.ManifestPath does.
-	digest := mustDigest(t, s, id)
+	digest := storekit.MustDigest(t, s, id)
 	dStr := string(digest)
 	if len(dStr) < 4 {
 		t.Fatal("digest too short")
@@ -202,11 +203,11 @@ func TestPutGet_Paranoid_RoundTrip(t *testing.T) {
 // keys, the resolver is nil, and ErrKeyNotFound surfaces.
 func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
 	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
-	_, r := storefx2.InitEncrypted(t, "pw", store.WithConfig(cfg))
+	_, r := storefx.InitEncrypted(t, "pw", store.WithConfig(cfg))
 
 	// Open with AutoUnlock first to write a manifest.
 	s := r.Open(t,
-		store.WithPassphrase(storefx2.StaticPP("pw")),
+		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithAutoUnlock(),
 		store.WithConfig(cfg),
 	)
@@ -218,7 +219,7 @@ func TestGet_LockedRejectsEncryptedManifest(t *testing.T) {
 
 	// Reopen WITHOUT AutoUnlock — Locked.
 	locked := r.Open(t,
-		store.WithPassphrase(storefx2.StaticPP("pw")),
+		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithConfig(cfg),
 	)
 
@@ -266,7 +267,7 @@ func TestPut_EncryptedBlobsDoNotDedup(t *testing.T) {
 	cfg := domain.StoreConfig{Pipeline: []string{"aes-gcm"}}
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
-	s := storefx2.InitOn(t, drv,
+	s := storefx.InitOn(t, drv,
 		store.WithStoreIndex(idx),
 		store.WithReadRegistry(reg),
 		store.WithConfig(cfg),
@@ -294,7 +295,7 @@ func TestPut_EncryptedBlobsDoNotDedup(t *testing.T) {
 
 	// (b) Three blobs on disk — encrypted blobs do NOT dedup under
 	// Disabled. This is the assertion that read "1" before ADR-58.
-	disk := storefx2.OnDiskAt(drv.Root())
+	disk := storefx.OnDiskAt(drv.Root())
 	if blobCount := disk.BlobCount(); blobCount != 3 {
 		t.Errorf("Disabled: 3 Puts of same plaintext should yield 3 blobs, got %d", blobCount)
 	}
@@ -357,7 +358,7 @@ func (r *fixedKeyIDResolver) ResolveWriteKey(pipeline.KeyContext) string { retur
 // stronger "ArtifactID locks the file as a whole" invariant.
 func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
-	_, r := storefx2.InitEncrypted(t, "pw", store.WithConfig(cfg))
+	_, r := storefx.InitEncrypted(t, "pw", store.WithConfig(cfg))
 
 	// AutoUnlock so the engine has a DEK; then we override the
 	// auto-promoted resolver with one whose ResolveWriteKey is
@@ -366,7 +367,7 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	// unwrapped — we read it indirectly through the resolver
 	// the auto-promotion installed.
 	autoOpened := r.Open(t,
-		store.WithPassphrase(storefx2.StaticPP("pw")),
+		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithAutoUnlock(),
 		store.WithConfig(cfg),
 	)
@@ -387,11 +388,11 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 	custom := &fixedKeyIDResolver{keyID: "tenant-X", dek: dek}
 	s, err := store.OpenStore(context.Background(), r.Driver(),
 		store.WithConfig(cfg),
-		store.WithPassphrase(storefx2.StaticPP("pw")),
+		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithAutoUnlock(),
 		store.WithKeyResolver(custom),
 		store.WithStoreIndex(fresh),
-		store.WithHashRegistry(storefx2.Hashes()),
+		store.WithHashRegistry(storefx.Hashes()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -437,7 +438,7 @@ func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
 func manifestPathFor(t *testing.T, s store.Store, id domain.ArtifactID) string {
 	t.Helper()
 	// Manifest files are named by their ManifestDigest, not the handle.
-	dStr := string(mustDigest(t, s, id))
+	dStr := string(storekit.MustDigest(t, s, id))
 	if len(dStr) < 4 {
 		t.Fatal("digest too short")
 	}
@@ -467,11 +468,11 @@ func (alwaysFailingResolver) ResolveWriteKey(pipeline.KeyContext) string { retur
 // row count.
 func TestWalk_ParanoidStoreWalksWithoutDecryption(t *testing.T) {
 	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
-	_, r := storefx2.InitEncrypted(t, "pw", store.WithConfig(cfg))
+	_, r := storefx.InitEncrypted(t, "pw", store.WithConfig(cfg))
 
 	// Phase 1: Put with the auto-promoted resolver.
 	s1 := r.Open(t,
-		store.WithPassphrase(storefx2.StaticPP("pw")),
+		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithAutoUnlock(),
 		store.WithConfig(cfg),
 	)
@@ -493,7 +494,7 @@ func TestWalk_ParanoidStoreWalksWithoutDecryption(t *testing.T) {
 	// reuse the original idx so the manifests stay in place —
 	// that is exactly what r.Open guarantees.
 	s2 := r.Open(t,
-		store.WithPassphrase(storefx2.StaticPP("pw")),
+		store.WithPassphrase(storefx.StaticPP("pw")),
 		store.WithAutoUnlock(),
 		store.WithKeyResolver(alwaysFailingResolver{}),
 		store.WithConfig(cfg),

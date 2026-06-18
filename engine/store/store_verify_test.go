@@ -14,7 +14,8 @@ import (
 	"scrinium.dev/event"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
-	storefx2 "scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // scrubCapture collects every ScrubFailedPayload published by the
@@ -59,7 +60,7 @@ func (c *scrubCapture) last(t *testing.T) event.ScrubFailedPayload {
 // --- Happy path ---
 
 func TestVerify_TargetBlob_Roundtrip(t *testing.T) {
-	s, _ := storefx2.InitWithRoot(t)
+	s, _ := storefx.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("verify me"),
 	)
@@ -91,7 +92,7 @@ func TestVerify_TargetBlob_TamperedBytes_ReturnsCorruptedBlob(t *testing.T) {
 	scrub := newScrubCapture()
 	bus.Subscribe(scrub.handle)
 
-	s, root := storefx2.InitWithRoot(t, store.WithPublisher(bus))
+	s, root := storefx.InitWithRoot(t, store.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("tamper target"),
 	)
@@ -101,8 +102,8 @@ func TestVerify_TargetBlob_TamperedBytes_ReturnsCorruptedBlob(t *testing.T) {
 
 	// Read the manifest off-disk so we can find the BlobRef and
 	// flip a byte in the corresponding blob file.
-	blobRef := readBlobRef(t, s, id)
-	blobPath := filepath.Join(root, blobPathForRef(t, string(blobRef)))
+	blobRef := storekit.ReadBlobRef(t, s, id)
+	blobPath := filepath.Join(root, storekit.BlobPathForRef(t, string(blobRef)))
 	content, err := os.ReadFile(blobPath)
 	if err != nil {
 		t.Fatalf("read blob: %v", err)
@@ -132,7 +133,7 @@ func TestVerify_TargetBlob_Missing_ReturnsCorruptedBlob(t *testing.T) {
 	scrub := newScrubCapture()
 	bus.Subscribe(scrub.handle)
 
-	s, root := storefx2.InitWithRoot(t, store.WithPublisher(bus))
+	s, root := storefx.InitWithRoot(t, store.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("delete the blob"),
 	)
@@ -140,8 +141,8 @@ func TestVerify_TargetBlob_Missing_ReturnsCorruptedBlob(t *testing.T) {
 		t.Fatalf("Put: %v", err)
 	}
 
-	blobRef := readBlobRef(t, s, id)
-	blobPath := filepath.Join(root, blobPathForRef(t, string(blobRef)))
+	blobRef := storekit.ReadBlobRef(t, s, id)
+	blobPath := filepath.Join(root, storekit.BlobPathForRef(t, string(blobRef)))
 	if err := os.Remove(blobPath); err != nil {
 		t.Fatalf("remove blob: %v", err)
 	}
@@ -202,15 +203,6 @@ func TestVerify_CancelledContext(t *testing.T) {
 // readBlobRef reads the manifest from the Store and returns the
 // BlobRef. Implementation: open the artifact via Get and read the
 // manifest off the resulting handle.
-func readBlobRef(t *testing.T, s store.Store, id domain.ArtifactID) domain.BlobRef {
-	t.Helper()
-	rh, err := s.Get(context.Background(), id)
-	if err != nil {
-		t.Fatalf("Get for manifest: %v", err)
-	}
-	defer rh.Close()
-	return rh.Manifest().PrimaryBlobRef()
-}
 
 // --- M2.3: encrypted manifest is transparent to Verify ---
 
@@ -226,18 +218,18 @@ func TestVerify_EncryptedManifest_Succeeds(t *testing.T) {
 
 			if _, _, err := store.InitStore(context.Background(), drv,
 				store.WithConfig(cfg),
-				store.WithPassphrase(storefx2.StaticPP("pw")),
+				store.WithPassphrase(storefx.StaticPP("pw")),
 				store.WithStoreIndex(idx),
-				store.WithHashRegistry(storefx2.Hashes()),
+				store.WithHashRegistry(storefx.Hashes()),
 			); err != nil {
 				t.Fatalf("InitStore: %v", err)
 			}
 			s, err := store.OpenStore(context.Background(), drv,
 				store.WithConfig(cfg),
-				store.WithPassphrase(storefx2.StaticPP("pw")),
+				store.WithPassphrase(storefx.StaticPP("pw")),
 				store.WithAutoUnlock(),
 				store.WithStoreIndex(idx),
-				store.WithHashRegistry(storefx2.Hashes()),
+				store.WithHashRegistry(storefx.Hashes()),
 			)
 			if err != nil {
 				t.Fatalf("OpenStore: %v", err)

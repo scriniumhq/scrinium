@@ -18,7 +18,8 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
-	storefx2 "scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // TestDelete_RemovesManifest: a logical delete removes the manifest
@@ -44,7 +45,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 			if tc.inline {
 				s, root = newInlineStore(t, 100)
 			} else {
-				s, root = storefx2.InitWithRoot(t)
+				s, root = storefx.InitWithRoot(t)
 			}
 			id, err := s.Put(context.Background(), payload("delete me"))
 			if err != nil {
@@ -53,12 +54,12 @@ func TestDelete_RemovesManifest(t *testing.T) {
 			// Capture the on-disk digest (the manifest filename) before the
 			// delete removes the artifact — afterwards the handle no longer
 			// resolves.
-			digest := mustDigest(t, s, id)
+			digest := storekit.MustDigest(t, s, id)
 			if err := s.Delete(context.Background(), id); err != nil {
 				t.Fatalf("Delete: %v", err)
 			}
 
-			disk := storefx2.OnDiskAt(root)
+			disk := storefx.OnDiskAt(root)
 			if disk.ManifestExists(digest) {
 				t.Errorf("manifest file should be gone")
 			}
@@ -97,7 +98,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 // the public API, so this is the store-level contract the model test
 // (which checks content/Walk/blob-count, not refcounts) does not cover.
 func TestStore_RefCountLifecycle(t *testing.T) {
-	s, root := storefx2.InitWithRoot(t)
+	s, root := storefx.InitWithRoot(t)
 	const text = "shared content for delete"
 
 	idA, err := s.Put(context.Background(), payload(text),
@@ -113,7 +114,7 @@ func TestStore_RefCountLifecycle(t *testing.T) {
 	if idA == idB {
 		t.Fatalf("shared-blob setup broken: ids equal")
 	}
-	if n := storefx2.OnDiskAt(root).BlobCount(); n != 1 {
+	if n := storefx.OnDiskAt(root).BlobCount(); n != 1 {
 		t.Fatalf("two artifacts should share 1 blob, got %d", n)
 	}
 
@@ -134,7 +135,7 @@ func TestStore_RefCountLifecycle(t *testing.T) {
 		t.Errorf("B payload after deleting A: got %q, want %q", got, text)
 	}
 
-	if n := storefx2.OnDiskAt(root).BlobCount(); n != 1 {
+	if n := storefx.OnDiskAt(root).BlobCount(); n != 1 {
 		t.Errorf("shared blob should remain after deleting one referrer: got %d, want 1", n)
 	}
 }

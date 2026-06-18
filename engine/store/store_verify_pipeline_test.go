@@ -12,13 +12,14 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
-	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"
+	zstdstage "scrinium.dev/engine/pipeline/stage/zstd"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
 	"scrinium.dev/testutil/storefx"
+	"scrinium.dev/testutil/storekit"
 )
 
 // --- Helpers ---
@@ -52,15 +53,15 @@ func initPipelineStore(
 // shard rule.
 func pipelineBlobPath(t *testing.T, s store.Store, root string, id domain.ArtifactID) string {
 	t.Helper()
-	ref := readBlobRef(t, s, id)
-	return filepath.Join(root, blobPathForRef(t, string(ref)))
+	ref := storekit.ReadBlobRef(t, s, id)
+	return filepath.Join(root, storekit.BlobPathForRef(t, string(ref)))
 }
 
 // --- Happy path: pipeline-bearing Verify succeeds ---
 
 func TestVerify_Pipeline_Zstd_Succeeds(t *testing.T) {
 	reg := pipeline.NewTransformerRegistry().
-		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
+		Register("zstd", zstdstage.New(zstdstage.Options{}))
 	s, _ := initPipelineStore(t, reg, []string{"zstd"})
 
 	// Highly compressible input so the pipeline actually does
@@ -109,7 +110,7 @@ func TestVerify_Pipeline_ZstdThenAESGCM_Succeeds(t *testing.T) {
 	}
 	aesFactory, _ := aesgcm.New(dek)
 	reg := pipeline.NewTransformerRegistry().
-		Register("zstd", scriniumzstd.New(scriniumzstd.Options{})).
+		Register("zstd", zstdstage.New(zstdstage.Options{})).
 		Register("aes-gcm", aesFactory)
 	s, _ := initPipelineStore(t, reg, []string{"zstd", "aes-gcm"})
 
@@ -194,7 +195,7 @@ func TestVerify_Pipeline_Zstd_TamperedCiphertext_ReturnsCorruptedBlob(t *testing
 	bus.Subscribe(scrub.handle)
 
 	reg := pipeline.NewTransformerRegistry().
-		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
+		Register("zstd", zstdstage.New(zstdstage.Options{}))
 	s, root := initPipelineStore(t, reg, []string{"zstd"},
 		store.WithPublisher(bus))
 
@@ -235,7 +236,7 @@ func TestVerify_Pipeline_Zstd_TamperedCiphertext_ReturnsCorruptedBlob(t *testing
 
 func TestVerify_Pipeline_MissingBlob_ReturnsCorruptedBlob(t *testing.T) {
 	reg := pipeline.NewTransformerRegistry().
-		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
+		Register("zstd", zstdstage.New(zstdstage.Options{}))
 	s, root := initPipelineStore(t, reg, []string{"zstd"})
 
 	original := bytes.Repeat([]byte("gone "), 128)
@@ -266,7 +267,7 @@ func TestVerify_Pipeline_MissingBlob_ReturnsCorruptedBlob(t *testing.T) {
 
 func TestVerify_Pipeline_ConsistentWithGet(t *testing.T) {
 	reg := pipeline.NewTransformerRegistry().
-		Register("zstd", scriniumzstd.New(scriniumzstd.Options{}))
+		Register("zstd", zstdstage.New(zstdstage.Options{}))
 	s, _ := initPipelineStore(t, reg, []string{"zstd"})
 
 	original := bytes.Repeat([]byte("consistency "), 512)
