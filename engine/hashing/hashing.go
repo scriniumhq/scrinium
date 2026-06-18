@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"hash"
 	"strings"
-	"sync"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
+	reg "scrinium.dev/internal/registry"
 )
 
-// registry implements domain.HashRegistry with an RWMutex so
-// concurrent registration and reads stay safe. In production
-// registration usually happens once (when wiring the stack), but the
-// protection is cheaper than chasing flaky races in tests.
+// registry implements domain.HashRegistry over a registry.Map, which
+// carries the concurrency-safe lock + map so concurrent registration
+// and reads stay safe. In production registration usually happens once
+// (when wiring the stack), but the protection is cheaper than chasing
+// flaky races in tests.
 type registry struct {
-	mu      sync.RWMutex
-	hashers map[string]func() hash.Hash
+	m *reg.Map[func() hash.Hash]
 }
 
 var _ domain.HashRegistry = (*registry)(nil)
@@ -26,7 +26,7 @@ var _ domain.HashRegistry = (*registry)(nil)
 // NewHashRegistry creates an empty hash-algorithm registry. The host
 // application registers factories through Register.
 func NewHashRegistry() domain.HashRegistry {
-	return &registry{hashers: make(map[string]func() hash.Hash)}
+	return &registry{m: reg.New[func() hash.Hash]()}
 }
 
 // Parse splits an "<algo>-<hex>" identifier into its algorithm name
@@ -47,9 +47,7 @@ func (r *registry) Parse(h string) (algo string, raw []byte, err error) {
 
 // NewHasher creates a fresh hash.Hash for the given algorithm.
 func (r *registry) NewHasher(algo string) (hash.Hash, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	fn, ok := r.hashers[algo]
+	fn, ok := r.m.Get(algo)
 	if !ok {
 		return nil, errs.ErrUnsupportedAlgorithm
 	}
@@ -65,9 +63,7 @@ func (r *registry) Format(algo string, raw []byte) string {
 // Register registers a hasher factory under an algorithm name and
 // returns the registry for chaining.
 func (r *registry) Register(algo string, fn func() hash.Hash) domain.HashRegistry {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.hashers[algo] = fn
+	r.m.Set(algo, fn)
 	return r
 }
 
@@ -89,16 +85,16 @@ var NamingKeyPublic = []byte("scrinium/artifact-id/v1")
 // Hashing the concatenation is mandatory: with an empty identity
 // partition md is a constant token, so a raw cd‖md would expose cd. H
 // keeps the output indistinguishable from random.
-func Handle(reg domain.HashRegistry, algo string, nk []byte, cd domain.ContentHash, md string, nonce []byte) (domain.ArtifactID, error) {
+func Handle(hashes domain.HashRegistry, algo string, nk []byte, cd domain.ContentHash, md string, nonce []byte) (domain.ArtifactID, error) {
 	cdRaw, err := hex.DecodeString(string(cd))
 	if err != nil {
 		return "", fmt.Errorf("hashing: decode cd: %w", err)
 	}
-	_, mdRaw, err := reg.Parse(md)
+	_, mdRaw, err := hashes.Parse(md)
 	if err != nil {
 		return "", fmt.Errorf("hashing: parse md: %w", err)
 	}
-	h, err := reg.NewHasher(algo)
+	h, err := hashes.NewHasher(algo)
 	if err != nil {
 		return "", err
 	}
@@ -106,5 +102,5 @@ func Handle(reg domain.HashRegistry, algo string, nk []byte, cd domain.ContentHa
 	h.Write(cdRaw)
 	h.Write(mdRaw)
 	h.Write(nonce)
-	return domain.ArtifactID(reg.Format(algo, h.Sum(nil))), nil
+	return domain.ArtifactID(hashes.Format(algo, h.Sum(nil))), nil
 }
