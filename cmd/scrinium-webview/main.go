@@ -80,7 +80,7 @@ func runServe(args []string) int {
 		}
 		// webview is always read-only; reflect that on the page.
 		return buildWebStatsData(asm.Projection.Queries(), capPtr, exts, startedAt, asm.MountSession,
-			meta.StoreURI, true, "off", meta.Namespace)
+			meta.StoreURI, true, "off")
 	}
 
 	v := vfs.New(asm.Projection, routingCfg, vfs.WithStatsProvider(textStats))

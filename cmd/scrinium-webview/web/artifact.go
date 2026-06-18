@@ -593,7 +593,6 @@ type locationView struct {
 type relatedView struct {
 	URL       string
 	Path      string // empty → "(orphaned)"
-	Namespace string
 	SessionID string
 	CreatedAt string // pre-formatted RFC3339
 	IsOrphan  bool
@@ -612,7 +611,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 
 	data.Identity = []labelValue{
 		{Label: "ArtifactID", Value: string(m.ArtifactID), Mono: true},
-		{Label: "Namespace", Value: orDash(m.Namespace)},
 		{Label: "SessionID", Value: orDash(string(m.SessionID)), Mono: m.SessionID != ""},
 		{Label: "CreatedAt", Value: m.CreatedAt.UTC().Format(time.RFC3339)},
 		{Label: "RetentionUntil", Value: formatTimeOrDash(m.RetentionUntil)},
@@ -664,7 +662,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 			view := relatedView{
 				URL:       h.prefix + "/_artifact/" + string(ra.ArtifactID),
 				Path:      ra.Path,
-				Namespace: ra.Namespace,
 				SessionID: string(ra.SessionID),
 				CreatedAt: ra.CreatedAt.UTC().Format(time.RFC3339),
 				IsOrphan:  ra.Path == "",
@@ -703,7 +700,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	// the wire shape (ArtifactID is intentionally absent — it's
 	// derived, not serialised, per docs §7.4).
 	raw, err := json.MarshalIndent(struct {
-		Namespace      string                 `json:"namespace,omitempty"`
 		SessionID      string                 `json:"session_id,omitempty"`
 		CreatedAt      time.Time              `json:"created_at"`
 		ContentHash    domain.ContentHash     `json:"content_hash,omitempty"`
@@ -716,7 +712,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		Ext            json.RawMessage        `json:"ext,omitempty"`
 		Usr            json.RawMessage        `json:"usr,omitempty"`
 	}{
-		Namespace:      m.Namespace,
 		SessionID:      string(m.SessionID),
 		CreatedAt:      m.CreatedAt,
 		ContentHash:    m.ContentHash,
@@ -981,7 +976,6 @@ const artifactPageHTML = `<!DOCTYPE html>
 {{- range .Related}}
     <tr>
       <td class="path"><a href="{{.URL}}">{{if .IsOrphan}}<span class="orphan">(orphaned)</span>{{else}}{{.Path}}{{end}}</a></td>
-      <td class="ns">{{if .Namespace}}{{.Namespace}}{{else}}—{{end}}</td>
       <td class="session mono">{{if .SessionID}}{{.SessionID}}{{else}}—{{end}}</td>
       <td class="created">{{.CreatedAt}}</td>
     </tr>

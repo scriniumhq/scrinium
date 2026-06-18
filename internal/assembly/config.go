@@ -68,10 +68,6 @@ type Projection struct {
 	AllowTruncate *bool  `yaml:"allowTruncate,omitempty" json:"allowTruncate,omitempty"`
 	AllowAppend   *bool  `yaml:"allowAppend,omitempty" json:"allowAppend,omitempty"`
 
-	// Namespace constrains writes/visibility to a single namespace.
-	// Empty = global.
-	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
-
 	// ScratchDir / ScratchQuota govern the staging area for in-flight
 	// FSOps writes. Empty dir defaults under a local store; 0 quota is
 	// unlimited.

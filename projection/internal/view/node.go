@@ -1,4 +1,4 @@
-// Package node is the data vocabulary of the projection layer: the
+// Package view is the data vocabulary of the projection layer: the
 // shape of a projected entry (Node + its facets) and the RootView
 // selector that names a logical tree. It is a leaf — it depends only
 // on the domain package and the standard library, so every other
@@ -36,7 +36,6 @@ type ArtifactFacet struct {
 	ArtifactID  domain.ArtifactID
 	ContentHash domain.ContentHash
 	BlobRef     domain.BlobRef
-	Namespace   string
 	SessionID   domain.SessionID
 	CreatedAt   time.Time
 

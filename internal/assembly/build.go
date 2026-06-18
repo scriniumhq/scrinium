@@ -431,7 +431,6 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 
 	info := Info{StoreURI: spec.Driver, Created: created}
 	if effProj != nil {
-		info.Namespace = effProj.Namespace
 		info.Editing = effProj.Editing
 		info.ReadOnly = effProj.ReadOnly
 	}

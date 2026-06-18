@@ -84,7 +84,6 @@ type StoreTarget struct {
 // RoutingMetadata is the input to RoutingFunc on the write path.
 // The multistore builds it from PutOptions.
 type RoutingMetadata struct {
-	Namespace   string
 	Size        int64
 	ContentType string
 	Source      string

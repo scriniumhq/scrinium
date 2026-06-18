@@ -39,10 +39,6 @@ type Config struct {
 	AllowTruncate *bool
 	AllowAppend   *bool
 
-	// Namespace constrains writes/visibility to a single namespace.
-	// Empty = global.
-	Namespace string
-
 	// ScratchDir is the staging area for in-flight FSOps writes,
 	// already resolved by the caller (empty = none; the engine
 	// tolerates this for read-mostly use). Ignored when ReadOnly.

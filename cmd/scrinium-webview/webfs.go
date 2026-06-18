@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	pathpkg "path"
-
 	"scrinium.dev/projection"
 
 	"scrinium.dev/cmd/scrinium-webview/web"
@@ -137,7 +136,6 @@ func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef
 		out = append(out, projection.RelatedArtifact{
 			ArtifactID: s.ArtifactID,
 			Path:       s.Path,
-			Namespace:  s.Namespace,
 			SessionID:  s.SessionID,
 			CreatedAt:  s.CreatedAt,
 		})
@@ -153,7 +151,6 @@ func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]p
 		out = append(out, projection.SearchResult{
 			ArtifactID:  h.ArtifactID,
 			Path:        h.Path,
-			Namespace:   h.Namespace,
 			SessionID:   h.SessionID,
 			CreatedAt:   h.CreatedAt,
 			MIME:        h.MIME,

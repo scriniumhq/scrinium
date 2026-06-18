@@ -25,7 +25,6 @@ const (
 // Filter restricts which manifests are admitted into the View
 // during backfill. All non-zero conditions combine by AND.
 type Filter struct {
-	Namespace string
 	SessionID domain.SessionID
 	Prefix    string
 }

@@ -29,7 +29,6 @@ func buildWebStatsData(
 	storePath string,
 	readOnly bool,
 	editing string,
-	namespace string,
 ) web.StatsData {
 	stats := reader.StatsSnapshot()
 
@@ -67,11 +66,10 @@ func buildWebStatsData(
 		d.HasStorage = true
 	}
 
-	if readOnly || editing != "" || namespace != "" {
+	if readOnly || editing != "" {
 		d.Config = web.StatsConfig{
-			ReadOnly:  readOnly,
-			Editing:   editing,
-			Namespace: namespace,
+			ReadOnly: readOnly,
+			Editing:  editing,
 		}
 		d.HasConfig = true
 	}

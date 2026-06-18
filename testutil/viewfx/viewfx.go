@@ -43,7 +43,6 @@ func Stack(t testing.TB, manifests ...domain.Manifest) (*projection.Projection, 
 	}
 
 	proj, err := projection.Build(t.Context(), src, nil, projection.Config{
-		Namespace:  "files",
 		Editing:    "on",
 		ScratchDir: t.TempDir(),
 		RootView:   "by-path",

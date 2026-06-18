@@ -111,13 +111,10 @@ func (v *View) Search(query string, limit int) []SearchResult {
 		}
 
 		path := strings.ToLower(rec.paths[v.opts.rootView])
-		ns := strings.ToLower(rec.manifest.Namespace)
 
 		switch {
 		case path != "" && strings.Contains(path, q):
 			out = append(out, v.makeSearchResult(id, rec, "path"))
-		case ns != "" && strings.Contains(ns, q):
-			out = append(out, v.makeSearchResult(id, rec, "namespace"))
 		default:
 			continue
 		}
@@ -136,7 +133,6 @@ func (v *View) makeSearchResult(id domain.ArtifactID, rec *artifactRecord, reaso
 	r := SearchResult{
 		ArtifactID:  id,
 		Path:        rec.paths[v.opts.rootView],
-		Namespace:   rec.manifest.Namespace,
 		SessionID:   rec.manifest.SessionID,
 		CreatedAt:   rec.manifest.CreatedAt,
 		MatchReason: reason,
@@ -180,7 +176,6 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 		out = append(out, RelatedArtifact{
 			ArtifactID: id,
 			Path:       rec.paths[v.opts.rootView],
-			Namespace:  rec.manifest.Namespace,
 			SessionID:  rec.manifest.SessionID,
 			CreatedAt:  rec.manifest.CreatedAt,
 		})

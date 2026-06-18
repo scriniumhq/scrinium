@@ -161,7 +161,6 @@ type Stats struct {
 type SearchResult struct {
 	ArtifactID  domain.ArtifactID `json:"artifactId"`
 	Path        string            `json:"path"`
-	Namespace   string            `json:"namespace"`
 	SessionID   domain.SessionID  `json:"sessionId"`
 	CreatedAt   time.Time         `json:"createdAt"`
 	MIME        string            `json:"mime"`
@@ -172,7 +171,6 @@ type SearchResult struct {
 type RelatedArtifact struct {
 	ArtifactID domain.ArtifactID `json:"artifactId"`
 	Path       string            `json:"path"`
-	Namespace  string            `json:"namespace"`
 	SessionID  domain.SessionID  `json:"sessionId"`
 	CreatedAt  time.Time         `json:"createdAt"`
 }

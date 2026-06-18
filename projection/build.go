@@ -88,7 +88,6 @@ func buildFSOps(v *view.View, backend Backend, cfg Config) (*fsops.Ops, error) {
 		fsops.WithDefaultUID(defaultID(cfg.DefaultUID, os.Getuid)),
 		fsops.WithDefaultGID(defaultID(cfg.DefaultGID, os.Getgid)),
 		fsops.WithEditingPolicy(editingPolicy(cfg)),
-		fsops.WithNamespace(cfg.Namespace),
 	}
 	if cfg.ReadOnly {
 		opts = append(opts, fsops.WithReadOnly())

@@ -369,28 +369,6 @@ func TestOpenByArtifact_SourceLocked(t *testing.T) {
 	}
 }
 
-// --- Filter ---
-
-func TestNewView_FilterByNamespace(t *testing.T) {
-	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "photos", "s", 100, time.Now().UTC()), nil)
-	src.Add(makeManifest("sha256-eeffaabb", "docs", "s", 100, time.Now().UTC()), nil)
-
-	v, err := vw.New(
-		context.Background(),
-		src,
-		vw.WithFilter(vw.Filter{Namespace: "photos"}),
-	)
-	if err != nil {
-		t.Fatalf("NewView: %v", err)
-	}
-	defer v.Close()
-
-	if got := v.Stats.TotalNodes; got != 1 {
-		t.Errorf("TotalNodes: got %d, want 1", got)
-	}
-}
-
 // testRoot is the root of the neutral fake provided view the projection
 // tests use to exercise the generic provided-view rail (ADR-98). It is
 // deliberately NOT by-path or by-namespace — those are extension views,

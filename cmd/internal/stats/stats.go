@@ -45,10 +45,6 @@ type DaemonInfo struct {
 	// Empty hides the row.
 	Editing string
 
-	// Namespace is the default namespace stamped on created
-	// artifacts. Empty hides the row.
-	Namespace string
-
 	// Capacity is the optional storage snapshot from
 	// store.Store.Capacity. nil hides the [storage] section; -1 in
 	// a field means "driver did not report".
@@ -161,7 +157,7 @@ func writeExtensionsSection(b *strings.Builder, exts []Extension) {
 }
 
 func writeConfigSection(b *strings.Builder, info DaemonInfo) {
-	hasAny := info.ReadOnly || info.Editing != "" || info.Namespace != ""
+	hasAny := info.ReadOnly || info.Editing != ""
 	if !hasAny {
 		return
 	}
@@ -169,9 +165,6 @@ func writeConfigSection(b *strings.Builder, info DaemonInfo) {
 	fmt.Fprintf(b, "ReadOnly:         %v\n", info.ReadOnly)
 	if info.Editing != "" {
 		fmt.Fprintf(b, "Editing:          %s\n", info.Editing)
-	}
-	if info.Namespace != "" {
-		fmt.Fprintf(b, "Namespace:        %s\n", info.Namespace)
 	}
 }
 

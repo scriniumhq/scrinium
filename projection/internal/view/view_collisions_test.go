@@ -109,7 +109,7 @@ func TestByPath_SyntheticFallback(t *testing.T) {
 		vw.WithFallback(vw.FallbackSynthetic))
 	defer v.Close()
 
-	expected := "photos/s1/23/s12345/aabbccdd.bin"
+	expected := "s1/23/s12345/aabbccdd.bin"
 	if _, err := v.GetIn(testRoot, expected); err != nil {
 		t.Fatalf("GetByPath(%q): %v", expected, err)
 	}

@@ -8,7 +8,6 @@ Each example is a self-contained `main.go` you can `go run` directly.
 | Example | What it shows | Lines |
 |---------|--------------|-------|
 | [hello](./hello) | Smallest possible program: init a store, put one file, read it back, close. | ~50 |
-| [ingest](./ingest) | Batch ingest: scan a directory tree and put every file into a store. Demonstrates Put with options, namespace, error handling. | ~120 |
 | [browse](./browse) | Read-only browser: open an existing store, iterate all artifacts, print summary stats. | ~80 |
 
 ## Running

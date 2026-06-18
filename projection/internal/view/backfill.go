@@ -240,9 +240,6 @@ func (v *View) populateExt(ctx context.Context, m *domain.Manifest) {
 // applied to the resolver path — see resolvePathForManifest below.
 func (v *View) passesFilter(m domain.Manifest) bool {
 	f := v.opts.filter
-	if f.Namespace != "" && m.Namespace != f.Namespace {
-		return false
-	}
 	if f.SessionID != "" && m.SessionID != f.SessionID {
 		return false
 	}
@@ -282,19 +279,14 @@ func (v *View) resolvePathForManifest(m domain.Manifest) (string, bool) {
 // syntheticPath builds a synthetic by-path entry for artifacts
 // without a resolver path. Format mirrors docs/4 §14.4.4:
 //
-//	<namespace>/<sid-shard>/<id-short>.bin   — namespace + session
-//	<namespace>/<id-short>.bin               — namespace only
-//	_anonymous/<id-short>.bin                — neither
+//	<sid-shard>/<id-short>.bin   — session present
+//	_anonymous/<id-short>.bin    — no session
 func (v *View) syntheticPath(m domain.Manifest) string {
 	idShort := shortID(m.ArtifactID)
-	switch {
-	case m.Namespace != "" && m.SessionID != "":
-		return m.Namespace + "/" + sessionShard(m.SessionID) + "/" + idShort + ".bin"
-	case m.Namespace != "":
-		return m.Namespace + "/" + idShort + ".bin"
-	default:
-		return "_anonymous/" + idShort + ".bin"
+	if m.SessionID != "" {
+		return sessionShard(m.SessionID) + "/" + idShort + ".bin"
 	}
+	return "_anonymous/" + idShort + ".bin"
 }
 
 // indexArtifact registers an artifact in every applicable tree by

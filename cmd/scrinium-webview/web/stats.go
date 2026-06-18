@@ -77,9 +77,8 @@ type StatsExtension struct {
 // fields use Go's native rendering ({{.X}} → "true"/"false");
 // the template hides the section entirely via HasConfig.
 type StatsConfig struct {
-	ReadOnly  bool
-	Editing   string // empty hides the row
-	Namespace string // empty hides the row
+	ReadOnly bool
+	Editing  string // empty hides the row
 }
 
 // StatsProvider is the host-supplied function the stats page
@@ -263,9 +262,6 @@ const statsPageHTML = `<!DOCTYPE html>
     <tr><td class="label">ReadOnly</td><td class="value">{{.Config.ReadOnly}}</td></tr>
     {{if .Config.Editing}}
     <tr><td class="label">Editing</td><td class="value">{{.Config.Editing}}</td></tr>
-    {{end}}
-    {{if .Config.Namespace}}
-    <tr><td class="label">Namespace</td><td class="value">{{.Config.Namespace}}</td></tr>
     {{end}}
   </tbody>
 </table>
