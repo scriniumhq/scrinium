@@ -53,7 +53,7 @@ func TestPut_LargePayload(t *testing.T) {
 	}
 
 	var seen domain.Manifest
-	if err := s.Walk(context.Background(), "big", func(m domain.Manifest) error {
+	if err := s.Walk(context.Background(), func(m domain.Manifest) error {
 		seen = m
 		return nil
 	}); err != nil {
@@ -81,7 +81,7 @@ func TestPut_DefaultNamespace(t *testing.T) {
 	}
 	// Visible via Walk("") (default namespace).
 	var seen int
-	_ = s.Walk(context.Background(), "", func(m domain.Manifest) error {
+	_ = s.Walk(context.Background(), func(m domain.Manifest) error {
 		seen++
 		return nil
 	})
@@ -329,156 +329,6 @@ func TestPut_Pipeline_RefusedOnInline(t *testing.T) {
 		domain.WithNamespace("ns"))
 	if err == nil {
 		t.Fatalf("Put: expected refusal for Inline + Pipeline, got nil")
-	}
-}
-
-// walkNamespace counts the artifacts visible under a namespace.
-func walkNamespace(t *testing.T, s store.Store, ns string) int {
-	t.Helper()
-	var n int
-	if err := s.Walk(context.Background(), ns, func(domain.Manifest) error {
-		n++
-		return nil
-	}); err != nil {
-		t.Fatalf("Walk(%q): %v", ns, err)
-	}
-	return n
-}
-
-// manifestNamespace returns the recorded namespace of the single artifact
-// id, by walking the wildcard and matching on ArtifactID.
-func manifestNamespace(t *testing.T, s store.Store, id domain.ArtifactID) string {
-	t.Helper()
-	var ns string
-	var found bool
-	if err := s.Walk(context.Background(), "*", func(m domain.Manifest) error {
-		if m.ArtifactID == id {
-			ns, found = m.Namespace, true
-		}
-		return nil
-	}); err != nil {
-		t.Fatalf("Walk(*): %v", err)
-	}
-	if !found {
-		t.Fatalf("artifact %q not found via Walk", id)
-	}
-	return ns
-}
-
-// TestPut_DefaultPutNamespace_Fallback: with DefaultPutNamespace configured,
-// a Put that leaves the namespace empty lands in the configured default,
-// not the empty namespace.
-func TestPut_DefaultPutNamespace_Fallback(t *testing.T) {
-	s := storefx.Init(t, store.WithConfig(domain.StoreConfig{
-		DefaultPutNamespace: "inbox",
-	}))
-
-	id, err := s.Put(context.Background(), artifactfx.Payload("no namespace given"))
-	if err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-
-	// The artifact records the resolved namespace in its manifest.
-	if got := manifestNamespace(t, s, id); got != "inbox" {
-		t.Errorf("resolved namespace: got %q, want %q", got, "inbox")
-	}
-	// Visible under the default, not under the empty namespace.
-	if n := walkNamespace(t, s, "inbox"); n != 1 {
-		t.Errorf("Walk(inbox): got %d, want 1", n)
-	}
-	if n := walkNamespace(t, s, ""); n != 0 {
-		t.Errorf("Walk(\"\"): got %d, want 0 (default should have diverted it)", n)
-	}
-}
-
-// TestPut_DefaultPutNamespace_ExplicitOverrides: an explicit WithNamespace
-// always wins over the configured default.
-func TestPut_DefaultPutNamespace_ExplicitOverrides(t *testing.T) {
-	s := storefx.Init(t, store.WithConfig(domain.StoreConfig{
-		DefaultPutNamespace: "inbox",
-	}))
-
-	id, err := s.Put(context.Background(),
-		artifactfx.Payload("explicit"),
-		domain.WithNamespace("archive"))
-	if err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-
-	if got := manifestNamespace(t, s, id); got != "archive" {
-		t.Errorf("explicit namespace should win: got %q, want %q", got, "archive")
-	}
-	if n := walkNamespace(t, s, "inbox"); n != 0 {
-		t.Errorf("Walk(inbox): got %d, want 0 (explicit ns bypassed the default)", n)
-	}
-	if n := walkNamespace(t, s, "archive"); n != 1 {
-		t.Errorf("Walk(archive): got %d, want 1", n)
-	}
-}
-
-// TestPut_DefaultPutNamespace_EmptyMeansEmpty: with no DefaultPutNamespace
-// configured (the zero value), an unnamespaced Put stays in the empty
-// namespace — the pre-existing behaviour is unchanged.
-func TestPut_DefaultPutNamespace_EmptyMeansEmpty(t *testing.T) {
-	s := storefx.Init(t) // no DefaultPutNamespace
-
-	id, err := s.Put(context.Background(), artifactfx.Payload("stays empty"))
-	if err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-
-	if got := manifestNamespace(t, s, id); got != "" {
-		t.Errorf("namespace: got %q, want empty", got)
-	}
-	if n := walkNamespace(t, s, ""); n != 1 {
-		t.Errorf("Walk(\"\"): got %d, want 1", n)
-	}
-}
-
-// TestPut_DefaultPutNamespace_Reassign: DefaultPutNamespace is mutable —
-// UpdateConfig changes it, and subsequent unnamespaced Puts land under the
-// new value. Already-stored artifacts keep their original namespace (the
-// change never reinterprets them), so the two defaults coexist.
-func TestPut_DefaultPutNamespace_Reassign(t *testing.T) {
-	ctx := context.Background()
-	s := storefx.Init(t, store.WithConfig(domain.StoreConfig{
-		DefaultPutNamespace: "first",
-	}))
-
-	// First unnamespaced Put → "first".
-	id1, err := s.Put(ctx, artifactfx.Payload("under first"))
-	if err != nil {
-		t.Fatalf("Put #1: %v", err)
-	}
-
-	// Reassign the default via UpdateConfig (mutable field).
-	cur := s.Config()
-	cur.DefaultPutNamespace = "second"
-	if err := s.UpdateConfig(ctx, cur); err != nil {
-		t.Fatalf("UpdateConfig: %v", err)
-	}
-	if got := s.Config().DefaultPutNamespace; got != "second" {
-		t.Fatalf("Config after reassign: got %q, want %q", got, "second")
-	}
-
-	// Second unnamespaced Put → "second".
-	id2, err := s.Put(ctx, artifactfx.Payload("under second"))
-	if err != nil {
-		t.Fatalf("Put #2: %v", err)
-	}
-
-	// The first artifact kept "first"; the second went to "second".
-	if got := manifestNamespace(t, s, id1); got != "first" {
-		t.Errorf("artifact #1 namespace: got %q, want %q (reassign must not move it)", got, "first")
-	}
-	if got := manifestNamespace(t, s, id2); got != "second" {
-		t.Errorf("artifact #2 namespace: got %q, want %q", got, "second")
-	}
-	if n := walkNamespace(t, s, "first"); n != 1 {
-		t.Errorf("Walk(first): got %d, want 1", n)
-	}
-	if n := walkNamespace(t, s, "second"); n != 1 {
-		t.Errorf("Walk(second): got %d, want 1", n)
 	}
 }
 

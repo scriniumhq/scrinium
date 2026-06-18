@@ -79,10 +79,10 @@ type DataStore interface {
 
 	// Iteration and introspection.
 
-	// Walk iterates over user manifests. namespace = "*" — every user
-	// namespace; an empty string — only the default one. system.*
+	// Walk iterates over every user manifest, namespace-agnostic. system.*
 	// artifacts are unreachable here; they live behind System().
-	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
+	// Namespace-filtered traversal is an extension concern (WalkByExt).
+	Walk(ctx context.Context, cb func(domain.Manifest) error) error
 
 	// WalkByExt iterates over user manifests whose projected ext field
 	// extName.field equals value (proj_ext, §9.6). It is the extension-

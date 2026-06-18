@@ -184,7 +184,7 @@ func TestStore_Retention(t *testing.T) {
 			t.Fatal(err)
 		}
 		var seen domain.Manifest
-		if err := s.Walk(context.Background(), "vault", func(m domain.Manifest) error {
+		if err := s.Walk(context.Background(), func(m domain.Manifest) error {
 			if m.ArtifactID == id {
 				seen = m
 			}

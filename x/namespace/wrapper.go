@@ -172,7 +172,7 @@ func (s *scopedStore) Put(ctx context.Context, a domain.Artifact, opts ...domain
 // extension-agnostic WalkByExt over the nsid projection (proj_ext) — the
 // filter runs in the index, no manifest-file I/O, and the "namespace"/"nsid"
 // coordinates live here in the extension, not in the core.
-func (s *scopedStore) Walk(ctx context.Context, _ string, cb func(domain.Manifest) error) error {
+func (s *scopedStore) Walk(ctx context.Context, cb func(domain.Manifest) error) error {
 	return s.DataStore.WalkByExt(ctx, extensionName, nsidField, string(s.nsid), cb)
 }
 

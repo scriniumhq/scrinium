@@ -38,7 +38,7 @@ func (i *Index) QueryByExtField(ctx context.Context, extName, field, value strin
 // projection, §9.6). It is the manifest-yielding sibling of QueryByExtField:
 // where that streams bare ArtifactIDs (membership / search), this hydrates
 // the index-resident Manifest — no manifest-file I/O, columns only, exactly
-// as ListByNamespace does — so it is the proj_ext-backed form of a listing.
+// as IterateManifests does — so it is the proj_ext-backed form of a listing.
 // Handle-less rows (system artifacts, pack containers) are excluded by
 // artifact_id IS NOT NULL. v1 is equality (a richer language is M7). The
 // callback may return fs.SkipAll to stop early without an error.

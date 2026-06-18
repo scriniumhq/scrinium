@@ -53,7 +53,7 @@ func run(storeURI string) error {
 	}
 	byNS := make(map[string]*nsStats)
 
-	if err := asm.Store.Walk(ctx, "*", func(m domain.Manifest) error {
+	if err := asm.Store.Walk(ctx, func(m domain.Manifest) error {
 		st, ok := byNS[m.Namespace]
 		if !ok {
 			st = &nsStats{}

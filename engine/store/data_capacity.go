@@ -33,13 +33,12 @@ func (d dataFacet) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 		AvailableBytes: -1,
 	}
 
-	// ArtifactCount: count of user-visible manifests. Walks the
-	// index with the "*" wildcard, which already excludes system.*
-	// namespaces (see index/sqlite ListByNamespace queryAny), so
-	// system.config and the future system.state writers do not
-	// inflate user-facing storage stats.
+	// ArtifactCount: count of user-visible manifests. Iterates every
+	// user manifest (artifact_id present), which already excludes
+	// system.* artifacts (not indexed), so system.config and the future
+	// system.state writers do not inflate user-facing storage stats.
 	var artifactCount int64
-	if err := d.index.ListByNamespace(ctx, domain.NamespaceWildcard, func(domain.Manifest) error {
+	if err := d.index.IterateManifests(ctx, func(domain.Manifest) error {
 		artifactCount++
 		return nil
 	}); err != nil {

@@ -43,7 +43,7 @@ func putWithRetention(t *testing.T, s store.Store, sid domain.SessionID, ns, pay
 func walkCount(t *testing.T, s store.Store) int {
 	t.Helper()
 	n := 0
-	if err := s.Walk(context.Background(), "*", func(domain.Manifest) error {
+	if err := s.Walk(context.Background(), func(domain.Manifest) error {
 		n++
 		return nil
 	}); err != nil {

@@ -132,7 +132,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 	emit("Walk: counting manifests in 'smoke' namespace")
 	startWalk := time.Now()
 	var seen int
-	if err := s.Walk(ctx, "smoke", func(_ domain.Manifest) error {
+	if err := s.Walk(ctx, func(_ domain.Manifest) error {
 		seen++
 		if seen%reportEvery == 0 {
 			reportProgress("Walk", seen, n, startWalk)
@@ -370,7 +370,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 
 	// --- Walk count ---
 	var walkCount int64
-	if err := s.Walk(ctx, "smoke-enc", func(domain.Manifest) error {
+	if err := s.Walk(ctx, func(domain.Manifest) error {
 		walkCount++
 		return nil
 	}); err != nil {

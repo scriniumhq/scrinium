@@ -106,42 +106,22 @@ func TestPut_EncryptedManifestRejectedWhenLocked(t *testing.T) {
 	}
 }
 
-// --- Sealed: system fields stay in plaintext on disk ---
+// --- Sealed: usr metadata stays confidential on disk ---
 
-func TestPut_Sealed_NamespaceVisibleOnDisk(t *testing.T) {
+func TestPut_Sealed_UsrMetadataConfidential(t *testing.T) {
 	s := initEncryptedWithCrypto(t, domain.ManifestCryptoSealed)
 	a, _ := payloadReader("payload")
 	a.Usr = json.RawMessage(`{"secret":"do-not-leak"}`)
 
-	id, err := s.Put(context.Background(), a, domain.WithNamespace("tenant-a"))
+	id, err := s.Put(context.Background(), a)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 
-	// Read raw manifest file from disk and check field visibility.
+	// Read raw manifest file from disk: usr metadata must not be plaintext.
 	bytesOnDisk := readManifestRaw(t, s, id)
-	if !bytes.Contains(bytesOnDisk, []byte("tenant-a")) {
-		t.Error("Sealed should leave Namespace in plaintext on disk")
-	}
 	if bytes.Contains(bytesOnDisk, []byte("do-not-leak")) {
 		t.Error("Sealed leaked usr metadata to plaintext")
-	}
-}
-
-// --- Paranoid: even Namespace is hidden ---
-
-func TestPut_Paranoid_NamespaceHiddenOnDisk(t *testing.T) {
-	s := initEncryptedWithCrypto(t, domain.ManifestCryptoParanoid)
-	a, _ := payloadReader("payload")
-
-	id, err := s.Put(context.Background(), a, domain.WithNamespace("tenant-secret"))
-	if err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-
-	bytesOnDisk := readManifestRaw(t, s, id)
-	if bytes.Contains(bytesOnDisk, []byte("tenant-secret")) {
-		t.Error("Paranoid leaked Namespace to plaintext on disk")
 	}
 }
 
@@ -522,7 +502,7 @@ func TestWalk_ParanoidStoreWalksWithoutDecryption(t *testing.T) {
 
 	// Walk must succeed without ever consulting the resolver.
 	count := 0
-	if err := s2.Walk(context.Background(), "ns", func(domain.Manifest) error {
+	if err := s2.Walk(context.Background(), func(domain.Manifest) error {
 		count++
 		return nil
 	}); err != nil {

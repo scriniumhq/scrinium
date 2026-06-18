@@ -298,7 +298,7 @@ func TestRecovery_DoesNotTouchLiveArtifact(t *testing.T) {
 
 	// Walk: the artifact is still indexed.
 	var seen []domain.ArtifactID
-	if err := s2.Walk(context.Background(), "live", func(m domain.Manifest) error {
+	if err := s2.Walk(context.Background(), func(m domain.Manifest) error {
 		seen = append(seen, m.ArtifactID)
 		return nil
 	}); err != nil {

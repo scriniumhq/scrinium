@@ -48,7 +48,7 @@ func TestPut_CoalescedMode_SameContentCoalesces(t *testing.T) {
 	}
 
 	var seen int
-	if err := s.Walk(ctx, "arc", func(domain.Manifest) error {
+	if err := s.Walk(ctx, func(domain.Manifest) error {
 		seen++
 		return nil
 	}); err != nil {

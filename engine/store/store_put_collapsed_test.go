@@ -107,7 +107,7 @@ func TestPut_SharedBlobAcrossArtifacts(t *testing.T) {
 	}
 
 	var seen int
-	if err := s.Walk(context.Background(), "n", func(domain.Manifest) error {
+	if err := s.Walk(context.Background(), func(domain.Manifest) error {
 		seen++
 		return nil
 	}); err != nil {
@@ -130,10 +130,6 @@ func TestPut_InputValidation(t *testing.T) {
 		opts    []domain.PutOption
 		wantErr error // nil means "any non-nil error"
 	}{
-		{"wildcard namespace", payload("x"),
-			[]domain.PutOption{domain.WithNamespace("*")}, errs.ErrReservedNamespace},
-		{"namespace too long", payload("x"),
-			[]domain.PutOption{domain.WithNamespace(strings.Repeat("a", 256))}, errs.ErrNamespaceTooLong},
 		{"session id too long", payload("x"),
 			[]domain.PutOption{domain.WithSession(domain.SessionID(strings.Repeat("a", 256)))}, errs.ErrSessionIDTooLong},
 		{"ext too large",
@@ -217,7 +213,7 @@ func TestPut_InlinePolicy(t *testing.T) {
 			t.Errorf("blob files after 2 inline Puts: got %d, want 0", n)
 		}
 		var manifests int
-		if err := s.Walk(context.Background(), "ns", func(domain.Manifest) error {
+		if err := s.Walk(context.Background(), func(domain.Manifest) error {
 			manifests++
 			return nil
 		}); err != nil {

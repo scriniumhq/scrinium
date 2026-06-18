@@ -64,7 +64,7 @@ func TestDelete_RemovesManifest(t *testing.T) {
 			}
 
 			var seen int
-			if err := s.Walk(context.Background(), "d", func(domain.Manifest) error {
+			if err := s.Walk(context.Background(), func(domain.Manifest) error {
 				seen++
 				return nil
 			}); err != nil {

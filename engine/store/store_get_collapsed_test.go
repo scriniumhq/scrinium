@@ -139,8 +139,8 @@ func TestGet_ReadHandleSemantics(t *testing.T) {
 	if m.ArtifactID != id {
 		t.Errorf("ArtifactID: got %q, want %q", m.ArtifactID, id)
 	}
-	if m.Namespace != "ns" || m.SessionID != "sess-x" {
-		t.Errorf("manifest fields: got ns=%q sess=%q, want ns/sess-x", m.Namespace, m.SessionID)
+	if m.SessionID != "sess-x" {
+		t.Errorf("manifest SessionID: got %q, want sess-x", m.SessionID)
 	}
 	if m.LayoutHeader.BlobStorage != domain.LayoutTarget {
 		t.Errorf("LayoutHeader: got %q, want Target", m.LayoutHeader.BlobStorage)

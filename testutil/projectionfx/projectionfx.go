@@ -80,7 +80,6 @@ func (f *FakeSource) SetGetErr(err error) {
 // field equals the argument.
 func (f *FakeSource) Walk(
 	ctx context.Context,
-	namespace string,
 	cb func(domain.Manifest) error,
 ) error {
 	f.mu.RLock()
@@ -92,9 +91,6 @@ func (f *FakeSource) Walk(
 		return walkErr
 	}
 	for _, m := range manifests {
-		if namespace != "*" && m.Namespace != namespace {
-			continue
-		}
 		if err := cb(m); err != nil {
 			return err
 		}

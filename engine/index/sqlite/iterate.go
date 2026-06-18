@@ -17,61 +17,31 @@ import (
 // recovers content_hash/original_size (the dedup key lives on the blob
 // row, not the manifest row); LEFT because Inline manifests have no
 // blobs partner.
-const manifestProjection = `m.manifest_digest, m.artifact_id, m.namespace, m.session_id,
+const manifestProjection = `m.manifest_digest, m.artifact_id, m.session_id,
 	       m.blob_ref, m.created_at, m.retention_until,
 	       b.content_hash, b.original_size`
 
-// ListByNamespace iterates over manifests whose namespace matches
-// the filter. The callback is invoked once per manifest in
-// (namespace, created_at) order; cancelling via fs.SkipAll
-// or any other error from the callback stops the iteration.
-//
-// Filter semantics match the contract of Walk in store.DataStore:
-//   - "*"          — every user namespace
-//   - ""           — only the default (empty) namespace
-//   - <other>      — exactly that namespace
+// IterateManifests iterates over every user manifest, namespace-agnostic —
+// the core attaches no namespace meaning. The callback is invoked once per
+// manifest in created_at order; cancelling via fs.SkipAll or any other
+// callback error stops the iteration.
 //
 // Handleless artifacts are NEVER included: the predicate
 // `artifact_id IS NOT NULL` (ADR-83) excludes pack containers (empty
 // slot). System artifacts are not indexed at all (ADR-85), so they
-// never appear here. The namespace filter itself is transitional —
-// ADR-79 moves namespace out of the core index into a custom index.
-func (i *Index) ListByNamespace(
+// never appear here.
+func (i *Index) IterateManifests(
 	ctx context.Context,
-	ns string,
 	cb func(domain.Manifest) error,
 ) error {
-	const (
-		queryDefault = `
-			SELECT ` + manifestProjection + `
-			FROM manifests m
-			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
-			WHERE m.namespace = '' AND m.artifact_id IS NOT NULL
-			ORDER BY m.created_at`
-		queryAny = `
+	const query = `
 			SELECT ` + manifestProjection + `
 			FROM manifests m
 			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
 			WHERE m.artifact_id IS NOT NULL
-			ORDER BY m.namespace, m.created_at`
-		queryExact = `
-			SELECT ` + manifestProjection + `
-			FROM manifests m
-			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
-			WHERE m.namespace = ? AND m.artifact_id IS NOT NULL
 			ORDER BY m.created_at`
-	)
 
-	var rows *sql.Rows
-	var err error
-	switch ns {
-	case domain.NamespaceWildcard:
-		rows, err = i.db.QueryContext(ctx, queryAny)
-	case "":
-		rows, err = i.db.QueryContext(ctx, queryDefault)
-	default:
-		rows, err = i.db.QueryContext(ctx, queryExact, ns)
-	}
+	rows, err := i.db.QueryContext(ctx, query)
 	if err != nil {
 		return classifyError(err)
 	}
@@ -167,7 +137,7 @@ func (i *Index) ListUnverifiedBlobs(ctx context.Context, before time.Time, cb fu
 
 // iterateManifestRows is the shared cursor loop for callbacks that
 // take domain.Manifest. Centralised because the iteration sites
-// (ListByNamespace, ManifestsByBlobRef, ListUnverifiedManifests) want
+// (IterateManifests, ManifestsByBlobRef, ListUnverifiedManifests) want
 // the same context check / fs.SkipAll / scan pattern.
 func iterateManifestRows(
 	ctx context.Context,
@@ -196,7 +166,7 @@ func iterateManifestRows(
 // blobRef, joining through the manifest_blobs edge table (keyed by
 // manifest digest). The Scrub Agent uses it to cascade from a verified
 // physical blob to its consuming artifacts. The same projection as
-// ListByNamespace feeds scanManifestRow; the join to blobs recovers
+// IterateManifests feeds scanManifestRow; the join to blobs recovers
 // content_hash/original_size, and manifest_blobs supplies the edge.
 func (i *Index) ManifestsByBlobRef(
 	ctx context.Context,

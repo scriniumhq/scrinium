@@ -102,7 +102,7 @@ func TestCrash_PutTornAtEveryWrite_IsAtomic(t *testing.T) {
 			s2 := env.reopenClean(t)
 			defer s2.Close()
 
-			present := walkIDs(t, s2, ns)
+			present := walkIDs(t, s2)
 			if putErr == nil {
 				// The store completed (possibly via internal retry past
 				// the one-shot fault): artifact must be present & exact.

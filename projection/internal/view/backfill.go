@@ -178,7 +178,7 @@ func (v *View) backfill(ctx context.Context) error {
 		v.indexArtifact(m, true /*duringBackfill*/)
 		return nil
 	}
-	if err := v.src.Walk(ctx, "*", cb); err != nil {
+	if err := v.src.Walk(ctx, cb); err != nil {
 		return fmt.Errorf("%w: %w", errs.ErrSourceUnavailable, err)
 	}
 	return nil

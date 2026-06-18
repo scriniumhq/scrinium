@@ -88,10 +88,11 @@ type StoreIndex interface {
 	// Iteration. Implementations are required to stream through the
 	// callback rather than load the whole result set into memory.
 
-	// ListByNamespace iterates over manifests with the given
-	// namespace. "*" — all namespaces; "" — only the default
-	// (empty). Returns blob and toc; pack is excluded.
-	ListByNamespace(ctx context.Context, ns string, cb func(domain.Manifest) error) error
+	// IterateManifests iterates over every user manifest (artifact_id
+	// present), namespace-agnostic. Returns blob and toc; pack is
+	// excluded. Namespace-filtered iteration is not a core concern —
+	// extensions filter via ListByExtField over their projection.
+	IterateManifests(ctx context.Context, cb func(domain.Manifest) error) error
 
 	// QueryByExtField streams the ArtifactIDs whose projected ext field
 	// extName.field equals value, read from proj_ext (read-side of the

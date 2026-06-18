@@ -132,7 +132,7 @@ func TestScopedStore_WalkDelegatesToNSIDProjection(t *testing.T) {
 	inner := &fakeDataStore{walk: []domain.Manifest{mfst("ns-7"), mfst("ns-7")}}
 	s := wrap(t, "ns-7", inner)
 	var seen int
-	err := s.Walk(context.Background(), "ignored-arg", func(domain.Manifest) error {
+	err := s.Walk(context.Background(), func(domain.Manifest) error {
 		seen++
 		return nil
 	})

@@ -43,7 +43,7 @@ func TestMigrate_BaselineIndexes(t *testing.T) {
 	idx := newMemoryIndex(t)
 	want := []string{
 		"blobs_content", "blobs_orphan", "blobs_scrub",
-		"manifests_namespace", "manifests_session", "manifests_scrub",
+		"manifests_session", "manifests_scrub",
 		"manifest_blobs_blob",
 		"proj_ext_lookup", "proj_usr_text", "proj_usr_number", "proj_usr_hash",
 	}

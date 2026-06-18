@@ -58,16 +58,16 @@ func getBytes(t *testing.T, s store.Store, id domain.ArtifactID) []byte {
 	return got
 }
 
-// walkIDs returns the set of ArtifactIDs the store reports for ns.
-func walkIDs(t *testing.T, s store.Store, ns string) map[domain.ArtifactID]struct{} {
+// walkIDs returns the set of ArtifactIDs the store reports.
+func walkIDs(t *testing.T, s store.Store) map[domain.ArtifactID]struct{} {
 	t.Helper()
 	out := make(map[domain.ArtifactID]struct{})
-	err := s.Walk(context.Background(), ns, func(m domain.Manifest) error {
+	err := s.Walk(context.Background(), func(m domain.Manifest) error {
 		out[m.ArtifactID] = struct{}{}
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("Walk(%q): %v", ns, err)
+		t.Fatalf("Walk: %v", err)
 	}
 	return out
 }
@@ -193,7 +193,7 @@ func checkReopenStable(t *testing.T, payload []byte) {
 		t.Fatalf("Put: %v", err)
 	}
 	before := getBytes(t, s, id)
-	beforeSet := walkIDs(t, s, "*")
+	beforeSet := walkIDs(t, s)
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -202,7 +202,7 @@ func checkReopenStable(t *testing.T, payload []byte) {
 	if got := getBytes(t, s2, id); !bytes.Equal(got, before) {
 		t.Fatalf("content changed across reopen")
 	}
-	afterSet := walkIDs(t, s2, "*")
+	afterSet := walkIDs(t, s2)
 	if len(afterSet) != len(beforeSet) {
 		t.Fatalf("Walk set changed across reopen: %d -> %d", len(beforeSet), len(afterSet))
 	}
@@ -228,7 +228,6 @@ func TestStore_ReopenStable_Seeded(t *testing.T) {
 // actually guarantees — manifest-FIELD confidentiality — across modes:
 //   - round-trip works with the right passphrase;
 //   - the usr metadata never appears in the on-disk manifest bytes;
-//   - Sealed leaves Namespace in plaintext, Paranoid hides it too;
 //   - opening with the wrong passphrase fails closed.
 //
 // Note the scope: ManifestCrypto encrypts the MANIFEST, not the blob
@@ -237,14 +236,12 @@ func TestStore_ReopenStable_Seeded(t *testing.T) {
 // asserting on blob bytes here would be testing the wrong mechanism.
 func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 	const usrSecret = "do-not-leak-usr-value"
-	const ns = "tenant-secret-namespace"
 
 	cases := []struct {
-		mode     domain.ManifestCrypto
-		nsHidden bool // Paranoid hides Namespace; Sealed leaves it visible
+		mode domain.ManifestCrypto
 	}{
-		{domain.ManifestCryptoSealed, false},
-		{domain.ManifestCryptoParanoid, true},
+		{domain.ManifestCryptoSealed},
+		{domain.ManifestCryptoParanoid},
 	}
 
 	for _, tc := range cases {
@@ -264,7 +261,7 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 				Payload: bytes.NewReader(payload),
 				Usr:     json.RawMessage(`{"k":"` + usrSecret + `"}`),
 			}
-			id, err := s.Put(ctx, art, domain.WithNamespace(ns))
+			id, err := s.Put(ctx, art)
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}
@@ -286,13 +283,6 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 
 			if bytes.Contains(raw, []byte(usrSecret)) {
 				t.Errorf("%s: usr metadata leaked into manifest plaintext", tc.mode)
-			}
-			nsPresent := bytes.Contains(raw, []byte(ns))
-			if tc.nsHidden && nsPresent {
-				t.Errorf("Paranoid: Namespace leaked into manifest plaintext")
-			}
-			if !tc.nsHidden && !nsPresent {
-				t.Errorf("Sealed: Namespace should remain in plaintext for index-free Walk")
 			}
 			_ = s.Close()
 

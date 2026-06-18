@@ -29,12 +29,6 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...domain.Pu
 	dopts := domain.ApplyPut(opts...)
 
 	cfg := d.snapshotConfig()
-	// Fall back to the store's default namespace when the caller left it
-	// empty. Resolved before validation so the effective namespace (the
-	// default included) is what gets checked and recorded.
-	if dopts.Namespace == "" {
-		dopts.Namespace = cfg.DefaultPutNamespace
-	}
 
 	if err := validatePutInputs(a, dopts); err != nil {
 		return "", err
@@ -52,7 +46,7 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...domain.Pu
 
 	blob, err := aio.Materialize(ctx, cfg, a, dopts, writeKeyID)
 	if err != nil {
-		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", dopts.Namespace), slog.String("stage", "materialize"))
+		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("stage", "materialize"))
 	}
 
 	// Borrow the DEK under the crypto lock only for the duration of the
@@ -67,11 +61,11 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...domain.Pu
 		manifest, manifestBytes, aerr = aio.AssembleManifest(cfg, a, dopts, blob, dek, writeKeyID)
 		return aerr
 	}); err != nil {
-		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", dopts.Namespace), slog.String("stage", "assemble"))
+		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("stage", "assemble"))
 	}
 
 	if err := aio.PersistManifest(ctx, manifest, manifestBytes, blob.Addr); err != nil {
-		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("namespace", dopts.Namespace), slog.String("stage", "persist"))
+		return "", d.traceErr(ctx, "Put", fmt.Errorf("store.Put: %w", err), slog.String("stage", "persist"))
 	}
 
 	d.publish(event.EventManifestSaved, event.ManifestSavedPayload{Manifest: manifest})
@@ -86,7 +80,6 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...domain.Pu
 		log.LogAttrs(ctx, slog.LevelDebug, "put committed",
 			storeIDAttr(d.core),
 			slog.String("artifact_id", string(manifest.ArtifactID)),
-			slog.String("namespace", dopts.Namespace),
 			manifestCryptoAttr(cfg.ManifestCrypto),
 			keyIDAttr(writeKeyID),
 		)
@@ -148,12 +141,6 @@ func (c *core) checkPutSupported(cfg domain.StoreConfig, opts domain.PutOptions)
 func validatePutInputs(a domain.Artifact, opts domain.PutOptions) error {
 	if a.Payload == nil {
 		return errors.New("store.Put: nil Payload")
-	}
-	if len(opts.Namespace) > domain.MaxNamespaceLen {
-		return errs.ErrNamespaceTooLong
-	}
-	if opts.Namespace == domain.NamespaceWildcard {
-		return errs.ErrReservedNamespace
 	}
 	if len(opts.SessionID) > domain.MaxSessionIDLen {
 		return errs.ErrSessionIDTooLong
