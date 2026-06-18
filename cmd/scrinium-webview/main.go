@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"scrinium.dev/cmd/internal/daemon"
-	"scrinium.dev/cmd/scrinium-webview/web"
+	"scrinium.dev/cmd/scrinium-webview/internal/web"
 	"scrinium.dev/domain"
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"

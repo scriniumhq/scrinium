@@ -76,7 +76,7 @@
 // Admin plane (AdminStore):
 //
 //   - admin_config.go      — Config, UpdateConfig, ConfigHistory.
-//   - admin_crypto_impl.go — Unlock, RotateKEK, SetPassphrase,
+//   - admin_crypto.go — Unlock, RotateKEK, SetPassphrase,
 //     ExportRecoveryKit, and callProvider; holds crypto.mu for the whole
 //     operation.
 //   - admin_close.go       — Close.
