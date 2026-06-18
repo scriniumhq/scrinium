@@ -13,6 +13,8 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
+	reg "scrinium.dev/internal/registry"
+	"scrinium.dev/internal/slogx"
 )
 
 // State is the lifecycle state of an agent reported by Status.
@@ -61,15 +63,8 @@ func (b *baseState) setState(s State, err error) {
 // slog.DiscardHandler and pays nothing (Enabled == false). Logs explain;
 // they never replace a returned error (no log-and-return).
 func (b *baseState) logger() *slog.Logger {
-	if b.log == nil {
-		return discardLogger
-	}
-	return b.log
+	return slogx.OrDiscard(b.log)
 }
-
-// discardLogger is the shared no-op logger (ADR-60: default is silence,
-// no slog.Default() reach-through).
-var discardLogger = slog.New(slog.DiscardHandler)
 
 // AgentOption tunes an agent at construction. The variadic form keeps
 // existing constructor call sites source-compatible; the assembler
@@ -90,10 +85,7 @@ func resolveAgentLogger(opts []AgentOption) *slog.Logger {
 	for _, fn := range opts {
 		fn(&o)
 	}
-	if o.logger == nil {
-		return discardLogger
-	}
-	return o.logger
+	return slogx.OrDiscard(o.logger)
 }
 
 // Agent is the single lifecycle contract of a Scrinium agent (ADR-68).
@@ -154,10 +146,7 @@ type Factory interface {
 	Build(st store.Store, cfg any, deps AgentDeps) (Agent, error)
 }
 
-var (
-	registryMu sync.RWMutex
-	registry   = map[string]Factory{}
-)
+var registry = reg.New[Factory]()
 
 // agentTypePattern matches a short built-in name ("gc") or a
 // namespaced custom index name ("acme.replicator"). Lowercase only.
@@ -179,20 +168,14 @@ func Register(f Factory) {
 	if !validAgentType(name) {
 		panic(fmt.Sprintf("agent.Register: invalid agent type %q", name))
 	}
-	registryMu.Lock()
-	defer registryMu.Unlock()
-	if _, dup := registry[name]; dup {
+	if !registry.SetFirstWins(name, f) {
 		panic(fmt.Sprintf("agent.Register: duplicate agent type %q", name))
 	}
-	registry[name] = f
 }
 
 // Lookup returns the Factory registered for name.
 func Lookup(name string) (Factory, bool) {
-	registryMu.RLock()
-	defer registryMu.RUnlock()
-	f, ok := registry[name]
-	return f, ok
+	return registry.Get(name)
 }
 
 // Build resolves the Factory for kind and constructs the agent. An

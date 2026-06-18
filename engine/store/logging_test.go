@@ -139,20 +139,20 @@ func TestResolveLogger_AddsScriniumGroup(t *testing.T) {
 
 func TestRedaction_DEKNeverRendered(t *testing.T) {
 	secret := []byte("super-secret-dek-bytes")
-	v := redactedDEK(secret).LogValue()
+	v := redactedSecret(secret).LogValue()
 	if got := v.String(); got != redactedKey {
-		t.Fatalf("redactedDEK rendered %q; must be %q", got, redactedKey)
+		t.Fatalf("redactedSecret rendered %q; must be %q", got, redactedKey)
 	}
 	if bytes.Contains([]byte(v.String()), secret) {
-		t.Fatal("redactedDEK leaked key material into the log value")
+		t.Fatal("redactedSecret leaked key material into the log value")
 	}
 }
 
 func TestRedaction_PassphraseNeverRendered(t *testing.T) {
 	secret := []byte("correct horse battery staple")
-	v := redactedPassphrase(secret).LogValue()
+	v := redactedSecret(secret).LogValue()
 	if got := v.String(); got != redactedKey {
-		t.Fatalf("redactedPassphrase rendered %q; must be %q", got, redactedKey)
+		t.Fatalf("redactedSecret rendered %q; must be %q", got, redactedKey)
 	}
 }
 
@@ -163,7 +163,7 @@ func TestRedaction_ThroughHandler(t *testing.T) {
 	h, recs, _ := newCaptureHandler(slog.LevelDebug)
 	l := slog.New(h)
 
-	l.Info("crypto op", slog.Any("dek", redactedDEK([]byte("leak-me-if-you-can"))))
+	l.Info("crypto op", slog.Any("dek", redactedSecret([]byte("leak-me-if-you-can"))))
 
 	got := (*recs)[0].Attrs["dek"]
 	if got != redactedKey {

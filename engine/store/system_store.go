@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/namedstore"
 	"scrinium.dev/engine/store/internal/artifactio"
+	"scrinium.dev/internal/slogx"
 )
 
 // systemStore is the SystemStore facade over the pointer-free layout
@@ -186,8 +187,5 @@ func (ss *systemStore) Walk(ctx context.Context, prefix string, cb func(name str
 // logger returns the systemStore's logger, never nil. Mirrors the
 // store-level nil-safety so call sites need no guard.
 func (ss *systemStore) logger() *slog.Logger {
-	if ss.log == nil {
-		return discardLogger
-	}
-	return ss.log
+	return slogx.OrDiscard(ss.log)
 }

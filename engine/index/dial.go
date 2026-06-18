@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"slices"
-	"sync"
+
+	"scrinium.dev/internal/registry"
 )
 
 // Dialer opens a StoreIndex from a parsed URI. Implementations
@@ -22,10 +22,7 @@ type Dialer func(ctx context.Context, u *url.URL, opts ...IndexOption) (StoreInd
 // dialers holds the registered URI scheme handlers. Populated
 // by package init() in index/<scheme> packages, read by
 // DialIndex.
-var (
-	dialersMu sync.RWMutex
-	dialers   = map[string]Dialer{}
-)
+var dialers = registry.New[Dialer]()
 
 // RegisterDialer attaches a Dialer to a URI scheme. Called
 // from package init() in index implementations:
@@ -43,25 +40,13 @@ func RegisterDialer(scheme string, d Dialer) {
 	if d == nil {
 		panic(fmt.Sprintf("index: nil dialer for scheme %q", scheme))
 	}
-	dialersMu.Lock()
-	defer dialersMu.Unlock()
-	if _, exists := dialers[scheme]; exists {
-		return // already registered — keep the first, ignore the rest.
-	}
-	dialers[scheme] = d
+	dialers.SetFirstWins(scheme, d) // first wins; duplicates ignored (ADR-63).
 }
 
 // RegisteredSchemes returns the schemes currently registered.
 // Sorted; useful for error messages and --help output.
 func RegisteredSchemes() []string {
-	dialersMu.RLock()
-	defer dialersMu.RUnlock()
-	out := make([]string, 0, len(dialers))
-	for s := range dialers {
-		out = append(out, s)
-	}
-	slices.Sort(out)
-	return out
+	return dialers.Keys()
 }
 
 // DialIndex opens a StoreIndex by URI. The scheme selects the
@@ -85,10 +70,7 @@ func DialIndex(ctx context.Context, uri string, opts ...IndexOption) (StoreIndex
 		return nil, fmt.Errorf("index: URI %q has no scheme (expected e.g. sqlite://path)", uri)
 	}
 
-	dialersMu.RLock()
-	d, ok := dialers[u.Scheme]
-	dialersMu.RUnlock()
-
+	d, ok := dialers.Get(u.Scheme)
 	if !ok {
 		return nil, fmt.Errorf("index: scheme %q not registered (import index/%s to enable; available: %v)",
 			u.Scheme, u.Scheme, RegisteredSchemes())

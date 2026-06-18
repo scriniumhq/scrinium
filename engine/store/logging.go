@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/internal/slogx"
 )
 
 // logging.go — the engine's logging foundation (ADR-60).
@@ -15,9 +16,9 @@ import (
 // no package-global logger, and no slog.Default() reach-through.
 //
 // Default is silence. A store built without WithLogger logs nowhere and
-// pays nothing: discardLogger wraps slog.DiscardHandler, whose Enabled
-// always reports false. This package is the canonical instance of the
-// system-wide model — the contract lives in docs/3 Reference/14 Logging.md,
+// pays nothing: the shared slogx.Discard wraps slog.DiscardHandler, whose
+// Enabled always reports false. This package is the canonical instance of
+// the system-wide model — the contract lives in docs/3 Reference/14 Logging.md,
 // the cross-layer invariants in docs/2 Internals/13 Concurrency Model.md.
 //
 // Three rules this package follows (and that sibling files must keep):
@@ -31,11 +32,6 @@ import (
 //   - key material never reaches a log. Secret-bearing values implement
 //     slog.LogValuer and redact themselves; only KeyID (an opaque id) is
 //     logged, never the DEK / passphrase / KEK.
-
-// discardLogger is the shared no-op logger used whenever the host did not
-// supply one. slog.DiscardHandler (Go 1.24+) reports Enabled == false, so
-// every call short-circuits before any argument is formatted.
-var discardLogger = slog.New(slog.DiscardHandler)
 
 // WithLogger provides the *slog.Logger the Store and its components log
 // against. Optional: without it the Store is silent (slog.DiscardHandler).
@@ -56,7 +52,7 @@ func WithLogger(l *slog.Logger) StoreOption {
 // cost on hot paths.
 func resolveLogger(l *slog.Logger) *slog.Logger {
 	if l == nil {
-		return discardLogger
+		return slogx.Discard
 	}
 	return l.WithGroup("scrinium")
 }
@@ -64,10 +60,7 @@ func resolveLogger(l *slog.Logger) *slog.Logger {
 // logger returns the store's logger, never nil. Mirrors the nil-safety of
 // publish: cheap and always callable.
 func (c *core) logger() *slog.Logger {
-	if c.log == nil {
-		return discardLogger
-	}
-	return c.log
+	return slogx.OrDiscard(c.log)
 }
 
 // componentLogger derives a sublogger tagged with the component name
@@ -99,21 +92,20 @@ func optsLogger(o storeOptions, component string) *slog.Logger {
 // material in a log record.
 const redactedKey = "<redacted>"
 
-// redactedDEK wraps a data-encryption key for logging. Its LogValue never
-// exposes the bytes; it reports only that a key is present and its length
-// class is hidden. Use this if a DEK ever needs to appear in a log
-// attribute — the bytes themselves stay out of the record.
-type redactedDEK []byte
+// redactedSecret wraps any secret byte buffer (a DEK, a passphrase, a
+// wrapped KEK) for logging. Its LogValue never exposes the bytes; it
+// renders only the redaction sentinel. Use it when a secret would
+// otherwise land in a slog attribute — the material stays out of the
+// record while the attribute's presence remains visible.
+//
+// One type covers every secret: the buffers are byte-identical from the
+// logger's point of view, so a per-secret type bought nothing but a name.
+// The call site names the attribute (e.g. slog.Any("dek", redactedSecret(k)))
+// where the role matters.
+type redactedSecret []byte
 
-// LogValue implements slog.LogValuer. The DEK is never rendered.
-func (redactedDEK) LogValue() slog.Value { return slog.StringValue(redactedKey) }
-
-// redactedPassphrase wraps a passphrase buffer for logging. Same
-// discipline as redactedDEK: the buffer is never rendered.
-type redactedPassphrase []byte
-
-// LogValue implements slog.LogValuer. The passphrase is never rendered.
-func (redactedPassphrase) LogValue() slog.Value { return slog.StringValue(redactedKey) }
+// LogValue implements slog.LogValuer. The secret is never rendered.
+func (redactedSecret) LogValue() slog.Value { return slog.StringValue(redactedKey) }
 
 // keyIDAttr is the canonical, safe way to log a write/read key: by its
 // opaque KeyID, never by its material. An empty KeyID (the default
