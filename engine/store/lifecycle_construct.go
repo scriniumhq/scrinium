@@ -52,7 +52,7 @@ func buildStore(
 	// only the driver, the hash registry, the active config (for its
 	// immutable ContentHasher), and a logger — no StoreIndex and no write
 	// indirection, since system artifacts are unindexed and the inline
-	// write is self-contained in namedartifact.
+	// write is self-contained in namedio.
 	c.system = systemstore.New(drv, o.hashRegistry, cfg, c.log)
 	return c, nil
 }

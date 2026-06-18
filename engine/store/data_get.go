@@ -6,17 +6,17 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/internal/artifactio"
+	"scrinium.dev/engine/internal/casio"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
 
-// artifactIO builds an artifactio.IO bound to this store's driver, index,
+// casio builds an casio.IO bound to this store's driver, index,
 // and registries. The value is a cheap stateless handle, constructed per
 // operation rather than held as a field.
-func (c *core) artifactIO() *artifactio.IO {
-	return artifactio.New(c.drv, c.index, c.hashes, c.transformers)
+func (c *core) casio() *casio.IO {
+	return casio.New(c.drv, c.index, c.hashes, c.transformers)
 }
 
 // Get opens an artifact for reading. It reads only the manifest and
@@ -42,7 +42,7 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 		return nil, err
 	}
 
-	aio := d.artifactIO()
+	aio := d.casio()
 	inner, err := aio.OpenHandle(ctx, manifest)
 	if err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 // refusal. asKeyProvider maps a nil resolver to a nil provider (the
 // typed-nil guard).
 func (c *core) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	return c.artifactIO().Load(ctx, id, asKeyProvider(c.crypto.resolver()), string(c.snapshotConfig().ContentHasher))
+	return c.casio().Load(ctx, id, asKeyProvider(c.crypto.resolver()), string(c.snapshotConfig().ContentHasher))
 }
 
 // guardHandleless enforces the negative identity invariant (ADR-83): a

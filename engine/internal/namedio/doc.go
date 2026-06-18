@@ -1,7 +1,7 @@
-// Package namedartifact is the pointer-free on-disk layout for system
+// Package namedio is the pointer-free on-disk layout for system
 // artifacts (ADR-85): manifests addressed by a NAME rather than by
 // content hash, the name-addressed counterpart of the content-addressed
-// engine/internal/artifactio. It is the single source of truth for where
+// engine/internal/casio. It is the single source of truth for where
 // a system artifact lives and how its active version is chosen, shared by
 // the callers that previously each carried their own copy of the rule:
 // the systemstore facade (engine/systemstore), the bootstrap config path
@@ -48,4 +48,4 @@
 // pass. Config is read at every store-open and the few other system
 // names on each touch — frequent enough that verify-on-read is the
 // whole integrity story.
-package namedartifact
+package namedio

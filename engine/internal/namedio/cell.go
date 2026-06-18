@@ -1,4 +1,4 @@
-package namedartifact
+package namedio
 
 import (
 	"bytes"

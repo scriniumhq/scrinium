@@ -2,7 +2,7 @@
 // tests.
 //
 // It exists so test code outside the engine/store tree — e.g. the
-// engine/internal/artifactio I/O tests, which exercise the write path
+// engine/internal/casio I/O tests, which exercise the write path
 // against a realistic config — can obtain one without importing the
 // store-internal storeconfig package (internal visibility forbids it).
 //

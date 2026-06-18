@@ -10,5 +10,5 @@
 // its own package rather than as a facet over the store core.
 //
 // The on-disk layout (versioned names, keep=0 cells, exclusive-create
-// publishing, verify-on-read) lives in engine/internal/namedartifact (ADR-85).
+// publishing, verify-on-read) lives in engine/internal/namedio (ADR-85).
 package systemstore

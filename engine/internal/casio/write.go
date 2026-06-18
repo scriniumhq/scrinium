@@ -1,4 +1,4 @@
-package artifactio
+package casio
 
 import (
 	"bytes"
@@ -31,7 +31,7 @@ type IO struct {
 }
 
 // New wires an IO to its dependencies. The store layer owns these
-// objects and injects them so artifactio never reaches into *store
+// objects and injects them so casio never reaches into *store
 // internals.
 func New(
 	drv driver.Driver,
@@ -78,7 +78,7 @@ func (x *IO) Materialize(ctx context.Context, cfg domain.StoreConfig, a domain.A
 	if inlineMode {
 		head, err := io.ReadAll(io.LimitReader(a.Payload, cfg.InlineBlobLimit+1))
 		if err != nil {
-			return Result{}, fmt.Errorf("artifactio: read payload head: %w", err)
+			return Result{}, fmt.Errorf("casio: read payload head: %w", err)
 		}
 		if int64(len(head)) <= cfg.InlineBlobLimit {
 			return x.materializeInline(hashAlgo, head)
@@ -95,10 +95,10 @@ func (x *IO) Materialize(ctx context.Context, cfg domain.StoreConfig, a domain.A
 func (x *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
 	h, err := x.hashes.NewHasher(hashAlgo)
 	if err != nil {
-		return Result{}, fmt.Errorf("artifactio: hasher: %w", err)
+		return Result{}, fmt.Errorf("casio: hasher: %w", err)
 	}
 	if _, err := h.Write(body); err != nil {
-		return Result{}, fmt.Errorf("artifactio: hash inline: %w", err)
+		return Result{}, fmt.Errorf("casio: hash inline: %w", err)
 	}
 	ch := domain.ContentHash(hex.EncodeToString(h.Sum(nil)))
 	return Result{
@@ -122,11 +122,11 @@ func (x *IO) streamToTarget(ctx context.Context, cfg domain.StoreConfig, hashAlg
 		SegmentSize:    cfg.SegmentSize,    // ADR-59: segmented AEAD frame size
 	})
 	if err != nil {
-		return Result{}, fmt.Errorf("artifactio: build put pipeline: %w", err)
+		return Result{}, fmt.Errorf("casio: build put pipeline: %w", err)
 	}
 
 	if err := x.drv.Put(ctx, stagingPath, stream); err != nil {
-		return Result{}, fmt.Errorf("artifactio: stage payload: %w", err)
+		return Result{}, fmt.Errorf("casio: stage payload: %w", err)
 	}
 
 	contentHash, blobRef, stages := pp.Finalize()
@@ -161,26 +161,26 @@ func (x *IO) commitBlob(
 	existingRef, found, err := x.dedupProbe(ctx, contentHash, originalSize, blobRef, crypto)
 	if err != nil {
 		_ = x.drv.Remove(ctx, stagingPath)
-		return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: dedup probe: %w", err)
+		return "", domain.PhysicalAddress{}, fmt.Errorf("casio: dedup probe: %w", err)
 	}
 	if found {
 		if err := x.drv.Remove(ctx, stagingPath); err != nil {
-			return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: drop staging: %w", err)
+			return "", domain.PhysicalAddress{}, fmt.Errorf("casio: drop staging: %w", err)
 		}
 		addr, err := x.index.Resolve(ctx, existingRef)
 		if err != nil {
-			return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: resolve existing blob: %w", err)
+			return "", domain.PhysicalAddress{}, fmt.Errorf("casio: resolve existing blob: %w", err)
 		}
 		return domain.BlobRef(existingRef), addr, nil
 	}
 	finalPath, err := artifact.BlobPath(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
 	if err != nil {
 		_ = x.drv.Remove(ctx, stagingPath)
-		return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: resolve blob path: %w", err)
+		return "", domain.PhysicalAddress{}, fmt.Errorf("casio: resolve blob path: %w", err)
 	}
 	if err := x.drv.Rename(ctx, stagingPath, finalPath); err != nil {
 		_ = x.drv.Remove(ctx, stagingPath)
-		return "", domain.PhysicalAddress{}, fmt.Errorf("artifactio: commit blob: %w", err)
+		return "", domain.PhysicalAddress{}, fmt.Errorf("casio: commit blob: %w", err)
 	}
 	return blobRef, domain.PhysicalAddress{Path: finalPath}, nil
 }
@@ -256,11 +256,11 @@ func (x *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 
 	nonce, err := identityNonce(cfg.IdentityMode)
 	if err != nil {
-		return domain.Manifest{}, nil, fmt.Errorf("artifactio: identity nonce: %w", err)
+		return domain.Manifest{}, nil, fmt.Errorf("casio: identity nonce: %w", err)
 	}
 	withHandle, err := artifact.ComputeHandle(manifest, hashAlgo, x.hashes, hashing.NamingKeyPublic, nonce)
 	if err != nil {
-		return domain.Manifest{}, nil, fmt.Errorf("artifactio: compute handle: %w", err)
+		return domain.Manifest{}, nil, fmt.Errorf("casio: compute handle: %w", err)
 	}
 
 	_, fileBytes, sm, err := artifact.ComputeManifestDigest(
@@ -272,7 +272,7 @@ func (x *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 		// orphan blob is harmless — ref_count stays 0 and GC reaps it —
 		// whereas an inverse Rename could race a parallel dedup on the same
 		// content.
-		return domain.Manifest{}, nil, fmt.Errorf("artifactio: compute manifest digest: %w", err)
+		return domain.Manifest{}, nil, fmt.Errorf("casio: compute manifest digest: %w", err)
 	}
 	return sm, fileBytes, nil
 }
@@ -300,15 +300,15 @@ func identityNonce(mode domain.IdentityMode) ([]byte, error) {
 func (x *IO) PersistManifest(ctx context.Context, manifest domain.Manifest, manifestBytes []byte, addr domain.PhysicalAddress) error {
 	manifestPath, err := artifact.ManifestPath(manifest.Digest)
 	if err != nil {
-		return fmt.Errorf("artifactio: manifest path: %w", err)
+		return fmt.Errorf("casio: manifest path: %w", err)
 	}
 	if err := x.drv.Put(ctx, manifestPath, bytes.NewReader(manifestBytes)); err != nil {
-		return fmt.Errorf("artifactio: write manifest: %w", err)
+		return fmt.Errorf("casio: write manifest: %w", err)
 	}
 	if err := x.index.IndexManifest(ctx, manifest, addr); err != nil {
 		// Manifest is on disk but unindexed; the rebuild agent is the
 		// recovery path. Surface so the caller can retry.
-		return fmt.Errorf("artifactio: index manifest: %w", err)
+		return fmt.Errorf("casio: index manifest: %w", err)
 	}
 	return nil
 }

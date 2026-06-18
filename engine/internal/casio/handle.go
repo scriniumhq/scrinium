@@ -1,4 +1,4 @@
-package artifactio
+package casio
 
 // handle.go — the blob-backed domain.ReadHandle implementations returned
 // to store's Get. Moved out of package store and decoupled from *store:
@@ -11,7 +11,7 @@ package artifactio
 //                           NOT publish events; store publishes
 //                           EventScrubFailed when it sees the error.
 //
-// They satisfy domain.ReadHandle, which lives in domain, so artifactio
+// They satisfy domain.ReadHandle, which lives in domain, so casio
 // returns them without importing store (no cycle).
 
 import (
@@ -159,7 +159,7 @@ func (x *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHand
 	case domain.LayoutTarget:
 		addr, err := x.index.Resolve(ctx, string(m.PrimaryBlobRef()))
 		if err != nil {
-			return nil, fmt.Errorf("artifactio.OpenHandle: resolve blob path: %w", err)
+			return nil, fmt.Errorf("casio.OpenHandle: resolve blob path: %w", err)
 		}
 		return &targetReadHandle{
 			manifest: m,
@@ -170,7 +170,7 @@ func (x *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHand
 		}, nil
 
 	default:
-		return nil, fmt.Errorf("artifactio.OpenHandle: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
+		return nil, fmt.Errorf("casio.OpenHandle: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
 	}
 }
 
@@ -193,7 +193,7 @@ type verifyingReadHandle struct {
 
 	// onMismatch is invoked once, the first time finalize detects
 	// corruption, with the artifact's ID and the failure error. It lets
-	// the store publish EventScrubFailed without artifactio importing the
+	// the store publish EventScrubFailed without casio importing the
 	// event bus: the mechanism (rehash) lives here, the consequence
 	// (publish) is injected. nil is allowed — the error still propagates
 	// through Read; only the side-effect is skipped.
@@ -223,7 +223,7 @@ func (x *IO) WrapVerifying(inner domain.ReadHandle, onMismatch func(domain.Artif
 	want, hasher, err := artifact.ParseContentHash(x.hashes, algo, m.ContentHash)
 	if err != nil {
 		_ = inner.Close()
-		return nil, fmt.Errorf("artifactio.WrapVerifying: %w", err)
+		return nil, fmt.Errorf("casio.WrapVerifying: %w", err)
 	}
 	limit := int64(-1)
 	if m.OriginalSize > 0 {

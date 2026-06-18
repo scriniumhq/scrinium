@@ -1,4 +1,4 @@
-package artifactio
+package casio
 
 // read.go — the read half of the artifact I/O layer, mirroring the write
 // half (Materialize/Assemble/Persist ↔ Load/OpenBlob/VerifyBlob). Pure
@@ -40,26 +40,26 @@ func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 	}
 	digest, ok, err := x.index.ResolveManifestDigest(ctx, id)
 	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("artifactio.Load: resolve digest: %w", err)
+		return domain.Manifest{}, fmt.Errorf("casio.Load: resolve digest: %w", err)
 	}
 	if !ok {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
 	}
 	manifestPath, err := artifact.ManifestPath(digest)
 	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("artifactio.Load: path: %w", err)
+		return domain.Manifest{}, fmt.Errorf("casio.Load: path: %w", err)
 	}
 	rc, err := x.drv.Get(ctx, manifestPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return domain.Manifest{}, errs.ErrArtifactNotFound
 		}
-		return domain.Manifest{}, fmt.Errorf("artifactio.Load: read: %w", err)
+		return domain.Manifest{}, fmt.Errorf("casio.Load: read: %w", err)
 	}
 	raw, err := io.ReadAll(io.LimitReader(rc, domain.MaxManifestSize+1))
 	_ = rc.Close()
 	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("artifactio.Load: read body: %w", err)
+		return domain.Manifest{}, fmt.Errorf("casio.Load: read body: %w", err)
 	}
 	if len(raw) > domain.MaxManifestSize {
 		return domain.Manifest{}, errs.ErrManifestTooLarge
@@ -95,7 +95,7 @@ func (x *IO) OpenBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser, er
 	decoded, err := x.runner().BuildGet(m.Pipeline, raw)
 	if err != nil {
 		// BuildGet closed raw on its failure path.
-		return nil, fmt.Errorf("artifactio.OpenBlob: build pipeline: %w", err)
+		return nil, fmt.Errorf("casio.OpenBlob: build pipeline: %w", err)
 	}
 	return decoded, nil
 }
@@ -111,19 +111,19 @@ func (x *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser,
 	case domain.LayoutTarget:
 		addr, err := x.index.Resolve(ctx, string(m.PrimaryBlobRef()))
 		if err != nil {
-			return nil, fmt.Errorf("artifactio: resolve blob path: %w", err)
+			return nil, fmt.Errorf("casio: resolve blob path: %w", err)
 		}
 		rc, err := x.drv.Get(ctx, addr.Path)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				return nil, errs.ErrCorruptedBlob
 			}
-			return nil, fmt.Errorf("artifactio: get blob: %w", err)
+			return nil, fmt.Errorf("casio: get blob: %w", err)
 		}
 		return rc, nil
 
 	default:
-		return nil, fmt.Errorf("artifactio: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
+		return nil, fmt.Errorf("casio: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
 	}
 }
 
@@ -136,7 +136,7 @@ func (x *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser,
 func (x *IO) VerifyBlob(ctx context.Context, m domain.Manifest) error {
 	want, hasher, err := artifact.ParseContentHash(x.hashes, m.HashAlgo, m.ContentHash)
 	if err != nil {
-		return fmt.Errorf("artifactio.VerifyBlob: %w", err)
+		return fmt.Errorf("casio.VerifyBlob: %w", err)
 	}
 
 	plaintext, err := x.OpenBlob(ctx, m)
@@ -152,7 +152,7 @@ func (x *IO) VerifyBlob(ctx context.Context, m domain.Manifest) error {
 		return errors.Join(errs.ErrCorruptedBlob, copyErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("artifactio.VerifyBlob: close blob reader: %w", closeErr)
+		return fmt.Errorf("casio.VerifyBlob: close blob reader: %w", closeErr)
 	}
 	if !bytes.Equal(hasher.Sum(nil), want) {
 		return errs.ErrCorruptedBlob

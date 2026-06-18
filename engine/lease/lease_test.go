@@ -15,7 +15,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/internal/namedartifact"
+	"scrinium.dev/engine/internal/namedio"
 	"scrinium.dev/engine/lease"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/driverfx"
@@ -68,11 +68,11 @@ func writeRecord(t *testing.T, drv driver.Driver, rec lease.Record) {
 	if err != nil {
 		t.Fatalf("marshal record: %v", err)
 	}
-	fileBytes, _, err := namedartifact.BuildInlineManifest(body, "sha256", leaseTestHashes{})
+	fileBytes, _, err := namedio.BuildInlineManifest(body, "sha256", leaseTestHashes{})
 	if err != nil {
 		t.Fatalf("build manifest: %v", err)
 	}
-	if err := namedartifact.WriteCell(context.Background(), drv, leaseName, fileBytes, false); err != nil {
+	if err := namedio.WriteCell(context.Background(), drv, leaseName, fileBytes, false); err != nil {
 		t.Fatalf("write cell: %v", err)
 	}
 }
@@ -81,7 +81,7 @@ func writeRecord(t *testing.T, drv driver.Driver, rec lease.Record) {
 // lease cell path, bypassing the manifest form.
 func putRaw(t *testing.T, drv driver.Driver, body string) {
 	t.Helper()
-	path, err := namedartifact.CellPath(leaseName)
+	path, err := namedio.CellPath(leaseName)
 	if err != nil {
 		t.Fatalf("cell path: %v", err)
 	}
@@ -93,7 +93,7 @@ func putRaw(t *testing.T, drv driver.Driver, body string) {
 // readRecord loads and parses the lease cell. ok is false when absent.
 func readRecord(t *testing.T, drv driver.Driver) (rec lease.Record, ok bool) {
 	t.Helper()
-	m, err := namedartifact.LoadCell(context.Background(), drv, leaseTestHashes{}, leaseName)
+	m, err := namedio.LoadCell(context.Background(), drv, leaseTestHashes{}, leaseName)
 	if err != nil {
 		if errors.Is(err, errs.ErrArtifactNotFound) {
 			return lease.Record{}, false
@@ -109,7 +109,7 @@ func readRecord(t *testing.T, drv driver.Driver) (rec lease.Record, ok bool) {
 // readRaw returns the lease cell file body verbatim (empty when absent).
 func readRaw(t *testing.T, drv driver.Driver) string {
 	t.Helper()
-	path, err := namedartifact.CellPath(leaseName)
+	path, err := namedio.CellPath(leaseName)
 	if err != nil {
 		t.Fatalf("cell path: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestRenew_LostWhenDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
-	if err := namedartifact.RemoveCell(context.Background(), drv, leaseName); err != nil {
+	if err := namedio.RemoveCell(context.Background(), drv, leaseName); err != nil {
 		t.Fatalf("RemoveCell: %v", err)
 	}
 	if err := l.Renew(context.Background()); !errors.Is(err, errs.ErrLeaseLost) {
@@ -347,7 +347,7 @@ func TestRelease_AbsentIsNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
-	if err := namedartifact.RemoveCell(context.Background(), drv, leaseName); err != nil {
+	if err := namedio.RemoveCell(context.Background(), drv, leaseName); err != nil {
 		t.Fatalf("RemoveCell: %v", err)
 	}
 	if err := l.Release(context.Background()); err != nil {

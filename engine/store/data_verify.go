@@ -18,7 +18,7 @@ import (
 //  1. loadManifest, which itself verifies ArtifactID = hash(file bytes)
 //     and decrypts the body for Sealed/Paranoid via the configured
 //     KeyResolver.
-//  2. Re-hash the blob plaintext bytes (artifactio.VerifyBlob), comparing
+//  2. Re-hash the blob plaintext bytes (casio.VerifyBlob), comparing
 //     to manifest.ContentHash. On divergence the store emits
 //     EventScrubFailed and returns errs.ErrCorruptedBlob.
 //
@@ -29,9 +29,9 @@ import (
 // well — for an admin operation, "decryption tag did not match" and
 // "plaintext hash did not match" are the same fault category.
 //
-// The integrity mechanics live in artifactio; the store owns the policy
+// The integrity mechanics live in casio; the store owns the policy
 // (state gate, manifest-type dispatch) and the consequence (event +
-// log). artifactio returns ErrCorruptedBlob; the store publishes
+// log). casio returns ErrCorruptedBlob; the store publishes
 // EventScrubFailed (ADR-60: errors return, events publish, logs explain).
 //
 // Handleless manifests (empty identity slot) collapse to not-found via
@@ -53,7 +53,7 @@ func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
 		return err
 	}
 
-	if err := d.artifactIO().VerifyBlob(ctx, manifest); err != nil {
+	if err := d.casio().VerifyBlob(ctx, manifest); err != nil {
 		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: id,
 			Err:        err,
@@ -122,7 +122,7 @@ func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
 		return err
 	}
 
-	if err := d.artifactIO().VerifyBlob(ctx, manifest); err != nil {
+	if err := d.casio().VerifyBlob(ctx, manifest); err != nil {
 		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: consumerID,
 			Err:        err,

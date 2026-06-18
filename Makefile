@@ -110,7 +110,7 @@ else
 endif
 
 # Single-package test. Usage: make test-pkg P=core
-# (or P=store/internal/artifactio, P=store/index/sqlite, etc.)
+# (or P=store/internal/casio, P=store/index/sqlite, etc.)
 .PHONY: test-pkg
 test-pkg:
 ifndef P
@@ -209,7 +209,7 @@ endif
 
 # Active fuzz. Usage:
 #   make fuzz P=store/internal/descriptor F=FuzzUnmarshal
-#   make fuzz P=store/internal/artifactio F=FuzzDecodeFile T=2m
+#   make fuzz P=store/internal/casio F=FuzzDecodeFile T=2m
 .PHONY: fuzz
 fuzz:
 ifndef P

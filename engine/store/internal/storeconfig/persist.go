@@ -7,7 +7,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/internal/namedartifact"
+	"scrinium.dev/engine/internal/namedio"
 	"scrinium.dev/errs"
 )
 
@@ -15,7 +15,7 @@ import (
 // StoreConfig and its history live: system/store.config/<seq> (ADR-85). The
 // active config is max(seq); a new config is published by claiming the
 // next seq. There is no pointer file — the config path uses the same
-// name→seq mechanism as every other system artifact (namedartifact),
+// name→seq mechanism as every other system artifact (namedio),
 // which is what removed the bespoke pointer this package used to carry.
 const configName = "store.config"
 
@@ -24,7 +24,7 @@ const configName = "store.config"
 // written (max seq).
 //
 // storeconfig owns the system.config FORMAT (StoreConfig serialisation);
-// namedartifact owns the MECHANICS (inline manifest build, seq claim,
+// namedio owns the MECHANICS (inline manifest build, seq claim,
 // verify-on-read) shared with every other system artifact.
 func Write(
 	ctx context.Context,
@@ -38,11 +38,11 @@ func Write(
 	}
 	payload = append(payload, '\n')
 
-	fileBytes, _, err := namedartifact.BuildInlineManifest(payload, string(cfg.ContentHasher), hashes)
+	fileBytes, _, err := namedio.BuildInlineManifest(payload, string(cfg.ContentHasher), hashes)
 	if err != nil {
 		return fmt.Errorf("system config: build: %w", err)
 	}
-	if _, _, err := namedartifact.ClaimVersion(ctx, drv, configName, fileBytes); err != nil {
+	if _, _, err := namedio.ClaimVersion(ctx, drv, configName, fileBytes); err != nil {
 		return fmt.Errorf("system config: write: %w", err)
 	}
 	return nil
@@ -53,13 +53,13 @@ func Write(
 // readable at store-open before the index is trusted — by reading the
 // version directory directly. Returns errs.ErrConfigMissing when
 // no config has ever been written; a corrupted version surfaces as
-// errs.ErrCorruptedContent from the verify-on-read in namedartifact.Load.
+// errs.ErrCorruptedContent from the verify-on-read in namedio.Load.
 func Read(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
 ) (domain.StoreConfig, error) {
-	seq, found, err := namedartifact.ResolveActiveSeq(ctx, drv, configName)
+	seq, found, err := namedio.ResolveActiveSeq(ctx, drv, configName)
 	if err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("system config: resolve active: %w", err)
 	}
@@ -77,7 +77,7 @@ func History(
 	drv driver.Driver,
 	hashes domain.HashRegistry,
 ) ([]domain.StoreConfig, error) {
-	seqs, err := namedartifact.ListVersions(ctx, drv, configName)
+	seqs, err := namedio.ListVersions(ctx, drv, configName)
 	if err != nil {
 		return nil, fmt.Errorf("system config: list versions: %w", err)
 	}
@@ -97,11 +97,11 @@ func History(
 // loadVersion reads, verifies, and unmarshals the config at a specific
 // system/config seq.
 func loadVersion(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, seq uint64) (domain.StoreConfig, error) {
-	path, err := namedartifact.VersionPath(configName, seq)
+	path, err := namedio.VersionPath(configName, seq)
 	if err != nil {
 		return domain.StoreConfig{}, err
 	}
-	m, err := namedartifact.Load(ctx, drv, hashes, path)
+	m, err := namedio.Load(ctx, drv, hashes, path)
 	if err != nil {
 		return domain.StoreConfig{}, fmt.Errorf("system config: load: %w", err)
 	}
