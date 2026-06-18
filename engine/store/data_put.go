@@ -20,8 +20,7 @@ import (
 // inputs against the active config, resolves the write key and borrows
 // the DEK (the only crypto-locked steps), and delegates the physical
 // mechanics — blob materialization, manifest assembly, persistence — to
-// casio. The store keeps the policy and the secrets; casio
-// keeps the I/O.
+// casio. The store keeps the policy and the secrets; casio keeps the I/O.
 func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...domain.PutOption) (domain.ArtifactID, error) {
 	if err := d.enterWrite(ctx); err != nil {
 		return "", err
@@ -96,7 +95,7 @@ func (c *core) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) e
 	if cfg.ManifestCrypto == "" || cfg.ManifestCrypto == domain.ManifestCryptoPlain {
 		return fn(nil)
 	}
-	dek, err := c.crypto.dekForWrite(cfg.ManifestCrypto)
+	dek, err := c.crypto.DEKForWrite(cfg.ManifestCrypto)
 	if err != nil {
 		return err
 	}
@@ -110,7 +109,7 @@ func (c *core) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) e
 // — it must be a cheap, non-blocking lookup. Returns "" for an
 // unencrypted store.
 func (c *core) resolveWriteKeyID() string {
-	r := c.crypto.resolver()
+	r := c.crypto.Resolver()
 	if r == nil {
 		return ""
 	}

@@ -123,7 +123,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		if err != nil {
 			return nil, wrap("", err)
 		}
-		s.crypto.promoteResolverIfDefault()
+		s.crypto.PromoteResolverIfDefault()
 		if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 			return nil, wrap("", err)
 		}
@@ -184,7 +184,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		aead.Wipe(dek)
 		return nil, wrap("", err)
 	}
-	s.crypto.promoteResolverIfDefault()
+	s.crypto.PromoteResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		return nil, wrap("", err)
 	}

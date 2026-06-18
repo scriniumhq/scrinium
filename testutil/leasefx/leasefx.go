@@ -1,10 +1,10 @@
 // Package leasefx provides test fixtures for the named-store lease.
 //
-// It stages a lease through the real namedstore.Acquire — the on-disk
+// It stages a lease through the real lease.Acquire — the on-disk
 // record (cell manifest, nonce, timestamps) is therefore always
 // authoritative, instead of being hand-rolled in every agent's tests.
 // It lives in testutil alongside the other fixtures and imports the
-// lease from its home package, engine/namedstore.
+// lease from its home package, engine/lease.
 package leasefx
 
 import (

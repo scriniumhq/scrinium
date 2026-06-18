@@ -81,7 +81,7 @@
 //     pure mechanics (CallProvider, BuildRecoveryKit, InitEncryptedDEK)
 //     live in internal/crypto.
 //   - admin_close.go       — Close.
-//   - crypto_state.go      — the cryptoState component: DEK, descriptor,
+//   - crypto material lives in internal/crypto (crypto.State): DEK,
 //     provider, and resolver under crypto.mu.
 //
 // Lifecycle and bootstrap:
@@ -94,7 +94,7 @@
 // System and config plumbing:
 //
 //   - systemstore.go    — the systemStore facade (Put/Get/Delete/Walk),
-//     a thin adapter over namedstore. System artifacts are
+//     a thin adapter over namedio. System artifacts are
 //     addressed by name in their own system/ address space and are never
 //     indexed (ADR-85), so there is no pointer file and no opt-out flag.
 //
@@ -106,12 +106,12 @@
 //     and manifest load, blob open, and verification (read).
 //   - descriptor   — the on-disk descriptor and its L2 cache.
 //   - keyring      — the KDF (Argon2id) and KEK/DEK wrap/unwrap kernels.
-//   - namedstore — the system/<name>/<seq> address-space mechanics
+//   - namedio — the system/<name>/<seq> address-space mechanics
 //     (name validation, seq claim via atomic create, inline-manifest
 //     build, verify-on-read) shared by the systemStore facade and the
 //     storeconfig bootstrap path (ADR-85).
 //   - storeconfig  — the StoreConfig format, defaults, validation, and
-//     persistence (over namedstore).
+//     persistence (over namedio).
 //   - orphanscan   — bootstrap-time orphan recovery.
 //   - reconcile    — replica reconciliation.
 //   - recoverykit  — the recovery-kit format.

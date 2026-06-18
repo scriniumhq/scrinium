@@ -53,7 +53,7 @@ func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
 		return err
 	}
 
-	if err := d.casio().VerifyBlob(ctx, manifest); err != nil {
+	if err := d.casIO().VerifyBlob(ctx, manifest); err != nil {
 		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: id,
 			Err:        err,
@@ -122,7 +122,7 @@ func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
 		return err
 	}
 
-	if err := d.casio().VerifyBlob(ctx, manifest); err != nil {
+	if err := d.casIO().VerifyBlob(ctx, manifest); err != nil {
 		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: consumerID,
 			Err:        err,

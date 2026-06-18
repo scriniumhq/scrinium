@@ -49,9 +49,18 @@ func StoreKeyResolver(s Store) pipeline.KeyResolver {
 	if !ok {
 		return nil
 	}
-	concrete.dataFacet.core.crypto.mu.Lock()
-	defer concrete.dataFacet.core.crypto.mu.Unlock()
-	return concrete.dataFacet.core.crypto.keyResolver
+	return concrete.dataFacet.core.crypto.Resolver()
+}
+
+// StoreHasDEK reports whether the Store currently holds a DEK, exposing
+// only the presence bit (never the key material). Tests use it to assert
+// that Close wiped the key. Returns false for non-*store implementers.
+func StoreHasDEK(s Store) bool {
+	concrete, ok := s.(*store)
+	if !ok {
+		return false
+	}
+	return concrete.dataFacet.core.crypto.HasDEK()
 }
 
 // ReadDriverFile reads a file from the Store's underlying Driver.

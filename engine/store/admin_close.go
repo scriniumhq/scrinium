@@ -12,7 +12,7 @@ import (
 //  1. Mark closed under stateMu (early-return for repeat calls).
 //     This is the gate any subsequent operation hits via
 //     checkOperational, which short-circuits to os.ErrClosed.
-//  2. Wipe DEK and capability token via crypto.closeSecrets —
+//  2. Wipe DEK and capability token via crypto.CloseSecrets —
 //     long-lived secret material that does not survive shutdown.
 //  3. If a default StaticKeyResolver was promoted, ask it to drop
 //     its DEK copy. Custom resolvers are owned by the host and
@@ -35,7 +35,7 @@ func (a adminFacet) Close() error {
 	a.closed = true
 	a.stateMu.Unlock()
 
-	resolver := a.crypto.closeSecrets()
+	resolver := a.crypto.CloseSecrets()
 
 	if r, ok := resolver.(interface{ Close() }); ok {
 		r.Close()

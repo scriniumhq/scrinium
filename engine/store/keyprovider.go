@@ -10,14 +10,12 @@ import "scrinium.dev/engine/artifact"
 //
 // It returns nil for an unencrypted Store (no resolver) or a non-*store
 // implementation; the caller then falls back to the Plain-only decoder.
-// pipeline.KeyResolver satisfies artifact.KeyProvider structurally (GetKeys),
-// so asKeyProvider only nil-guards and forwards it.
+// The crypto.State accessor takes the crypto mutex and adapts the resolver,
+// so this no longer reaches into crypto internals.
 func ManifestKeyProvider(s Store) artifact.KeyProvider {
 	concrete, ok := s.(*store)
 	if !ok {
 		return nil
 	}
-	concrete.dataFacet.core.crypto.mu.Lock()
-	defer concrete.dataFacet.core.crypto.mu.Unlock()
-	return asKeyProvider(concrete.dataFacet.core.crypto.keyResolver)
+	return concrete.dataFacet.core.crypto.KeyProvider()
 }

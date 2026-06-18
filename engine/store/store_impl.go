@@ -8,6 +8,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/event"
 )
@@ -31,15 +32,12 @@ import (
 // blocks an admin state transition. Mutating admin methods hold the
 // write lock for the transition only.
 //
-// Lock ordering — when more than one mutex is held in a call path,
-// acquire in this order; the reverse deadlocks:
-//
-//	crypto.mu  →  stateMu  →  cfgMu
-//
-// snapshotConfig and maintenanceMode take their lock in isolation and
-// release before returning, so a caller may take another lock after
-// them; what is forbidden is holding cfgMu or stateMu and then
-// reaching for crypto.mu.
+// Lock ordering — stateMu and cfgMu are each taken in isolation and
+// released before returning, so they are never nested. The crypto
+// material has its own mutex inside crypto.State (engine/store/internal/
+// crypto); its methods take and release it entirely on their own, and the
+// store never holds stateMu or cfgMu while calling into crypto.State, so
+// that mutex is never nested with these two either.
 type core struct {
 	// Identity and dependencies.
 	storeID string
@@ -72,9 +70,11 @@ type core struct {
 	// unit tests that build a *core by hand.
 	system systemstore.Store
 
-	// crypto groups the DEK, descriptor, passphrase provider, and key
-	// resolver with the mutex that guards them (crypto_state.go).
-	crypto cryptoState
+	// crypto holds the DEK, descriptor, passphrase provider, and key
+	// resolver behind its own mutex (engine/store/internal/crypto). Its
+	// lifecycle methods take that mutex internally and release it before
+	// the store touches stateMu, so the two are never held at once.
+	crypto *crypto.State
 }
 
 // dataFacet is the artifact-facing facet (DataStore): Put, Get, Walk,

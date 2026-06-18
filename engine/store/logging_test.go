@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/store/internal/crypto"
 )
 
 // --- capturing handler ---------------------------------------------------
@@ -191,7 +192,7 @@ func TestClose_EmitsDebugTrace(t *testing.T) {
 		storeID: "store-xyz",
 		state:   domain.StateUnlocked,
 		log:     resolveLogger(slog.New(h)),
-		crypto:  cryptoState{dek: []byte{1, 2, 3, 4}},
+		crypto:  crypto.New(nil, []byte{1, 2, 3, 4}, nil, nil, nil, nil),
 	})
 
 	if err := s.Close(); err != nil {
@@ -219,7 +220,7 @@ func TestClose_EmitsDebugTrace(t *testing.T) {
 // TestClose_SilentByDefault ensures a store built without a logger emits
 // nothing on Close (no panic, no output).
 func TestClose_SilentByDefault(t *testing.T) {
-	s := newStore(&core{state: domain.StateUnlocked, crypto: cryptoState{dek: []byte{9}}})
+	s := newStore(&core{state: domain.StateUnlocked, crypto: crypto.New(nil, []byte{9}, nil, nil, nil, nil)})
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on silent store: %v", err)
 	}

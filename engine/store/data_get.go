@@ -5,17 +5,15 @@ import (
 	"log/slog"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/internal/casio"
-	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
 
-// casio builds an casio.IO bound to this store's driver, index,
+// casIO builds an casio.IO bound to this store's driver, index,
 // and registries. The value is a cheap stateless handle, constructed per
 // operation rather than held as a field.
-func (c *core) casio() *casio.IO {
+func (c *core) casIO() *casio.IO {
 	return casio.New(c.drv, c.index, c.hashes, c.transformers)
 }
 
@@ -42,7 +40,7 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 		return nil, err
 	}
 
-	aio := d.casio()
+	aio := d.casIO()
 	inner, err := aio.OpenHandle(ctx, manifest)
 	if err != nil {
 		return nil, err
@@ -82,7 +80,7 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 // refusal. asKeyProvider maps a nil resolver to a nil provider (the
 // typed-nil guard).
 func (c *core) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	return c.casio().Load(ctx, id, asKeyProvider(c.crypto.resolver()), string(c.snapshotConfig().ContentHasher))
+	return c.casIO().Load(ctx, id, c.crypto.KeyProvider(), string(c.snapshotConfig().ContentHasher))
 }
 
 // guardHandleless enforces the negative identity invariant (ADR-83): a
@@ -97,17 +95,4 @@ func guardHandleless(m domain.Manifest) error {
 		return errs.ErrArtifactNotFound
 	}
 	return nil
-}
-
-// asKeyProvider adapts a pipeline.KeyResolver to an artifact.KeyProvider,
-// mapping a nil resolver to a nil provider. This avoids the typed-nil
-// trap: a nil resolver passed straight into an interface parameter would
-// become a non-nil interface value, and the codec's `keys == nil` check
-// would miss it. "No resolver" must mean "no provider" — Plain manifests
-// need none; encrypted ones then surface ErrKeyNotFound.
-func asKeyProvider(r pipeline.KeyResolver) artifact.KeyProvider {
-	if r == nil {
-		return nil
-	}
-	return r
 }

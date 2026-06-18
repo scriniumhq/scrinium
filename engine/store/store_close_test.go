@@ -1,7 +1,6 @@
 package store
 
 import (
-	"bytes"
 	"errors"
 	"os"
 	"sync"
@@ -10,6 +9,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/errs"
 )
 
@@ -31,10 +31,8 @@ func (r *fakeKeyResolver) close()                                     { r.closed
 // publisher — Close does not touch any of them.
 func newTestStore() *store {
 	return newStore(&core{
-		state: domain.StateUnlocked,
-		crypto: cryptoState{
-			dek: []byte{1, 2, 3, 4, 5, 6, 7, 8},
-		},
+		state:  domain.StateUnlocked,
+		crypto: crypto.New(nil, []byte{1, 2, 3, 4, 5, 6, 7, 8}, nil, nil, nil, nil),
 	})
 }
 
@@ -58,18 +56,19 @@ func TestClose_Idempotent(t *testing.T) {
 
 func TestClose_WipesDEK(t *testing.T) {
 	s := newTestStore()
-	original := append([]byte(nil), s.dataFacet.core.crypto.dek...) // capture for length check
-	dekRef := s.dataFacet.core.crypto.dek                           // grab the slice header — observe its bytes after Close
+	if !StoreHasDEK(s) {
+		t.Fatal("precondition: test store should hold a DEK before Close")
+	}
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 
-	if s.dataFacet.core.crypto.dek != nil {
-		t.Errorf("s.crypto.dek: want nil after Close, got %v", s.dataFacet.core.crypto.dek)
-	}
-	if !allZero(dekRef) {
-		t.Errorf("dek bytes should be zeroed, got %v (was %v)", dekRef, original)
+	// Store-level observable: the DEK is gone after Close. The byte-level
+	// zeroing of the backing array is unit-tested against CloseSecrets in
+	// engine/store/internal/crypto (state_test.go).
+	if StoreHasDEK(s) {
+		t.Error("DEK should be wiped after Close")
 	}
 }
 
@@ -77,10 +76,8 @@ func TestClose_WipesDEK(t *testing.T) {
 
 func TestClose_NilDEK_NoPanic(t *testing.T) {
 	s := newStore(&core{
-		state: domain.StateLocked,
-		crypto: cryptoState{
-			dek: nil,
-		},
+		state:  domain.StateLocked,
+		crypto: crypto.New(nil, nil, nil, nil, nil, nil),
 	})
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on nil dek: %v", err)
@@ -89,10 +86,8 @@ func TestClose_NilDEK_NoPanic(t *testing.T) {
 
 func TestClose_EmptyDEK_NoPanic(t *testing.T) {
 	s := newStore(&core{
-		state: domain.StateUnlocked,
-		crypto: cryptoState{
-			dek: []byte{},
-		},
+		state:  domain.StateUnlocked,
+		crypto: crypto.New(nil, []byte{}, nil, nil, nil, nil),
 	})
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on empty dek: %v", err)
@@ -101,10 +96,8 @@ func TestClose_EmptyDEK_NoPanic(t *testing.T) {
 
 func TestClose_NoCapabilityToken_NoPanic(t *testing.T) {
 	s := newStore(&core{
-		state: domain.StateUnlocked,
-		crypto: cryptoState{
-			dek: []byte{1, 2, 3},
-		},
+		state:  domain.StateUnlocked,
+		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, nil, nil, nil),
 	})
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on nil token: %v", err)
@@ -186,11 +179,8 @@ func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 	resolver := pipeline.NewStaticKeyResolver(dek)
 
 	s := newStore(&core{
-		state: domain.StateUnlocked,
-		crypto: cryptoState{
-			dek:         append([]byte(nil), dek...),
-			keyResolver: resolver,
-		},
+		state:  domain.StateUnlocked,
+		crypto: crypto.New(nil, append([]byte(nil), dek...), nil, resolver, nil, nil),
 	})
 
 	if err := s.Close(); err != nil {
@@ -212,11 +202,8 @@ func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 func TestClose_CustomKeyResolver_NotTouched(t *testing.T) {
 	resolver := &fakeKeyResolver{}
 	s := newStore(&core{
-		state: domain.StateUnlocked,
-		crypto: cryptoState{
-			dek:         []byte{1, 2, 3},
-			keyResolver: resolver,
-		},
+		state:  domain.StateUnlocked,
+		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, resolver, nil, nil),
 	})
 
 	if err := s.Close(); err != nil {
@@ -230,11 +217,8 @@ func TestClose_CustomKeyResolver_NotTouched(t *testing.T) {
 
 func TestClose_NilKeyResolver_NoPanic(t *testing.T) {
 	s := newStore(&core{
-		state: domain.StateUnlocked,
-		crypto: cryptoState{
-			dek:         []byte{1, 2, 3},
-			keyResolver: nil,
-		},
+		state:  domain.StateUnlocked,
+		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, nil, nil, nil),
 	})
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -251,11 +235,8 @@ func TestClose_RaceWithGetKeys(t *testing.T) {
 	resolver := pipeline.NewStaticKeyResolver(dek)
 
 	s := newStore(&core{
-		state: domain.StateUnlocked,
-		crypto: cryptoState{
-			dek:         append([]byte(nil), dek...),
-			keyResolver: resolver,
-		},
+		state:  domain.StateUnlocked,
+		crypto: crypto.New(nil, append([]byte(nil), dek...), nil, resolver, nil, nil),
 	})
 
 	const N = 100
@@ -307,14 +288,7 @@ func TestClose_RaceWithItself(t *testing.T) {
 	if !s.dataFacet.core.closed {
 		t.Errorf("s.closed: want true after concurrent Closes")
 	}
-	if s.dataFacet.core.crypto.dek != nil {
-		t.Errorf("s.crypto.dek: want nil after concurrent Closes, got %v", s.dataFacet.core.crypto.dek)
+	if StoreHasDEK(s) {
+		t.Error("DEK should be wiped after concurrent Closes")
 	}
-}
-
-// --- Helpers ---
-
-func allZero(b []byte) bool {
-	zero := make([]byte, len(b))
-	return bytes.Equal(b, zero)
 }

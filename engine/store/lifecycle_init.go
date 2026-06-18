@@ -194,7 +194,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
 	}
-	s.crypto.promoteResolverIfDefault()
+	s.crypto.PromoteResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
