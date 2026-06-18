@@ -54,7 +54,7 @@ func newRebuildFixture(t *testing.T, opts ...store.StoreOption) rebuildFixture {
 
 func (f rebuildFixture) put(t *testing.T, ns, data string) domain.ArtifactID {
 	t.Helper()
-	id, err := f.store.Put(context.Background(), artifactfx.Payload(data), domain.WithNamespace(ns))
+	id, err := f.store.Put(context.Background(), artifactfx.Payload(data))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -295,8 +295,7 @@ func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
 	if len(kit) == 0 {
 		t.Fatal("empty recovery kit for an encrypted store")
 	}
-	if _, err := st.Put(ctx, artifactfx.Payload("payload that lands as a manifest file on the location"),
-		domain.WithNamespace("r")); err != nil {
+	if _, err := st.Put(ctx, artifactfx.Payload("payload that lands as a manifest file on the location")); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 

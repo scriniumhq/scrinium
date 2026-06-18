@@ -53,7 +53,6 @@ func makeFSManifest(t *testing.T, id domain.ArtifactID, path string) domain.Mani
 	}
 	return domain.Manifest{
 		ArtifactID:   id,
-		Namespace:    "files",
 		BlobRefs:     []domain.BlobRef{"sha256-" + domain.BlobRef(id)},
 		ContentHash:  "sha256-" + domain.ContentHash(id),
 		OriginalSize: 100,
@@ -70,7 +69,6 @@ func makeForeignManifest(t *testing.T, id domain.ArtifactID) domain.Manifest {
 	raw, _ := json.Marshal(map[string]string{"kind": "email/v1", "subject": "hi"})
 	return domain.Manifest{
 		ArtifactID:   id,
-		Namespace:    "mail",
 		BlobRefs:     []domain.BlobRef{"sha256-" + domain.BlobRef(id)},
 		ContentHash:  "sha256-" + domain.ContentHash(id),
 		OriginalSize: 50,
@@ -170,7 +168,6 @@ func TestIndex_NoMetadata_Skipped(t *testing.T) {
 
 	m := domain.Manifest{
 		ArtifactID:   "bare-1",
-		Namespace:    "files",
 		BlobRefs:     []domain.BlobRef{"sha256-bare"},
 		ContentHash:  "sha256-bare",
 		OriginalSize: 10,
@@ -197,7 +194,6 @@ func TestIndex_BrokenVFSMeta_RollsBackMainWrite(t *testing.T) {
 	bad := json.RawMessage(`{"kind":"scrinium.fs/v1","path":12345}`)
 	m := domain.Manifest{
 		ArtifactID:   "art-bad",
-		Namespace:    "files",
 		BlobRefs:     []domain.BlobRef{"sha256-bad"},
 		ContentHash:  "sha256-bad",
 		OriginalSize: 10,

@@ -67,9 +67,8 @@ type PipelineStage struct {
 // slot: a filled slot consumes its members (top-down, +ref_count); an
 // empty slot (pack container) places them (bottom-up, no ref_count).
 //
-// MIGRATION NOTE: the Namespace field is still transitional
-// (ADR-79), serialised until its readers migrate. The legacy single
-// BlobRef has been removed (ADR-92) — the россыпь blob is BlobRefs[0].
+// The legacy single BlobRef has been removed (ADR-92) — the россыпь
+// blob is BlobRefs[0].
 type Manifest struct {
 	// ArtifactID is the floating external identity (handle):
 	// PRF(NK, cd‖md). It is what the outside world holds and what
@@ -110,13 +109,6 @@ type Manifest struct {
 	// IdentityMode=Unique (makes the handle unique per Put); absent
 	// in Coalesced. SERIALISED, so the handle stays reproducible.
 	IdentityNonce []byte
-
-	// Namespace is the per-store organisational label (nsid).
-	// Deprecated (ADR-79/93): the namespace is a CustomIndex + registry
-	// and the nsid stamp is client-supplied data in Ext, not a core
-	// field. Retained transitionally (still serialised) until the
-	// namespace readers migrate to Ext.
-	Namespace string
 
 	SessionID SessionID
 	CreatedAt time.Time

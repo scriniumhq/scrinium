@@ -119,7 +119,6 @@ func runIndexManifest(t *testing.T, f Factory) {
 		toc := domain.Manifest{
 			ArtifactID:   "art-toc",
 			Ext:          json.RawMessage(`{"composite":true}`),
-			Namespace:    "test",
 			ContentHash:  manifestfx.SyntheticHash('0'),
 			BlobRefs:     []domain.BlobRef{domain.BlobRef(chunks[0].ref), domain.BlobRef(chunks[1].ref), domain.BlobRef(chunks[2].ref)},
 			OriginalSize: 3072,

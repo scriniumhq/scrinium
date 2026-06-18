@@ -44,7 +44,6 @@ func (c *countingMetadataSource) Metadata(id domain.ArtifactID) (json.RawMessage
 func strippedManifest(id domain.ArtifactID, namespace string) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   id,
-		Namespace:    namespace,
 		BlobRefs:     []domain.BlobRef{"sha256-" + domain.BlobRef(id)},
 		ContentHash:  "sha256-" + domain.ContentHash(id),
 		OriginalSize: 100,
@@ -117,7 +116,6 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	idHit := domain.ArtifactID("hit")
 	src.Add(domain.Manifest{
 		ArtifactID:   idHit,
-		Namespace:    "files",
 		BlobRefs:     []domain.BlobRef{"sha256-hit"},
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),
@@ -132,7 +130,6 @@ func TestBackfill_FastPath_FallsBackOnMiss(t *testing.T) {
 	idMiss := domain.ArtifactID("miss")
 	src.Add(domain.Manifest{
 		ArtifactID:   idMiss,
-		Namespace:    "files",
 		BlobRefs:     []domain.BlobRef{"sha256-miss"},
 		OriginalSize: 1,
 		CreatedAt:    time.Now().UTC(),

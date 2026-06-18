@@ -224,7 +224,7 @@ func TestServiceRoot_ListsTrees(t *testing.T) {
 	if err != nil && err != io.EOF {
 		t.Fatalf("Readdir: %v", err)
 	}
-	want := []string{"stats", "by-artifact", "by-date", "by-session", "by-namespace", "orphaned", "by-path"}
+	want := []string{"stats", "by-artifact", "by-date", "by-session", "orphaned"}
 	got := names(entries)
 	for _, w := range want {
 		if !contains(got, w) {

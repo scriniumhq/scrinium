@@ -75,9 +75,8 @@ func (f *FakeSource) SetGetErr(err error) {
 	f.getErr = err
 }
 
-// Walk iterates the registered manifests. namespace="*" matches
-// every namespace; otherwise only manifests whose Namespace
-// field equals the argument.
+// Walk iterates over every registered manifest (ADR-99:
+// namespace-agnostic).
 func (f *FakeSource) Walk(
 	ctx context.Context,
 	cb func(domain.Manifest) error,
@@ -166,7 +165,6 @@ func (f *FakeSource) Put(
 
 	m := domain.Manifest{
 		ArtifactID:   id,
-		Namespace:    po.Namespace,
 		SessionID:    po.SessionID,
 		CreatedAt:    time.Now().UTC(),
 		ContentHash:  hash,

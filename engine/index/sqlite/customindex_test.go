@@ -658,7 +658,6 @@ func TestIndex_ListCustomIndexes_Empty(t *testing.T) {
 func makeBlobManifest(id domain.ArtifactID) domain.Manifest {
 	return domain.Manifest{
 		ArtifactID:   id,
-		Namespace:    "files",
 		BlobRefs:     []domain.BlobRef{"sha256-aaaa"},
 		ContentHash:  "sha256-aaaa",
 		OriginalSize: 100,

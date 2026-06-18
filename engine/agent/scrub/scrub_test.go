@@ -64,8 +64,7 @@ func newScrubFixtureCfg(t *testing.T, opts ...store.StoreOption) scrubFixture {
 func (f scrubFixture) put(t *testing.T, ns, data string) domain.ArtifactID {
 	t.Helper()
 	id, err := f.store.Put(context.Background(),
-		artifactfx.Payload(data),
-		domain.WithNamespace(ns))
+		artifactfx.Payload(data))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

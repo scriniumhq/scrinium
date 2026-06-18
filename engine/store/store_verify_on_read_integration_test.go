@@ -92,7 +92,7 @@ func TestGet_VerifyOnRead_ForceEnabled_DetectsBlobCorruption(t *testing.T) {
 	)
 	id, err := s.Put(context.Background(),
 		payload("hello verify on read"),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestGet_VerifyOnRead_Disabled_SilentOnCorruption(t *testing.T) {
 	)
 	id, err := s.Put(context.Background(),
 		payload("trust the medium"),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestGet_VerifyOnRead_Auto_PlainBlob_Verifies(t *testing.T) {
 	)
 	id, err := s.Put(context.Background(),
 		payload("auto must catch this"),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestGet_VerifyOnRead_ForceEnabled_CleanBlobRoundtrip(t *testing.T) {
 	const want = "clean blob no tamper"
 	id, err := s.Put(context.Background(),
 		payload(want),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestGet_VerifyOnRead_EmitsScrubFailedEvent(t *testing.T) {
 	)
 	id, err := s.Put(context.Background(),
 		payload("event must fire"),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestGet_VerifyOnRead_ForceEnabled_InlineRoundtrip(t *testing.T) {
 	const want = "inline body"
 	id, err := s.Put(context.Background(),
 		payload(want),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

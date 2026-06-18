@@ -69,7 +69,7 @@ func TestVerify_Pipeline_Zstd_Succeeds(t *testing.T) {
 	original := bytes.Repeat([]byte("scrinium verify "), 1024)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestVerify_Pipeline_AESGCM_Succeeds(t *testing.T) {
 	original := []byte("encrypted blob to verify")
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestVerify_Pipeline_ZstdThenAESGCM_Succeeds(t *testing.T) {
 	original := bytes.Repeat([]byte("two-stage "), 512)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestVerify_Pipeline_AESGCM_TamperedCiphertext_ReturnsCorruptedBlob(t *testi
 	original := bytes.Repeat([]byte("tamper-target "), 64)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -201,7 +201,7 @@ func TestVerify_Pipeline_Zstd_TamperedCiphertext_ReturnsCorruptedBlob(t *testing
 	original := bytes.Repeat([]byte("compressible "), 256)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -241,7 +241,7 @@ func TestVerify_Pipeline_MissingBlob_ReturnsCorruptedBlob(t *testing.T) {
 	original := bytes.Repeat([]byte("gone "), 128)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestVerify_Pipeline_ConsistentWithGet(t *testing.T) {
 	original := bytes.Repeat([]byte("consistency "), 512)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

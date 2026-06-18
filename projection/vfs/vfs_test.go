@@ -141,7 +141,7 @@ func TestVFS_ServicePrefixListing(t *testing.T) {
 	for _, fi := range infos {
 		names[fi.Name()] = true
 	}
-	want := []string{"stats", "by-path", "by-date", "by-session", "by-namespace", "by-artifact", "orphaned"}
+	want := []string{"stats", "by-date", "by-session", "by-artifact", "orphaned"}
 	for _, w := range want {
 		if !names[w] {
 			t.Errorf("listing missing %q (got %v)", w, infos)
@@ -255,7 +255,6 @@ func mkManifest(path, namespace, payload string) domain.Manifest {
 	})
 	return domain.Manifest{
 		ArtifactID:   id,
-		Namespace:    namespace,
 		Ext:          extMeta,
 		OriginalSize: int64(len(payload)),
 	}

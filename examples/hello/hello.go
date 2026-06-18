@@ -66,8 +66,7 @@ func main() {
 
 	// Store an artifact.
 	id, err := s.Put(ctx,
-		scrinium.Artifact{Payload: strings.NewReader("hello, scrinium!\n")},
-		scrinium.WithNamespace("demo"))
+		scrinium.Artifact{Payload: strings.NewReader("hello, scrinium!\n")})
 	if err != nil {
 		log.Fatalf("put: %v", err)
 	}

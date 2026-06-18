@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/faulty"
 	"scrinium.dev/engine/index"
@@ -72,14 +71,13 @@ func (e crashEnv) reopenClean(t *testing.T) store.Store {
 
 func TestCrash_PutTornAtEveryWrite_IsAtomic(t *testing.T) {
 	ctx := context.Background()
-	ns := "u"
 	// A multi-write payload: large enough that Put issues several blob
 	// writes, so the sweep covers more than the trivial single-write
 	// case.
 	payload := bytes.Repeat([]byte("crash-consistency-"), 4096)
 
 	// 1. Measure the Put write window on a clean run.
-	window := measurePutWrites(t, payload, ns)
+	window := measurePutWrites(t, payload)
 	if window == 0 {
 		t.Fatal("measured zero Put writes; cannot sweep")
 	}
@@ -95,7 +93,7 @@ func TestCrash_PutTornAtEveryWrite_IsAtomic(t *testing.T) {
 			base := env.fd.CallCount(faulty.MethodPut)
 			env.fd.SetFailOnCall(faulty.MethodPut, base+k)
 
-			id, putErr := s.Put(ctx, mkArtifact(payload), domain.WithNamespace(ns))
+			id, putErr := s.Put(ctx, mkArtifact(payload))
 			_ = s.Close()
 
 			// 3. Recover and reconcile.
@@ -131,7 +129,7 @@ func TestCrash_PutTornAtEveryWrite_IsAtomic(t *testing.T) {
 
 // measurePutWrites runs one clean Put and returns how many MethodPut
 // calls it issued (the write window the sweep iterates over).
-func measurePutWrites(t *testing.T, payload []byte, ns string) int64 {
+func measurePutWrites(t *testing.T, payload []byte) int64 {
 	t.Helper()
 	inner := driverfx.LocalFS(t)
 	fd := driverfx.Faulty(t, inner)
@@ -139,7 +137,7 @@ func measurePutWrites(t *testing.T, payload []byte, ns string) int64 {
 	defer s.Close()
 
 	base := fd.CallCount(faulty.MethodPut)
-	if _, err := s.Put(context.Background(), mkArtifact(payload), domain.WithNamespace("ns")); err != nil {
+	if _, err := s.Put(context.Background(), mkArtifact(payload)); err != nil {
 		t.Fatalf("measure Put: %v", err)
 	}
 	return fd.CallCount(faulty.MethodPut) - base

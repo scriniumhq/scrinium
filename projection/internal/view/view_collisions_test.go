@@ -75,7 +75,7 @@ func TestByPath_VirtualDirsExist(t *testing.T) {
 func TestByPath_OrphanedNotPresent(t *testing.T) {
 	// Artifact without metadata → orphaned, NOT in by-path.
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "s", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
 		vw.WithProvidedViews(testProvided()))
@@ -102,7 +102,7 @@ func TestByPath_OrphanedNotPresent(t *testing.T) {
 
 func TestByPath_SyntheticFallback(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "photos", "s12345", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "s12345", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
 		vw.WithProvidedViews(testProvided()),
@@ -120,7 +120,7 @@ func TestByPath_SyntheticFallback(t *testing.T) {
 
 func TestByPath_SyntheticAnonymous(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "", "", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src,
 		vw.WithProvidedViews(testProvided()),

@@ -36,7 +36,7 @@ func TestEjector_EjectMaterialises(t *testing.T) {
 	a, st := newEjector(t, rec, EjectorConfig{})
 
 	const body = "eject me, please"
-	id, err := st.Put(ctx, artifactfx.Payload(body), domain.WithNamespace("ej"))
+	id, err := st.Put(ctx, artifactfx.Payload(body))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestEjector_EjectIdempotent(t *testing.T) {
 	rec := eventfx.New()
 	a, st := newEjector(t, rec, EjectorConfig{})
 
-	id, err := st.Put(ctx, artifactfx.Payload("twice"), domain.WithNamespace("ej"))
+	id, err := st.Put(ctx, artifactfx.Payload("twice"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -82,49 +82,12 @@ func TestEjector_EjectIdempotent(t *testing.T) {
 	}
 }
 
-// Two artifacts with identical content but different namespaces have
-// different ArtifactIDs and the same ContentHash; eject must dedup them
-// to one file (CAS naming).
-func TestEjector_ContentAddressedDedup(t *testing.T) {
-	ctx := context.Background()
-	rec := eventfx.New()
-	a, st := newEjector(t, rec, EjectorConfig{})
-
-	const body = "shared content across two artifacts"
-	idA, err := st.Put(ctx, artifactfx.Payload(body), domain.WithNamespace("a"))
-	if err != nil {
-		t.Fatalf("Put A: %v", err)
-	}
-	idB, err := st.Put(ctx, artifactfx.Payload(body), domain.WithNamespace("b"))
-	if err != nil {
-		t.Fatalf("Put B: %v", err)
-	}
-	if idA == idB {
-		t.Fatalf("expected distinct ArtifactIDs for different namespaces")
-	}
-
-	pA, err := a.Eject(ctx, idA)
-	if err != nil {
-		t.Fatalf("Eject A: %v", err)
-	}
-	pB, err := a.Eject(ctx, idB)
-	if err != nil {
-		t.Fatalf("Eject B: %v", err)
-	}
-	if pA != pB {
-		t.Errorf("CAS dedup failed: %q vs %q", pA, pB)
-	}
-	if n := rec.Count(event.EventArtifactEjected); n != 1 {
-		t.Errorf("EventArtifactEjected = %d, want 1 (second is dedup reuse)", n)
-	}
-}
-
 func TestEjector_HoldProtectsFromIdleEviction(t *testing.T) {
 	ctx := context.Background()
 	rec := eventfx.New()
 	a, st := newEjector(t, rec, EjectorConfig{KeepAliveIdle: time.Millisecond})
 
-	id, err := st.Put(ctx, artifactfx.Payload("held"), domain.WithNamespace("ej"))
+	id, err := st.Put(ctx, artifactfx.Payload("held"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -165,7 +128,7 @@ func TestEjector_EjectFragmentPrefix(t *testing.T) {
 	a, st := newEjector(t, rec, EjectorConfig{})
 
 	const body = "HEADER////tail-bytes-not-wanted"
-	id, err := st.Put(ctx, artifactfx.Payload(body), domain.WithNamespace("ej"))
+	id, err := st.Put(ctx, artifactfx.Payload(body))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -186,7 +149,7 @@ func TestEjector_EjectFragmentBadRange(t *testing.T) {
 	ctx := context.Background()
 	rec := eventfx.New()
 	a, st := newEjector(t, rec, EjectorConfig{})
-	id, err := st.Put(ctx, artifactfx.Payload("0123456789"), domain.WithNamespace("ej"))
+	id, err := st.Put(ctx, artifactfx.Payload("0123456789"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -202,7 +165,7 @@ func TestEjector_EjectFragmentTooLarge(t *testing.T) {
 	ctx := context.Background()
 	rec := eventfx.New()
 	a, st := newEjector(t, rec, EjectorConfig{MaxFragmentBytes: 4})
-	id, err := st.Put(ctx, artifactfx.Payload("0123456789"), domain.WithNamespace("ej"))
+	id, err := st.Put(ctx, artifactfx.Payload("0123456789"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -215,7 +178,7 @@ func TestEjector_ClosedRejects(t *testing.T) {
 	ctx := context.Background()
 	rec := eventfx.New()
 	a, st := newEjector(t, rec, EjectorConfig{})
-	id, err := st.Put(ctx, artifactfx.Payload("x"), domain.WithNamespace("ej"))
+	id, err := st.Put(ctx, artifactfx.Payload("x"))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent/rebuild"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/testutil/artifactfx"
@@ -34,8 +33,7 @@ func TestRebuild_FullScan_DecodesEncryptedManifests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitStore (encrypted): %v", err)
 	}
-	if _, err := st.Put(ctx, artifactfx.Payload("payload that lands as an encrypted manifest file"),
-		domain.WithNamespace("r")); err != nil {
+	if _, err := st.Put(ctx, artifactfx.Payload("payload that lands as an encrypted manifest file")); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 

@@ -21,8 +21,8 @@ import (
 func TestBySession_Populated(t *testing.T) {
 	src := projectionfx.New()
 	now := time.Now().UTC()
-	src.Add(makeManifest("sha256-aaaa1111", "f", "abcd1234", 100, now), nil)
-	src.Add(makeManifest("sha256-bbbb2222", "f", "abcd1234", 200, now), nil)
+	src.Add(makeManifest("sha256-aaaa1111", "abcd1234", 100, now), nil)
+	src.Add(makeManifest("sha256-bbbb2222", "abcd1234", 200, now), nil)
 
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
@@ -40,7 +40,7 @@ func TestBySession_Populated(t *testing.T) {
 
 func TestBySession_EmptySessionSkipped(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
@@ -61,7 +61,7 @@ func TestBySession_EmptySessionSkipped(t *testing.T) {
 
 func TestBySession_Short(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "ab", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "ab", 100, time.Now().UTC()), nil)
 
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
@@ -82,7 +82,7 @@ func TestBySession_Short(t *testing.T) {
 func TestByDate_Populated(t *testing.T) {
 	src := projectionfx.New()
 	t0 := time.Date(2024, 5, 3, 14, 23, 5, 0, time.UTC)
-	src.Add(makeManifest("sha256-aabbccddeeff0011", "f", "s", 100, t0), nil)
+	src.Add(makeManifest("sha256-aabbccddeeff0011", "s", 100, t0), nil)
 
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
@@ -97,7 +97,7 @@ func TestByDate_Populated(t *testing.T) {
 
 func TestEvent_ViewRebuilt(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "s", 100, time.Now().UTC()), nil)
 
 	bus := eventfx.New()
 	v, _ := vw.New(context.Background(), src,
@@ -123,7 +123,6 @@ func TestAdd_AppearsInAllTrees(t *testing.T) {
 	defer v.Close()
 
 	m := pathManifest("sha256-aabbccdd", "photos/img.jpg")
-	m.Namespace = "files"
 	m.SessionID = "sess1"
 	m.OriginalSize = 100
 	m.CreatedAt = time.Now().UTC()
@@ -168,7 +167,7 @@ func TestAdd_OnClosedView(t *testing.T) {
 	v, _ := vw.New(context.Background(), src)
 	v.Close()
 
-	err := v.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()))
+	err := v.Add(makeManifest("sha256-aabbccdd", "s", 100, time.Now().UTC()))
 	if !errors.Is(err, os.ErrClosed) {
 		t.Errorf("expected os.ErrClosed, got %v", err)
 	}
@@ -179,7 +178,6 @@ func TestAdd_OnClosedView(t *testing.T) {
 func TestRemove_DropsFromAllTrees(t *testing.T) {
 	src := projectionfx.New()
 	m := pathManifest("sha256-aabbccdd", "photos/img.jpg")
-	m.Namespace = "files"
 	m.SessionID = "sess1"
 	m.OriginalSize = 100
 	m.CreatedAt = time.Now().UTC()

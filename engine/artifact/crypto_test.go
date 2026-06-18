@@ -101,11 +101,8 @@ func TestDecodeEncrypted_RotationCandidates(t *testing.T) {
 	// Provider returns the key array [new, old]
 	provider := artifactfx.Keys(newDEK, oldDEK)
 
-	got, err := artifact.DecodeEncrypted(bs, provider)
+	_, err := artifact.DecodeEncrypted(bs, provider)
 	if err != nil {
 		t.Fatalf("decode with rotation candidates: %v", err)
-	}
-	if got.Namespace == "" {
-		t.Error("expected fully decoded manifest")
 	}
 }

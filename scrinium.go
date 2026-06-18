@@ -14,7 +14,7 @@
 //
 //	c, err := scrinium.Open(ctx, "file:///data/app")
 //	defer c.Close()
-//	c.Put(ctx, scrinium.Artifact{Payload: r}, scrinium.WithNamespace("demo"))
+//	c.Put(ctx, scrinium.Artifact{Payload: r})
 //
 // Built-in backends register by blank import, as in database/sql; pull
 // in the ones a deployment uses (ADR-63):
@@ -89,7 +89,6 @@ type Event = event.Event
 // programs need not import domain directly. Rule: every public domain
 // option has a scrinium.WithX re-export of the same value-function.
 var (
-	WithNamespace = domain.WithNamespace // PutOption
 	WithSession   = domain.WithSession   // PutOption
 	WithBlobType  = domain.WithBlobType  // PutOption
 	WithRetention = domain.WithRetention // PutOption

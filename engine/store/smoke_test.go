@@ -98,8 +98,7 @@ func TestSmoke_MillionSmallFiles(t *testing.T) {
 	for i := 0; i < n; i++ {
 		p := makePayload(i, payloadSize)
 		id, err := s.Put(ctx,
-			domain.Artifact{Payload: bytes.NewReader(p)},
-			domain.WithNamespace("smoke"))
+			domain.Artifact{Payload: bytes.NewReader(p)})
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}
@@ -354,8 +353,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 	for i := 0; i < n; i++ {
 		p := makePayload(i, payloadSize)
 		id, err := s.Put(ctx,
-			domain.Artifact{Payload: bytes.NewReader(p)},
-			domain.WithNamespace("smoke-enc"))
+			domain.Artifact{Payload: bytes.NewReader(p)})
 		if err != nil {
 			t.Fatalf("Put #%d: %v", i, err)
 		}

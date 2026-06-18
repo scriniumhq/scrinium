@@ -47,7 +47,7 @@ func TestPut_LargePayload(t *testing.T) {
 	data := bytes.Repeat([]byte{0xab}, N)
 	id, err := s.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(data)},
-		domain.WithNamespace("big"))
+	)
 	if err != nil {
 		t.Fatalf("Put 1MiB: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestPut_Pipeline_ZstdRoundTrip(t *testing.T) {
 	original := bytes.Repeat([]byte("scrinium "), 4096)
 	id, err := st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("ns"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestPut_Pipeline_AESGCMRoundTrip(t *testing.T) {
 	original := []byte("Hello, ciphertext on disk")
 	id, err := st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("ns"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -249,7 +249,7 @@ func TestPut_Pipeline_ZstdThenAESGCM(t *testing.T) {
 	original := bytes.Repeat([]byte("compress then encrypt "), 1024)
 	id, err := st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader(original)},
-		domain.WithNamespace("ns"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -291,7 +291,7 @@ func TestPut_Pipeline_MissingAlgorithm(t *testing.T) {
 
 	_, err := st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-		domain.WithNamespace("ns"))
+	)
 	if !errors.Is(err, errs.ErrUnsupportedAlgorithm) {
 		t.Fatalf("Put: got %v, want ErrUnsupportedAlgorithm", err)
 	}
@@ -326,7 +326,7 @@ func TestPut_Pipeline_RefusedOnInline(t *testing.T) {
 	// Otherwise Put must refuse it explicitly.
 	_, err = st.Put(context.Background(),
 		domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
-		domain.WithNamespace("ns"))
+	)
 	if err == nil {
 		t.Fatalf("Put: expected refusal for Inline + Pipeline, got nil")
 	}

@@ -38,7 +38,7 @@ func newCheckpointFixture(t *testing.T) checkpointFixture {
 
 func (f checkpointFixture) put(t *testing.T, data string) {
 	t.Helper()
-	if _, err := f.store.Put(context.Background(), artifactfx.Payload(data), domain.WithNamespace("s")); err != nil {
+	if _, err := f.store.Put(context.Background(), artifactfx.Payload(data)); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 }

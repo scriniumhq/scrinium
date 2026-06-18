@@ -11,12 +11,6 @@ import "time"
 // importing the engine. The store applies them via ApplyPut.
 type PutOption func(*PutOptions)
 
-// WithNamespace places the artifact in a namespace. Empty (the
-// default) is the store's default namespace.
-func WithNamespace(ns string) PutOption {
-	return func(o *PutOptions) { o.Namespace = ns }
-}
-
 // WithSession ties the Put to a session for RollbackSession.
 func WithSession(id SessionID) PutOption {
 	return func(o *PutOptions) { o.SessionID = id }

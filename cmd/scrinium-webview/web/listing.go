@@ -440,7 +440,7 @@ func pageLinkURL(orig *url.URL, page int) string {
 }
 
 // isServiceTreeRoot reports whether dir is exactly one of
-// the service tree names (by-path, by-date, by-session,
+// the service tree names (by-date, by-session,
 // by-namespace, by-artifact, orphaned) — and not a sub-path
 // inside one. Used to suppress the ".." entry on tree roots:
 // climbing up from /by-date/ would land on the redirect-only

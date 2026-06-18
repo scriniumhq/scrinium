@@ -85,7 +85,7 @@ func randBytes(rng *rand.Rand, n int) []byte {
 func checkRoundTrip(t *testing.T, payload []byte) {
 	t.Helper()
 	s := storefx2.Init(t)
-	id, err := s.Put(context.Background(), mkArtifact(payload), domain.WithNamespace("u"))
+	id, err := s.Put(context.Background(), mkArtifact(payload))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -124,18 +124,18 @@ func checkContentAddressing(t *testing.T, a, b []byte) {
 	s, root := storefx2.InitWithRoot(t)
 	ctx := context.Background()
 
-	id1, err := s.Put(ctx, mkArtifact(a), domain.WithNamespace("u"))
+	id1, err := s.Put(ctx, mkArtifact(a))
 	if err != nil {
 		t.Fatalf("Put a #1: %v", err)
 	}
 	// A second Put of the same bytes must not create a second blob,
 	// whether it reuses the manifest (same second) or writes a new one
 	// (the blob is still deduped on content hash).
-	if _, err := s.Put(ctx, mkArtifact(a), domain.WithNamespace("u")); err != nil {
+	if _, err := s.Put(ctx, mkArtifact(a)); err != nil {
 		t.Fatalf("Put a #2: %v", err)
 	}
 
-	id2, err := s.Put(ctx, mkArtifact(b), domain.WithNamespace("u"))
+	id2, err := s.Put(ctx, mkArtifact(b))
 	if err != nil {
 		t.Fatalf("Put b: %v", err)
 	}
@@ -188,7 +188,7 @@ func checkReopenStable(t *testing.T, payload []byte) {
 	s, r := storefx2.InitPlain(t)
 	ctx := context.Background()
 
-	id, err := s.Put(ctx, mkArtifact(payload), domain.WithNamespace("u"))
+	id, err := s.Put(ctx, mkArtifact(payload))
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

@@ -46,7 +46,7 @@ func TestPut_OnDiskLayout(t *testing.T) {
 	s, root := storefx2.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("hello scrinium"),
-		domain.WithNamespace("users"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -85,12 +85,12 @@ func TestPut_SharedBlobAcrossArtifacts(t *testing.T) {
 	const text = "shared content"
 
 	id1, err := s.Put(context.Background(), payload(text),
-		domain.WithNamespace("n"), domain.WithSession("a"))
+		domain.WithSession("a"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	id2, err := s.Put(context.Background(), payload(text),
-		domain.WithNamespace("n"), domain.WithSession("b"))
+		domain.WithSession("b"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestPut_InlinePolicy(t *testing.T) {
 			s, root := newInlineStore(t, tc.limit)
 			id, err := s.Put(context.Background(),
 				payload(tc.content),
-				domain.WithNamespace("inline"))
+			)
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}
@@ -205,7 +205,7 @@ func TestPut_InlinePolicy(t *testing.T) {
 		const content = "shared inline"
 		for _, sid := range []domain.SessionID{"a", "b"} {
 			if _, err := s.Put(context.Background(), payload(content),
-				domain.WithNamespace("ns"), domain.WithSession(sid)); err != nil {
+				domain.WithSession(sid)); err != nil {
 				t.Fatal(err)
 			}
 		}
