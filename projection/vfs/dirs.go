@@ -143,16 +143,19 @@ func (d *serviceDirFile) Readdir(count int) ([]os.FileInfo, error) {
 		if cfg.ShowBySession {
 			add("by-session")
 		}
-		if cfg.ShowByNamespace {
-			add("by-namespace")
-		}
 		if cfg.ShowOrphaned {
 			add("orphaned")
 		}
 		if cfg.ShowRaw {
 			add("raw")
 		}
-		add("by-path")
+		// Extension-contributed roots (by-path, by-namespace, …): the
+		// surface names none of them; it lists whatever the View reports.
+		if cfg.ShowProvidedViews {
+			for _, r := range d.v.view.ProvidedRoots() {
+				add(string(r))
+			}
+		}
 		return out, nil
 	}
 	// Service-tree listing.

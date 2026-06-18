@@ -81,13 +81,17 @@ type Config struct {
 	// Show* gate the individual diagnostic trees. A path under a
 	// hidden service tree returns kindRejected (the dispatcher
 	// then surfaces ENOENT).
-	ShowStats       bool
-	ShowByArtifact  bool
-	ShowOrphaned    bool
-	ShowByDate      bool
-	ShowBySession   bool
-	ShowByNamespace bool
-	ShowRaw         bool
+	ShowStats      bool
+	ShowByArtifact bool
+	ShowOrphaned   bool
+	ShowByDate     bool
+	ShowBySession  bool
+	// ShowProvidedViews gates the extension-contributed roots as a group
+	// (whatever the connected extensions provide, e.g. by-path, by-
+	// namespace). The surface names none of them; it enumerates them via
+	// View.ProvidedRoots.
+	ShowProvidedViews bool
+	ShowRaw           bool
 
 	// UnprefixedServiceTrees, when true, exposes service tree
 	// names (by-path, by-date, by-session, by-namespace,
@@ -135,7 +139,7 @@ var errRejected = errors.New("scrinium-vfs: path rejected by routing")
 //
 // The function does no I/O and does not consult the View; it is
 // pure with respect to its inputs.
-func route(path string, cfg Config, rootView view.RootView) (target, error) {
+func route(path string, cfg Config, rootView view.RootView, providedRoots map[view.RootView]bool) (target, error) {
 	// Mount root.
 	if path == "" {
 		return target{
@@ -153,7 +157,7 @@ func route(path string, cfg Config, rootView view.RootView) (target, error) {
 			// dispatchServiceTree returns kindRoot when no
 			// match, so plain user paths still work in the
 			// rare case the host has no service trees enabled.
-			return dispatchServiceTree(path, cfg, rootView)
+			return dispatchServiceTree(path, cfg, rootView, providedRoots)
 		}
 		return target{
 			Kind:    kindRoot,
@@ -180,7 +184,7 @@ func route(path string, cfg Config, rootView view.RootView) (target, error) {
 
 	// Inside the service prefix: dispatch by the second
 	// segment via the same logic UnprefixedServiceTrees uses.
-	return dispatchServiceTree(rest, cfg, rootView)
+	return dispatchServiceTree(rest, cfg, rootView, providedRoots)
 }
 
 // dispatchServiceTree maps a path whose first segment is a
@@ -188,7 +192,7 @@ func route(path string, cfg Config, rootView view.RootView) (target, error) {
 // Used both by the prefixed flow (after stripping
 // ServicePrefix) and the unprefixed flow (as the top-level
 // dispatcher when ServicePrefix is empty).
-func dispatchServiceTree(path string, cfg Config, rootView view.RootView) (target, error) {
+func dispatchServiceTree(path string, cfg Config, rootView view.RootView, providedRoots map[view.RootView]bool) (target, error) {
 	tree, treeRest := pathx.SplitFirst(path)
 	switch tree {
 	case "stats":
@@ -245,26 +249,6 @@ func dispatchServiceTree(path string, cfg Config, rootView view.RootView) (targe
 			SubPath: treeRest,
 		}, nil
 
-	case "by-namespace":
-		if !cfg.ShowByNamespace {
-			return target{Kind: kindRejected}, errRejected
-		}
-		return target{
-			Kind:    kindServiceTree,
-			Tree:    view.RootByNamespace,
-			SubPath: treeRest,
-		}, nil
-
-	case "by-path":
-		// Always available when servicePrefix is set; the dispatcher
-		// surfaces this in case the user picked a non-by-path
-		// RootView and wants the path tree as a service view.
-		return target{
-			Kind:    kindServiceTree,
-			Tree:    view.RootByPath,
-			SubPath: treeRest,
-		}, nil
-
 	case "raw":
 		if !cfg.ShowRaw {
 			return target{Kind: kindRejected}, errRejected
@@ -272,6 +256,17 @@ func dispatchServiceTree(path string, cfg Config, rootView view.RootView) (targe
 		return target{
 			Kind:       kindRawMirror,
 			RawSubPath: treeRest,
+		}, nil
+	}
+
+	// Extension-contributed (provided) root? The surface names none of
+	// them — ShowProvidedViews gates the group, and providedRoots carries
+	// whatever the connected extensions supply (by-path, by-namespace, …).
+	if cfg.ShowProvidedViews && providedRoots[view.RootView(tree)] {
+		return target{
+			Kind:    kindServiceTree,
+			Tree:    view.RootView(tree),
+			SubPath: treeRest,
 		}, nil
 	}
 

@@ -49,7 +49,6 @@ func StatsProvider(c *scrinium.ScriniumClient, startedAt time.Time, capacityTime
 			StorePath:    meta.StoreURI,
 			ReadOnly:     meta.ReadOnly,
 			Editing:      meta.Editing,
-			Namespace:    meta.Namespace,
 			Capacity:     capPtr,
 			Extensions:   exts,
 		})

@@ -12,7 +12,7 @@ import (
 // The dependency is inverted — the projection layer owns this
 // interface; the store implements it.
 type Provider interface {
-	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
+	Walk(ctx context.Context, cb func(domain.Manifest) error) error
 	Get(ctx context.Context, id domain.ArtifactID, opts ...domain.GetOption) (domain.ReadHandle, error)
 }
 

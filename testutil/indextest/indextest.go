@@ -44,26 +44,24 @@ func Run(t *testing.T, f Factory) {
 	t.Run(f.Name+"/MarkVerified", func(t *testing.T) { runMarkVerified(t, f) })
 	t.Run(f.Name+"/MarkManifestVerified", func(t *testing.T) { runListUnverifiedManifests(t, f) })
 	t.Run(f.Name+"/ManifestsByBlobRef", func(t *testing.T) { runManifestsByBlobRef(t, f) })
-	t.Run(f.Name+"/ListByNamespace", func(t *testing.T) { runListByNamespace(t, f) })
+	t.Run(f.Name+"/IterateManifests", func(t *testing.T) { runIterateManifests(t, f) })
 	t.Run(f.Name+"/GetBySession", func(t *testing.T) { runGetBySession(t, f) })
 	t.Run(f.Name+"/ListOrphanBlobs", func(t *testing.T) { runListOrphanBlobs(t, f) })
 	t.Run(f.Name+"/DeleteOrphanBlob", func(t *testing.T) { runDeleteOrphanBlob(t, f) })
 	t.Run(f.Name+"/ListUnverifiedBlobs", func(t *testing.T) { runListUnverifiedBlobs(t, f) })
 }
 
-// collectByNamespace is a small helper that turns a streaming
-// ListByNamespace into a slice for table-style assertions. It is
-// used by every run_X.go that needs to inspect the iteration
-// order or contents of ListByNamespace results.
-func collectByNamespace(t *testing.T, idx index.StoreIndex, ns string) []domain.Manifest {
+// collectAll turns a streaming IterateManifests into a slice for
+// table-style assertions.
+func collectAll(t *testing.T, idx index.StoreIndex) []domain.Manifest {
 	t.Helper()
 	var got []domain.Manifest
-	err := idx.ListByNamespace(context.Background(), ns, func(m domain.Manifest) error {
+	err := idx.IterateManifests(context.Background(), func(m domain.Manifest) error {
 		got = append(got, m)
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ListByNamespace(%q): %v", ns, err)
+		t.Fatalf("IterateManifests: %v", err)
 	}
 	return got
 }

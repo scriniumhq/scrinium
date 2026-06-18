@@ -37,9 +37,6 @@ func applyProjectionDefaults(p *Projection) {
 	if p.Editing == "" {
 		p.Editing = "off"
 	}
-	if p.RootView == "" {
-		p.RootView = "by-path"
-	}
 	if p.ByPathFallback == "" {
 		p.ByPathFallback = "orphaned"
 	}

@@ -119,7 +119,6 @@ CREATE INDEX blobs_scrub   ON blobs(last_verified_at);
 CREATE TABLE manifests (
     manifest_digest  TEXT    PRIMARY KEY,
     artifact_id      TEXT,
-    namespace        TEXT    NOT NULL DEFAULT '',
     session_id       TEXT    NOT NULL DEFAULT '',
     blob_ref         TEXT,
     created_at       TEXT    NOT NULL,
@@ -128,7 +127,6 @@ CREATE TABLE manifests (
 ) WITHOUT ROWID;
 
 CREATE INDEX manifests_artifact  ON manifests(artifact_id);
-CREATE INDEX manifests_namespace ON manifests(namespace);
 CREATE INDEX manifests_session   ON manifests(session_id);
 CREATE INDEX manifests_scrub     ON manifests(last_verified_at);
 

@@ -26,22 +26,41 @@ type ViewProvider interface {
 // The composition root collects these across installed extensions, unions
 // them with the native (intrinsic) views, and feeds the projection. Root
 // must be unique across installed extensions; the root rejects a collision.
+//
+// The extension owns the view's full layout: Path maps a manifest directly
+// to its placement in the tree, so the projection never knows the view's
+// addressing scheme (a verbatim logical path for by-path, an id-sharded
+// path under a registry label for by-namespace, …). This keeps the
+// projection extension-agnostic (ADR-89, Principle 10): it materialises
+// trees from opaque Path/CountKey functions without naming any view.
 type ProvidedView struct {
 	// Root is the RootView this extension backs, e.g. "by-path" (fspath)
 	// or "by-namespace" (namespace). Unique across installed extensions.
 	Root string
 
-	// Resolve extracts this view's key from a manifest during backfill:
-	// (key, true) admits the artifact into the tree, ("", false) when the
-	// manifest is opaque to this view. Pure — the same manifest must
-	// always produce the same result (the view caches the decision). For
-	// by-path this is vfsmeta.Resolver.
-	Resolve func(m domain.Manifest) (key string, ok bool)
+	// Path maps a manifest to its full placement path in this tree during
+	// backfill: (path, true) admits the artifact, ("", false) when the
+	// manifest is opaque to this view (routed to the orphan tree when
+	// Orphans is set). Pure — the same manifest must always produce the
+	// same result. The extension applies whatever layout it wants here
+	// (verbatim key, label + id-shard, …); the projection does not look
+	// inside.
+	Path func(m domain.Manifest) (path string, ok bool)
 
-	// Label optionally maps a raw key segment to a display label (e.g.
-	// nsid → human name via a registry). nil ⇒ the key is used verbatim
-	// (by-path needs no mapping).
-	Label func(key string) (label string, ok bool)
+	// Collide marks a tree whose Path keys are NOT artifact-unique (e.g.
+	// by-path's logical paths): the projection runs collision arbitration
+	// (freshest CreatedAt wins, tie → larger ArtifactID) for it. id-shaped
+	// layouts (by-namespace) leave this false.
+	Collide bool
+
+	// Orphans routes a Path()=!ok manifest to the orphan tree (by-path);
+	// other views simply skip a miss.
+	Orphans bool
+
+	// CountKey, when non-nil, supplies this view's distinct-cardinality
+	// key (e.g. the namespace label) so the projection can maintain the
+	// view's count without knowing the concept. nil ⇒ not counted.
+	CountKey func(m domain.Manifest) (key string, ok bool)
 
 	// Metadata optionally provides bulk ext-block lookup so the backfill
 	// fetches an artifact's custom-index block in one round-trip instead

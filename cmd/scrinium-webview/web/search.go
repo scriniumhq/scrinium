@@ -40,7 +40,6 @@ type searchPageData struct {
 type searchResultRow struct {
 	URL         string
 	Path        string // empty → "(orphaned)"
-	Namespace   string
 	SessionID   string
 	CreatedAt   string
 	MIME        string
@@ -83,7 +82,6 @@ func (h *Handler) serveSearch(w http.ResponseWriter, r *http.Request) {
 				row := searchResultRow{
 					URL:         h.prefix + "/_artifact/" + string(sr.ArtifactID),
 					Path:        sr.Path,
-					Namespace:   sr.Namespace,
 					SessionID:   string(sr.SessionID),
 					CreatedAt:   sr.CreatedAt.UTC().Format(time.RFC3339),
 					MIME:        sr.MIME,
@@ -205,7 +203,6 @@ const searchPageHTML = `<!DOCTYPE html>
     <tr>
       <th>Path</th>
       <th class="match">Match</th>
-      <th class="ns">Namespace</th>
       <th class="time">Created</th>
     </tr>
   </thead>
@@ -214,7 +211,6 @@ const searchPageHTML = `<!DOCTYPE html>
     <tr>
       <td class="path"><a href="{{.URL}}" title="{{if .IsOrphan}}(orphaned){{else}}{{.Path}}{{end}}">{{if .IsOrphan}}<span class="orphan">(orphaned)</span>{{else}}{{.Path}}{{end}}</a></td>
       <td class="match"><span class="{{.MatchReason}}-match">{{.MatchReason}}</span></td>
-      <td class="ns">{{if .Namespace}}{{.Namespace}}{{else}}—{{end}}</td>
       <td class="time">{{.CreatedAt}}</td>
     </tr>
 {{- end}}

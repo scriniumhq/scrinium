@@ -133,7 +133,7 @@ func TestDedup_Matrix(t *testing.T) {
 			for i, p := range tc.payloads {
 				id, err := s.Put(ctx,
 					domain.Artifact{Payload: bytes.NewReader([]byte(p))},
-					domain.WithNamespace("ns"))
+				)
 				if err != nil {
 					t.Fatalf("Put #%d: %v", i, err)
 				}

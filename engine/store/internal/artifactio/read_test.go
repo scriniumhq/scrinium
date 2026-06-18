@@ -40,7 +40,7 @@ func rwHarness(t *testing.T) (*artifactio.IO, *artifactio.IO, driver.Driver, ind
 func write(t *testing.T, w *artifactio.IO, cfg domain.StoreConfig, content string) domain.ArtifactID {
 	t.Helper()
 	ctx := context.Background()
-	opts := domain.PutOptions{Namespace: "ns"}
+	opts := domain.PutOptions{}
 	blob, err := w.Materialize(ctx, cfg, artifactfx.Payload(content), opts, "")
 	if err != nil {
 		t.Fatalf("Materialize: %v", err)

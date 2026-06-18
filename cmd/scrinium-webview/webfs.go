@@ -136,7 +136,6 @@ func (b *webBackingFS) LookupRelated(ctx context.Context, blobRef domain.BlobRef
 		out = append(out, projection.RelatedArtifact{
 			ArtifactID: s.ArtifactID,
 			Path:       s.Path,
-			Namespace:  s.Namespace,
 			SessionID:  s.SessionID,
 			CreatedAt:  s.CreatedAt,
 		})
@@ -152,7 +151,6 @@ func (b *webBackingFS) Search(ctx context.Context, query string, limit int) ([]p
 		out = append(out, projection.SearchResult{
 			ArtifactID:  h.ArtifactID,
 			Path:        h.Path,
-			Namespace:   h.Namespace,
 			SessionID:   h.SessionID,
 			CreatedAt:   h.CreatedAt,
 			MIME:        h.MIME,
@@ -169,12 +167,5 @@ func (b *webBackingFS) LookupLocations(ctx context.Context, id domain.ArtifactID
 	if !ok {
 		return projection.Locations{}, false, nil
 	}
-	return projection.Locations{
-		ByArtifact:  locs.ByArtifact,
-		BySession:   locs.BySession,
-		ByNamespace: locs.ByNamespace,
-		ByDate:      locs.ByDate,
-		ByPath:      locs.ByPath,
-		ByOrphaned:  locs.ByOrphaned,
-	}, true, nil
+	return locs, true, nil
 }

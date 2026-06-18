@@ -33,7 +33,6 @@ func artifactFacetFrom(m domain.Manifest) *ArtifactFacet {
 		ArtifactID:  m.ArtifactID,
 		ContentHash: m.ContentHash,
 		BlobRef:     m.PrimaryBlobRef(),
-		Namespace:   m.Namespace,
 		SessionID:   m.SessionID,
 		CreatedAt:   m.CreatedAt,
 		Ext:         m.Ext,
@@ -116,22 +115,6 @@ func byDateLabel(m domain.Manifest) string {
 		}
 	}
 	return shortID(m.ArtifactID) + ".bin"
-}
-
-// byNamespacePath: <ns>/<aa>/<bb>/<id>
-//
-// Empty namespace is bucketed under "_default" so the artifact
-// remains visible in the tree.
-func byNamespacePath(m domain.Manifest) string {
-	ns := m.Namespace
-	if ns == "" {
-		ns = "_default"
-	}
-	hash := hashPart(string(m.ArtifactID))
-	if len(hash) < 4 {
-		return ns + "/_short/" + string(m.ArtifactID)
-	}
-	return ns + "/" + hash[:2] + "/" + hash[2:4] + "/" + string(m.ArtifactID)
 }
 
 // bySessionPath: <aa>/<bb>/<sid>/<artifact-id>

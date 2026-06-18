@@ -33,6 +33,32 @@ func (i *Index) QueryByExtField(ctx context.Context, extName, field, value strin
 	return iterateArtifactIDRows(ctx, rows, cb)
 }
 
+// ListByExtField iterates over manifests whose projected ext field
+// extName.field equals value, read from proj_ext (read-side of the Indexer
+// projection, §9.6). It is the manifest-yielding sibling of QueryByExtField:
+// where that streams bare ArtifactIDs (membership / search), this hydrates
+// the index-resident Manifest — no manifest-file I/O, columns only, exactly
+// as IterateManifests does — so it is the proj_ext-backed form of a listing.
+// Handle-less rows (system artifacts, pack containers) are excluded by
+// artifact_id IS NOT NULL. v1 is equality (a richer language is M7). The
+// callback may return fs.SkipAll to stop early without an error.
+func (i *Index) ListByExtField(ctx context.Context, extName, field, value string, cb func(domain.Manifest) error) error {
+	const stmt = `
+		SELECT ` + manifestProjection + `
+		FROM manifests m
+		JOIN proj_ext p ON p.digest = m.manifest_digest
+		LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
+		WHERE p.ext_name = ? AND p.field = ? AND p.value = ?
+		  AND m.artifact_id IS NOT NULL
+		ORDER BY m.created_at`
+	rows, err := i.db.QueryContext(ctx, stmt, extName, field, value)
+	if err != nil {
+		return classifyError(err)
+	}
+	defer rows.Close()
+	return iterateManifestRows(ctx, rows, cb)
+}
+
 // QueryByUsrField is the same over proj_usr (§9.6). It returns an empty result
 // (no error) when the global usr_indexing switch is off — proj_usr is then not
 // maintained, so a query has nothing to match (§9.12). A field is projected

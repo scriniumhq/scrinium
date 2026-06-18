@@ -133,7 +133,6 @@ func TestRender_ConfigSection(t *testing.T) {
 		StartedAt: time.Now(),
 		ReadOnly:  true,
 		Editing:   "on",
-		Namespace: "files",
 	}))
 	if !strings.Contains(out, "[config]") {
 		t.Fatal("missing [config] section")
@@ -143,8 +142,5 @@ func TestRender_ConfigSection(t *testing.T) {
 	}
 	if !strings.Contains(out, "Editing:          on") {
 		t.Error("Editing row missing")
-	}
-	if !strings.Contains(out, "Namespace:        files") {
-		t.Error("Namespace row missing")
 	}
 }

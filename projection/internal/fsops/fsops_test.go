@@ -46,7 +46,7 @@ func TestStat_FileInRootView(t *testing.T) {
 		"photos/img.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -69,7 +69,7 @@ func TestStat_VirtualDirectory(t *testing.T) {
 		"photos/2024/img.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -89,7 +89,7 @@ func TestStat_VirtualDirectory(t *testing.T) {
 func TestStat_NotFound(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -106,7 +106,7 @@ func TestStat_AppliesDefaultMode(t *testing.T) {
 		"a.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v,
@@ -127,7 +127,7 @@ func TestStat_AppliesDefaultUIDGID(t *testing.T) {
 		"a.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v,
@@ -150,7 +150,7 @@ func TestStat_RoutesViaRootView_ByArtifact(t *testing.T) {
 		"photos/img.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver),
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"),
 		vw.WithRootView(vw.RootByArtifact))
 	defer v.Close()
 
@@ -177,7 +177,7 @@ func TestListdir_ListsFiles(t *testing.T) {
 		"photos/b.jpg"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -203,7 +203,7 @@ func TestListdir_OnFile(t *testing.T) {
 		"a.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -220,7 +220,7 @@ func TestListdir_OnFile(t *testing.T) {
 func TestListdir_NotFound(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -242,7 +242,7 @@ func TestOpen_ReadOnly(t *testing.T) {
 		"hello.txt"), []byte("hello"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -271,7 +271,7 @@ func TestOpen_WriteModesRejectedWithoutPolicy(t *testing.T) {
 		"a.txt"), []byte("x"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -294,7 +294,7 @@ func TestOpen_OnDirectory(t *testing.T) {
 		"d/file.txt"), nil)
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -308,7 +308,7 @@ func TestOpen_OnDirectory(t *testing.T) {
 func TestOpen_NotFound(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -327,7 +327,7 @@ func TestReadOnlyFile_WriteAtRefused(t *testing.T) {
 		"a.txt"), []byte("hello"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -347,7 +347,7 @@ func TestReadOnlyFile_TruncateRefused(t *testing.T) {
 		"a.txt"), []byte("hello"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -366,7 +366,7 @@ func TestReadOnlyFile_ReadAtRandomAccess(t *testing.T) {
 		"a.txt"), []byte("0123456789"))
 
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v)
@@ -404,4 +404,16 @@ func (r *fileReader) Read(p []byte) (int, error) {
 		err = io.EOF
 	}
 	return n, err
+}
+
+// byPathProvided is the by-path view as the fspath extension supplies it
+// (ADR-98): vfsmeta resolver, collidable, orphaning. Local to the fsops
+// tests now that the View takes its by-path tree through the provided rail.
+func byPathProvided() vw.ProvidedView {
+	return vw.ProvidedView{
+		Root:    "by-path",
+		Path:    vfsmeta.Resolver,
+		Collide: true,
+		Orphans: true,
+	}
 }

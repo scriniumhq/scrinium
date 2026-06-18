@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -220,43 +221,45 @@ func (h *Handler) tryPreview(ctx context.Context, id domain.ArtifactID, m domain
 // RootView=byDate (so byDate is at the URL root), the by-path
 // link still works via /_browse/_scrinium/by-path/...
 func (h *Handler) buildLocationViews(locs projection.Locations) []locationView {
-	out := make([]locationView, 0, 6)
 	servicePrefix := h.cfg.ServicePrefix
-	if servicePrefix == "" {
-		// Without a service prefix the only navigable tree is
-		// the root view. Show whichever placement we have.
-		if locs.ByPath != "" {
-			out = append(out, locationView{
-				Tree: "by-path",
-				Path: locs.ByPath,
-				URL:  parentURL(h.prefix+"/", locs.ByPath),
-			})
-		}
-		return out
-	}
 
-	add := func(label, path, treeSegment string) {
+	roots := make([]string, 0, len(locs.Paths))
+	for r := range locs.Paths {
+		roots = append(roots, string(r))
+	}
+	sort.Strings(roots)
+
+	out := make([]locationView, 0, len(roots))
+	for _, r := range roots {
+		path := locs.Paths[projection.RootView(r)]
 		if path == "" {
-			return
+			continue
 		}
-		base := h.prefix + "/" + servicePrefix + "/" + treeSegment + "/"
+		if servicePrefix == "" {
+			// Without a service prefix only the root view is mounted at
+			// the bare prefix; we don't know which root that is here, so
+			// surface each placement against it. The root view's link
+			// resolves; others are informational.
+			out = append(out, locationView{
+				Tree: r,
+				Path: path,
+				URL:  parentURL(h.prefix+"/", path),
+			})
+			continue
+		}
+		// The URL segment matches the root name. by-orphaned is the one
+		// intrinsic view whose mount segment ("orphaned") differs.
+		seg := r
+		if r == "by-orphaned" {
+			seg = "orphaned"
+		}
+		base := h.prefix + "/" + servicePrefix + "/" + seg + "/"
 		out = append(out, locationView{
-			Tree: label,
+			Tree: r,
 			Path: path,
 			URL:  parentURL(base, path),
 		})
 	}
-
-	// Order goes from "most useful" to "diagnostic": users
-	// usually want by-path or by-date first, by-artifact /
-	// by-orphaned are infrastructure peeks.
-	add("by-path", locs.ByPath, "by-path")
-	add("by-orphaned", locs.ByOrphaned, "orphaned")
-	add("by-date", locs.ByDate, "by-date")
-	add("by-namespace", locs.ByNamespace, "by-namespace")
-	add("by-session", locs.BySession, "by-session")
-	add("by-artifact", locs.ByArtifact, "by-artifact")
-
 	return out
 }
 
@@ -590,7 +593,6 @@ type locationView struct {
 type relatedView struct {
 	URL       string
 	Path      string // empty → "(orphaned)"
-	Namespace string
 	SessionID string
 	CreatedAt string // pre-formatted RFC3339
 	IsOrphan  bool
@@ -609,7 +611,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 
 	data.Identity = []labelValue{
 		{Label: "ArtifactID", Value: string(m.ArtifactID), Mono: true},
-		{Label: "Namespace", Value: orDash(m.Namespace)},
 		{Label: "SessionID", Value: orDash(string(m.SessionID)), Mono: m.SessionID != ""},
 		{Label: "CreatedAt", Value: m.CreatedAt.UTC().Format(time.RFC3339)},
 		{Label: "RetentionUntil", Value: formatTimeOrDash(m.RetentionUntil)},
@@ -661,7 +662,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 			view := relatedView{
 				URL:       h.prefix + "/_artifact/" + string(ra.ArtifactID),
 				Path:      ra.Path,
-				Namespace: ra.Namespace,
 				SessionID: string(ra.SessionID),
 				CreatedAt: ra.CreatedAt.UTC().Format(time.RFC3339),
 				IsOrphan:  ra.Path == "",
@@ -700,7 +700,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	// the wire shape (ArtifactID is intentionally absent — it's
 	// derived, not serialised, per docs §7.4).
 	raw, err := json.MarshalIndent(struct {
-		Namespace      string                 `json:"namespace,omitempty"`
 		SessionID      string                 `json:"session_id,omitempty"`
 		CreatedAt      time.Time              `json:"created_at"`
 		ContentHash    domain.ContentHash     `json:"content_hash,omitempty"`
@@ -713,7 +712,6 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 		Ext            json.RawMessage        `json:"ext,omitempty"`
 		Usr            json.RawMessage        `json:"usr,omitempty"`
 	}{
-		Namespace:      m.Namespace,
 		SessionID:      string(m.SessionID),
 		CreatedAt:      m.CreatedAt,
 		ContentHash:    m.ContentHash,
@@ -978,7 +976,6 @@ const artifactPageHTML = `<!DOCTYPE html>
 {{- range .Related}}
     <tr>
       <td class="path"><a href="{{.URL}}">{{if .IsOrphan}}<span class="orphan">(orphaned)</span>{{else}}{{.Path}}{{end}}</a></td>
-      <td class="ns">{{if .Namespace}}{{.Namespace}}{{else}}—{{end}}</td>
       <td class="session mono">{{if .SessionID}}{{.SessionID}}{{else}}—{{end}}</td>
       <td class="created">{{.CreatedAt}}</td>
     </tr>

@@ -53,7 +53,6 @@ func makeFSManifest(t *testing.T, id domain.ArtifactID, path string) domain.Mani
 	}
 	return domain.Manifest{
 		ArtifactID:   id,
-		Namespace:    "files",
 		BlobRefs:     []domain.BlobRef{"sha256-" + domain.BlobRef(id)},
 		ContentHash:  "sha256-" + domain.ContentHash(id),
 		OriginalSize: 100,
@@ -70,7 +69,6 @@ func makeForeignManifest(t *testing.T, id domain.ArtifactID) domain.Manifest {
 	raw, _ := json.Marshal(map[string]string{"kind": "email/v1", "subject": "hi"})
 	return domain.Manifest{
 		ArtifactID:   id,
-		Namespace:    "mail",
 		BlobRefs:     []domain.BlobRef{"sha256-" + domain.BlobRef(id)},
 		ContentHash:  "sha256-" + domain.ContentHash(id),
 		OriginalSize: 50,
@@ -170,7 +168,6 @@ func TestIndex_NoMetadata_Skipped(t *testing.T) {
 
 	m := domain.Manifest{
 		ArtifactID:   "bare-1",
-		Namespace:    "files",
 		BlobRefs:     []domain.BlobRef{"sha256-bare"},
 		ContentHash:  "sha256-bare",
 		OriginalSize: 10,
@@ -197,7 +194,6 @@ func TestIndex_BrokenVFSMeta_RollsBackMainWrite(t *testing.T) {
 	bad := json.RawMessage(`{"kind":"scrinium.fs/v1","path":12345}`)
 	m := domain.Manifest{
 		ArtifactID:   "art-bad",
-		Namespace:    "files",
 		BlobRefs:     []domain.BlobRef{"sha256-bad"},
 		ContentHash:  "sha256-bad",
 		OriginalSize: 10,
@@ -448,26 +444,29 @@ func TestProvidedViews_Shape(t *testing.T) {
 	if pv.Root != "by-path" {
 		t.Errorf("Root = %q, want by-path", pv.Root)
 	}
-	if pv.Resolve == nil {
-		t.Error("Resolve is nil; the by-path view needs a key extractor")
+	if pv.Path == nil {
+		t.Error("Path is nil; the by-path view needs a placement function")
 	}
 	if pv.Metadata == nil {
 		t.Error("Metadata is nil; backfill loses its bulk ext source")
 	}
-	if pv.Label != nil {
-		t.Error("Label should be nil for by-path (keys are used verbatim)")
+	if !pv.Collide {
+		t.Error("by-path must be collidable (logical paths are not artifact-unique)")
+	}
+	if !pv.Orphans {
+		t.Error("by-path must orphan manifests it cannot place")
 	}
 }
 
-func TestProvidedViews_Resolve(t *testing.T) {
+func TestProvidedViews_Path(t *testing.T) {
 	pv := fsExt.NewIndex().ProvidedViews()[0]
 
-	key, ok := pv.Resolve(makeFSManifest(t, "a-1", "photos/sunset.jpg"))
-	if !ok || key != "photos/sunset.jpg" {
-		t.Errorf("Resolve = (%q,%v), want (photos/sunset.jpg,true)", key, ok)
+	path, ok := pv.Path(makeFSManifest(t, "a-1", "photos/sunset.jpg"))
+	if !ok || path != "photos/sunset.jpg" {
+		t.Errorf("Path = (%q,%v), want (photos/sunset.jpg,true)", path, ok)
 	}
-	if _, ok := pv.Resolve(makeForeignManifest(t, "e-1")); ok {
-		t.Error("Resolve admitted a foreign-schema manifest; want ok=false")
+	if _, ok := pv.Path(makeForeignManifest(t, "e-1")); ok {
+		t.Error("Path admitted a foreign-schema manifest; want ok=false")
 	}
 }
 

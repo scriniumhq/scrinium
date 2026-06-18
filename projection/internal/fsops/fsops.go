@@ -48,7 +48,6 @@ type Ops struct {
 
 	editing      EditingPolicy
 	mountSession domain.SessionID
-	namespace    string
 	readOnly     bool
 
 	// Path locks: per-path RWMutex serialising mutations on a
@@ -191,7 +190,6 @@ type fsOpsOptions struct {
 	defaultGID   uint32
 	editing      EditingPolicy
 	mountSession domain.SessionID
-	namespace    string
 	readOnly     bool
 }
 
@@ -241,13 +239,6 @@ func WithMountSession(sid domain.SessionID) Option {
 	return func(o *fsOpsOptions) { o.mountSession = sid }
 }
 
-// WithNamespace sets the Namespace stamped onto every Put.
-// Required when Create is called; Mkdir/Rmdir/Unlink/Rename
-// do not depend on it (they operate on existing artifacts).
-func WithNamespace(ns string) Option {
-	return func(o *fsOpsOptions) { o.namespace = ns }
-}
-
 // WithReadOnly forces every mutation to return ErrEditingDisabled
 // regardless of EditingPolicy or the existence of a StoreClient.
 func WithReadOnly() Option {
@@ -289,7 +280,6 @@ func New(v *vw.View, opts ...Option) (*Ops, error) {
 		defaultGID:   o.defaultGID,
 		editing:      o.editing,
 		mountSession: o.mountSession,
-		namespace:    o.namespace,
 		readOnly:     o.readOnly,
 		pathLocks:    newPathLockManager(),
 		quota:        &quotaTracker{quota: o.scratchQuota},
@@ -539,7 +529,6 @@ func (o *Ops) fileInfoFromNode(n vw.Node) FileInfo {
 // Errors:
 //   - ErrInvalidPath if path fails vfsmeta validation.
 //   - ErrEditingDisabled if Ops was constructed with WithReadOnly.
-//   - "WithNamespace not configured" if Namespace is empty.
 //   - "WithStore not configured" if no StoreClient was supplied.
 //   - ErrPathExists wrapping the existing-path detail when the
 //     target is already taken.
@@ -552,9 +541,6 @@ func (o *Ops) Create(ctx context.Context, path string, mode uint32) (File, error
 	}
 	if err := vfsmeta.ValidatePath(path); err != nil {
 		return nil, err
-	}
-	if o.namespace == "" {
-		return nil, fmt.Errorf("projection.Ops.Create: WithNamespace not configured")
 	}
 	if o.store == nil {
 		return nil, fmt.Errorf("projection.Ops.Create: WithStore not configured")
@@ -1211,7 +1197,6 @@ func (f *writeFile) Close() error {
 			Ext: metadata,
 		},
 		domain.WithSession(f.fsops.mountSession),
-		domain.WithNamespace(f.fsops.namespace),
 		domain.WithBlobType(domain.BlobTypeRegular),
 	)
 	if err != nil {

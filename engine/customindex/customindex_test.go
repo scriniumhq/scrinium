@@ -145,7 +145,7 @@ func TestEventArgs_ZeroValueIsValid(t *testing.T) {
 // described in the contract. This test is the executable form
 // of that contract table.
 func TestEventArgs_PopulatedShape(t *testing.T) {
-	m := domain.Manifest{ArtifactID: "art-1", Namespace: "files"}
+	m := domain.Manifest{ArtifactID: "art-1"}
 
 	// ManifestIndexed: Manifest fully populated, ArtifactID dup.
 	indexedArgs := EventArgs{Manifest: m, ArtifactID: m.ArtifactID}

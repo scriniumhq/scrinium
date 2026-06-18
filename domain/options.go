@@ -22,10 +22,18 @@ type RoutingHints struct {
 // PutOptions is the call context for Store.Put.
 type PutOptions struct {
 	SessionID      SessionID
-	Namespace      string
 	BlobType       BlobType
 	RetentionUntil time.Time
 	Routing        RoutingHints
+
+	// ExtHints is the generic, opaque per-call channel from a client to
+	// the behavior wrappers, keyed by extension name. The core NEVER reads
+	// it — it carries the map through Put to the wrappers, which alone
+	// interpret their own key (e.g. a namespace name an extension wrapper
+	// resolves and stamps into Ext). This is how a client passes an
+	// extension a per-call value without the core learning that
+	// extension's vocabulary.
+	ExtHints map[string]string
 }
 
 // GetOptions is the call context for Store.Get.

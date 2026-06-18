@@ -42,10 +42,12 @@ func Stack(t testing.TB, manifests ...domain.Manifest) (*projection.Projection, 
 	}
 
 	proj, err := projection.Build(t.Context(), src, nil, projection.Config{
-		Namespace:    "files",
-		Editing:      "on",
-		ScratchDir:   t.TempDir(),
-		PathResolver: vfsmeta.Resolver,
+		Editing:    "on",
+		ScratchDir: t.TempDir(),
+		RootView:   "by-path",
+		ProvidedViews: []projection.ProvidedView{
+			{Root: "by-path", Path: vfsmeta.Resolver, Collide: true, Orphans: true},
+		},
 	})
 	if err != nil {
 		t.Fatalf("viewfx.Stack: Build: %v", err)
@@ -56,22 +58,22 @@ func Stack(t testing.TB, manifests ...domain.Manifest) (*projection.Projection, 
 }
 
 // RoutingAll returns a RoutingConfig with every service tree enabled
-// under the conventional "_scrinium" prefix and RootByPath as the
-// root view — the literal fuse, webdav, and the projection routing
-// tests previously each declared inline.
+// under the conventional "_scrinium" prefix (the root view is set on the
+// projection, not here) — the literal fuse, webdav, and the projection
+// routing tests previously each declared inline.
 //
 // ShowRaw stays false: the raw tree is opt-in per surface (webview
 // turns it on, fuse/webdav do not), so a test that needs it flips the
 // field on the returned value.
 func RoutingAll() vfs.Config {
 	return vfs.Config{
-		ServicePrefix:   "_scrinium",
-		ShowStats:       true,
-		ShowByArtifact:  true,
-		ShowOrphaned:    true,
-		ShowByDate:      true,
-		ShowBySession:   true,
-		ShowByNamespace: true,
-		ShowRaw:         false,
+		ServicePrefix:     "_scrinium",
+		ShowStats:         true,
+		ShowByArtifact:    true,
+		ShowOrphaned:      true,
+		ShowByDate:        true,
+		ShowBySession:     true,
+		ShowProvidedViews: true,
+		ShowRaw:           false,
 	}
 }

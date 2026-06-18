@@ -119,8 +119,7 @@ func benchmarkPut(b *testing.B, payloadSize int) {
 		// Put writes unique content (avoiding dedup).
 		binary.LittleEndian.PutUint64(payload[:8], uint64(i))
 		_, err := s.Put(ctx,
-			domain.Artifact{Payload: bytes.NewReader(payload)},
-			domain.WithNamespace("bench"))
+			domain.Artifact{Payload: bytes.NewReader(payload)})
 		if err != nil {
 			b.Fatalf("Put #%d: %v", i, err)
 		}

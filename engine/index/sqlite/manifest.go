@@ -199,9 +199,9 @@ func registerBlob(
 func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error {
 	const stmt = `
 		INSERT INTO manifests (
-			manifest_digest, artifact_id, namespace, session_id,
+			manifest_digest, artifact_id, session_id,
 			blob_ref, created_at, retention_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(manifest_digest) DO NOTHING`
 
 	// Identity slot. A user artifact fills artifact_id with its floating
@@ -241,7 +241,6 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	_, err := tx.ExecContext(ctx, stmt,
 		string(m.Digest),
 		artifactIDArg,
-		m.Namespace,
 		m.SessionID,
 		blobRefArg,
 		timefmt.Format(createdAt),

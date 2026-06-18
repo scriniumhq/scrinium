@@ -79,10 +79,21 @@ type DataStore interface {
 
 	// Iteration and introspection.
 
-	// Walk iterates over user manifests. namespace = "*" — every user
-	// namespace; an empty string — only the default one. system.*
+	// Walk iterates over every user manifest, namespace-agnostic. system.*
 	// artifacts are unreachable here; they live behind System().
-	Walk(ctx context.Context, namespace string, cb func(domain.Manifest) error) error
+	// Namespace-filtered traversal is an extension concern (WalkByExt).
+	Walk(ctx context.Context, cb func(domain.Manifest) error) error
+
+	// WalkByExt iterates over user manifests whose projected ext field
+	// extName.field equals value (proj_ext, §9.6). It is the extension-
+	// agnostic, equality-only listing primitive: the core attaches NO meaning
+	// to extName/field — a namespace extension lists its artifacts via
+	// WalkByExt("namespace", "nsid", <nsid>); other projecting extensions use
+	// their own fields. The yielded Manifest carries index-resident fields
+	// only (no manifest-file I/O); Ext is not hydrated — read it via Get if
+	// needed. A field/operator-discovery selector that also folds in native
+	// fields and prefix/range is future work (Walkable-Fields rationale).
+	WalkByExt(ctx context.Context, extName, field, value string, cb func(domain.Manifest) error) error
 
 	// Capacity returns aggregated storage metrics.
 	Capacity(ctx context.Context) (domain.StorageInfo, error)

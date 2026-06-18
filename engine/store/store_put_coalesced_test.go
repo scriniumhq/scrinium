@@ -24,11 +24,11 @@ func TestPut_CoalescedMode_SameContentCoalesces(t *testing.T) {
 	s := storefx2.Init(t, store.WithCoalesced())
 	ctx := context.Background()
 
-	id1, err := s.Put(ctx, payload("identical bytes"), domain.WithNamespace("arc"))
+	id1, err := s.Put(ctx, payload("identical bytes"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	id2, err := s.Put(ctx, payload("identical bytes"), domain.WithNamespace("arc"))
+	id2, err := s.Put(ctx, payload("identical bytes"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestPut_CoalescedMode_SameContentCoalesces(t *testing.T) {
 	}
 
 	var seen int
-	if err := s.Walk(ctx, "arc", func(domain.Manifest) error {
+	if err := s.Walk(ctx, func(domain.Manifest) error {
 		seen++
 		return nil
 	}); err != nil {
@@ -66,11 +66,11 @@ func TestPut_CoalescedMode_DistinctContentStaysDistinct(t *testing.T) {
 	s := storefx2.Init(t, store.WithCoalesced())
 	ctx := context.Background()
 
-	idA, err := s.Put(ctx, payload("alpha"), domain.WithNamespace("arc"))
+	idA, err := s.Put(ctx, payload("alpha"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	idB, err := s.Put(ctx, payload("beta"), domain.WithNamespace("arc"))
+	idB, err := s.Put(ctx, payload("beta"))
 	if err != nil {
 		t.Fatal(err)
 	}

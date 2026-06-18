@@ -121,7 +121,7 @@ func runModelProgram(t *testing.T, program []byte) {
 			content := bytes.Repeat([]byte{fillB}, int(sizeB)) // 0..255 bytes, content == fill*size
 			ns := namespaces[int(nsB)%len(namespaces)]
 
-			id, err := s.Put(ctx, mkArtifact(content), domain.WithNamespace(ns))
+			id, err := s.Put(ctx, mkArtifact(content))
 			if err != nil {
 				t.Fatalf("step %d Put(ns=%s,len=%d): %v", step, ns, len(content), err)
 			}
@@ -187,23 +187,18 @@ func reconcileModel(t *testing.T, s store.Store, root string, m *model, step int
 		}
 	}
 
-	// Walk per namespace yields exactly the live ids in that namespace.
-	wantByNS := map[string]map[domain.ArtifactID]struct{}{}
+	// Walk yields exactly the live ids — namespace-agnostic (ADR-99).
+	want := map[domain.ArtifactID]struct{}{}
 	for _, e := range m.live {
-		if wantByNS[e.ns] == nil {
-			wantByNS[e.ns] = map[domain.ArtifactID]struct{}{}
-		}
-		wantByNS[e.ns][e.id] = struct{}{}
+		want[e.id] = struct{}{}
 	}
-	for ns, want := range wantByNS {
-		got := walkIDs(t, s, ns)
-		if len(got) != len(want) {
-			t.Fatalf("step %d reconcile: Walk(%q) size got %d want %d", step, ns, len(got), len(want))
-		}
-		for id := range want {
-			if _, ok := got[id]; !ok {
-				t.Fatalf("step %d reconcile: Walk(%q) missing %s", step, ns, id)
-			}
+	got := walkIDs(t, s)
+	if len(got) != len(want) {
+		t.Fatalf("step %d reconcile: Walk size got %d want %d", step, len(got), len(want))
+	}
+	for id := range want {
+		if _, ok := got[id]; !ok {
+			t.Fatalf("step %d reconcile: Walk missing %s", step, id)
 		}
 	}
 

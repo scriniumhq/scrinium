@@ -176,7 +176,7 @@ func TestSystemStore_PutDoesNotIndex(t *testing.T) {
 	ctx := context.Background()
 	body := []byte("snapshot-payload-1234")
 
-	before := countNamespace(t, idx, domain.NamespaceWildcard)
+	before := countManifests(t, idx)
 
 	if err := ss.Put(ctx, store.SystemArtifact{Name: "index_checkpoint/2026-04-01", Payload: bytes.NewReader(body)}); err != nil {
 		t.Fatalf("Put: %v", err)
@@ -195,7 +195,7 @@ func TestSystemStore_PutDoesNotIndex(t *testing.T) {
 	}
 
 	// System artifacts are never indexed (ADR-85): the index must not grow.
-	if d := countNamespace(t, idx, domain.NamespaceWildcard) - before; d != 0 {
+	if d := countManifests(t, idx) - before; d != 0 {
 		t.Errorf("system artifact appeared in index (delta %d, want 0)", d)
 	}
 }
@@ -234,16 +234,16 @@ func walkNames(t *testing.T, ss store.SystemStore, prefix string) []string {
 	return names
 }
 
-// countNamespace returns the number of index rows in ns.
-func countNamespace(t *testing.T, idx index.StoreIndex, ns string) int {
+// countManifests returns the number of user manifest rows in the index.
+func countManifests(t *testing.T, idx index.StoreIndex) int {
 	t.Helper()
 	var n int
-	err := idx.ListByNamespace(context.Background(), ns, func(_ domain.Manifest) error {
+	err := idx.IterateManifests(context.Background(), func(_ domain.Manifest) error {
 		n++
 		return nil
 	})
 	if err != nil {
-		t.Fatalf("ListByNamespace(%q): %v", ns, err)
+		t.Fatalf("IterateManifests: %v", err)
 	}
 	return n
 }

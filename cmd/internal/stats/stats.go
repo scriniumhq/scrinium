@@ -45,10 +45,6 @@ type DaemonInfo struct {
 	// Empty hides the row.
 	Editing string
 
-	// Namespace is the default namespace stamped on created
-	// artifacts. Empty hides the row.
-	Namespace string
-
 	// Capacity is the optional storage snapshot from
 	// store.Store.Capacity. nil hides the [storage] section; -1 in
 	// a field means "driver did not report".
@@ -102,7 +98,14 @@ func writeViewSection(b *strings.Builder, stats projection.Stats) {
 	fmt.Fprintf(b, "TotalNodes:       %d\n", stats.TotalNodes)
 	fmt.Fprintf(b, "TotalBytes:       %s\n", humanize.BytesWithRaw(stats.TotalBytes))
 	fmt.Fprintf(b, "SessionCount:     %d\n", stats.SessionCount)
-	fmt.Fprintf(b, "NamespaceCount:   %d\n", stats.NamespaceCount)
+	vcRoots := make([]string, 0, len(stats.ViewCounts))
+	for r := range stats.ViewCounts {
+		vcRoots = append(vcRoots, string(r))
+	}
+	slices.Sort(vcRoots)
+	for _, r := range vcRoots {
+		fmt.Fprintf(b, "ViewCount[%s]:  %d\n", r, stats.ViewCounts[projection.RootView(r)])
+	}
 	fmt.Fprintf(b, "OrphanedCount:    %d\n", stats.OrphanedCount)
 	fmt.Fprintf(b, "CollisionCount:   %d\n", stats.CollisionCount)
 	fmt.Fprintf(b, "TransitCount:     %d\n", stats.TransitCount)
@@ -154,7 +157,7 @@ func writeExtensionsSection(b *strings.Builder, exts []Extension) {
 }
 
 func writeConfigSection(b *strings.Builder, info DaemonInfo) {
-	hasAny := info.ReadOnly || info.Editing != "" || info.Namespace != ""
+	hasAny := info.ReadOnly || info.Editing != ""
 	if !hasAny {
 		return
 	}
@@ -162,9 +165,6 @@ func writeConfigSection(b *strings.Builder, info DaemonInfo) {
 	fmt.Fprintf(b, "ReadOnly:         %v\n", info.ReadOnly)
 	if info.Editing != "" {
 		fmt.Fprintf(b, "Editing:          %s\n", info.Editing)
-	}
-	if info.Namespace != "" {
-		fmt.Fprintf(b, "Namespace:        %s\n", info.Namespace)
 	}
 }
 

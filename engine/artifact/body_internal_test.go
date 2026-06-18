@@ -38,7 +38,6 @@ func TestMarshalBodyJSON_KeysAreAlphabetical(t *testing.T) {
 		"content_hash",
 		"created_at",
 		"layout_header",
-		"namespace",
 		"original_size",
 		"pipeline",
 		"schema_version",

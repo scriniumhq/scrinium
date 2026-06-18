@@ -54,7 +54,6 @@ type jsonSys struct {
 	IdentityMetaHash string              `json:"identity_meta_hash,omitempty"`
 	IdentityNonce    string              `json:"identity_nonce,omitempty"` // base64
 	LayoutHeader     jsonLayoutHeader    `json:"layout_header"`
-	Namespace        string              `json:"namespace"`
 	OriginalSize     *int64              `json:"original_size,omitempty"`
 	Pipeline         []jsonPipelineStage `json:"pipeline"`
 	RetentionTime    string              `json:"retention_until,omitempty"`
@@ -90,7 +89,6 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 			HashAlgo:         m.HashAlgo,
 			IdentityMetaHash: m.IdentityMetaHash,
 			LayoutHeader:     jsonLayoutHeader{BlobStorage: m.LayoutHeader.BlobStorage},
-			Namespace:        m.Namespace,
 			Pipeline:         pipelineToJSON(m.Pipeline),
 			SchemaVersion:    SchemaVersion,
 			SessionID:        string(m.SessionID),
@@ -158,7 +156,6 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 	m := domain.Manifest{
 		ArtifactID:       domain.ArtifactID(b.Sys.ArtifactID),
 		IdentityMetaHash: b.Sys.IdentityMetaHash,
-		Namespace:        b.Sys.Namespace,
 		SessionID:        domain.SessionID(b.Sys.SessionID),
 		ContentHash:      domain.ContentHash(b.Sys.ContentHash),
 		HashAlgo:         b.Sys.HashAlgo,

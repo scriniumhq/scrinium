@@ -11,7 +11,6 @@ import (
 	vw "scrinium.dev/projection/internal/view"
 	"scrinium.dev/testutil/projectionfx"
 
-	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
 
@@ -25,7 +24,7 @@ func newFSOpsForWrite(t *testing.T, opts ...fso.Option) (*fso.Ops, *projectionfx
 	t.Helper()
 	src := projectionfx.New()
 	v, err := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	if err != nil {
 		t.Fatalf("NewView: %v", err)
 	}
@@ -33,7 +32,6 @@ func newFSOpsForWrite(t *testing.T, opts ...fso.Option) (*fso.Ops, *projectionfx
 
 	defaults := []fso.Option{
 		fso.WithStore(src),
-		fso.WithNamespace("files"),
 		fso.WithScratchDir(t.TempDir()),
 	}
 	o, err := fso.New(v, append(defaults, opts...)...)
@@ -132,30 +130,13 @@ func TestCreate_InvalidPath(t *testing.T) {
 	}
 }
 
-func TestCreate_NoNamespace(t *testing.T) {
-	src := projectionfx.New()
-	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
-	defer v.Close()
-
-	o, _ := fso.New(v,
-		fso.WithStore(src),
-		fso.WithScratchDir(t.TempDir()))
-
-	_, err := o.Create(context.Background(), "a.txt", 0o644)
-	if err == nil || !strings.Contains(err.Error(), "WithNamespace") {
-		t.Errorf("expected namespace error, got %v", err)
-	}
-}
-
 func TestCreate_NoStore(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src,
-		vw.WithPathResolver(vfsmeta.Resolver))
+		vw.WithProvidedViews(byPathProvided()), vw.WithRootView("by-path"))
 	defer v.Close()
 
 	o, _ := fso.New(v,
-		fso.WithNamespace("files"),
 		fso.WithScratchDir(t.TempDir()))
 
 	_, err := o.Create(context.Background(), "a.txt", 0o644)

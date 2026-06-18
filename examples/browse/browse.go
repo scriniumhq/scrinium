@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sort"
 
 	"scrinium.dev"
 
@@ -46,21 +45,12 @@ func run(storeURI string) error {
 		}
 	}()
 
-	// Aggregate stats across all namespaces.
-	type nsStats struct {
-		count int
-		bytes int64
-	}
-	byNS := make(map[string]*nsStats)
-
-	if err := asm.Store.Walk(ctx, "*", func(m domain.Manifest) error {
-		st, ok := byNS[m.Namespace]
-		if !ok {
-			st = &nsStats{}
-			byNS[m.Namespace] = st
-		}
-		st.count++
-		st.bytes += m.OriginalSize
+	// Aggregate total artifacts/bytes across the store.
+	var totalCount int
+	var totalBytes int64
+	if err := asm.Store.Walk(ctx, func(m domain.Manifest) error {
+		totalCount++
+		totalBytes += m.OriginalSize
 		return nil
 	}); err != nil {
 		return fmt.Errorf("walk: %w", err)
@@ -75,32 +65,11 @@ func run(storeURI string) error {
 	fmt.Printf("State: %s\n", asm.Store.State())
 	fmt.Println()
 
-	if len(byNS) == 0 {
+	if totalCount == 0 {
 		fmt.Println("(no artifacts)")
 	} else {
-		// Stable order for deterministic output.
-		names := make([]string, 0, len(byNS))
-		for k := range byNS {
-			names = append(names, k)
-		}
-		sort.Strings(names)
-
-		var totalCount int
-		var totalBytes int64
-		fmt.Printf("%-32s %10s %15s\n", "namespace", "artifacts", "bytes")
-		fmt.Println("------------------------------------------------------------")
-		for _, ns := range names {
-			st := byNS[ns]
-			label := ns
-			if label == "" {
-				label = "(default)"
-			}
-			fmt.Printf("%-32s %10d %15d\n", label, st.count, st.bytes)
-			totalCount += st.count
-			totalBytes += st.bytes
-		}
-		fmt.Println("------------------------------------------------------------")
-		fmt.Printf("%-32s %10d %15d\n", "TOTAL", totalCount, totalBytes)
+		fmt.Printf("Artifacts: %d\n", totalCount)
+		fmt.Printf("Bytes:     %d\n", totalBytes)
 	}
 
 	fmt.Println()

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -123,8 +124,8 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	//    behavior wrapper is applied at open; paired agents join the
 	//    scheduler. The set comes from the registry (registered at the
 	//    composition root, ADR-63/98); the assembler special-cases no
-	//    extension — the by-path projection seam below is taken from
-	//    whichever extension provides that view.
+	//    extension — the projection view seams below are taken from
+	//    whichever extensions provide those views.
 	//
 	// Two sources, installed identically below: the process-wide registry
 	// (RegisterExtension — e.g. third-party blank-import) and the per-build
@@ -228,6 +229,29 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 			data = d
 		}
 		st = wrappedStore{DataStore: data, AdminStore: st}
+	}
+
+	// Late-bound extension Env (ADR-100/101 §4): now that the store is
+	// open, hand each extension that needs it a scoped SystemStore — its
+	// own "extension.<name>." slice of System(). The assembler scopes it
+	// by the extension's own Descriptor name and the handle is confined
+	// there, so a plugin can address only its own slice; the assembler
+	// knows nothing of what any plugin keeps in it (durable registries,
+	// cursors, …). Extensions with no durable state do not implement
+	// Receiver and are skipped — the same assertion pattern as the index,
+	// wrapper, and agent axes.
+	for _, e := range exts {
+		r, ok := e.(extension.Receiver)
+		if !ok {
+			continue
+		}
+		scoped, serr := extension.NewScopedSystemStore(e.Descriptor().Name, st.System())
+		if serr != nil {
+			return nil, fmt.Errorf("scrinium: extension %q scoped system store: %w", e.Descriptor().Name, serr)
+		}
+		if uerr := r.UseEnv(extension.Env{SystemStore: scoped}); uerr != nil {
+			return nil, fmt.Errorf("scrinium: extension %q env: %w", e.Descriptor().Name, uerr)
+		}
 	}
 
 	// Agents. Validate configured kinds against the registry (fail fast,
@@ -343,13 +367,30 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		if cfgErr != nil {
 			return nil, fmt.Errorf("scrinium: %w", cfgErr)
 		}
-		// The by-path view's seam comes entirely from the view-providing
-		// extension (ADR-98): both the resolver and the bulk metadata
-		// source. The assembler holds no direct index handle.
+		// Every view an extension backs is forwarded to the projection
+		// verbatim (ADR-98): the assembler special-cases none and names no
+		// view — it adapts each customindex.ProvidedView onto the
+		// projection's own type and hands over the bulk metadata source a
+		// view may carry (today only fspath's index does). Sorted by Root so
+		// the projection sees a deterministic order regardless of the order
+		// extensions were installed.
 		var metaSrc projection.MetadataIndex
-		if pv, ok := providedViews["by-path"]; ok {
-			pcfg.PathResolver = pv.Resolve
-			if pv.Metadata != nil {
+		roots := make([]string, 0, len(providedViews))
+		for root := range providedViews {
+			roots = append(roots, root)
+		}
+		sort.Strings(roots)
+		pcfg.ProvidedViews = make([]projection.ProvidedView, 0, len(roots))
+		for _, root := range roots {
+			pv := providedViews[root]
+			pcfg.ProvidedViews = append(pcfg.ProvidedViews, projection.ProvidedView{
+				Root:     pv.Root,
+				Path:     pv.Path,
+				Collide:  pv.Collide,
+				Orphans:  pv.Orphans,
+				CountKey: pv.CountKey,
+			})
+			if pv.Metadata != nil && metaSrc == nil {
 				metaSrc = pv.Metadata
 			}
 		}
@@ -390,7 +431,6 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 
 	info := Info{StoreURI: spec.Driver, Created: created}
 	if effProj != nil {
-		info.Namespace = effProj.Namespace
 		info.Editing = effProj.Editing
 		info.ReadOnly = effProj.ReadOnly
 	}
@@ -679,9 +719,6 @@ func storeConfigFromPolicy(p *Policy) (domain.StoreConfig, bool) {
 	}
 	if p.Retention != 0 {
 		cfg.RetentionPeriod = p.Retention.Std()
-	}
-	if p.DefaultPutNamespace != "" {
-		cfg.DefaultPutNamespace = p.DefaultPutNamespace
 	}
 
 	return cfg, encrypted

@@ -62,7 +62,7 @@ func TestVerify_TargetBlob_Roundtrip(t *testing.T) {
 	s, _ := storefx2.InitWithRoot(t)
 	id, err := s.Put(context.Background(),
 		payload("verify me"),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestVerify_InlineBlob_Roundtrip(t *testing.T) {
 	s, _ := newInlineStore(t, 1024)
 	id, err := s.Put(context.Background(),
 		payload("inline data"),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestVerify_TargetBlob_TamperedBytes_ReturnsCorruptedBlob(t *testing.T) {
 	s, root := storefx2.InitWithRoot(t, store.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("tamper target"),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestVerify_TargetBlob_Missing_ReturnsCorruptedBlob(t *testing.T) {
 	s, root := storefx2.InitWithRoot(t, store.WithPublisher(bus))
 	id, err := s.Put(context.Background(),
 		payload("delete the blob"),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestVerify_OfflineMode_Blocked(t *testing.T) {
 	s := newStore(t)
 	id, err := s.Put(context.Background(),
 		payload("offline test"),
-		domain.WithNamespace("v"))
+	)
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestVerify_EncryptedManifest_Succeeds(t *testing.T) {
 
 			id, err := s.Put(context.Background(),
 				payload("verify encrypted"),
-				domain.WithNamespace("v"))
+			)
 			if err != nil {
 				t.Fatalf("Put: %v", err)
 			}

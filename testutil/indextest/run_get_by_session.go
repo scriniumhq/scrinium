@@ -23,7 +23,6 @@ func runGetBySession(t *testing.T, f Factory) {
 		}
 		for _, s := range stage {
 			m := manifestfx.BlobWithHash(s.id, s.ref, manifestfx.SyntheticHash(s.fillChar), 1024)
-			m.Namespace = "ns"
 			m.SessionID = domain.SessionID(s.sess)
 			if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("p/"+s.ref)); err != nil {
 				t.Fatalf("seed %s: %v", s.id, err)

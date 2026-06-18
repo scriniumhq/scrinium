@@ -36,7 +36,7 @@ type Assembly interface {
 	MountSession() domain.SessionID
 
 	// Info returns assembly metadata for diagnostics (the store URI,
-	// namespace, editing policy, read-only flag, fresh-create flag). A
+	// editing policy, read-only flag, fresh-create flag). A
 	// cheap snapshot.
 	Info() Info
 
@@ -85,10 +85,9 @@ type Assembly interface {
 // Info is assembly metadata an app may surface in diagnostics (e.g. a
 // stats page). The assembly itself does not act on it.
 type Info struct {
-	StoreURI  string
-	Namespace string
-	Editing   string
-	ReadOnly  bool
+	StoreURI string
+	Editing  string
+	ReadOnly bool
 	// Created is true when this assembly freshly initialised the store
 	// (Init, or OpenOrInit that fell through to Init) rather than
 	// opening an existing one.

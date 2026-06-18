@@ -124,7 +124,7 @@ func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 	}
 
 	var walked int
-	if err := s1.Walk(context.Background(), "*", func(m domain.Manifest) error {
+	if err := s1.Walk(context.Background(), func(m domain.Manifest) error {
 		walked++
 		return nil
 	}); err != nil {
@@ -147,7 +147,6 @@ func TestStore_FullLifecycle_DiskBacked(t *testing.T) {
 	}
 	manifest := domain.Manifest{
 		ArtifactID:   "art-test",
-		Namespace:    "users",
 		ContentHash:  "sha256-" + domain.ContentHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
 		BlobRefs:     []domain.BlobRef{"blob-test"},
 		OriginalSize: 1024,

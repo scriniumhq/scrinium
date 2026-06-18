@@ -68,10 +68,6 @@ type Projection struct {
 	AllowTruncate *bool  `yaml:"allowTruncate,omitempty" json:"allowTruncate,omitempty"`
 	AllowAppend   *bool  `yaml:"allowAppend,omitempty" json:"allowAppend,omitempty"`
 
-	// Namespace constrains writes/visibility to a single namespace.
-	// Empty = global.
-	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
-
 	// ScratchDir / ScratchQuota govern the staging area for in-flight
 	// FSOps writes. Empty dir defaults under a local store; 0 quota is
 	// unlimited.
@@ -104,18 +100,17 @@ type Credentials map[string]secretref.Ref
 
 // Policy is the set of behaviours applied to a store.
 type Policy struct {
-	Encryption          *Encryption     `yaml:"encryption,omitempty" json:"encryption,omitempty"`
-	Chunking            *Chunking       `yaml:"chunking,omitempty" json:"chunking,omitempty"`
-	Bundling            *Bundling       `yaml:"bundling,omitempty" json:"bundling,omitempty"`
-	Pipeline            []PipelineStage `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
-	PipelineExtra       []PipelineStage `yaml:"pipelineExtra,omitempty" json:"pipelineExtra,omitempty"`
-	DeletionPolicy      string          `yaml:"deletionPolicy,omitempty" json:"deletionPolicy,omitempty"`
-	DefaultPutNamespace string          `yaml:"defaultPutNamespace,omitempty" json:"defaultPutNamespace,omitempty"`
-	Retention           Duration        `yaml:"retention,omitempty" json:"retention,omitempty"`
-	MaxArtifactSize     Size            `yaml:"maxArtifactSize,omitempty" json:"maxArtifactSize,omitempty"`
-	GC                  *Schedule       `yaml:"gc,omitempty" json:"gc,omitempty"`
-	Scrub               *ScrubSchedule  `yaml:"scrub,omitempty" json:"scrub,omitempty"`
-	Checkpoint          *Schedule       `yaml:"checkpoint,omitempty" json:"checkpoint,omitempty"`
+	Encryption      *Encryption     `yaml:"encryption,omitempty" json:"encryption,omitempty"`
+	Chunking        *Chunking       `yaml:"chunking,omitempty" json:"chunking,omitempty"`
+	Bundling        *Bundling       `yaml:"bundling,omitempty" json:"bundling,omitempty"`
+	Pipeline        []PipelineStage `yaml:"pipeline,omitempty" json:"pipeline,omitempty"`
+	PipelineExtra   []PipelineStage `yaml:"pipelineExtra,omitempty" json:"pipelineExtra,omitempty"`
+	DeletionPolicy  string          `yaml:"deletionPolicy,omitempty" json:"deletionPolicy,omitempty"`
+	Retention       Duration        `yaml:"retention,omitempty" json:"retention,omitempty"`
+	MaxArtifactSize Size            `yaml:"maxArtifactSize,omitempty" json:"maxArtifactSize,omitempty"`
+	GC              *Schedule       `yaml:"gc,omitempty" json:"gc,omitempty"`
+	Scrub           *ScrubSchedule  `yaml:"scrub,omitempty" json:"scrub,omitempty"`
+	Checkpoint      *Schedule       `yaml:"checkpoint,omitempty" json:"checkpoint,omitempty"`
 }
 
 // Encryption enables manifest+blob encryption. Passphrase is required

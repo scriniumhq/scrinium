@@ -33,7 +33,7 @@ type storeOp struct {
 
 var (
 	putOp = storeOp{"Put", func(ctx context.Context, s store.Store, _ domain.ArtifactID) error {
-		_, err := s.Put(ctx, payload("x"), domain.WithNamespace("u"))
+		_, err := s.Put(ctx, payload("x"))
 		return err
 	}}
 	getOp = storeOp{"Get", func(ctx context.Context, s store.Store, id domain.ArtifactID) error {
@@ -51,7 +51,7 @@ var (
 // mustPut seeds a fresh artifact and returns its id.
 func mustPut(t *testing.T, s store.Store) domain.ArtifactID {
 	t.Helper()
-	id, err := s.Put(context.Background(), payload("seed"), domain.WithNamespace("seed"))
+	id, err := s.Put(context.Background(), payload("seed"))
 	if err != nil {
 		t.Fatalf("seed Put: %v", err)
 	}
@@ -179,12 +179,12 @@ func TestStore_Retention(t *testing.T) {
 		s, _ := storefx.InitWithRoot(t)
 		when := future()
 		id, err := s.Put(context.Background(), payload("retained"),
-			domain.WithNamespace("vault"), domain.WithRetention(when))
+			domain.WithRetention(when))
 		if err != nil {
 			t.Fatal(err)
 		}
 		var seen domain.Manifest
-		if err := s.Walk(context.Background(), "vault", func(m domain.Manifest) error {
+		if err := s.Walk(context.Background(), func(m domain.Manifest) error {
 			if m.ArtifactID == id {
 				seen = m
 			}
@@ -200,7 +200,7 @@ func TestStore_Retention(t *testing.T) {
 	t.Run("Delete blocked by active retention", func(t *testing.T) {
 		s, _ := storefx.InitWithRoot(t)
 		id, err := s.Put(context.Background(), payload("retained"),
-			domain.WithNamespace("v"), domain.WithRetention(future()))
+			domain.WithRetention(future()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -213,7 +213,7 @@ func TestStore_Retention(t *testing.T) {
 		s, _ := storefx.InitWithRoot(t)
 		past := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
 		id, err := s.Put(context.Background(), payload("expired"),
-			domain.WithNamespace("v"), domain.WithRetention(past))
+			domain.WithRetention(past))
 		if err != nil {
 			t.Fatal(err)
 		}

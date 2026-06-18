@@ -142,17 +142,5 @@ type StoreConfig struct {
 	InlineBlobLimit      int64
 	GCLeasePolicy        GCLeasePolicy
 
-	// DefaultPutNamespace is the namespace a Put falls back to when its
-	// options leave the namespace empty. Mutable (changeable via
-	// UpdateConfig like other policy fields) and not part of the
-	// immutable format identity: it only influences which namespace an
-	// otherwise-unnamespaced Put resolves to at write time. Each
-	// artifact records its resolved namespace in its own manifest, so
-	// changing this never reinterprets already-stored artifacts — new
-	// unnamespaced Puts simply land under the new value. Empty (the
-	// default) means an unnamespaced Put stays in the store's own
-	// default namespace.
-	DefaultPutNamespace string
-
 	KDFParams *KDFParams
 }

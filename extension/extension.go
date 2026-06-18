@@ -107,3 +107,31 @@ func Use(ctx context.Context, t Target, e Extension) error {
 	}
 	return nil
 }
+
+// Env carries the late-bound handles an extension may need, delivered
+// once after the store has opened (ADR-100/101 §4). It is delivered at a
+// post-assembly hook rather than at CustomIndex.Setup: the index axis is
+// registered before the store opens (the first IndexManifest must
+// dispatch into it), so a store-backed handle like the scoped
+// SystemStore does not yet exist at Setup time. The struct is
+// deliberately extensible — a new handle is a new field, and the
+// Receiver signature does not change.
+type Env struct {
+	// SystemStore is the extension's own scoped SystemStore: an
+	// "extension.<name>." slice of the store's System(), built and
+	// confined by the assembler from the extension's Descriptor name so
+	// a plugin can address only its own slice (ADR-101). nil only if the
+	// extension declared no need for one. Durable extension state (e.g.
+	// a registry) lives here and survives an index rebuild.
+	SystemStore *ScopedSystemStore
+}
+
+// Receiver is the optional capability an extension implements when it
+// needs the late-bound Env (a scoped SystemStore, …). The assembler
+// detects it by assertion — exactly like the CustomIndex / Wrapper /
+// Agent axes — and calls UseEnv once, after the store is open, before
+// the projection is built. An extension that needs no late handle does
+// not implement it and is skipped. UseEnv must be idempotent.
+type Receiver interface {
+	UseEnv(env Env) error
+}

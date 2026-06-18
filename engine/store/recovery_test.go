@@ -278,8 +278,7 @@ func TestRecovery_DoesNotTouchLiveArtifact(t *testing.T) {
 	// blob and the manifest become legitimate index-backed files;
 	// a subsequent recovery pass must leave them alone.
 	id, err := s.Put(context.Background(),
-		domain.Artifact{Payload: bytes.NewReader([]byte("real payload"))},
-		domain.WithNamespace("live"))
+		domain.Artifact{Payload: bytes.NewReader([]byte("real payload"))})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -298,7 +297,7 @@ func TestRecovery_DoesNotTouchLiveArtifact(t *testing.T) {
 
 	// Walk: the artifact is still indexed.
 	var seen []domain.ArtifactID
-	if err := s2.Walk(context.Background(), "live", func(m domain.Manifest) error {
+	if err := s2.Walk(context.Background(), func(m domain.Manifest) error {
 		seen = append(seen, m.ArtifactID)
 		return nil
 	}); err != nil {
@@ -332,8 +331,7 @@ func TestRecovery_OpenStore_RemovesOrphanInjectedAfterInit(t *testing.T) {
 	// One real artifact so the Store is non-trivially populated.
 	// Recovery must distinguish it from the planted orphans.
 	liveID, err := s.Put(context.Background(),
-		domain.Artifact{Payload: bytes.NewReader([]byte("survivor"))},
-		domain.WithNamespace("live"))
+		domain.Artifact{Payload: bytes.NewReader([]byte("survivor"))})
 	if err != nil {
 		t.Fatalf("Put: %v", err)
 	}

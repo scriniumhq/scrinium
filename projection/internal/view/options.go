@@ -25,7 +25,6 @@ const (
 // Filter restricts which manifests are admitted into the View
 // during backfill. All non-zero conditions combine by AND.
 type Filter struct {
-	Namespace string
 	SessionID domain.SessionID
 	Prefix    string
 }
@@ -34,7 +33,6 @@ type Filter struct {
 type Option func(*viewOptions)
 
 type viewOptions struct {
-	resolver source.Resolver
 	rootView RootView
 	fallback Fallback
 	filter   Filter
@@ -46,6 +44,47 @@ type viewOptions struct {
 	// WithFSPathIndex (the latter is a typed convenience for the
 	// common engine/index/fspathindex case).
 	metadataSource source.Metadata
+
+	// provided are the extension-contributed view definitions that
+	// make up the View's non-intrinsic trees (ADR-98). Set via
+	// WithProvidedViews — by-path (fspath) and by-namespace (the
+	// namespace extension) arrive here like any other. The View builds
+	// one tree per provided root with no knowledge of its domain.
+	provided []ProvidedView
+}
+
+// ProvidedView is an extension-contributed view definition (ADR-98). The
+// projection appends each active extension's provided views to its
+// intrinsic core set, building one tree per provided root. The projection
+// attaches no meaning to the root or to what Path computes — this is the
+// generic "by-ext" rail by which fspath contributes by-path, the namespace
+// extension contributes by-namespace, and so on.
+type ProvidedView struct {
+	// Root is the tree identifier (e.g. "by-path"). It is the key under
+	// which the tree is addressed via GetIn/ListIn and surfaced by
+	// transports.
+	Root RootView
+	// Path maps a manifest to its placement in this tree. ok=false means
+	// the manifest is absent from the tree (routed to the orphan tree when
+	// Orphans is set).
+	Path func(domain.Manifest) (string, bool)
+	// Collide marks a tree whose path keys are not artifact-unique, so
+	// inserts run collision arbitration (freshest CreatedAt wins, tie →
+	// larger ArtifactID). by-path sets this; id-shaped views do not.
+	Collide bool
+	// Orphans routes a Path()=!ok manifest to the orphan tree (by-path).
+	Orphans bool
+	// CountKey, when set, supplies the distinct-cardinality key the View
+	// uses to maintain this view's Stats counter.
+	CountKey func(domain.Manifest) (string, bool)
+}
+
+// WithProvidedViews appends extension-contributed view definitions to the
+// View's intrinsic set. This is the generic rail (ADR-98) by which the
+// assembler forwards every active extension's views; the View treats them
+// uniformly alongside its core trees.
+func WithProvidedViews(pvs ...ProvidedView) Option {
+	return func(o *viewOptions) { o.provided = append(o.provided, pvs...) }
 }
 
 // WithMetadataSource installs a bulk metadata source for
@@ -70,17 +109,11 @@ func WithFSPathIndex(fsidx source.Metadata) Option {
 	return WithMetadataSource(fsidx)
 }
 
-// WithPathResolver registers the path-extraction function. Without
-// it the by-path tree contains only artifacts produced by the
-// fallback (when FallbackSynthetic) or is empty.
-func WithPathResolver(r source.Resolver) Option {
-	return func(o *viewOptions) { o.resolver = r }
-}
-
-// WithRootView selects the tree that occupies the View root. The
-// default is RootByPath. The choice is informational for the View
-// itself; transports (FUSE) react to it by hiding the same tree
-// from the service directory.
+// WithRootView selects the tree that occupies the View root, by name.
+// When unset the View defaults to the first available root; a name that
+// does not match any active root is an error at New. The choice is
+// otherwise informational for the View itself; transports (FUSE) react
+// to it by hiding the same tree from the service directory.
 func WithRootView(rv RootView) Option {
 	return func(o *viewOptions) { o.rootView = rv }
 }

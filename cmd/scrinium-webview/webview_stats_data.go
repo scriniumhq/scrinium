@@ -29,7 +29,6 @@ func buildWebStatsData(
 	storePath string,
 	readOnly bool,
 	editing string,
-	namespace string,
 ) web.StatsData {
 	stats := reader.StatsSnapshot()
 
@@ -46,7 +45,7 @@ func buildWebStatsData(
 			TotalBytes:     stats.TotalBytes,
 			TotalBytesText: humanize.BytesWithRaw(stats.TotalBytes),
 			SessionCount:   stats.SessionCount,
-			NamespaceCount: stats.NamespaceCount,
+			ViewCounts:     viewCountsToStrMap(stats.ViewCounts),
 			OrphanedCount:  stats.OrphanedCount,
 			CollisionCount: stats.CollisionCount,
 			TransitCount:   stats.TransitCount,
@@ -67,11 +66,10 @@ func buildWebStatsData(
 		d.HasStorage = true
 	}
 
-	if readOnly || editing != "" || namespace != "" {
+	if readOnly || editing != "" {
 		d.Config = web.StatsConfig{
-			ReadOnly:  readOnly,
-			Editing:   editing,
-			Namespace: namespace,
+			ReadOnly: readOnly,
+			Editing:  editing,
 		}
 		d.HasConfig = true
 	}
@@ -125,4 +123,18 @@ func formatStatsUptime(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%ds", seconds)
 	}
+}
+
+// viewCountsToStrMap converts the projection's root-keyed view counts to
+// a string-keyed map for the template, which renders whatever views are
+// present by their root name without naming any of them.
+func viewCountsToStrMap(in map[projection.RootView]int64) map[string]int64 {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]int64, len(in))
+	for r, c := range in {
+		out[string(r)] = c
+	}
+	return out
 }

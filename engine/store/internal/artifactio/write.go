@@ -237,7 +237,6 @@ func (x *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 		layout = domain.LayoutInline
 	}
 	manifest := domain.Manifest{
-		Namespace:      opts.Namespace,
 		SessionID:      opts.SessionID,
 		CreatedAt:      time.Now().UTC(),
 		ContentHash:    blob.ContentHash,

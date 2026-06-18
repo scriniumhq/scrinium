@@ -21,7 +21,6 @@ func projectionConfig(p *Projection, mountSession domain.SessionID, storeURI str
 		AllowSetattr:   p.AllowSetattr,
 		AllowTruncate:  p.AllowTruncate,
 		AllowAppend:    p.AllowAppend,
-		Namespace:      p.Namespace,
 		ScratchQuota:   p.ScratchQuota.Int64(),
 		ReadOnly:       p.ReadOnly,
 		DefaultMode:    p.DefaultMode,

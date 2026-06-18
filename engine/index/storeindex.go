@@ -88,10 +88,11 @@ type StoreIndex interface {
 	// Iteration. Implementations are required to stream through the
 	// callback rather than load the whole result set into memory.
 
-	// ListByNamespace iterates over manifests with the given
-	// namespace. "*" — all namespaces; "" — only the default
-	// (empty). Returns blob and toc; pack is excluded.
-	ListByNamespace(ctx context.Context, ns string, cb func(domain.Manifest) error) error
+	// IterateManifests iterates over every user manifest (artifact_id
+	// present), namespace-agnostic. Returns blob and toc; pack is
+	// excluded. Namespace-filtered iteration is not a core concern —
+	// extensions filter via ListByExtField over their projection.
+	IterateManifests(ctx context.Context, cb func(domain.Manifest) error) error
 
 	// QueryByExtField streams the ArtifactIDs whose projected ext field
 	// extName.field equals value, read from proj_ext (read-side of the
@@ -102,6 +103,15 @@ type StoreIndex interface {
 	// containers) are excluded by construction (artifact_id IS NULL). The
 	// callback may return fs.SkipAll to stop early without an error.
 	QueryByExtField(ctx context.Context, extName, field, value string, cb func(domain.ArtifactID) error) error
+
+	// ListByExtField is the manifest-yielding form of QueryByExtField: it
+	// streams the index-resident Manifest of each artifact whose projected
+	// ext field extName.field equals value (proj_ext, §9.6), no manifest-file
+	// I/O. It is the proj_ext-backed listing primitive behind a namespace
+	// Walk (extName="namespace", field="nsid") and any equality listing over
+	// a projected ext field; the core attaches no meaning to extName/field.
+	// Handle-less rows are excluded (artifact_id IS NULL). Equality only (v1).
+	ListByExtField(ctx context.Context, extName, field, value string, cb func(domain.Manifest) error) error
 
 	// QueryByUsrField is the same over proj_usr (user-pocket fields). It
 	// returns an empty result (no error) unless the global usr_indexing

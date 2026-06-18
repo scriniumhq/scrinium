@@ -142,7 +142,6 @@ func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	var (
 		manifestDigest     string
 		artifactID         sql.NullString
-		namespace          string
 		sessionID          domain.SessionID
 		createdAt          string
 		blobRef, retention sql.NullString
@@ -150,7 +149,7 @@ func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 		originalSize       sql.NullInt64
 	)
 	if err := rows.Scan(
-		&manifestDigest, &artifactID, &namespace, &sessionID,
+		&manifestDigest, &artifactID, &sessionID,
 		&blobRef, &createdAt, &retention,
 		&contentHash, &originalSize,
 	); err != nil {
@@ -158,7 +157,6 @@ func scanManifestRow(rows *sql.Rows) (domain.Manifest, error) {
 	}
 	m := domain.Manifest{
 		Digest:    domain.ManifestDigest(manifestDigest),
-		Namespace: namespace,
 		SessionID: sessionID,
 	}
 	if artifactID.Valid {

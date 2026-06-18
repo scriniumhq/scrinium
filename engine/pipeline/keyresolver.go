@@ -21,16 +21,15 @@ type KeyResolver interface {
 	// ResolveWriteKey returns the KeyID to encrypt a new artifact
 	// under, given its write-time context. The default
 	// StaticKeyResolver ignores ctx and returns "" (one store,
-	// one DEK). A custom resolver may map ctx.Namespace to a KeyID
-	// to implement key-per-namespace. The read path never calls
+	// one DEK). A custom resolver may map context fields to a KeyID
+	// for key-per-attribute schemes. The read path never calls
 	// this — the KeyID always comes from the manifest header.
 	ResolveWriteKey(ctx KeyContext) string
 }
 
 // KeyContext carries the write-time context the engine hands to
 // ResolveWriteKey. Extended additively — new fields are added
-// without changing the method signature. See ADR-58.
-type KeyContext struct {
-	// Namespace is the artifact's namespace at write time.
-	Namespace string
-}
+// without changing the method signature. See ADR-58. It carries no
+// namespace: namespace is not a security boundary, and crypto is
+// namespace-agnostic (ADR-99 §1b). It is currently empty.
+type KeyContext struct{}

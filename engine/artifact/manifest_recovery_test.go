@@ -48,7 +48,6 @@ func recHex(b byte, n int) string {
 // the package fixture so the crypto-mode tests have something to hide.
 func recManifest(mut ...func(*domain.Manifest)) domain.Manifest {
 	m := domain.Manifest{
-		Namespace:    "ns",
 		SessionID:    "sess-1",
 		ContentHash:  domain.ContentHash(recHex('a', 64)),
 		BlobRefs:     []domain.BlobRef{domain.BlobRef(recHex('a', 64))},
@@ -78,7 +77,7 @@ func TestEncodeDecode_PlainRoundTrip_AllFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Namespace != m.Namespace || got.SessionID != m.SessionID {
+	if got.SessionID != m.SessionID {
 		t.Errorf("namespace/session lost: %+v", got)
 	}
 	if string(got.ContentHash) != string(m.ContentHash) || string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) {
@@ -150,9 +149,6 @@ func TestSealed_RoundTrip_AllFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Namespace != m.Namespace {
-		t.Errorf("Namespace lost: got %q", got.Namespace)
-	}
 	if string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) {
 		t.Errorf("BlobRef lost: got %q", got.PrimaryBlobRef())
 	}
@@ -201,9 +197,6 @@ func TestParanoid_RoundTrip_AllFields(t *testing.T) {
 	got, err := artifact.DecodeEncrypted(b, recKeys{keys: [][]byte{recDEK()}})
 	if err != nil {
 		t.Fatal(err)
-	}
-	if got.Namespace != m.Namespace {
-		t.Errorf("Namespace lost: got %q", got.Namespace)
 	}
 	if !bytes.Equal(got.Ext, m.Ext) {
 		t.Errorf("Ext lost: got %s", got.Ext)

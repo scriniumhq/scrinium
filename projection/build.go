@@ -51,8 +51,18 @@ func buildView(ctx context.Context, backend Backend, fsidx MetadataIndex, cfg Co
 	opts := []view.Option{
 		view.WithFSPathIndex(fsidx),
 	}
-	if cfg.PathResolver != nil {
-		opts = append(opts, view.WithPathResolver(cfg.PathResolver))
+	if len(cfg.ProvidedViews) > 0 {
+		pvs := make([]view.ProvidedView, 0, len(cfg.ProvidedViews))
+		for _, p := range cfg.ProvidedViews {
+			pvs = append(pvs, view.ProvidedView{
+				Root:     view.RootView(p.Root),
+				Path:     p.Path,
+				Collide:  p.Collide,
+				Orphans:  p.Orphans,
+				CountKey: p.CountKey,
+			})
+		}
+		opts = append(opts, view.WithProvidedViews(pvs...))
 	}
 	if cfg.RootView != "" {
 		opts = append(opts, view.WithRootView(view.RootView(cfg.RootView)))
@@ -78,7 +88,6 @@ func buildFSOps(v *view.View, backend Backend, cfg Config) (*fsops.Ops, error) {
 		fsops.WithDefaultUID(defaultID(cfg.DefaultUID, os.Getuid)),
 		fsops.WithDefaultGID(defaultID(cfg.DefaultGID, os.Getgid)),
 		fsops.WithEditingPolicy(editingPolicy(cfg)),
-		fsops.WithNamespace(cfg.Namespace),
 	}
 	if cfg.ReadOnly {
 		opts = append(opts, fsops.WithReadOnly())

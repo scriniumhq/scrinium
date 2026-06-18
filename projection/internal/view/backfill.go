@@ -20,7 +20,7 @@ import (
 // the source has been fully traversed.
 //
 // Default options:
-//   - root view: RootByPath (informational only)
+//   - root view: the first available root (intrinsic or provided)
 //   - fallback: FallbackOrphaned
 //   - filter: empty
 //
@@ -32,7 +32,6 @@ func New(ctx context.Context, src source.Provider, opts ...Option) (*View, error
 	}
 
 	o := viewOptions{
-		rootView: RootByPath,
 		fallback: FallbackOrphaned,
 	}
 	for _, opt := range opts {
@@ -47,25 +46,51 @@ func New(ctx context.Context, src source.Provider, opts ...Option) (*View, error
 		bus:  o.bus,
 		opts: o,
 
-		byPath:      make(map[string]*viewNode),
-		bySession:   make(map[string]*viewNode),
-		byNamespace: make(map[string]*viewNode),
-		byDate:      make(map[string]*viewNode),
-		byArtifact:  make(map[string]*viewNode),
-		byOrphaned:  make(map[string]*viewNode),
-
+		trees:      make(map[RootView]map[string]*viewNode),
 		artifacts:  make(map[domain.ArtifactID]*artifactRecord),
-		pathOwner:  make(map[string]domain.ArtifactID),
-		pathLosers: make(map[string][]loserEntry),
-
-		seenSessions:   make(map[domain.SessionID]struct{}),
-		seenNamespaces: make(map[string]struct{}),
+		pathOwner:  make(map[RootView]map[string]domain.ArtifactID),
+		pathLosers: make(map[RootView]map[string][]loserEntry),
+		collide:    make(map[RootView]bool),
+		seenKeys:   make(map[RootView]map[string]struct{}),
 	}
 
-	// Initialise tree roots so List on empty tree returns
+	// Build the active view set (intrinsic core + extension-provided)
+	// and initialise per-root state.
+	v.defs = v.buildViewDefs()
+	roots := map[RootView]bool{RootByOrphaned: true}
+	for _, d := range v.defs {
+		roots[d.root] = true
+		if d.collide {
+			v.collide[d.root] = true
+			v.pathOwner[d.root] = make(map[string]domain.ArtifactID)
+			v.pathLosers[d.root] = make(map[string][]loserEntry)
+		}
+		if d.countKey != nil {
+			v.seenKeys[d.root] = make(map[string]struct{})
+		}
+	}
+
+	// Resolve the root view. The client picks it by name (via config);
+	// when unset we default to the first available root, and a named
+	// root that does not exist is an error. The projection itself names
+	// none of the roots.
+	if v.opts.rootView == "" {
+		rs := make([]RootView, 0, len(roots))
+		for r := range roots {
+			rs = append(rs, r)
+		}
+		sort.Slice(rs, func(i, j int) bool { return rs[i] < rs[j] })
+		if len(rs) > 0 {
+			v.opts.rootView = rs[0]
+		}
+	} else if !roots[v.opts.rootView] {
+		return nil, fmt.Errorf("projection.New: root view %q is not available", v.opts.rootView)
+	}
+
+	// Initialise tree roots so List on an empty tree returns
 	// children rather than ErrPathNotFound.
-	for _, tree := range v.allTrees() {
-		tree[""] = newDirNode("", "", v.CreatedAt)
+	for r := range roots {
+		v.trees[r] = map[string]*viewNode{"": newDirNode("", "", v.CreatedAt)}
 	}
 
 	startedAt := time.Now()
@@ -80,13 +105,49 @@ func New(ctx context.Context, src source.Provider, opts ...Option) (*View, error
 	return v, nil
 }
 
-// allTrees returns every tree pointer in a stable order. Used
-// for whole-set initialisation; per-tree access goes through the
-// named fields directly.
-func (v *View) allTrees() []map[string]*viewNode {
-	return []map[string]*viewNode{
-		v.byPath, v.bySession, v.byNamespace, v.byDate, v.byArtifact, v.byOrphaned,
+// buildViewDefs assembles the active view set: the intrinsic core
+// definitions (derived from core manifest fields) augmented by the views
+// active extensions provide via WithProvidedViews (ADR-98). The View is
+// agnostic to what each provided view computes — by-path (fspath) and
+// by-namespace (the namespace extension) arrive through the provided rail
+// like any other, each carrying its own layout, collision and count policy.
+func (v *View) buildViewDefs() []viewDef {
+	defs := []viewDef{
+		{root: RootByArtifact, path: pathByArtifactDef},
+		{root: RootByDate, path: pathByDateDef},
+		{root: RootBySession, path: pathBySessionDef, countKey: sessionCountKey},
 	}
+	for _, p := range v.opts.provided {
+		defs = append(defs, viewDef{
+			root:     p.Root,
+			path:     p.Path,
+			collide:  p.Collide,
+			orphans:  p.Orphans,
+			countKey: p.CountKey,
+		})
+	}
+	return defs
+}
+
+// Intrinsic def path/count functions. These derive placement purely from
+// core manifest fields, so they carry no extension knowledge.
+
+func pathByArtifactDef(m domain.Manifest) (string, bool) { return byArtifactPath(m.ArtifactID), true }
+
+func pathByDateDef(m domain.Manifest) (string, bool) { return byDatePath(m), true }
+
+func pathBySessionDef(m domain.Manifest) (string, bool) {
+	if m.SessionID == "" {
+		return "", false
+	}
+	return bySessionPath(m), true
+}
+
+func sessionCountKey(m domain.Manifest) (string, bool) {
+	if m.SessionID == "" {
+		return "", false
+	}
+	return string(m.SessionID), true
 }
 
 // backfill walks the source and classifies each manifest. The
@@ -117,7 +178,7 @@ func (v *View) backfill(ctx context.Context) error {
 		v.indexArtifact(m, true /*duringBackfill*/)
 		return nil
 	}
-	if err := v.src.Walk(ctx, "*", cb); err != nil {
+	if err := v.src.Walk(ctx, cb); err != nil {
 		return fmt.Errorf("%w: %w", errs.ErrSourceUnavailable, err)
 	}
 	return nil
@@ -179,9 +240,6 @@ func (v *View) populateExt(ctx context.Context, m *domain.Manifest) {
 // applied to the resolver path — see resolvePathForManifest below.
 func (v *View) passesFilter(m domain.Manifest) bool {
 	f := v.opts.filter
-	if f.Namespace != "" && m.Namespace != f.Namespace {
-		return false
-	}
 	if f.SessionID != "" && m.SessionID != f.SessionID {
 		return false
 	}
@@ -197,15 +255,19 @@ func (v *View) passesFilter(m domain.Manifest) bool {
 	return true
 }
 
-// resolvePathForManifest applies the configured PathResolver, then
-// the fallback policy, returning (path, true) when the artifact
-// has any by-path representation (real or synthetic), or
-// ("", false) when it does not (FallbackOrphaned + no resolver
-// path).
+// resolvePathForManifest applies the orphaning view's placement
+// function, then the fallback policy, returning (path, true) when the
+// artifact has any such representation (real or synthetic), or
+// ("", false) when it does not (FallbackOrphaned + no placement). Used
+// only for Filter.Prefix; the orphaning view is found in the active set
+// so the View names none.
 func (v *View) resolvePathForManifest(m domain.Manifest) (string, bool) {
-	if v.opts.resolver != nil {
-		if path, ok := v.opts.resolver(m); ok {
-			return path, true
+	for _, d := range v.defs {
+		if d.orphans && d.path != nil {
+			if path, ok := d.path(m); ok {
+				return path, true
+			}
+			break
 		}
 	}
 	if v.opts.fallback == FallbackSynthetic {
@@ -217,59 +279,69 @@ func (v *View) resolvePathForManifest(m domain.Manifest) (string, bool) {
 // syntheticPath builds a synthetic by-path entry for artifacts
 // without a resolver path. Format mirrors docs/4 §14.4.4:
 //
-//	<namespace>/<sid-shard>/<id-short>.bin   — namespace + session
-//	<namespace>/<id-short>.bin               — namespace only
-//	_anonymous/<id-short>.bin                — neither
+//	<sid-shard>/<id-short>.bin   — session present
+//	_anonymous/<id-short>.bin    — no session
 func (v *View) syntheticPath(m domain.Manifest) string {
 	idShort := shortID(m.ArtifactID)
-	switch {
-	case m.Namespace != "" && m.SessionID != "":
-		return m.Namespace + "/" + sessionShard(m.SessionID) + "/" + idShort + ".bin"
-	case m.Namespace != "":
-		return m.Namespace + "/" + idShort + ".bin"
-	default:
-		return "_anonymous/" + idShort + ".bin"
+	if m.SessionID != "" {
+		return sessionShard(m.SessionID) + "/" + idShort + ".bin"
 	}
+	return "_anonymous/" + idShort + ".bin"
 }
 
-// indexArtifact registers an artifact in every applicable tree.
-// duringBackfill controls whether Stats counters are bumped
-// (always yes during backfill; on Add it is incremental).
+// indexArtifact registers an artifact in every applicable tree by
+// iterating the active view set. duringBackfill is retained for symmetry
+// (Stats are maintained identically on Add and backfill).
 //
 // The function does NOT take the View lock — callers (backfill,
 // Add) handle locking themselves. backfill runs single-threaded;
 // Add takes the write lock around the call.
 func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
-	rec := &artifactRecord{manifest: m}
+	rec := &artifactRecord{manifest: m, paths: make(map[RootView]string)}
 
-	// by-artifact — always.
-	rec.pathByArtifact = byArtifactPath(m.ArtifactID)
-	v.insertFile(v.byArtifact, rec.pathByArtifact, m)
+	for _, d := range v.defs {
+		var (
+			path string
+			ok   bool
+		)
+		if d.path != nil {
+			path, ok = d.path(m)
+		}
+		if !ok {
+			// No placement in this view. Orphaning views (by-path)
+			// send the artifact to the orphan tree, or to a synthetic
+			// by-path entry under FallbackSynthetic; other views skip.
+			if !d.orphans {
+				continue
+			}
+			if v.opts.fallback == FallbackSynthetic {
+				sp := v.syntheticPath(m)
+				rec.paths[d.root] = sp
+				if d.collide {
+					v.applyCollisionInsert(d.root, sp, m, rec)
+				} else {
+					v.insertFile(v.trees[d.root], sp, m)
+				}
+			} else {
+				op := byArtifactPath(m.ArtifactID)
+				rec.paths[RootByOrphaned] = op
+				v.insertFile(v.trees[RootByOrphaned], op, m)
+				v.Stats.OrphanedCount++
+			}
+			continue
+		}
 
-	// by-date — always.
-	rec.pathByDate = byDatePath(m)
-	v.insertFile(v.byDate, rec.pathByDate, m)
-
-	// by-namespace — always (synthetic _default for empty Namespace).
-	rec.pathByNamespace = byNamespacePath(m)
-	v.insertFile(v.byNamespace, rec.pathByNamespace, m)
-
-	// by-session — only if SessionID present.
-	if m.SessionID != "" {
-		rec.pathBySession = bySessionPath(m)
-		v.insertFile(v.bySession, rec.pathBySession, m)
-	}
-
-	// by-path — depends on resolver + fallback. When the
-	// resolver doesn't produce a path the artifact lands in
-	// byOrphaned instead, indexed under the same id-shaped
-	// layout byArtifact uses.
-	if path, ok := v.resolvePathForManifest(m); ok {
-		v.applyByPathInsert(path, m, rec)
-	} else {
-		rec.pathByOrphaned = byArtifactPath(m.ArtifactID)
-		v.insertFile(v.byOrphaned, rec.pathByOrphaned, m)
-		v.Stats.OrphanedCount++
+		rec.paths[d.root] = path
+		if d.collide {
+			v.applyCollisionInsert(d.root, path, m, rec)
+		} else {
+			v.insertFile(v.trees[d.root], path, m)
+		}
+		if d.countKey != nil {
+			if key, kok := d.countKey(m); kok {
+				v.seenKeys[d.root][key] = struct{}{}
+			}
+		}
 	}
 
 	v.artifacts[m.ArtifactID] = rec
@@ -277,58 +349,62 @@ func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
 	// Stats. TotalNodes counts artifacts (not virtual dirs).
 	v.Stats.TotalNodes++
 	v.Stats.TotalBytes += m.OriginalSize
-	if m.SessionID != "" {
-		if _, seen := v.seenSessions[m.SessionID]; !seen {
-			v.seenSessions[m.SessionID] = struct{}{}
-			v.Stats.SessionCount++
+	// Distinct-cardinality counters from the per-view seen-key sets.
+	// by-session is an intrinsic view and keeps a named counter; every
+	// other counting view (including any extension-provided one) lands
+	// in ViewCounts under its own root, so this stays generic.
+	v.Stats.SessionCount = int64(len(v.seenKeys[RootBySession]))
+	for root, keys := range v.seenKeys {
+		if root == RootBySession {
+			continue
 		}
-	}
-	if m.Namespace != "" {
-		if _, seen := v.seenNamespaces[m.Namespace]; !seen {
-			v.seenNamespaces[m.Namespace] = struct{}{}
-			v.Stats.NamespaceCount++
+		if v.Stats.ViewCounts == nil {
+			v.Stats.ViewCounts = make(map[RootView]int64)
 		}
+		v.Stats.ViewCounts[root] = int64(len(keys))
 	}
 	_ = duringBackfill
 }
 
-// applyByPathInsert handles the collision logic for the by-path
-// tree. Three cases:
+// applyCollisionInsert handles arbitration for a collidable tree
+// (path keys not artifact-unique, e.g. by-path), keyed by root. Three
+// cases:
 //
 //  1. path is unclaimed → insert as winner.
-//  2. path is claimed; newcomer is fresher → newcomer wins,
-//     previous owner becomes loser, event.EventPathCollision emitted.
-//  3. path is claimed; newcomer is older → newcomer joins the
-//     losers list, no by-path node, event.EventPathCollision emitted.
+//  2. path is claimed; newcomer is fresher → newcomer wins, previous
+//     owner becomes loser, event.EventPathCollision emitted.
+//  3. path is claimed; newcomer is older → newcomer joins the losers
+//     list, no node, event.EventPathCollision emitted.
 //
-// The "fresher" rule is CreatedAt descending; on tie, the
-// lexicographically larger ArtifactID wins (deterministic when
-// two artifacts are written in the same second).
-func (v *View) applyByPathInsert(path string, m domain.Manifest, rec *artifactRecord) {
-	rec.pathByPath = path
+// The caller records rec.paths[root] before calling (a loser still has
+// its path recorded for Remove). The "fresher" rule is CreatedAt
+// descending; on tie the lexicographically larger ArtifactID wins.
+func (v *View) applyCollisionInsert(root RootView, path string, m domain.Manifest, rec *artifactRecord) {
+	owners := v.pathOwner[root]
+	tree := v.trees[root]
 
-	currentOwner, claimed := v.pathOwner[path]
+	currentOwner, claimed := owners[path]
 	if !claimed {
-		v.pathOwner[path] = m.ArtifactID
-		v.insertFile(v.byPath, path, m)
+		owners[path] = m.ArtifactID
+		v.insertFile(tree, path, m)
 		return
 	}
 
 	currentRec := v.artifacts[currentOwner]
 	if currentRec == nil {
-		// Should not happen: pathOwner without artifact record.
+		// Should not happen: owner without artifact record.
 		// Recover by treating as unclaimed.
-		v.pathOwner[path] = m.ArtifactID
-		v.insertFile(v.byPath, path, m)
+		owners[path] = m.ArtifactID
+		v.insertFile(tree, path, m)
 		return
 	}
 
 	if isFresherWinner(m, currentRec.manifest) {
 		// Newcomer wins. Demote previous owner.
-		v.pathOwner[path] = m.ArtifactID
-		v.removeFile(v.byPath, path)
-		v.insertFile(v.byPath, path, m)
-		v.pushLoser(path, currentRec.manifest)
+		owners[path] = m.ArtifactID
+		v.removeFile(tree, path)
+		v.insertFile(tree, path, m)
+		v.pushLoser(root, path, currentRec.manifest)
 		v.publish(event.EventPathCollision, event.PathCollisionPayload{
 			Path:   path,
 			Winner: m.ArtifactID,
@@ -339,7 +415,7 @@ func (v *View) applyByPathInsert(path string, m domain.Manifest, rec *artifactRe
 	}
 
 	// Newcomer loses.
-	v.pushLoser(path, m)
+	v.pushLoser(root, path, m)
 	v.publish(event.EventPathCollision, event.PathCollisionPayload{
 		Path:   path,
 		Winner: currentOwner,
@@ -361,11 +437,12 @@ func isFresherWinner(candidate, incumbent domain.Manifest) bool {
 	return false
 }
 
-// pushLoser inserts an entry into pathLosers[path], keeping the
-// slice sorted by CreatedAt descending (and ArtifactID descending
-// on tie). pathLosers[path] is allocated lazily.
-func (v *View) pushLoser(path string, m domain.Manifest) {
-	losers := v.pathLosers[path]
+// pushLoser inserts an entry into pathLosers[root][path], keeping the
+// slice sorted by CreatedAt descending (and ArtifactID descending on
+// tie). The inner slice is allocated lazily.
+func (v *View) pushLoser(root RootView, path string, m domain.Manifest) {
+	byPath := v.pathLosers[root]
+	losers := byPath[path]
 	entry := loserEntry{id: m.ArtifactID, createdAt: m.CreatedAt}
 	idx := sort.Search(len(losers), func(i int) bool {
 		// sort descending: we want the position of the first entry
@@ -383,18 +460,19 @@ func (v *View) pushLoser(path string, m domain.Manifest) {
 	losers = append(losers, loserEntry{})
 	copy(losers[idx+1:], losers[idx:])
 	losers[idx] = entry
-	v.pathLosers[path] = losers
+	byPath[path] = losers
 }
 
 // removeLoser drops the entry with the given id from
-// pathLosers[path]; no-op if not present.
-func (v *View) removeLoser(path string, id domain.ArtifactID) {
-	losers := v.pathLosers[path]
+// pathLosers[root][path]; no-op if not present.
+func (v *View) removeLoser(root RootView, path string, id domain.ArtifactID) {
+	byPath := v.pathLosers[root]
+	losers := byPath[path]
 	for i, l := range losers {
 		if l.id == id {
-			v.pathLosers[path] = append(losers[:i], losers[i+1:]...)
-			if len(v.pathLosers[path]) == 0 {
-				delete(v.pathLosers, path)
+			byPath[path] = append(losers[:i], losers[i+1:]...)
+			if len(byPath[path]) == 0 {
+				delete(byPath, path)
 			}
 			return
 		}

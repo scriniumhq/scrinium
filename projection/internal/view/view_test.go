@@ -2,6 +2,7 @@ package view_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -21,9 +22,8 @@ import (
 // overrides the fields a typical projection test cares about.
 // Local to this file because the override pattern is small and
 // every other call-site has its own preferences.
-func makeManifest(id, ns string, sid domain.SessionID, size int64, createdAt time.Time) domain.Manifest {
+func makeManifest(id string, sid domain.SessionID, size int64, createdAt time.Time) domain.Manifest {
 	m := manifestfx.Blob(id, "sha256-"+repeatChar('b', 64))
-	m.Namespace = ns
 	m.SessionID = sid
 	m.OriginalSize = size
 	m.CreatedAt = createdAt
@@ -93,8 +93,8 @@ func TestNewView_SourceWalkError(t *testing.T) {
 func TestNewView_PopulatesByArtifact(t *testing.T) {
 	src := projectionfx.New()
 	now := time.Now().UTC()
-	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, now), []byte("hello"))
-	src.Add(makeManifest("sha256-eeffgghh", "files", "sess1", 200, now), []byte("world"))
+	src.Add(makeManifest("sha256-aabbccdd", "sess1", 100, now), []byte("hello"))
+	src.Add(makeManifest("sha256-eeffgghh", "sess1", 200, now), []byte("world"))
 
 	v, err := vw.New(context.Background(), src)
 	if err != nil {
@@ -114,7 +114,7 @@ func TestNewView_PopulatesByArtifact(t *testing.T) {
 
 func TestGetByArtifact_File(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "sess1", 100, time.Now().UTC()), nil)
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -135,7 +135,7 @@ func TestGetByArtifact_File(t *testing.T) {
 
 func TestGetByArtifact_VirtualDirectory(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "sess1", 100, time.Now().UTC()), nil)
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -153,7 +153,7 @@ func TestGetByArtifact_VirtualDirectory(t *testing.T) {
 
 func TestGetByArtifact_Root(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "files", "sess1", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "sess1", 100, time.Now().UTC()), nil)
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -192,8 +192,8 @@ func TestGetByArtifact_Closed(t *testing.T) {
 
 func TestListByArtifact_RootListsShards(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
-	src.Add(makeManifest("sha256-ccddeeff", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-ccddeeff", "s", 100, time.Now().UTC()), nil)
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -214,7 +214,7 @@ func TestListByArtifact_RootListsShards(t *testing.T) {
 
 func TestListByArtifact_FileReturnsErrNotADirectory(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "s", 100, time.Now().UTC()), nil)
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -245,8 +245,8 @@ func TestListByArtifact_NonexistentReturnsErrPathNotFound(t *testing.T) {
 
 func TestWalkByArtifact_AllNodes(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
-	src.Add(makeManifest("sha256-aaccddee", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aaccddee", "s", 100, time.Now().UTC()), nil)
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -268,7 +268,7 @@ func TestWalkByArtifact_StopEarly(t *testing.T) {
 	src := projectionfx.New()
 	for i := 0; i < 10; i++ {
 		id := makeShortID(i)
-		src.Add(makeManifest(id, "f", "s", 100, time.Now().UTC()), nil)
+		src.Add(makeManifest(id, "s", 100, time.Now().UTC()), nil)
 	}
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
@@ -292,7 +292,7 @@ func TestWalkByArtifact_StopEarly(t *testing.T) {
 
 func TestOpenByArtifact_File(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 5, time.Now().UTC()), []byte("hello"))
+	src.Add(makeManifest("sha256-aabbccdd", "s", 5, time.Now().UTC()), []byte("hello"))
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -313,7 +313,7 @@ func TestOpenByArtifact_File(t *testing.T) {
 
 func TestOpenByArtifact_Directory(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "s", 100, time.Now().UTC()), nil)
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -339,7 +339,7 @@ func TestOpenByArtifact_SourceArtifactNotFound(t *testing.T) {
 	// race with concurrent deletion. Mapping yields
 	// ErrPathNotFound on the projection side.
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "s", 100, time.Now().UTC()), nil)
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -353,7 +353,7 @@ func TestOpenByArtifact_SourceArtifactNotFound(t *testing.T) {
 
 func TestOpenByArtifact_SourceLocked(t *testing.T) {
 	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "f", "s", 100, time.Now().UTC()), nil)
+	src.Add(makeManifest("sha256-aabbccdd", "s", 100, time.Now().UTC()), nil)
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
 
@@ -368,24 +368,55 @@ func TestOpenByArtifact_SourceLocked(t *testing.T) {
 	}
 }
 
-// --- Filter ---
+// testRoot is the root of the neutral fake provided view the projection
+// tests use to exercise the generic provided-view rail (ADR-98). It is
+// deliberately NOT by-path or by-namespace — those are extension views,
+// tested with their extensions (x/fspath, x/namespace). The projection
+// attaches no meaning to it.
+const testRoot vw.RootView = "by-test"
 
-func TestNewView_FilterByNamespace(t *testing.T) {
-	src := projectionfx.New()
-	src.Add(makeManifest("sha256-aabbccdd", "photos", "s", 100, time.Now().UTC()), nil)
-	src.Add(makeManifest("sha256-eeffaabb", "docs", "s", 100, time.Now().UTC()), nil)
-
-	v, err := vw.New(
-		context.Background(),
-		src,
-		vw.WithFilter(vw.Filter{Namespace: "photos"}),
-	)
-	if err != nil {
-		t.Fatalf("NewView: %v", err)
+// testProvided is a neutral collidable, orphaning provided view standing
+// in for "some extension's view". Its path is a logical path the test
+// stamps into the manifest Ext under "_p"; a manifest with no stamp misses
+// (orphaned, or synthetic under FallbackSynthetic). The projection never
+// knows what computes it.
+func testProvided() vw.ProvidedView {
+	return vw.ProvidedView{
+		Root:    testRoot,
+		Path:    testPath,
+		Collide: true,
+		Orphans: true,
 	}
-	defer v.Close()
+}
 
-	if got := v.Stats.TotalNodes; got != 1 {
-		t.Errorf("TotalNodes: got %d, want 1", got)
+func testPath(m domain.Manifest) (string, bool) {
+	if len(m.Ext) == 0 {
+		return "", false
 	}
+	var x struct {
+		Path string `json:"_p"`
+	}
+	if err := json.Unmarshal(m.Ext, &x); err != nil || x.Path == "" {
+		return "", false
+	}
+	return x.Path, true
+}
+
+// testManifest builds a neutral blob manifest carrying a logical path in
+// Ext under "_p" (empty path ⇒ no stamp, so the view misses it). The other
+// fields a test cares about (namespace, session, time) are set by the
+// caller afterwards.
+func testManifest(id, path string, createdAt time.Time) domain.Manifest {
+	m := manifestfx.Blob(id, "sha256-"+repeatChar('b', 64))
+	m.CreatedAt = createdAt
+	if path != "" {
+		m.Ext, _ = json.Marshal(map[string]string{"_p": path})
+	}
+	return m
+}
+
+// pathManifest is testManifest at the current time, for tests that do not
+// care about CreatedAt.
+func pathManifest(id, path string) domain.Manifest {
+	return testManifest(id, path, time.Now().UTC())
 }

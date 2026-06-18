@@ -132,7 +132,6 @@ projection:
   rootView: by-date
   editing: custom
   allowRename: true
-  namespace: files
 `
 	var c Config
 	if err := yaml.Unmarshal([]byte(doc), &c); err != nil {

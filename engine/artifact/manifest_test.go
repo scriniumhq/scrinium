@@ -23,7 +23,7 @@ func TestEncodeDecode_PlainRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Namespace != m.Namespace || string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) || got.OriginalSize != m.OriginalSize {
+	if string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) || got.OriginalSize != m.OriginalSize {
 		t.Errorf("round-trip lost sys fields: %+v", got)
 	}
 	if !bytes.Equal(got.InlineBlob, m.InlineBlob) {
@@ -75,7 +75,7 @@ func TestComputeManifestDigest_StableAndAssigned(t *testing.T) {
 
 func TestComputeManifestDigest_DifferentManifestsDifferentIDs(t *testing.T) {
 	m1 := artifactfx.Manifest()
-	m2 := artifactfx.Manifest(func(m *domain.Manifest) { m.Namespace = "other" })
+	m2 := artifactfx.Manifest(func(m *domain.Manifest) { m.SessionID = "other" })
 	dg1, _, _, _ := artifact.ComputeManifestDigest(m1, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
 	dg2, _, _, _ := artifact.ComputeManifestDigest(m2, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
 	if dg1 == dg2 {
@@ -118,10 +118,10 @@ func TestSealed_RoundTrip(t *testing.T) {
 }
 
 func TestSealed_SysFieldsArePlaintextOnDisk(t *testing.T) {
-	m := artifactfx.Manifest(func(m *domain.Manifest) { m.Namespace = "ns" })
+	m := artifactfx.Manifest()
 	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoSealed)
-	if !bytes.Contains(b, []byte(`"ns"`)) {
-		t.Error("Sealed should leave sys (namespace) in plaintext on disk")
+	if !bytes.Contains(b, []byte("sess-1")) {
+		t.Error("Sealed should leave sys (session id) in plaintext on disk")
 	}
 	if bytes.Contains(b, []byte("inline-secret-bytes")) {
 		t.Error("Sealed leaked inline_blob plaintext on disk")
@@ -137,16 +137,16 @@ func TestParanoid_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Namespace != m.Namespace || !bytes.Equal(got.InlineBlob, m.InlineBlob) {
+	if !bytes.Equal(got.InlineBlob, m.InlineBlob) {
 		t.Error("Paranoid round-trip lost fields")
 	}
 }
 
 func TestParanoid_HidesSysOnDisk(t *testing.T) {
-	m := artifactfx.Manifest(func(m *domain.Manifest) { m.Namespace = "ns" })
+	m := artifactfx.Manifest()
 	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoParanoid)
-	if bytes.Contains(b, []byte(`"ns"`)) {
-		t.Error("Paranoid should encrypt the whole body including sys (namespace)")
+	if bytes.Contains(b, []byte("sess-1")) {
+		t.Error("Paranoid should encrypt the whole body including sys (session id)")
 	}
 }
 

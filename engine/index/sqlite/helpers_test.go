@@ -82,16 +82,16 @@ func insertManifest(t *testing.T, idx *Index, m domain.Manifest) {
 	// never collide on an empty PK.
 	digest := string(m.Digest)
 	if digest == "" {
-		sum := sha256.Sum256([]byte(string(m.ArtifactID) + "|" + m.Namespace + "|" + string(m.SessionID) + "|" + timefmt.Format(createdAt)))
+		sum := sha256.Sum256([]byte(string(m.ArtifactID) + "|" + string(m.SessionID) + "|" + timefmt.Format(createdAt)))
 		digest = "sha256-" + hex.EncodeToString(sum[:])
 	}
 	_, err := idx.db.ExecContext(context.Background(),
 		`INSERT INTO manifests (
-			manifest_digest, artifact_id, namespace, session_id,
+			manifest_digest, artifact_id, session_id,
 			blob_ref, created_at, retention_until
-		) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?)`,
 		digest, string(m.ArtifactID),
-		m.Namespace, m.SessionID, blobRefArg,
+		m.SessionID, blobRefArg,
 		timefmt.Format(createdAt), retentionArg,
 	)
 	if err != nil {

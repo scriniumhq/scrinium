@@ -50,7 +50,7 @@ func runServe(args []string) int {
 	meta := asm.Info
 
 	// webview is read-only and opinionated about layout: it lives at the
-	// URL root with every tree shown unprefixed (/by-path/, /by-date/,
+	// URL root with every tree shown unprefixed (/by-date/,
 	// …) and the text stats file off (it renders stats as HTML instead).
 	// These are properties of THIS surface, not of the stored data, so
 	// they are set here rather than in the config.
@@ -61,7 +61,7 @@ func runServe(args []string) int {
 		ShowOrphaned:           true,
 		ShowByDate:             true,
 		ShowBySession:          true,
-		ShowByNamespace:        true,
+		ShowProvidedViews:      true,
 		ShowRaw:                true,
 		UnprefixedServiceTrees: true,
 	}
@@ -80,7 +80,7 @@ func runServe(args []string) int {
 		}
 		// webview is always read-only; reflect that on the page.
 		return buildWebStatsData(asm.Projection.Queries(), capPtr, exts, startedAt, asm.MountSession,
-			meta.StoreURI, true, "off", meta.Namespace)
+			meta.StoreURI, true, "off")
 	}
 
 	v := vfs.New(asm.Projection, routingCfg, vfs.WithStatsProvider(textStats))

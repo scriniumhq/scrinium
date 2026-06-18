@@ -158,7 +158,7 @@ func TestStore_Capacity_CtxCancelled(t *testing.T) {
 func TestStore_Walk_EmptyStore(t *testing.T) {
 	s := newStore(t)
 	var seen int
-	err := s.Walk(context.Background(), "*", func(m domain.Manifest) error {
+	err := s.Walk(context.Background(), func(m domain.Manifest) error {
 		seen++
 		return nil
 	})
@@ -170,34 +170,11 @@ func TestStore_Walk_EmptyStore(t *testing.T) {
 	}
 }
 
-func TestStore_Walk_RejectsTooLongNamespace(t *testing.T) {
-	s := newStore(t)
-	long := strings.Repeat("a", 256)
-	err := s.Walk(context.Background(), long, func(m domain.Manifest) error {
-		return nil
-	})
-	if !errors.Is(err, errs.ErrNamespaceTooLong) {
-		t.Fatalf("expected errs.ErrNamespaceTooLong, got %v", err)
-	}
-}
-
-func TestStore_Walk_AcceptsEmptyAndWildcard(t *testing.T) {
-	s := newStore(t)
-	for _, ns := range []string{"", "*"} {
-		err := s.Walk(context.Background(), ns, func(m domain.Manifest) error {
-			return nil
-		})
-		if err != nil {
-			t.Errorf("Walk(%q): %v", ns, err)
-		}
-	}
-}
-
 func TestStore_Walk_CtxCancelled(t *testing.T) {
 	s := newStore(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := s.Walk(ctx, "*", func(m domain.Manifest) error { return nil })
+	err := s.Walk(ctx, func(m domain.Manifest) error { return nil })
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}

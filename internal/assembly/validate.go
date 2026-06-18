@@ -79,11 +79,9 @@ func validateProjection(p *Projection, add func(string, ...any)) {
 	default:
 		add("projection.editing %q is not one of {off, on, custom}", p.Editing)
 	}
-	switch p.RootView {
-	case "", "by-path", "by-date", "by-session", "by-namespace", "by-artifact", "by-orphaned":
-	default:
-		add("projection.rootView %q is not a known tree", p.RootView)
-	}
+	// RootView is validated by the View at build time (it must name an
+	// active root — intrinsic or extension-provided); assembly does not
+	// enumerate the roots, so it does not pre-validate the name here.
 	switch p.ByPathFallback {
 	case "", "orphaned", "synthetic":
 	default:

@@ -11,12 +11,6 @@ import "time"
 // importing the engine. The store applies them via ApplyPut.
 type PutOption func(*PutOptions)
 
-// WithNamespace places the artifact in a namespace. Empty (the
-// default) is the store's default namespace.
-func WithNamespace(ns string) PutOption {
-	return func(o *PutOptions) { o.Namespace = ns }
-}
-
 // WithSession ties the Put to a session for RollbackSession.
 func WithSession(id SessionID) PutOption {
 	return func(o *PutOptions) { o.SessionID = id }
@@ -35,6 +29,21 @@ func WithRetention(t time.Time) PutOption {
 // WithRouting attaches routing hints (e.g. for a multistore router).
 func WithRouting(h RoutingHints) PutOption {
 	return func(o *PutOptions) { o.Routing = h }
+}
+
+// WithExtHint attaches an opaque, extension-scoped hint to a Put under key
+// (an extension's stable name). The core never reads it — it carries the
+// hint through to the behavior wrappers, which alone interpret their own
+// key. It is the generic per-call channel by which a client hands an
+// extension a value (e.g. a target namespace name) without the core
+// learning that extension's vocabulary. A repeated key overwrites.
+func WithExtHint(key, value string) PutOption {
+	return func(o *PutOptions) {
+		if o.ExtHints == nil {
+			o.ExtHints = map[string]string{}
+		}
+		o.ExtHints[key] = value
+	}
 }
 
 // ApplyPut folds options into a PutOptions. The store calls this to
