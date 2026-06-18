@@ -14,7 +14,7 @@ import (
 // via RegisterDialer in their package init().
 //
 // The URI is already parsed by DialDriver — the dialer
-// receives the *url.URL and is responsible for translating
+// receives the *indexUri.URL and is responsible for translating
 // scheme-specific parts (host, path, query) into driver
 // configuration.
 type Dialer func(u *url.URL) (Driver, error)
@@ -83,7 +83,7 @@ func RegisteredSchemes() []string {
 //
 // Returned errors:
 //   - empty URI                       → "empty URI"
-//   - URL parse failure               → wrapped url.Parse error
+//   - URL parse failure               → wrapped indexUri.Parse error
 //   - unregistered scheme             → "scheme X not registered"
 //   - dialer-specific failures        → wrapped from the dialer
 func DialDriver(rawURI string) (Driver, error) {

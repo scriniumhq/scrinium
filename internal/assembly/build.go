@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +24,7 @@ import (
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/extension"
+	"scrinium.dev/internal/uri"
 	"scrinium.dev/projection"
 )
 
@@ -98,7 +97,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 
 	// 2. For an Init/OpenOrInit on a local store, ensure the directory.
 	if mode != modeOpen {
-		if p, perr := localStorePath(spec.Driver); perr == nil {
+		if p, perr := uri.ResolveLocalURI(spec.Driver); perr == nil {
 			if err := os.MkdirAll(p, 0o755); err != nil {
 				return nil, fmt.Errorf("scrinium: mkdir store: %w", err)
 			}
@@ -628,7 +627,7 @@ func isNotFound(err error) bool {
 // DialDriver (file://, s3:// when present, bare paths). The built-in
 // schemes are registered by the consumer's blank import (ADR-63).
 func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
-	scheme := schemeOf(spec.Driver)
+	scheme := uri.SchemeOf(spec.Driver)
 	if f, ok := reg.driver(scheme); ok {
 		creds, err := resolveCredentials(ctx, spec.Credentials)
 		if err != nil {
@@ -645,25 +644,25 @@ func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
 // custom index factory if one is registered for its scheme, otherwise the
 // engine's built-in DialIndex.
 func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.StoreIndex, error) {
-	uri := spec.Index
-	if uri == "" && defaults != nil {
-		uri = defaults.Index
+	indexUri := spec.Index
+	if indexUri == "" && defaults != nil {
+		indexUri = defaults.Index
 	}
-	if uri == "" {
-		p, err := localStorePath(spec.Driver)
+	if indexUri == "" {
+		p, err := uri.ResolveLocalURI(spec.Driver)
 		if err != nil {
 			return nil, fmt.Errorf("index URI is empty and cannot default for store %q (set index explicitly)", spec.Driver)
 		}
-		uri = "sqlite:///" + filepath.Join(p, "index", "index.db")
+		indexUri = "sqlite:///" + filepath.Join(p, "index", "index.db")
 	}
-	if f, ok := reg.indexFor(schemeOf(uri)); ok {
+	if f, ok := reg.indexFor(uri.SchemeOf(indexUri)); ok {
 		creds, err := resolveCredentials(ctx, spec.Credentials)
 		if err != nil {
 			return nil, err
 		}
-		return f(ctx, uri, creds)
+		return f(ctx, indexUri, creds)
 	}
-	return index.DialIndex(ctx, uri)
+	return index.DialIndex(ctx, indexUri)
 }
 
 func resolveCredentials(ctx context.Context, creds Credentials) (map[string][]byte, error) {
@@ -748,72 +747,6 @@ func passphraseProvider(ctx context.Context, p *Policy) (store.PassphraseProvide
 func hashRegistry() domain.HashRegistry {
 	return hashing.NewHashRegistry().
 		Register("sha256", func() hash.Hash { return sha256.New() })
-}
-
-// --- URI helpers (a trimmed local copy of scrinium's; the assembler
-// cannot import the root package without a layering inversion). ---
-
-func schemeOf(uri string) string {
-	if i := strings.Index(uri, "://"); i > 0 {
-		return uri[:i]
-	}
-	if i := strings.IndexByte(uri, ':'); i > 0 && !strings.Contains(uri[:i], "/") {
-		return uri[:i]
-	}
-	return ""
-}
-
-func localStorePath(storeURI string) (string, error) {
-	if !looksLikeSchemeURI(storeURI) {
-		return filepath.Abs(expandTilde(storeURI))
-	}
-	u, err := url.Parse(storeURI)
-	if err != nil {
-		return "", err
-	}
-	if u.Scheme != "file" {
-		return "", fmt.Errorf("non-local store scheme %q", u.Scheme)
-	}
-	switch u.Host {
-	case "":
-		return filepath.Abs(u.Path)
-	case "~":
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		return filepath.Abs(filepath.Join(home, strings.TrimPrefix(u.Path, "/")))
-	case ".":
-		return filepath.Abs("." + u.Path)
-	}
-	return "", fmt.Errorf("unsupported file:// host %q", u.Host)
-}
-
-func looksLikeSchemeURI(s string) bool {
-	i := strings.Index(s, "://")
-	if i <= 0 {
-		return false
-	}
-	for j := 0; j < i; j++ {
-		c := s[j]
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z',
-			c >= '0' && c <= '9', c == '+', c == '-', c == '.':
-			continue
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func expandTilde(p string) string {
-	if strings.HasPrefix(p, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, p[2:])
-		}
-	}
-	return p
 }
 
 // wrappedStore presents a full Store whose data plane is decorated by one

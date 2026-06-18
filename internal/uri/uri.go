@@ -38,10 +38,10 @@ var ErrEmptyPath = errors.New("uri: empty path")
 // directory check for it and skip cleanly.
 var ErrNotLocal = errors.New("uri: not a local path")
 
-// Scheme returns the URI scheme ("file", "sqlite", "s3", …) or "" for a
+// SchemeOf returns the URI scheme ("file", "sqlite", "s3", …) or "" for a
 // bare path. It is the one scheme extractor in the library; registries and
 // dialers classify by it instead of hand-rolling "://" scans.
-func Scheme(s string) string {
+func SchemeOf(s string) string {
 	u, err := url.Parse(s)
 	if err != nil {
 		return ""
@@ -49,9 +49,9 @@ func Scheme(s string) string {
 	return u.Scheme
 }
 
-// IsURI reports whether s carries a scheme (Scheme(s) != ""). A bare path
+// IsURI reports whether s carries a scheme (SchemeOf(s) != ""). A bare path
 // — "/abs", "./rel", "~/x", "rel" — is not a URI.
-func IsURI(s string) bool { return Scheme(s) != "" }
+func IsURI(s string) bool { return SchemeOf(s) != "" }
 
 // ResolveLocalPath turns a parsed file-like URL into an absolute local
 // path, expanding the ~ and . host aliases. The result is always

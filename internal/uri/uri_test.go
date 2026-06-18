@@ -19,7 +19,7 @@ func TestScheme(t *testing.T) {
 		"rel/path":         "",
 	}
 	for in, want := range cases {
-		if got := Scheme(in); got != want {
+		if got := SchemeOf(in); got != want {
 			t.Errorf("Scheme(%q) = %q, want %q", in, got, want)
 		}
 		if got := IsURI(in); got != (want != "") {
