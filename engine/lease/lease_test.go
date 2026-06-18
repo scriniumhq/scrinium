@@ -1,4 +1,4 @@
-package namedstore_test
+package lease_test
 
 import (
 	"context"
@@ -15,7 +15,8 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/namedstore"
+	"scrinium.dev/engine/internal/namedartifact"
+	"scrinium.dev/engine/lease"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/driverfx"
 )
@@ -53,25 +54,25 @@ func (leaseTestHashes) Format(algo string, raw []byte) string {
 
 func (h leaseTestHashes) Register(string, func() hash.Hash) domain.HashRegistry { return h }
 
-func cfgA(ttl time.Duration) namedstore.Config {
-	return namedstore.Config{Name: leaseName, HostID: hostA, AgentType: "Test", TTL: ttl}
+func cfgA(ttl time.Duration) lease.Config {
+	return lease.Config{Name: leaseName, HostID: hostA, AgentType: "Test", TTL: ttl}
 }
 
 // writeRecord stages a fully-formed lease record as the lease cell,
 // bypassing Acquire — used to stage live/expired/foreign states
 // deterministically. The record is wrapped in the same inline-manifest
 // form (sha256) the lease writes, so the lease's own read decodes it.
-func writeRecord(t *testing.T, drv driver.Driver, rec namedstore.Record) {
+func writeRecord(t *testing.T, drv driver.Driver, rec lease.Record) {
 	t.Helper()
 	body, err := json.Marshal(rec)
 	if err != nil {
 		t.Fatalf("marshal record: %v", err)
 	}
-	fileBytes, _, err := namedstore.BuildInlineManifest(body, "sha256", leaseTestHashes{})
+	fileBytes, _, err := namedartifact.BuildInlineManifest(body, "sha256", leaseTestHashes{})
 	if err != nil {
 		t.Fatalf("build manifest: %v", err)
 	}
-	if err := namedstore.WriteCell(context.Background(), drv, leaseName, fileBytes, false); err != nil {
+	if err := namedartifact.WriteCell(context.Background(), drv, leaseName, fileBytes, false); err != nil {
 		t.Fatalf("write cell: %v", err)
 	}
 }
@@ -80,7 +81,7 @@ func writeRecord(t *testing.T, drv driver.Driver, rec namedstore.Record) {
 // lease cell path, bypassing the manifest form.
 func putRaw(t *testing.T, drv driver.Driver, body string) {
 	t.Helper()
-	path, err := namedstore.CellPath(leaseName)
+	path, err := namedartifact.CellPath(leaseName)
 	if err != nil {
 		t.Fatalf("cell path: %v", err)
 	}
@@ -90,12 +91,12 @@ func putRaw(t *testing.T, drv driver.Driver, body string) {
 }
 
 // readRecord loads and parses the lease cell. ok is false when absent.
-func readRecord(t *testing.T, drv driver.Driver) (rec namedstore.Record, ok bool) {
+func readRecord(t *testing.T, drv driver.Driver) (rec lease.Record, ok bool) {
 	t.Helper()
-	m, err := namedstore.LoadCell(context.Background(), drv, leaseTestHashes{}, leaseName)
+	m, err := namedartifact.LoadCell(context.Background(), drv, leaseTestHashes{}, leaseName)
 	if err != nil {
 		if errors.Is(err, errs.ErrArtifactNotFound) {
-			return namedstore.Record{}, false
+			return lease.Record{}, false
 		}
 		t.Fatalf("load cell: %v", err)
 	}
@@ -108,7 +109,7 @@ func readRecord(t *testing.T, drv driver.Driver) (rec namedstore.Record, ok bool
 // readRaw returns the lease cell file body verbatim (empty when absent).
 func readRaw(t *testing.T, drv driver.Driver) string {
 	t.Helper()
-	path, err := namedstore.CellPath(leaseName)
+	path, err := namedartifact.CellPath(leaseName)
 	if err != nil {
 		t.Fatalf("cell path: %v", err)
 	}
@@ -123,7 +124,7 @@ func readRaw(t *testing.T, drv driver.Driver) string {
 
 func TestAcquire_EmptySlot(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, prev, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	l, prev, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
@@ -154,14 +155,14 @@ func TestAcquire_EmptySlot(t *testing.T) {
 func TestAcquire_HeldByLiveForeign(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	now := time.Now()
-	writeRecord(t, drv, namedstore.Record{
+	writeRecord(t, drv, lease.Record{
 		HostID:     hostB,
 		AcquiredAt: now,
 		ExpiresAt:  now.Add(time.Hour), // live
 		AgentType:  "Other",
 		Nonce:      "AAAAAAAAAAAAAAAAAAAAAA==",
 	})
-	_, _, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	_, _, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if !errors.Is(err, errs.ErrLeaseHeld) {
 		t.Fatalf("Acquire err = %v, want ErrLeaseHeld", err)
 	}
@@ -173,14 +174,14 @@ func TestAcquire_HeldByLiveForeign(t *testing.T) {
 func TestAcquire_TakeoverExpiredForeign(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	now := time.Now()
-	writeRecord(t, drv, namedstore.Record{
+	writeRecord(t, drv, lease.Record{
 		HostID:     hostB,
 		AcquiredAt: now.Add(-2 * time.Hour),
 		ExpiresAt:  now.Add(-time.Hour), // expired
 		AgentType:  "Other",
 		Nonce:      "BBBBBBBBBBBBBBBBBBBBBB==",
 	})
-	l, prev, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	l, prev, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if err != nil {
 		t.Fatalf("Acquire (takeover): %v", err)
 	}
@@ -200,12 +201,12 @@ func TestAcquire_TakeoverExpiredForeign(t *testing.T) {
 
 func TestAcquire_ReacquireOwnLiveRefreshesNonce(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if _, _, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute)); err != nil {
+	if _, _, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute)); err != nil {
 		t.Fatalf("first Acquire: %v", err)
 	}
 	rec1, _ := readRecord(t, drv)
 
-	_, prev, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	_, prev, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if err != nil {
 		t.Fatalf("re-Acquire own: %v", err)
 	}
@@ -223,7 +224,7 @@ func TestAcquire_ReacquireOwnLiveRefreshesNonce(t *testing.T) {
 
 func TestAcquire_Validation(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	cases := map[string]namedstore.Config{
+	cases := map[string]lease.Config{
 		"empty name": {Name: "", HostID: hostA, TTL: time.Minute},
 		"empty host": {Name: leaseName, HostID: "", TTL: time.Minute},
 		"zero ttl":   {Name: leaseName, HostID: hostA, TTL: 0},
@@ -231,7 +232,7 @@ func TestAcquire_Validation(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, _, err := namedstore.Acquire(context.Background(), drv, c); err == nil {
+			if _, _, err := lease.Acquire(context.Background(), drv, c); err == nil {
 				t.Fatalf("Acquire(%+v) = nil err, want validation error", c)
 			}
 		})
@@ -243,7 +244,7 @@ func TestAcquire_CorruptBodyBlocks(t *testing.T) {
 	putRaw(t, drv, "}{ not json")
 	// A corrupt/unparseable lease body is conservative: Acquire refuses
 	// rather than stomping a file it cannot read.
-	if _, _, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute)); err == nil {
+	if _, _, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute)); err == nil {
 		t.Fatal("Acquire on corrupt body = nil err, want failure")
 	}
 	if got := readRaw(t, drv); got != "}{ not json" {
@@ -253,7 +254,7 @@ func TestAcquire_CorruptBodyBlocks(t *testing.T) {
 
 func TestRenew_ExtendsExpiry(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, _, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
@@ -277,13 +278,13 @@ func TestRenew_ExtendsExpiry(t *testing.T) {
 
 func TestRenew_LostAfterForeignTakeover(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, _, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
 	// Simulate another host taking over.
 	now := time.Now()
-	writeRecord(t, drv, namedstore.Record{
+	writeRecord(t, drv, lease.Record{
 		HostID: hostB, AcquiredAt: now, ExpiresAt: now.Add(time.Hour),
 		AgentType: "Other", Nonce: "CCCCCCCCCCCCCCCCCCCCCC==",
 	})
@@ -294,11 +295,11 @@ func TestRenew_LostAfterForeignTakeover(t *testing.T) {
 
 func TestRenew_LostWhenDeleted(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, _, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
-	if err := namedstore.RemoveCell(context.Background(), drv, leaseName); err != nil {
+	if err := namedartifact.RemoveCell(context.Background(), drv, leaseName); err != nil {
 		t.Fatalf("RemoveCell: %v", err)
 	}
 	if err := l.Renew(context.Background()); !errors.Is(err, errs.ErrLeaseLost) {
@@ -308,7 +309,7 @@ func TestRenew_LostWhenDeleted(t *testing.T) {
 
 func TestRelease_DeletesOwn(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, _, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
@@ -322,13 +323,13 @@ func TestRelease_DeletesOwn(t *testing.T) {
 
 func TestRelease_NotOursIsNoOp(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, _, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
 	// Another host takes over before we release.
 	now := time.Now()
-	writeRecord(t, drv, namedstore.Record{
+	writeRecord(t, drv, lease.Record{
 		HostID: hostB, AcquiredAt: now, ExpiresAt: now.Add(time.Hour),
 		AgentType: "Other", Nonce: "DDDDDDDDDDDDDDDDDDDDDD==",
 	})
@@ -342,11 +343,11 @@ func TestRelease_NotOursIsNoOp(t *testing.T) {
 
 func TestRelease_AbsentIsNoOp(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, _, err := namedstore.Acquire(context.Background(), drv, cfgA(time.Minute))
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(time.Minute))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
-	if err := namedstore.RemoveCell(context.Background(), drv, leaseName); err != nil {
+	if err := namedartifact.RemoveCell(context.Background(), drv, leaseName); err != nil {
 		t.Fatalf("RemoveCell: %v", err)
 	}
 	if err := l.Release(context.Background()); err != nil {
@@ -358,7 +359,7 @@ func TestHeartbeat_RenewsThenStopsOnCancel(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	// TTL 2s → renew interval 1s, which crosses a whole second so the
 	// timefmt-persisted ExpiresAt advances observably between ticks.
-	l, _, err := namedstore.Acquire(context.Background(), drv, cfgA(2*time.Second))
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(2*time.Second))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
@@ -391,7 +392,7 @@ func TestHeartbeat_RenewsThenStopsOnCancel(t *testing.T) {
 
 func TestHeartbeat_AbortsOnTakeover(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	l, _, err := namedstore.Acquire(context.Background(), drv, cfgA(2*time.Second))
+	l, _, err := lease.Acquire(context.Background(), drv, cfgA(2*time.Second))
 	if err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
@@ -400,7 +401,7 @@ func TestHeartbeat_AbortsOnTakeover(t *testing.T) {
 
 	// Foreign takeover: the next Renew tick must observe a lost lease.
 	now := time.Now()
-	writeRecord(t, drv, namedstore.Record{
+	writeRecord(t, drv, lease.Record{
 		HostID: hostB, AcquiredAt: now, ExpiresAt: now.Add(time.Hour),
 		AgentType: "Other", Nonce: "EEEEEEEEEEEEEEEEEEEEEE==",
 	})

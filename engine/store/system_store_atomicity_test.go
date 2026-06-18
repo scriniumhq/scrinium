@@ -26,8 +26,9 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/namedstore"
+	"scrinium.dev/engine/internal/namedartifact"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
 	"scrinium.dev/testutil/storefx"
@@ -70,7 +71,7 @@ func (f *faultDriver) Remove(ctx context.Context, path string) error {
 // versionPath is the driver path of a specific system-artifact version.
 func versionPath(t *testing.T, name string, seq uint64) string {
 	t.Helper()
-	p, err := namedstore.VersionPath(name, seq)
+	p, err := namedartifact.VersionPath(name, seq)
 	if err != nil {
 		t.Fatalf("VersionPath(%q, %d): %v", name, seq, err)
 	}
@@ -87,10 +88,10 @@ func TestSystemStore_PutConvergesOnLatest(t *testing.T) {
 	ctx := context.Background()
 	ss := s.System()
 
-	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v1"))}); err != nil {
+	if err := ss.Put(ctx, systemstore.Artifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v1"))}); err != nil {
 		t.Fatalf("Put v1: %v", err)
 	}
-	if err := ss.Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v2-newer"))}); err != nil {
+	if err := ss.Put(ctx, systemstore.Artifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v2-newer"))}); err != nil {
 		t.Fatalf("Put v2: %v", err)
 	}
 
@@ -122,7 +123,7 @@ func TestSystemStore_Atomicity_FailDuringVersionWrite(t *testing.T) {
 
 	// 1. Seed: init Store, write v1 (seq 1), close.
 	s := storefx.InitOn(t, realDrv, store.WithStoreIndex(idx))
-	if err := s.System().Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v1-original"))}); err != nil {
+	if err := s.System().Put(ctx, systemstore.Artifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v1-original"))}); err != nil {
 		t.Fatalf("seed Put: %v", err)
 	}
 	if err := s.Close(); err != nil {
@@ -136,7 +137,7 @@ func TestSystemStore_Atomicity_FailDuringVersionWrite(t *testing.T) {
 	defer s2.Close()
 
 	// 3. Try Put v2 — must return the injected error.
-	err := s2.System().Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v2-failed"))})
+	err := s2.System().Put(ctx, systemstore.Artifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte("v2-failed"))})
 	if err == nil {
 		t.Fatal("Put v2: expected injected failure, got nil")
 	}
@@ -168,7 +169,7 @@ func TestSystemStore_Atomicity_PruneFailureIsBestEffort(t *testing.T) {
 	ctx := context.Background()
 
 	for _, v := range []string{"v1", "v2", "v3", "v4"} {
-		if err := s.System().Put(ctx, store.SystemArtifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte(v))}); err != nil {
+		if err := s.System().Put(ctx, systemstore.Artifact{Name: "scrub/cursor", Payload: bytes.NewReader([]byte(v))}); err != nil {
 			t.Fatalf("Put %s (prune is best-effort, Put must succeed): %v", v, err)
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/event"
 )
 
@@ -69,7 +70,7 @@ type core struct {
 
 	// SystemStore facade, wired once at construction. nil only in
 	// unit tests that build a *core by hand.
-	system *systemStore
+	system systemstore.Store
 
 	// crypto groups the DEK, descriptor, passphrase provider, and key
 	// resolver with the mutex that guards them (crypto_state.go).
@@ -108,7 +109,7 @@ func newStore(c *core) *store {
 
 // System returns the SystemStore facade. Reached only through
 // AdminStore, so DataStore consumers cannot see system state.
-func (a adminFacet) System() SystemStore { return a.core.system }
+func (a adminFacet) System() systemstore.Store { return a.core.system }
 
 // publish emits an event when a Publisher is configured. Cheap when
 // nil — the common case for tests and minimal-stack hosts.

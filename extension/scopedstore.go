@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/systemstore"
 )
 
 // scopeRoot is the reserved first token of every scoped system-artifact
@@ -24,22 +24,22 @@ const scopeRoot = "extension."
 // engine's) artifacts: the prefix is prepended here, never supplied by
 // the caller, so there is no way to escape the scope.
 //
-// It satisfies store.SystemStore, so an extension can pass it anywhere a
+// It satisfies systemstore.Store, so an extension can pass it anywhere a
 // SystemStore is expected — e.g. as the backing store of a versioned
-// registry built on the namedstore Keep contract (ADR-85/101).
+// registry built on the namedartifact Keep contract (ADR-85/101).
 type ScopedSystemStore struct {
 	name   string
 	prefix string
-	sys    store.SystemStore
+	sys    systemstore.Store
 }
 
-var _ store.SystemStore = (*ScopedSystemStore)(nil)
+var _ systemstore.Store = (*ScopedSystemStore)(nil)
 
 // NewScopedSystemStore confines sys to the extension named name. name
 // must be a single clean token — non-empty and free of '.', '/', and
 // whitespace — so one extension's scope can neither overlap nor escape
 // another's.
-func NewScopedSystemStore(name string, sys store.SystemStore) (*ScopedSystemStore, error) {
+func NewScopedSystemStore(name string, sys systemstore.Store) (*ScopedSystemStore, error) {
 	if err := validateScopeName(name); err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func NewScopedSystemStore(name string, sys store.SystemStore) (*ScopedSystemStor
 func (s *ScopedSystemStore) Name() string { return s.name }
 
 // Put writes a with its Name scoped to this extension.
-func (s *ScopedSystemStore) Put(ctx context.Context, a store.SystemArtifact) error {
+func (s *ScopedSystemStore) Put(ctx context.Context, a systemstore.Artifact) error {
 	scoped, err := s.scopeName(a.Name)
 	if err != nil {
 		return err

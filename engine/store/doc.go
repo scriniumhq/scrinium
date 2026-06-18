@@ -93,7 +93,7 @@
 //
 // System and config plumbing:
 //
-//   - system_store.go    — the systemStore facade (Put/Get/Delete/Walk),
+//   - systemstore.go    — the systemStore facade (Put/Get/Delete/Walk),
 //     a thin adapter over namedstore. System artifacts are
 //     addressed by name in their own system/ address space and are never
 //     indexed (ADR-85), so there is no pointer file and no opt-out flag.

@@ -10,7 +10,7 @@ import (
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/namedstore"
+	"scrinium.dev/engine/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -197,7 +197,7 @@ func (a *gcAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
 		AgentType:    "gc",
 		StoreID:      a.storeID,
-		Lease:        namedstore.Config{Name: gcLeaseName, HostID: a.hostID, AgentType: "gc", TTL: a.cfg.LeaseTTL},
+		Lease:        lease.Config{Name: gcLeaseName, HostID: a.hostID, AgentType: "gc", TTL: a.cfg.LeaseTTL},
 		LeaseEnabled: a.leaseRequired(a.store.Config().GCLeasePolicy),
 		Terminal:     event.EventAgentCycle,
 		TerminalMode: agent.TerminalEveryCycle,

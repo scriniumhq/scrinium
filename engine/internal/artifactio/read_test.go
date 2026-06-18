@@ -204,7 +204,7 @@ func TestOpenHandle_TargetStreamsAndVerifies(t *testing.T) {
 
 func TestWrapVerifying_NoContentHashReturnsInner(t *testing.T) {
 	_, r, _, _, _ := rwHarness(t)
-	inner := artifactio.NewInlineHandle(domain.Manifest{InlineBlob: []byte("x")}) // no ContentHash
+	inner := artifact.NewInlineHandle(domain.Manifest{InlineBlob: []byte("x")}) // no ContentHash
 	wrapped, err := r.WrapVerifying(inner, nil)
 	if err != nil {
 		t.Fatal(err)

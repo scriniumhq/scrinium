@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/namedstore"
+	"scrinium.dev/engine/lease"
 )
 
 // StageForeign acquires the lease named name under a foreign host so a
@@ -22,7 +22,7 @@ import (
 // mid-run without a heartbeat. The lease is released on test cleanup.
 func StageForeign(t *testing.T, drv driver.Driver, name, host, agentType string, ttl time.Duration) {
 	t.Helper()
-	l, _, err := namedstore.Acquire(context.Background(), drv, namedstore.Config{
+	l, _, err := lease.Acquire(context.Background(), drv, lease.Config{
 		Name:      name,
 		HostID:    host,
 		AgentType: agentType,

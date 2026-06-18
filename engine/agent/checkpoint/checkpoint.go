@@ -13,8 +13,9 @@ import (
 	"scrinium.dev/engine/agent/internal/checkpointfmt"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/namedstore"
+	"scrinium.dev/engine/lease"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/event"
 )
 
@@ -168,7 +169,7 @@ func (a *checkpointAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
 		AgentType:    "checkpoint",
 		StoreID:      a.storeID,
-		Lease:        namedstore.Config{Name: checkpointLeaseName, HostID: a.hostID, AgentType: "checkpoint", TTL: defaultCheckpointLeaseTTL},
+		Lease:        lease.Config{Name: checkpointLeaseName, HostID: a.hostID, AgentType: "checkpoint", TTL: defaultCheckpointLeaseTTL},
 		LeaseEnabled: true,
 		Terminal:     event.EventAgentCompleted,
 		TerminalMode: agent.TerminalOnSuccess,
@@ -229,7 +230,7 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 
 	name := checkpointfmt.Prefix + id
 	if err := a.store.System().Put(ctx,
-		store.SystemArtifact{Name: name, Payload: f},
+		systemstore.Artifact{Name: name, Payload: f},
 	); err != nil {
 		return CheckpointStats{}, fmt.Errorf("publish checkpoint %q: %w", name, err)
 	}

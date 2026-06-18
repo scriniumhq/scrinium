@@ -8,7 +8,7 @@ import (
 	"sort"
 	"testing"
 
-	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"
 )
 
@@ -26,10 +26,10 @@ func TestSystemStore_CellPutGetRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	body := []byte("lease-holder-A")
 
-	if err := ss.Put(ctx, store.SystemArtifact{
+	if err := ss.Put(ctx, systemstore.Artifact{
 		Name:    "celltest/lease",
 		Payload: bytes.NewReader(body),
-		Keep:    store.KeepCell(),
+		Keep:    systemstore.KeepCell(),
 	}); err != nil {
 		t.Fatalf("Put cell: %v", err)
 	}
@@ -52,10 +52,10 @@ func TestSystemStore_CellOverwriteReplaces(t *testing.T) {
 	ctx := context.Background()
 	put := func(b string) {
 		t.Helper()
-		if err := ss.Put(ctx, store.SystemArtifact{
+		if err := ss.Put(ctx, systemstore.Artifact{
 			Name:    "celltest/lease",
 			Payload: bytes.NewReader([]byte(b)),
-			Keep:    store.KeepCell(),
+			Keep:    systemstore.KeepCell(),
 		}); err != nil {
 			t.Fatalf("Put %q: %v", b, err)
 		}
@@ -80,13 +80,13 @@ func TestSystemStore_CellAndVersionedGetRoute(t *testing.T) {
 	ss, _ := newSystemStore(t)
 	ctx := context.Background()
 
-	if err := ss.Put(ctx, store.SystemArtifact{
-		Name: "celltest/lease", Payload: bytes.NewReader([]byte("cell")), Keep: store.KeepCell(),
+	if err := ss.Put(ctx, systemstore.Artifact{
+		Name: "celltest/lease", Payload: bytes.NewReader([]byte("cell")), Keep: systemstore.KeepCell(),
 	}); err != nil {
 		t.Fatalf("Put cell: %v", err)
 	}
-	if err := ss.Put(ctx, store.SystemArtifact{
-		Name: "celltest/cfg", Payload: bytes.NewReader([]byte("ver")), Keep: store.KeepVersions(2),
+	if err := ss.Put(ctx, systemstore.Artifact{
+		Name: "celltest/cfg", Payload: bytes.NewReader([]byte("ver")), Keep: systemstore.KeepVersions(2),
 	}); err != nil {
 		t.Fatalf("Put versioned: %v", err)
 	}
@@ -108,8 +108,8 @@ func TestSystemStore_DeleteCell(t *testing.T) {
 	ss, _ := newSystemStore(t)
 	ctx := context.Background()
 
-	if err := ss.Put(ctx, store.SystemArtifact{
-		Name: "celltest/lease", Payload: bytes.NewReader([]byte("x")), Keep: store.KeepCell(),
+	if err := ss.Put(ctx, systemstore.Artifact{
+		Name: "celltest/lease", Payload: bytes.NewReader([]byte("x")), Keep: systemstore.KeepCell(),
 	}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
@@ -127,12 +127,12 @@ func TestSystemStore_WalkIncludesCells(t *testing.T) {
 	ss, _ := newSystemStore(t)
 	ctx := context.Background()
 
-	if err := ss.Put(ctx, store.SystemArtifact{
-		Name: "celltest/lease", Payload: bytes.NewReader([]byte("L")), Keep: store.KeepCell(),
+	if err := ss.Put(ctx, systemstore.Artifact{
+		Name: "celltest/lease", Payload: bytes.NewReader([]byte("L")), Keep: systemstore.KeepCell(),
 	}); err != nil {
 		t.Fatalf("Put cell: %v", err)
 	}
-	if err := ss.Put(ctx, store.SystemArtifact{
+	if err := ss.Put(ctx, systemstore.Artifact{
 		Name: "celltest/cfg", Payload: bytes.NewReader([]byte("C")), // nil Keep → default keep=1 (versioned)
 	}); err != nil {
 		t.Fatalf("Put versioned: %v", err)

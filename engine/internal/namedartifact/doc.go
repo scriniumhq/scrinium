@@ -1,10 +1,13 @@
-// Package namedstore is the pointer-free on-disk layout for system
-// artifacts (ADR-85). It is the single source of truth for where a
-// system artifact lives and how its active version is chosen, shared by
-// the two callers that previously each carried their own copy of the
-// rule: the SystemStore facade (engine/store) and the bootstrap config
-// path (engine/store/internal/storeconfig). Putting the layout here is
-// what collapses that duplication into one mechanism.
+// Package namedartifact is the pointer-free on-disk layout for system
+// artifacts (ADR-85): manifests addressed by a NAME rather than by
+// content hash, the name-addressed counterpart of the content-addressed
+// engine/internal/artifactio. It is the single source of truth for where
+// a system artifact lives and how its active version is chosen, shared by
+// the callers that previously each carried their own copy of the rule:
+// the systemstore facade (engine/systemstore), the bootstrap config path
+// (engine/store/internal/storeconfig), and the lease primitive
+// (engine/lease). Putting the layout here is what collapses that
+// duplication into one mechanism.
 //
 // A system artifact is identified by a NAME — a flat, dot-separated
 // key: "store.config", "store.checkpoint.<ts>", "store.state.gc.lease".
@@ -45,4 +48,4 @@
 // pass. Config is read at every store-open and the few other system
 // names on each touch — frequent enough that verify-on-read is the
 // whole integrity story.
-package namedstore
+package namedartifact

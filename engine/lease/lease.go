@@ -1,4 +1,4 @@
-package namedstore
+package lease
 
 import (
 	"context"
@@ -16,12 +16,13 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/internal/namedartifact"
 	"scrinium.dev/engine/internal/timefmt"
 	"scrinium.dev/errs"
 )
 
 // The lease is the keep=0 exclusive cell in its policy form (ADR-100/101):
-// a single fixed slot (CellPath(Name)) acquired by exclusive-create and
+// a single fixed slot (namedartifact.CellPath(Name)) acquired by exclusive-create and
 // overwritten in place, with TTL / heartbeat / nonce-takeover layered on
 // top. It is the sole consumer of the exclusive-cell semantics that also
 // needs a lifetime, so it lives here, beside the cell primitive it wraps.
@@ -110,7 +111,7 @@ type Lease struct {
 // Config configures Acquire.
 type Config struct {
 	// Name is the system-artifact name of the lease cell, e.g.
-	// "store.state.gc.lease". The cell lives at CellPath(Name).
+	// "store.state.gc.lease". The cell lives at namedartifact.CellPath(Name).
 	// Required and must be a valid name (see ValidateName).
 	Name string
 
@@ -140,7 +141,7 @@ func Acquire(ctx context.Context, drv driver.Driver, cfg Config) (l *Lease, prev
 	if cfg.Name == "" || cfg.HostID == "" || cfg.TTL <= 0 {
 		return nil, nil, fmt.Errorf("lease.Acquire: Name, HostID and TTL>0 are required")
 	}
-	if err := ValidateName(cfg.Name); err != nil {
+	if err := namedartifact.ValidateName(cfg.Name); err != nil {
 		return nil, nil, fmt.Errorf("lease.Acquire: %w", err)
 	}
 	nonce, err := newNonce()
@@ -232,7 +233,7 @@ func (l *Lease) Release(ctx context.Context) error {
 	if current.HostID != l.hostID || current.Nonce != l.nonce {
 		return nil // taken over — not ours to delete
 	}
-	if err := RemoveCell(ctx, l.drv, l.name); err != nil {
+	if err := namedartifact.RemoveCell(ctx, l.drv, l.name); err != nil {
 		return fmt.Errorf("lease.Release: remove: %w", err)
 	}
 	return nil
@@ -284,11 +285,11 @@ func (l *Lease) write(ctx context.Context, exclusive bool) error {
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
-	fileBytes, _, err := BuildInlineManifest(recordJSON, leaseHashAlgo, leaseHashes)
+	fileBytes, _, err := namedartifact.BuildInlineManifest(recordJSON, leaseHashAlgo, leaseHashes)
 	if err != nil {
 		return fmt.Errorf("build lease manifest: %w", err)
 	}
-	return WriteCell(ctx, l.drv, l.name, fileBytes, exclusive)
+	return namedartifact.WriteCell(ctx, l.drv, l.name, fileBytes, exclusive)
 }
 
 // read loads and verifies the lease cell, returning the decoded Record.
@@ -298,7 +299,7 @@ func (l *Lease) write(ctx context.Context, exclusive bool) error {
 // routes Acquire to the exclusive-create path, which a concurrent
 // writer guards (same contract as the previous raw-JSON form).
 func (l *Lease) read(ctx context.Context) (Record, error) {
-	m, err := LoadCell(ctx, l.drv, leaseHashes, l.name)
+	m, err := namedartifact.LoadCell(ctx, l.drv, leaseHashes, l.name)
 	if err != nil {
 		if errors.Is(err, errs.ErrArtifactNotFound) {
 			return Record{}, err

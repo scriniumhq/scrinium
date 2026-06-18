@@ -7,7 +7,7 @@ import (
 
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/namedstore"
+	"scrinium.dev/engine/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -58,7 +58,7 @@ func (a *rebuildAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
 		AgentType:    "rebuild",
 		StoreID:      a.storeID,
-		Lease:        namedstore.Config{Name: rebuildLeasePath, HostID: a.hostID, AgentType: "rebuild", TTL: a.cfg.LeaseTTL},
+		Lease:        lease.Config{Name: rebuildLeasePath, HostID: a.hostID, AgentType: "rebuild", TTL: a.cfg.LeaseTTL},
 		LeaseEnabled: true,
 		Terminal:     event.EventAgentCompleted,
 		TerminalMode: agent.TerminalOnSuccess,

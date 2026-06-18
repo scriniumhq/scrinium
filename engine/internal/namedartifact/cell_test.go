@@ -1,4 +1,4 @@
-package namedstore
+package namedartifact
 
 import (
 	"bytes"

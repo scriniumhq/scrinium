@@ -14,6 +14,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/driverfx"
@@ -81,7 +82,7 @@ func (f rebuildFixture) publishCheckpoint(t *testing.T) string {
 	defer rc.Close()
 	name := checkpointfmt.Name(time.Now())
 	if err := f.store.System().Put(context.Background(),
-		store.SystemArtifact{Name: name, Payload: rc}); err != nil {
+		systemstore.Artifact{Name: name, Payload: rc}); err != nil {
 		t.Fatalf("publish checkpoint: %v", err)
 	}
 	return name

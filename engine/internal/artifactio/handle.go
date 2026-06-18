@@ -1,9 +1,8 @@
 package artifactio
 
-// handle.go — the three domain.ReadHandle implementations returned to
-// store's Get. Moved out of package store and decoupled from *store:
+// handle.go — the blob-backed domain.ReadHandle implementations returned
+// to store's Get. Moved out of package store and decoupled from *store:
 //
-//   - inlineReadHandle    — bytes already in the manifest; a buffer reader.
 //   - targetReadHandle    — lazily opens the physical blob, composes the
 //                           inverse Pipeline; holds a *pipeline.Runner
 //                           rather than a *store.
@@ -31,34 +30,6 @@ import (
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 )
-
-// --- inlineReadHandle: bytes live in the manifest itself ---
-
-type inlineReadHandle struct {
-	manifest domain.Manifest
-	reader   *bytes.Reader
-}
-
-// NewInlineHandle builds a read handle over an inline manifest's payload.
-// Used for inline blobs and for system artifacts (systemstore's inline
-// handle factory).
-func NewInlineHandle(m domain.Manifest) domain.ReadHandle {
-	return &inlineReadHandle{manifest: m, reader: bytes.NewReader(m.InlineBlob)}
-}
-
-func (h *inlineReadHandle) Read(p []byte) (int, error) { return h.reader.Read(p) }
-func (h *inlineReadHandle) ReadAt(p []byte, off int64) (int, error) {
-	return h.reader.ReadAt(p, off)
-}
-func (h *inlineReadHandle) ReadAtCtx(ctx context.Context, p []byte, off int64) (int, error) {
-	if err := ctx.Err(); err != nil {
-		return 0, err
-	}
-	return h.reader.ReadAt(p, off)
-}
-func (h *inlineReadHandle) SupportsRandomAccess() bool { return true }
-func (h *inlineReadHandle) Close() error               { return nil } // in-memory; idempotent
-func (h *inlineReadHandle) Manifest() domain.Manifest  { return h.manifest }
 
 // --- targetReadHandle: blob is a separate file under /blobs/ ---
 //
@@ -183,7 +154,7 @@ func (h *targetReadHandle) Manifest() domain.Manifest { return h.manifest }
 func (x *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHandle, error) {
 	switch m.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
-		return NewInlineHandle(m), nil
+		return artifact.NewInlineHandle(m), nil
 
 	case domain.LayoutTarget:
 		addr, err := x.index.Resolve(ctx, string(m.PrimaryBlobRef()))
@@ -343,7 +314,6 @@ func (h *verifyingReadHandle) Close() error {
 
 // Compile-time interface conformance.
 var (
-	_ domain.ReadHandle = (*inlineReadHandle)(nil)
 	_ domain.ReadHandle = (*targetReadHandle)(nil)
 	_ domain.ReadHandle = (*verifyingReadHandle)(nil)
 )

@@ -15,6 +15,7 @@ import (
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/orphanscan"
 	"scrinium.dev/engine/store/internal/reconcile"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/event"
 )
 
@@ -51,8 +52,8 @@ func buildStore(
 	// only the driver, the hash registry, the active config (for its
 	// immutable ContentHasher), and a logger — no StoreIndex and no write
 	// indirection, since system artifacts are unindexed and the inline
-	// write is self-contained in namedstore.
-	c.system = newSystemStore(drv, o.hashRegistry, cfg, c.log)
+	// write is self-contained in namedartifact.
+	c.system = systemstore.New(drv, o.hashRegistry, cfg, c.log)
 	return c, nil
 }
 

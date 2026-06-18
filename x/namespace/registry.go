@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"
 	"scrinium.dev/extension"
 )
@@ -214,10 +214,10 @@ func (r *Registry) persist(ctx context.Context, snap snapshot) error {
 	if err != nil {
 		return fmt.Errorf("namespace registry: encode: %w", err)
 	}
-	if err := r.sys.Put(ctx, store.SystemArtifact{
+	if err := r.sys.Put(ctx, systemstore.Artifact{
 		Name:    registryArtifact,
 		Payload: bytes.NewReader(body),
-		Keep:    store.KeepVersions(registryKeep),
+		Keep:    systemstore.KeepVersions(registryKeep),
 	}); err != nil {
 		return fmt.Errorf("namespace registry: persist: %w", err)
 	}
