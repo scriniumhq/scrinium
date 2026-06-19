@@ -15,7 +15,7 @@ import (
 )
 
 // StoreKeyResolver exposes the internal keyResolver field for
-// tests so they can assert that promoteKeyResolverIfDefault
+// tests so they can assert that the default-resolver promotion
 // did or did not run. Returns nil for non-*store implementers
 // (e.g. test mocks) so the helper degrades cleanly.
 func StoreKeyResolver(s Store) pipeline.KeyResolver {

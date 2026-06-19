@@ -104,8 +104,6 @@ func TestClose_NoCapabilityToken_NoPanic(t *testing.T) {
 	}
 }
 
-// --- State transition ---
-
 // --- Closed flag ---
 
 // TestClose_MarksClosed verifies Close sets s.closed regardless
