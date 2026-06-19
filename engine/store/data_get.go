@@ -5,17 +5,9 @@ import (
 	"log/slog"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/internal/cas"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
-
-// cas builds an cas.IO bound to this store's driver, index,
-// and registries. The value is a cheap stateless handle, constructed per
-// operation rather than held as a field.
-func (s *store) cas() *cas.IO {
-	return cas.New(s.drv, s.index, s.hashes, s.transformers)
-}
 
 // Get opens an artifact for reading. It reads only the manifest and
 // prepares a ReadHandle; blob bytes stream lazily on the first
@@ -67,32 +59,4 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts ...domain.Ge
 		})
 	}
 	return inner, nil
-}
-
-// loadManifest reads, verifies, and decodes the manifest file for id via
-// the artifact I/O layer. Used by Get, Delete, and Verify. Returns
-// ErrArtifactNotFound when the file is absent and ErrCorruptedManifest
-// when its hash does not match id. State checks are the caller's job.
-//
-// Decode dispatches on the file header: Plain bypasses the resolver;
-// encrypted (Sealed/Paranoid) consults the snapshotted resolver. A Locked
-// Store has a nil resolver, which surfaces ErrKeyNotFound — the correct
-// refusal. asKeyProvider maps a nil resolver to a nil provider (the
-// typed-nil guard).
-func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	return s.cas().Load(ctx, id, s.crypto.KeyProvider(), string(s.snapshotConfig().ContentHasher))
-}
-
-// guardHandleless enforces the negative identity invariant (ADR-83): a
-// manifest with an empty identity slot (handle IS NULL) is not a
-// user-visible artifact — a pack container or other engine-internal
-// object — so user-facing Get/Delete/Verify collapse it to not-found
-// rather than leaking it. Structure (chunked/composite bodies) is no
-// longer dispatched here: the owning wrapper handles it (ADR-88), and a
-// body whose layout needs an absent decorator fails in the open path.
-func guardHandleless(m domain.Manifest) error {
-	if !m.IsUser() {
-		return errs.ErrArtifactNotFound
-	}
-	return nil
 }

@@ -107,3 +107,17 @@ func (s *store) enterAdmin(ctx context.Context) error {
 	// (Unlock) are the means of leaving Locked.
 	return nil
 }
+
+// guardHandleless enforces the negative identity invariant (ADR-83): a
+// manifest with an empty identity slot (handle IS NULL) is not a
+// user-visible artifact — a pack container or other engine-internal
+// object — so user-facing Get/Delete/Verify collapse it to not-found
+// rather than leaking it. Structure (chunked/composite bodies) is no
+// longer dispatched here: the owning wrapper handles it (ADR-88), and a
+// body whose layout needs an absent decorator fails in the open path.
+func guardHandleless(m domain.Manifest) error {
+	if !m.IsUser() {
+		return errs.ErrArtifactNotFound
+	}
+	return nil
+}

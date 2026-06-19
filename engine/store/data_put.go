@@ -8,9 +8,7 @@ import (
 	"log/slog"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/internal/cas"
-	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
@@ -84,36 +82,6 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts ...domain.PutOp
 		)
 	}
 	return manifest.ArtifactID, nil
-}
-
-// withWriteDEK borrows a DEK copy for an encrypting write and guarantees
-// it is wiped before returning. For a Plain config it calls fn with a
-// nil DEK. The DEK never escapes fn, so no write path can leak it by
-// forgetting to wipe. The write KeyID is resolved by the caller (Put)
-// and no longer threaded here — withWriteDEK is now purely DEK custody.
-func (s *store) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) error {
-	if cfg.ManifestCrypto == "" || cfg.ManifestCrypto == domain.ManifestCryptoPlain {
-		return fn(nil)
-	}
-	dek, err := s.crypto.DEKForWrite(cfg.ManifestCrypto)
-	if err != nil {
-		return err
-	}
-	defer aead.Wipe(dek)
-	return fn(dek)
-}
-
-// resolveWriteKeyID asks the resolver which KeyID a new artifact
-// encrypts under. The resolver reference is snapshotted under
-// the crypto lock but ResolveWriteKey runs without it
-// — it must be a cheap, non-blocking lookup. Returns "" for an
-// unencrypted store.
-func (s *store) resolveWriteKeyID() string {
-	r := s.crypto.Resolver()
-	if r == nil {
-		return ""
-	}
-	return r.ResolveWriteKey(pipeline.KeyContext{})
 }
 
 // checkPutSupported rejects configurations and options whose support is
