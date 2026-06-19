@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/internal/slogx"
 )
 
 // logging.go — the engine's logging foundation (ADR-60).
@@ -15,9 +16,9 @@ import (
 // no package-global logger, and no slog.Default() reach-through.
 //
 // Default is silence. A store built without WithLogger logs nowhere and
-// pays nothing: discardLogger wraps slog.DiscardHandler, whose Enabled
-// always reports false. This package is the canonical instance of the
-// system-wide model — the contract lives in docs/3 Reference/14 Logging.md,
+// pays nothing: the shared slogx.Discard wraps slog.DiscardHandler, whose
+// Enabled always reports false. This package is the canonical instance of
+// the system-wide model — the contract lives in docs/3 Reference/14 Logging.md,
 // the cross-layer invariants in docs/2 Internals/13 Concurrency Model.md.
 //
 // Three rules this package follows (and that sibling files must keep):
@@ -32,42 +33,21 @@ import (
 //     slog.LogValuer and redact themselves; only KeyID (an opaque id) is
 //     logged, never the DEK / passphrase / KEK.
 
-// discardLogger is the shared no-op logger used whenever the host did not
-// supply one. slog.DiscardHandler (Go 1.24+) reports Enabled == false, so
-// every call short-circuits before any argument is formatted.
-var discardLogger = slog.New(slog.DiscardHandler)
-
-// WithLogger provides the *slog.Logger the Store and its components log
-// against. Optional: without it the Store is silent (slog.DiscardHandler).
-// A nil logger is treated as "silent" — WithLogger(nil) never panics and
-// is equivalent to omitting the option.
-//
-// The Store namespaces the supplied logger once at construction
-// (WithGroup("scrinium")) and derives per-component subloggers from it
-// (componentLogger). Hosts therefore pass a plain root logger; the engine
-// adds its own structure.
-func WithLogger(l *slog.Logger) StoreOption {
-	return func(o *storeOptions) { o.logger = l }
-}
-
 // resolveLogger turns the (possibly nil) injected logger into the
 // store's namespaced logger. Called once, from buildStore. Never returns
 // nil — callers can log unconditionally and rely on Enabled-gating for
 // cost on hot paths.
 func resolveLogger(l *slog.Logger) *slog.Logger {
 	if l == nil {
-		return discardLogger
+		return slogx.Discard
 	}
 	return l.WithGroup("scrinium")
 }
 
 // logger returns the store's logger, never nil. Mirrors the nil-safety of
 // publish: cheap and always callable.
-func (c *core) logger() *slog.Logger {
-	if c.log == nil {
-		return discardLogger
-	}
-	return c.log
+func (s *store) logger() *slog.Logger {
+	return slogx.OrDiscard(s.log)
 }
 
 // componentLogger derives a sublogger tagged with the component name
@@ -75,8 +55,8 @@ func (c *core) logger() *slog.Logger {
 // this rather than re-deriving the group, so the "scrinium" group is
 // applied exactly once (at construction) and the component attribute once
 // here — a Handler formats a With attribute a single time.
-func (c *core) componentLogger(component string) *slog.Logger {
-	return c.logger().With(slog.String("component", component))
+func (s *store) componentLogger(component string) *slog.Logger {
+	return s.logger().With(slog.String("component", component))
 }
 
 // optsLogger builds the lifecycle-phase logger for the package-level
@@ -99,21 +79,20 @@ func optsLogger(o storeOptions, component string) *slog.Logger {
 // material in a log record.
 const redactedKey = "<redacted>"
 
-// redactedDEK wraps a data-encryption key for logging. Its LogValue never
-// exposes the bytes; it reports only that a key is present and its length
-// class is hidden. Use this if a DEK ever needs to appear in a log
-// attribute — the bytes themselves stay out of the record.
-type redactedDEK []byte
+// redactedSecret wraps any secret byte buffer (a DEK, a passphrase, a
+// wrapped KEK) for logging. Its LogValue never exposes the bytes; it
+// renders only the redaction sentinel. Use it when a secret would
+// otherwise land in a slog attribute — the material stays out of the
+// record while the attribute's presence remains visible.
+//
+// One type covers every secret: the buffers are byte-identical from the
+// logger's point of view, so a per-secret type bought nothing but a name.
+// The call site names the attribute (e.g. slog.Any("dek", redactedSecret(k)))
+// where the role matters.
+type redactedSecret []byte
 
-// LogValue implements slog.LogValuer. The DEK is never rendered.
-func (redactedDEK) LogValue() slog.Value { return slog.StringValue(redactedKey) }
-
-// redactedPassphrase wraps a passphrase buffer for logging. Same
-// discipline as redactedDEK: the buffer is never rendered.
-type redactedPassphrase []byte
-
-// LogValue implements slog.LogValuer. The passphrase is never rendered.
-func (redactedPassphrase) LogValue() slog.Value { return slog.StringValue(redactedKey) }
+// LogValue implements slog.LogValuer. The secret is never rendered.
+func (redactedSecret) LogValue() slog.Value { return slog.StringValue(redactedKey) }
 
 // keyIDAttr is the canonical, safe way to log a write/read key: by its
 // opaque KeyID, never by its material. An empty KeyID (the default
@@ -125,7 +104,7 @@ func keyIDAttr(keyID string) slog.Attr {
 
 // storeIDAttr is the conventional attribute identifying which Store a
 // record came from. Safe: StoreID is a public UUID, not secret material.
-func storeIDAttr(c *core) slog.Attr {
+func storeIDAttr(c *store) slog.Attr {
 	return slog.String("store_id", c.storeID)
 }
 
@@ -179,10 +158,10 @@ func errAttr(err error) slog.Attr {
 // sense — that prohibition targets duplicate Warn/Error reporting; a
 // Debug trace is silent in production (DiscardHandler / level>Debug) and
 // exists purely for diagnostics. err must be non-nil.
-func (c *core) traceErr(ctx context.Context, op string, err error, attrs ...slog.Attr) error {
-	log := c.componentLogger("store")
+func (s *store) traceErr(ctx context.Context, op string, err error, attrs ...slog.Attr) error {
+	log := s.componentLogger("store")
 	if log.Enabled(ctx, slog.LevelDebug) {
-		rec := append([]slog.Attr{storeIDAttr(c), slog.String("op", op), errAttr(err)}, attrs...)
+		rec := append([]slog.Attr{storeIDAttr(s), slog.String("op", op), errAttr(err)}, attrs...)
 		log.LogAttrs(ctx, slog.LevelDebug, "operation failed", rec...)
 	}
 	return err

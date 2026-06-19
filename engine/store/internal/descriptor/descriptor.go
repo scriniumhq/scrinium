@@ -116,22 +116,22 @@ func Read(ctx context.Context, drv driver.Driver) (*Descriptor, error) {
 	return Unmarshal(data)
 }
 
-// Persist writes d to both replicas (L0 and L1), serialised once and
+// WriteBoth writes d to both replicas (L0 and L1), serialised once and
 // Put twice. This is the canonical descriptor write; every mutation
 // path (InitStore, Unlock, SetPassphrase, RotateKEK) goes through it.
 //
 // Each Put is atomic; the pair is not. A crash between the two leaves
 // L1 stale, which reconcile heals on the next OpenStore.
-func Persist(ctx context.Context, drv driver.Driver, d *Descriptor) error {
+func WriteBoth(ctx context.Context, drv driver.Driver, d *Descriptor) error {
 	data, err := Marshal(d)
 	if err != nil {
 		return err
 	}
 	if err := drv.Put(ctx, Path, bytes.NewReader(data)); err != nil {
-		return fmt.Errorf("descriptor.Persist: L0: %w", err)
+		return fmt.Errorf("descriptor.WriteBoth: L0: %w", err)
 	}
 	if err := drv.Put(ctx, BackupPath, bytes.NewReader(data)); err != nil {
-		return fmt.Errorf("descriptor.Persist: L1: %w", err)
+		return fmt.Errorf("descriptor.WriteBoth: L1: %w", err)
 	}
 	return nil
 }

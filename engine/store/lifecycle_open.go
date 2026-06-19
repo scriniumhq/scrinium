@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/reconcile"
@@ -122,14 +123,14 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		if err != nil {
 			return nil, wrap("", err)
 		}
-		s.crypto.promoteResolverIfDefault()
+		s.crypto.PromoteResolverIfDefault()
 		if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 			return nil, wrap("", err)
 		}
 		s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
 			storeIDAttr(s), stateAttr(domain.StateUnlocked),
 			slog.Bool("encrypted_dek", false))
-		return newStore(s), nil
+		return s, nil
 	}
 
 	// Encrypted DEK below.
@@ -149,7 +150,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
 			storeIDAttr(s), stateAttr(domain.StateLocked),
 			slog.Bool("encrypted_dek", true))
-		return newStore(s), nil
+		return s, nil
 	}
 
 	// AutoUnlock: invoke the provider, derive KEK, unwrap DEK.
@@ -157,7 +158,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		return nil, fmt.Errorf("store.OpenStore: %w: WithAutoUnlock requires WithPassphrase",
 			errs.ErrPassphraseRequired)
 	}
-	passphrase, err := callProvider(ctx, o.passphrase, PassphraseHint{
+	passphrase, err := crypto.CallProvider(ctx, o.passphrase, domain.PassphraseHint{
 		StoreID: desc.StoreID,
 		Reason:  "unlock",
 	})
@@ -183,14 +184,14 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		aead.Wipe(dek)
 		return nil, wrap("", err)
 	}
-	s.crypto.promoteResolverIfDefault()
+	s.crypto.PromoteResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		return nil, wrap("", err)
 	}
 	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
 		storeIDAttr(s), stateAttr(domain.StateUnlocked),
 		slog.Bool("encrypted_dek", true), slog.Bool("auto_unlock", true))
-	return newStore(s), nil
+	return s, nil
 }
 
 // loadCanonicalDescriptor reads both descriptor replicas, reconciles
@@ -240,7 +241,7 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx index.S
 
 	// Save the L2 cache when absent, corrupted, or checksum-divergent.
 	// Read errors are non-fatal — the canonical is always the fallback.
-	if err := descriptor.Refresh(ctx, idx, desc); err != nil {
+	if err := descriptor.RefreshCache(ctx, idx, desc); err != nil {
 		return nil, wrap("refresh L2 cache", err)
 	}
 	return desc, nil

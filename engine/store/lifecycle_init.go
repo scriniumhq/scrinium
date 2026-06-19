@@ -12,6 +12,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/storeconfig"
@@ -161,7 +162,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	var kit []byte
 	if o.passphrase != nil {
-		wrapped, kdfParams, kitBytes, ierr := initEncryptedDEK(
+		wrapped, kdfParams, kitBytes, ierr := crypto.InitEncryptedDEK(
 			ctx, storeID, dek, o.passphrase, cfg.KDFParams)
 		if ierr != nil {
 			aead.Wipe(dek)
@@ -193,7 +194,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
 	}
-	s.crypto.promoteResolverIfDefault()
+	s.crypto.PromoteResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		aead.Wipe(dek)
 		return nil, nil, wrap("", err)
@@ -203,7 +204,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		slog.Bool("encrypted_dek", desc.DEKEncrypted),
 		manifestCryptoAttr(cfg.ManifestCrypto),
 		slog.Bool("recovery_kit", kit != nil))
-	return newStore(s), kit, nil
+	return s, kit, nil
 }
 
 // prepareInitLocation probes the Driver for an existing descriptor and
@@ -258,10 +259,10 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 // cache are written first so a config-write failure still leaves a
 // readable Store identity behind.
 func persistInitState(ctx context.Context, drv driver.Driver, idx index.StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
-	if err := descriptor.Persist(ctx, drv, desc); err != nil {
+	if err := descriptor.WriteBoth(ctx, drv, desc); err != nil {
 		return wrap("write descriptor", err)
 	}
-	if err := descriptor.Save(ctx, idx, desc); err != nil {
+	if err := descriptor.SaveCache(ctx, idx, desc); err != nil {
 		return wrap("save L2 cache", err)
 	}
 	if hashes == nil {

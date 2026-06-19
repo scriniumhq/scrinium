@@ -68,7 +68,7 @@ func RestoreDescriptorFromRecoveryKit(ctx context.Context, drv driver.Driver, ki
 		},
 	}
 
-	if err := descriptor.Persist(ctx, drv, desc); err != nil {
+	if err := descriptor.WriteBoth(ctx, drv, desc); err != nil {
 		return RecoveryKitRestoreInfo{}, fmt.Errorf(
 			"store.RestoreDescriptorFromRecoveryKit: persist descriptor: %w", err)
 	}

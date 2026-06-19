@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"
 	"scrinium.dev/extension"
 )
@@ -21,7 +21,7 @@ type memSysStore struct{ items map[string][]byte }
 
 func newMemSysStore() *memSysStore { return &memSysStore{items: map[string][]byte{}} }
 
-func (m *memSysStore) Put(_ context.Context, a store.SystemArtifact) error {
+func (m *memSysStore) Put(_ context.Context, a systemstore.NamedArtifact) error {
 	b, err := io.ReadAll(a.Payload)
 	if err != nil {
 		return err
@@ -54,7 +54,7 @@ func (m *memSysStore) Walk(_ context.Context, prefix string, cb func(string, dom
 	return nil
 }
 
-var _ store.SystemStore = (*memSysStore)(nil)
+var _ systemstore.Store = (*memSysStore)(nil)
 
 // bytesHandle adapts a *bytes.Reader to domain.ReadHandle for tests.
 type bytesHandle struct{ *bytes.Reader }

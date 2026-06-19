@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"hash"
+	"path/filepath"
 	"testing"
 
 	"scrinium.dev/domain"
@@ -13,6 +14,7 @@ import (
 	"scrinium.dev/engine/hashing"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/testutil/driverfx"
 	"scrinium.dev/testutil/indexfx"
 )
@@ -177,4 +179,37 @@ func InitEncryptedLocked(t testing.TB, pass string, extra ...store.StoreOption) 
 		store.WithPassphrase(StaticPP(pass)),
 	)
 	return s, r
+}
+
+// InitInline initialises a Plain Store backed by inline blob storage with
+// the given inline-blob limit, returning the Store and its root.
+func InitInline(t testing.TB, limit int64) (store.Store, string) {
+	t.Helper()
+	cfg := domain.StoreConfig{
+		BlobStorage:     domain.BlobStorageInline,
+		InlineBlobLimit: limit,
+	}
+	return InitWithRoot(t, store.WithConfig(cfg))
+}
+
+// InitDisk initialises a Plain Store on a fresh localfs driver with a
+// disk-backed index, returning the Store and the driver root. Use it for
+// tests that reopen the Store and need on-disk persistence of both the
+// blobs and the index.
+func InitDisk(t testing.TB) (store.Store, string) {
+	t.Helper()
+	drv := driverfx.LocalFS(t)
+	root := drv.Root()
+	idx := indexfx.Disk(t, filepath.Join(t.TempDir(), "store.idx"))
+	s := InitOn(t, drv, store.WithStoreIndex(idx))
+	return s, root
+}
+
+// InitPlainSystem initialises a Plain Store and returns its system plane
+// plus the backing StoreIndex. The Store is closed on cleanup.
+func InitPlainSystem(t testing.TB) (systemstore.Store, index.StoreIndex) {
+	t.Helper()
+	s, r := InitPlain(t)
+	t.Cleanup(func() { _ = s.Close() })
+	return s.System(), r.Index()
 }

@@ -2,13 +2,12 @@ package assembly
 
 import (
 	"context"
-	"sort"
-	"sync"
 
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/extension"
+	kvreg "scrinium.dev/internal/registry"
 )
 
 // CustomIndex factory signatures. Hosts register implementations through
@@ -48,55 +47,46 @@ type (
 	ExtensionFactory func() extension.Extension
 )
 
-// registries holds the process-wide custom index tables. A single guard
-// covers all four — registration is a startup-time, low-contention
-// operation.
+// registries holds the process-wide custom index tables. Each is an
+// independent concurrency-safe registry.Map; registration is a
+// startup-time, low-contention operation.
 type registries struct {
-	mu         sync.RWMutex
-	drivers    map[string]DriverFactory
-	indexes    map[string]IndexFactory
-	stages     map[string]PipelineStageFactory
-	agents     map[string]AgentFactory
-	extensions map[string]ExtensionFactory
+	drivers    *kvreg.Map[DriverFactory]
+	indexes    *kvreg.Map[IndexFactory]
+	stages     *kvreg.Map[PipelineStageFactory]
+	agents     *kvreg.Map[AgentFactory]
+	extensions *kvreg.Map[ExtensionFactory]
 }
 
 var reg = &registries{
-	drivers:    map[string]DriverFactory{},
-	indexes:    map[string]IndexFactory{},
-	stages:     map[string]PipelineStageFactory{},
-	agents:     map[string]AgentFactory{},
-	extensions: map[string]ExtensionFactory{},
+	drivers:    kvreg.New[DriverFactory](),
+	indexes:    kvreg.New[IndexFactory](),
+	stages:     kvreg.New[PipelineStageFactory](),
+	agents:     kvreg.New[AgentFactory](),
+	extensions: kvreg.New[ExtensionFactory](),
 }
 
 // RegisterDriver registers a custom index driver under a URI scheme
 // (e.g. "myco-blob"). Panics on empty scheme, nil factory, or
 // duplicate — a double import or typo fails at startup.
 func RegisterDriver(scheme string, f DriverFactory) {
-	mustRegister(scheme, f == nil, "driver", func() {
-		reg.drivers[scheme] = f
-	})
+	register(reg.drivers, scheme, f, f == nil, "driver")
 }
 
 // RegisterIndex registers a custom index index under a URI scheme.
 func RegisterIndex(scheme string, f IndexFactory) {
-	mustRegister(scheme, f == nil, "index", func() {
-		reg.indexes[scheme] = f
-	})
+	register(reg.indexes, scheme, f, f == nil, "index")
 }
 
 // RegisterPipelineStage registers a custom index pipeline stage under a
 // kind (e.g. "mycompany-watermark").
 func RegisterPipelineStage(kind string, f PipelineStageFactory) {
-	mustRegister(kind, f == nil, "pipeline stage", func() {
-		reg.stages[kind] = f
-	})
+	register(reg.stages, kind, f, f == nil, "pipeline stage")
 }
 
 // RegisterAgent registers a user background agent under a kind.
 func RegisterAgent(kind string, f AgentFactory) {
-	mustRegister(kind, f == nil, "agent", func() {
-		reg.agents[kind] = f
-	})
+	register(reg.agents, kind, f, f == nil, "agent")
 }
 
 // RegisterExtension registers an extension factory under its stable name
@@ -105,65 +95,42 @@ func RegisterAgent(kind string, f AgentFactory) {
 // build pulls the registered set, installs each as a whole (ADR-88), and
 // discovers its index/view/wrapper/agent parts by assertion (ADR-98).
 func RegisterExtension(name string, f ExtensionFactory) {
-	mustRegister(name, f == nil, "extension", func() {
-		reg.extensions[name] = f
-	})
+	register(reg.extensions, name, f, f == nil, "extension")
 }
 
-func mustRegister(key string, nilFactory bool, what string, set func()) {
+// register validates the key/factory and installs it first-wins. A
+// duplicate key panics (a double import or typo fails at startup), as do
+// an empty key or a nil factory. nilFactory is computed at the call site
+// because a typed-nil func value can only be compared to nil there.
+func register[V any](r *kvreg.Map[V], key string, f V, nilFactory bool, what string) {
 	if key == "" {
 		panic("scrinium: empty " + what + " key")
 	}
 	if nilFactory {
 		panic("scrinium: nil " + what + " factory for " + key)
 	}
-	reg.mu.Lock()
-	defer reg.mu.Unlock()
-	set()
+	if !r.SetFirstWins(key, f) {
+		panic("scrinium: duplicate " + what + " " + key)
+	}
 }
 
-func (r *registries) driver(scheme string) (DriverFactory, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	f, ok := r.drivers[scheme]
-	return f, ok
-}
+func (r *registries) driver(scheme string) (DriverFactory, bool) { return r.drivers.Get(scheme) }
 
-func (r *registries) indexFor(scheme string) (IndexFactory, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	f, ok := r.indexes[scheme]
-	return f, ok
-}
+func (r *registries) indexFor(scheme string) (IndexFactory, bool) { return r.indexes.Get(scheme) }
 
-func (r *registries) stage(kind string) (PipelineStageFactory, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	f, ok := r.stages[kind]
-	return f, ok
-}
+func (r *registries) stage(kind string) (PipelineStageFactory, bool) { return r.stages.Get(kind) }
 
-func (r *registries) agent(kind string) (AgentFactory, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	f, ok := r.agents[kind]
-	return f, ok
-}
+func (r *registries) agent(kind string) (AgentFactory, bool) { return r.agents.Get(kind) }
 
 // extensionList instantiates every registered extension, in stable name
 // order, as fresh wholes for one assembly. build installs them through the
 // generic extension loop; no extension is special-cased in the assembler.
 func (r *registries) extensionList() []extension.Extension {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	names := make([]string, 0, len(r.extensions))
-	for name := range r.extensions {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := r.extensions.Keys() // sorted
 	out := make([]extension.Extension, 0, len(names))
 	for _, name := range names {
-		out = append(out, r.extensions[name]())
+		f, _ := r.extensions.Get(name)
+		out = append(out, f())
 	}
 	return out
 }

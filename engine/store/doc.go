@@ -27,7 +27,7 @@
 // A live *store is guarded by three mutexes with a fixed lock order
 // (crypto.mu → stateMu → cfgMu). The full model — what each guards, the
 // acquire/release discipline per call path, and the invariants a refactor
-// must preserve — lives in store_impl.go's header. Read it before touching
+// must preserve — lives in store_type.go's header. Read it before touching
 // any locking.
 //
 // This package is the canonical (foundation) instance of the system-wide
@@ -36,7 +36,7 @@
 //
 // # Reading order
 //
-// store.go (contracts) → store_impl.go (the type and lock order) →
+// store.go (contracts) → store_type.go (the type and lock order) →
 // access.go and admin_state.go (the entry gates every method funnels
 // through) → the data_* plane → the admin_* plane and crypto_state.go →
 // the lifecycle_* constructors → the system_* plumbing → internal/.
@@ -48,7 +48,7 @@
 //   - store.go        — the Store / DataStore / AdminStore / SystemStore
 //     interfaces and the SystemArtifact value type.
 //   - readhandle.go   — the ReadHandle interface.
-//   - store_impl.go   — the *store struct, its fields, the lock-order
+//   - store_type.go   — the *store struct, its fields, the lock-order
 //     invariant, and System().
 //   - options.go      — StoreOption constructors (With…) and the
 //     PassphraseProvider / PassphraseHint contract.
@@ -63,9 +63,9 @@
 // Data plane (DataStore):
 //
 //   - data_put.go          — Put orchestrator and write-path policy; the
-//     physical mechanics live in internal/artifactio.
+//     physical mechanics live in internal/cas.
 //   - data_get.go          — Get, read-handle dispatch, manifest loading.
-//     The ReadHandle implementations live in internal/artifactio.
+//     The ReadHandle implementations live in internal/cas.
 //   - data_delete.go       — Delete.
 //   - data_verify.go       — Verify and the VerifyOnRead policy.
 //   - data_walk.go         — Walk.
@@ -76,11 +76,12 @@
 // Admin plane (AdminStore):
 //
 //   - admin_config.go      — Config, UpdateConfig, ConfigHistory.
-//   - admin_crypto_impl.go — Unlock, RotateKEK, SetPassphrase,
-//     ExportRecoveryKit, and callProvider; holds crypto.mu for the whole
-//     operation.
+//   - admin_crypto.go — Unlock, RotateKEK, SetPassphrase, and
+//     ExportRecoveryKit; holds crypto.mu for the whole operation. The
+//     pure mechanics (CallProvider, buildRecoveryKit, InitEncryptedDEK)
+//     live in internal/crypto.
 //   - admin_close.go       — Close.
-//   - crypto_state.go      — the cryptoState component: DEK, descriptor,
+//   - crypto material lives in internal/crypto (crypto.State): DEK,
 //     provider, and resolver under crypto.mu.
 //
 // Lifecycle and bootstrap:
@@ -89,29 +90,28 @@
 //   - lifecycle_open.go      — OpenStore.
 //   - lifecycle_construct.go — buildStore, unlockBootstrap, and replica
 //     healing, the tail shared by both constructors.
-//   - bootstrap_dek.go       — initEncryptedDEK and buildRecoveryKit.
 //
 // System and config plumbing:
 //
-//   - system_store.go    — the systemStore facade (Put/Get/Delete/Walk),
-//     a thin adapter over namedstore. System artifacts are
+//   - systemstore.go    — the systemStore facade (Put/Get/Delete/Walk),
+//     a thin adapter over named. System artifacts are
 //     addressed by name in their own system/ address space and are never
 //     indexed (ADR-85), so there is no pointer file and no opt-out flag.
 //
 // internal/ subpackages — concerns that own their state and so are
 // separate packages (the boundary along which the engine can be split):
 //
-//   - artifactio    — the artifact I/O mechanics over the engine/artifact
+//   - cas    — the artifact I/O mechanics over the engine/artifact
 //     format: blob materialization, manifest assembly/persistence (write)
 //     and manifest load, blob open, and verification (read).
 //   - descriptor   — the on-disk descriptor and its L2 cache.
 //   - keyring      — the KDF (Argon2id) and KEK/DEK wrap/unwrap kernels.
-//   - namedstore — the system/<name>/<seq> address-space mechanics
+//   - named — the system/<name>/<seq> address-space mechanics
 //     (name validation, seq claim via atomic create, inline-manifest
 //     build, verify-on-read) shared by the systemStore facade and the
 //     storeconfig bootstrap path (ADR-85).
 //   - storeconfig  — the StoreConfig format, defaults, validation, and
-//     persistence (over namedstore).
+//     persistence (over named).
 //   - orphanscan   — bootstrap-time orphan recovery.
 //   - reconcile    — replica reconciliation.
 //   - recoverykit  — the recovery-kit format.

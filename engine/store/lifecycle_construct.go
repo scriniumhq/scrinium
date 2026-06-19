@@ -12,9 +12,11 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/orphanscan"
 	"scrinium.dev/engine/store/internal/reconcile"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/event"
 )
 
@@ -29,8 +31,8 @@ func buildStore(
 	cfg domain.StoreConfig,
 	desc *descriptor.Descriptor,
 	dek []byte,
-) (*core, error) {
-	c := &core{
+) (*store, error) {
+	c := &store{
 		storeID:      desc.StoreID,
 		drv:          drv,
 		index:        idx,
@@ -40,19 +42,14 @@ func buildStore(
 		state:        domain.StateBootstrapping,
 		hashes:       o.hashRegistry,
 		transformers: o.readRegistry,
-		crypto: cryptoState{
-			desc:        desc,
-			dek:         dek,
-			provider:    o.passphrase,
-			keyResolver: o.keyResolver,
-		},
+		crypto:       crypto.New(desc, dek, o.passphrase, o.keyResolver, drv, idx),
 	}
 	// SystemStore facade over the pointer-free layout (ADR-85). It needs
 	// only the driver, the hash registry, the active config (for its
 	// immutable ContentHasher), and a logger — no StoreIndex and no write
 	// indirection, since system artifacts are unindexed and the inline
-	// write is self-contained in namedstore.
-	c.system = newSystemStore(drv, o.hashRegistry, cfg, c.log)
+	// write is self-contained in system artifact.
+	c.system = systemstore.New(drv, o.hashRegistry, cfg, c.log)
 	return c, nil
 }
 
@@ -65,7 +62,7 @@ func buildStore(
 // An Orphan Scan error propagates with the *store left in
 // StateBootstrapping; the caller decides whether to retry, fall back to
 // Locked, or surface the failure.
-func unlockBootstrap(ctx context.Context, c *core, pub event.Publisher) error {
+func unlockBootstrap(ctx context.Context, c *store, pub event.Publisher) error {
 	report, err := orphanscan.RecoverOrphans(ctx, c.drv, c.index)
 	if err != nil {
 		return fmt.Errorf("orphan scan: %w", err)

@@ -1,10 +1,10 @@
 // Package leasefx provides test fixtures for the named-store lease.
 //
-// It stages a lease through the real namedstore.Acquire — the on-disk
+// It stages a lease through the real lease.Acquire — the on-disk
 // record (cell manifest, nonce, timestamps) is therefore always
 // authoritative, instead of being hand-rolled in every agent's tests.
 // It lives in testutil alongside the other fixtures and imports the
-// lease from its home package, engine/namedstore.
+// lease from its home package, engine/lease.
 package leasefx
 
 import (
@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/namedstore"
+	"scrinium.dev/engine/lease"
 )
 
 // StageForeign acquires the lease named name under a foreign host so a
@@ -22,7 +22,7 @@ import (
 // mid-run without a heartbeat. The lease is released on test cleanup.
 func StageForeign(t *testing.T, drv driver.Driver, name, host, agentType string, ttl time.Duration) {
 	t.Helper()
-	l, _, err := namedstore.Acquire(context.Background(), drv, namedstore.Config{
+	l, _, err := lease.Acquire(context.Background(), drv, lease.Config{
 		Name:      name,
 		HostID:    host,
 		AgentType: agentType,

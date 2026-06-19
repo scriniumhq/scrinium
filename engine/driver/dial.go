@@ -3,9 +3,8 @@ package driver
 import (
 	"fmt"
 	"net/url"
-	"slices"
-	"sync"
 
+	"scrinium.dev/internal/registry"
 	"scrinium.dev/internal/uri"
 )
 
@@ -21,12 +20,9 @@ type Dialer func(u *url.URL) (Driver, error)
 
 // dialers holds the registered URI scheme handlers. Populated
 // by package init() in driver/<scheme> packages, read by
-// DialDriver. The mutex guards registration vs lookup; once
-// init() phase is over, lookups are read-only and uncontended.
-var (
-	dialersMu sync.RWMutex
-	dialers   = map[string]Dialer{}
-)
+// DialDriver. The registry guards registration vs lookup; once
+// the init() phase is over, lookups are read-only and uncontended.
+var dialers = registry.New[Dialer]()
 
 // RegisterDialer attaches a Dialer to a URI scheme. Called
 // from package init() in driver implementations:
@@ -44,26 +40,14 @@ func RegisterDialer(scheme string, d Dialer) {
 	if d == nil {
 		panic(fmt.Sprintf("driver: nil dialer for scheme %q", scheme))
 	}
-	dialersMu.Lock()
-	defer dialersMu.Unlock()
-	if _, exists := dialers[scheme]; exists {
-		return // already registered — keep the first, ignore the rest.
-	}
-	dialers[scheme] = d
+	dialers.SetFirstWins(scheme, d) // first wins; duplicates ignored (ADR-63).
 }
 
 // RegisteredSchemes returns the schemes currently registered.
 // Sorted for deterministic output; useful in error messages
 // and in --help output of binaries.
 func RegisteredSchemes() []string {
-	dialersMu.RLock()
-	defer dialersMu.RUnlock()
-	out := make([]string, 0, len(dialers))
-	for s := range dialers {
-		out = append(out, s)
-	}
-	slices.Sort(out)
-	return out
+	return dialers.Keys()
 }
 
 // DialDriver opens a Driver by URI. The scheme selects the
@@ -105,10 +89,7 @@ func DialDriver(rawURI string) (Driver, error) {
 		return nil, fmt.Errorf("driver: parse %q: %w", rawURI, err)
 	}
 
-	dialersMu.RLock()
-	d, ok := dialers[u.Scheme]
-	dialersMu.RUnlock()
-
+	d, ok := dialers.Get(u.Scheme)
 	if !ok {
 		return nil, fmt.Errorf("driver: scheme %q not registered (import driver/%s to enable; available: %v)",
 			u.Scheme, u.Scheme, RegisteredSchemes())
@@ -122,9 +103,7 @@ func DialDriver(rawURI string) (Driver, error) {
 // path uniform — every Driver creation goes through the
 // registered file dialer, even on the legacy code path.
 func dialBarePath(absPath string) (Driver, error) {
-	dialersMu.RLock()
-	d, ok := dialers["file"]
-	dialersMu.RUnlock()
+	d, ok := dialers.Get("file")
 	if !ok {
 		return nil, fmt.Errorf("driver: bare path requires the file:// scheme but it is not registered (import driver/localfs)")
 	}

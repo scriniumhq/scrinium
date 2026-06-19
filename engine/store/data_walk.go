@@ -12,11 +12,11 @@ import (
 //
 // Headless pack containers are excluded by the index (they carry no
 // handle, so the artifact_id filter skips them).
-func (d dataFacet) Walk(ctx context.Context, cb func(domain.Manifest) error) error {
-	if err := d.enterRead(ctx); err != nil {
+func (s *store) Walk(ctx context.Context, cb func(domain.Manifest) error) error {
+	if err := s.enterRead(ctx); err != nil {
 		return err
 	}
-	return d.index.IterateManifests(ctx, cb)
+	return s.index.IterateManifests(ctx, cb)
 }
 
 // WalkByExt iterates over user manifests whose projected ext field
@@ -25,9 +25,9 @@ func (d dataFacet) Walk(ctx context.Context, cb func(domain.Manifest) error) err
 // a namespace extension lists its artifacts via WalkByExt("namespace",
 // "nsid", <nsid>). No namespace-syntax validation applies (extName/field/
 // value are opaque projection coordinates, not a namespace label).
-func (d dataFacet) WalkByExt(ctx context.Context, extName, field, value string, cb func(domain.Manifest) error) error {
-	if err := d.enterRead(ctx); err != nil {
+func (s *store) WalkByExt(ctx context.Context, extName, field, value string, cb func(domain.Manifest) error) error {
+	if err := s.enterRead(ctx); err != nil {
 		return err
 	}
-	return d.index.ListByExtField(ctx, extName, field, value, cb)
+	return s.index.ListByExtField(ctx, extName, field, value, cb)
 }

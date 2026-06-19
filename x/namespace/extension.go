@@ -7,7 +7,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/customindex"
-	"scrinium.dev/engine/store"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/engine/wrapper"
 	"scrinium.dev/errs"
 	"scrinium.dev/extension"
@@ -49,7 +49,7 @@ type Extension struct {
 // scoping an unscoped handle is the older pattern — the assembler now
 // builds and confines the scoped store and delivers it via Env, so
 // nothing outside the extension ever holds the unscoped one.
-func New(sys store.SystemStore) (*Extension, error) {
+func New(sys systemstore.Store) (*Extension, error) {
 	scoped, err := extension.NewScopedSystemStore(extensionName, sys)
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ func (e *Extension) UseEnv(env extension.Env) error {
 // A bound extension occupies the wrapper axis in addition to the index
 // axis: its wrapper stamps the bound nsid into every Put's Ext and scopes
 // Walk to that namespace.
-func NewScoped(ctx context.Context, sys store.SystemStore, scopedNamespace string) (*Extension, error) {
+func NewScoped(ctx context.Context, sys systemstore.Store, scopedNamespace string) (*Extension, error) {
 	e, err := New(sys)
 	if err != nil {
 		return nil, err

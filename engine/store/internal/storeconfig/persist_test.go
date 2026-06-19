@@ -1,11 +1,13 @@
 package storeconfig
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
+	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/errs"
 )
 
@@ -136,5 +139,71 @@ func TestHistory_NewestFirst(t *testing.T) {
 	}
 	if active.RetentionPeriod != 4*time.Hour {
 		t.Errorf("active: got %v, want 4h", active.RetentionPeriod)
+	}
+}
+
+// readVersionFile returns the raw on-disk bytes of a system/config
+// version, so a test can corrupt them and check the read path reacts.
+func readVersionFile(t *testing.T, drv *localfs.Driver, path string) []byte {
+	t.Helper()
+	rc, err := drv.Get(context.Background(), path)
+	if err != nil {
+		t.Fatalf("Get %q: %v", path, err)
+	}
+	defer rc.Close()
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("ReadAll %q: %v", path, err)
+	}
+	return data
+}
+
+// TestRead_RejectsTamperedVersion verifies a config version whose on-disk
+// bytes were altered is never returned as a clean config: Read delegates
+// to named.Load, whose verify-on-read rejects it. The precise error
+// depends on where the flipped byte lands (a header byte fails the parse;
+// a payload byte fails the content hash with ErrCorruptedContent), so the
+// contract under test is rejection, not a specific sentinel.
+func TestRead_RejectsTamperedVersion(t *testing.T) {
+	drv := newDriver(t)
+	if err := Write(context.Background(), drv, testHashes{}, sampleConfig()); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	seq, found, err := named.ResolveActiveSeq(context.Background(), drv, configName)
+	if err != nil || !found {
+		t.Fatalf("resolve active: err=%v found=%v", err, found)
+	}
+	path, err := named.VersionPath(configName, seq)
+	if err != nil {
+		t.Fatalf("VersionPath: %v", err)
+	}
+
+	raw := readVersionFile(t, drv, path)
+	if len(raw) < 8 {
+		t.Fatalf("version file improbably short: %d bytes", len(raw))
+	}
+	tampered := append([]byte{}, raw...)
+	tampered[len(tampered)/2] ^= 0xFF // flip a mid-file byte
+	if err := drv.Put(context.Background(), path, bytes.NewReader(tampered)); err != nil {
+		t.Fatalf("Put tampered: %v", err)
+	}
+
+	if _, err := Read(context.Background(), drv, testHashes{}); err == nil {
+		t.Fatal("Read returned a tampered config as clean; corruption must surface as an error")
+	}
+}
+
+// TestHistory_EmptyStore_ReturnsEmpty pins the Read/History divergence on
+// a fresh store: Read reports ErrConfigMissing, but History tolerates the
+// empty version set and returns an empty slice with no error.
+func TestHistory_EmptyStore_ReturnsEmpty(t *testing.T) {
+	drv := newDriver(t)
+	hist, err := History(context.Background(), drv, testHashes{})
+	if err != nil {
+		t.Fatalf("History on empty store: unexpected error %v", err)
+	}
+	if len(hist) != 0 {
+		t.Errorf("History on empty store: got %d entries, want 0", len(hist))
 	}
 }

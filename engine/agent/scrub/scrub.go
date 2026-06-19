@@ -10,7 +10,7 @@ import (
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/namedstore"
+	"scrinium.dev/engine/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -192,7 +192,7 @@ func (a *scrubAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
 		AgentType:    "scrub",
 		StoreID:      a.storeID,
-		Lease:        namedstore.Config{Name: scrubLeaseName, HostID: a.hostID, AgentType: "scrub", TTL: defaultScrubLeaseTTL},
+		Lease:        lease.Config{Name: scrubLeaseName, HostID: a.hostID, AgentType: "scrub", TTL: defaultScrubLeaseTTL},
 		LeaseEnabled: true,
 		Terminal:     event.EventAgentCycle,
 		TerminalMode: agent.TerminalEveryCycle,

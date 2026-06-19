@@ -99,7 +99,7 @@ func applyPolicyDefaults(p *Policy) {
 // applyDefaults and build. PolicyRef and inline Policy are mutually
 // exclusive (validate enforces it); an unknown ref is an error.
 func resolvePolicyRefs(c *Config) error {
-	for name, s := range c.namedStores() {
+	for name, s := range c.named() {
 		if s.PolicyRef == "" {
 			continue
 		}
@@ -170,9 +170,9 @@ func (c *Config) allStores() []*StoreSpec {
 	return out
 }
 
-// namedStores returns the stores keyed by name. The single Store gets
+// named returns the stores keyed by name. The single Store gets
 // the implicit name "default" so error messages are uniform.
-func (c *Config) namedStores() map[string]*StoreSpec {
+func (c *Config) named() map[string]*StoreSpec {
 	if c.Store != nil {
 		return map[string]*StoreSpec{"default": c.Store}
 	}

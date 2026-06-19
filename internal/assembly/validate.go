@@ -41,7 +41,7 @@ func validate(c *Config) error {
 		add("`multistore:` is set but there is only a single `store:`")
 	}
 
-	for name, s := range c.namedStores() {
+	for name, s := range c.named() {
 		if s == nil {
 			add("store %q: empty", name)
 			continue

@@ -6,7 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
+
+	reg "scrinium.dev/internal/registry"
 )
 
 // Resolver turns the value part of a SecretRef (everything after the
@@ -14,14 +15,16 @@ import (
 // network-backed schemes can honour cancellation.
 type Resolver func(ctx context.Context, value string) ([]byte, error)
 
-var (
-	mu        sync.RWMutex
-	resolvers = map[string]Resolver{
-		"file":  resolveFile,
-		"env":   resolveEnv,
-		"plain": resolvePlain,
-	}
-)
+var resolvers = reg.New[Resolver]()
+
+// The built-in schemes are seeded once at package load. A host or preset
+// registering a custom scheme later goes through Register (first-wins),
+// so re-registering a built-in is the documented idempotent no-op.
+func init() {
+	resolvers.Set("file", resolveFile)
+	resolvers.Set("env", resolveEnv)
+	resolvers.Set("plain", resolvePlain)
+}
 
 // Register installs a Resolver for scheme. An empty scheme or a nil
 // resolver panics — both are programming errors. Re-registering a
@@ -36,12 +39,7 @@ func Register(scheme string, r Resolver) {
 	if r == nil {
 		panic("secretref: nil resolver for scheme " + scheme)
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	if _, dup := resolvers[scheme]; dup {
-		return // already registered — keep the first, ignore the rest.
-	}
-	resolvers[scheme] = r
+	resolvers.SetFirstWins(scheme, r) // first wins; duplicates ignored (ADR-63).
 }
 
 // Ref is a raw, unresolved "<scheme>:<value>" reference as it appears
@@ -86,9 +84,7 @@ func (r Ref) Resolve(ctx context.Context) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("secretref %q: missing \"<scheme>:\" prefix", r.String())
 	}
-	mu.RLock()
-	resolve, known := resolvers[scheme]
-	mu.RUnlock()
+	resolve, known := resolvers.Get(scheme)
 	if !known {
 		return nil, fmt.Errorf("secretref: unknown scheme %q", scheme)
 	}

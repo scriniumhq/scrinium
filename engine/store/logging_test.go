@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/store/internal/crypto"
 )
 
 // --- capturing handler ---------------------------------------------------
@@ -105,7 +106,7 @@ func TestResolveLogger_NilIsSilent(t *testing.T) {
 }
 
 func TestStoreLogger_NilFieldIsSilent(t *testing.T) {
-	s := &core{} // log field left nil, as a hand-built test store
+	s := &store{} // log field left nil, as a hand-built test store
 	if s.logger() == nil {
 		t.Fatal("logger() returned nil; must substitute the discard logger")
 	}
@@ -118,7 +119,7 @@ func TestStoreLogger_NilFieldIsSilent(t *testing.T) {
 
 func TestResolveLogger_AddsScriniumGroup(t *testing.T) {
 	h, recs, _ := newCaptureHandler(slog.LevelDebug)
-	s := &core{storeID: "store-123", log: resolveLogger(slog.New(h))}
+	s := &store{storeID: "store-123", log: resolveLogger(slog.New(h))}
 
 	s.componentLogger("gc").Info("hello", slog.String("k", "v"))
 
@@ -139,20 +140,20 @@ func TestResolveLogger_AddsScriniumGroup(t *testing.T) {
 
 func TestRedaction_DEKNeverRendered(t *testing.T) {
 	secret := []byte("super-secret-dek-bytes")
-	v := redactedDEK(secret).LogValue()
+	v := redactedSecret(secret).LogValue()
 	if got := v.String(); got != redactedKey {
-		t.Fatalf("redactedDEK rendered %q; must be %q", got, redactedKey)
+		t.Fatalf("redactedSecret rendered %q; must be %q", got, redactedKey)
 	}
 	if bytes.Contains([]byte(v.String()), secret) {
-		t.Fatal("redactedDEK leaked key material into the log value")
+		t.Fatal("redactedSecret leaked key material into the log value")
 	}
 }
 
 func TestRedaction_PassphraseNeverRendered(t *testing.T) {
 	secret := []byte("correct horse battery staple")
-	v := redactedPassphrase(secret).LogValue()
+	v := redactedSecret(secret).LogValue()
 	if got := v.String(); got != redactedKey {
-		t.Fatalf("redactedPassphrase rendered %q; must be %q", got, redactedKey)
+		t.Fatalf("redactedSecret rendered %q; must be %q", got, redactedKey)
 	}
 }
 
@@ -163,7 +164,7 @@ func TestRedaction_ThroughHandler(t *testing.T) {
 	h, recs, _ := newCaptureHandler(slog.LevelDebug)
 	l := slog.New(h)
 
-	l.Info("crypto op", slog.Any("dek", redactedDEK([]byte("leak-me-if-you-can"))))
+	l.Info("crypto op", slog.Any("dek", redactedSecret([]byte("leak-me-if-you-can"))))
 
 	got := (*recs)[0].Attrs["dek"]
 	if got != redactedKey {
@@ -187,12 +188,12 @@ func TestKeyIDAttr_EmptyIsVisibleNotOmitted(t *testing.T) {
 
 func TestClose_EmitsDebugTrace(t *testing.T) {
 	h, recs, _ := newCaptureHandler(slog.LevelDebug)
-	s := newStore(&core{
+	s := &store{
 		storeID: "store-xyz",
 		state:   domain.StateUnlocked,
 		log:     resolveLogger(slog.New(h)),
-		crypto:  cryptoState{dek: []byte{1, 2, 3, 4}},
-	})
+		crypto:  crypto.New(nil, []byte{1, 2, 3, 4}, nil, nil, nil, nil),
+	}
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -219,8 +220,80 @@ func TestClose_EmitsDebugTrace(t *testing.T) {
 // TestClose_SilentByDefault ensures a store built without a logger emits
 // nothing on Close (no panic, no output).
 func TestClose_SilentByDefault(t *testing.T) {
-	s := newStore(&core{state: domain.StateUnlocked, crypto: cryptoState{dek: []byte{9}}})
+	s := &store{state: domain.StateUnlocked, crypto: crypto.New(nil, []byte{9}, nil, nil, nil, nil)}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on silent store: %v", err)
+	}
+}
+
+// --- maintenance-mode attribute (enum → name, numeric fallback) ----------
+
+func TestMaintenanceModeAttr_NamesKnownModes(t *testing.T) {
+	cases := []struct {
+		mode domain.MaintenanceMode
+		want string
+	}{
+		{domain.MaintenanceModeNone, "none"},
+		{domain.MaintenanceModeReadOnly, "read_only"},
+		{domain.MaintenanceModeOffline, "offline"},
+	}
+	for _, tc := range cases {
+		a := maintenanceModeAttr(tc.mode)
+		if a.Key != "mode" {
+			t.Errorf("%v: key = %q, want \"mode\"", tc.mode, a.Key)
+		}
+		if a.Value.Kind() != slog.KindString || a.Value.String() != tc.want {
+			t.Errorf("%v: rendered %v(%q), want string %q", tc.mode, a.Value.Kind(), a.Value.String(), tc.want)
+		}
+	}
+}
+
+func TestMaintenanceModeAttr_UnknownFallsBackToNumeric(t *testing.T) {
+	// A mode the switch does not name must still log something meaningful
+	// — the numeric value — so a future MaintenanceMode addition stays
+	// visible in the record instead of being silently dropped.
+	const unknown = domain.MaintenanceMode(99)
+	a := maintenanceModeAttr(unknown)
+	if a.Key != "mode" {
+		t.Errorf("key = %q, want \"mode\"", a.Key)
+	}
+	if a.Value.Kind() != slog.KindInt64 {
+		t.Fatalf("unknown mode rendered as %v; want numeric (KindInt64)", a.Value.Kind())
+	}
+	if a.Value.Int64() != int64(unknown) {
+		t.Errorf("numeric value = %d, want %d", a.Value.Int64(), int64(unknown))
+	}
+}
+
+// --- construction-phase logger (Init/Open, before a *store exists) -------
+
+func TestOptsLogger_NilLoggerIsSilent(t *testing.T) {
+	l := optsLogger(storeOptions{}, "init") // logger field left nil
+	if l == nil {
+		t.Fatal("optsLogger returned nil; the construction path must be unconditionally loggable")
+	}
+	if l.Enabled(context.Background(), slog.LevelError) {
+		t.Error("nil-logger construction phase is not silent")
+	}
+}
+
+func TestOptsLogger_NamespacesAndTagsComponent(t *testing.T) {
+	h, recs, _ := newCaptureHandler(slog.LevelDebug)
+	l := optsLogger(storeOptions{logger: slog.New(h)}, "init")
+
+	l.Info("bootstrapping", slog.String("k", "v"))
+
+	if len(*recs) != 1 {
+		t.Fatalf("want 1 record, got %d", len(*recs))
+	}
+	got := (*recs)[0]
+	// Component tag and call attr both sit under "scrinium", exactly what
+	// buildStore installs on the live store — optsLogger must match it so
+	// construction-phase records and steady-state records read alike.
+	if got.Attrs["scrinium.component"] != "init" {
+		t.Errorf("component attr: want scrinium.component=init, got %q", got.Attrs["scrinium.component"])
+	}
+	if got.Attrs["scrinium.k"] != "v" {
+		t.Errorf("call attr: want scrinium.k=v, got %q", got.Attrs["scrinium.k"])
 	}
 }

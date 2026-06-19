@@ -6,11 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"net/url"
 	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,12 +17,12 @@ import (
 	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/extension"
+	"scrinium.dev/internal/uri"
 	"scrinium.dev/projection"
 )
 
@@ -36,12 +33,6 @@ const (
 	modeInit
 	modeOpenOrInit
 )
-
-// standardSchedulerTick is how often the built-in scheduler goroutine
-// (WithStandardScheduler) ticks the interval primitive. It bounds the
-// latency between an agent becoming due and running, not the configured
-// intervals themselves; 1s is ample for maintenance cadences.
-const standardSchedulerTick = time.Second
 
 // agentWiring carries the build-time agent/scheduler options into the
 // single-store assembler, so the signatures stay stable as options grow.
@@ -98,7 +89,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 
 	// 2. For an Init/OpenOrInit on a local store, ensure the directory.
 	if mode != modeOpen {
-		if p, perr := localStorePath(spec.Driver); perr == nil {
+		if p, perr := uri.ResolveLocalURI(spec.Driver); perr == nil {
 			if err := os.MkdirAll(p, 0o755); err != nil {
 				return nil, fmt.Errorf("scrinium: mkdir store: %w", err)
 			}
@@ -438,117 +429,6 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus, sched, aw.cronParser, loadedExts), nil
 }
 
-// resolvedSchedule is a fully-resolved schedule for one kind: either an
-// interval or a parsed cron Next, plus the config to build the agent with.
-type resolvedSchedule struct {
-	interval time.Duration
-	next     func(time.Time) time.Time
-	cfg      any
-}
-
-// resolveSchedules collects declared schedules into a kind->resolved map,
-// replace-by-kind (later sources override earlier): config policy blocks,
-// agents[] triggers, then the WithSchedule option. A cron expression
-// requires the cron adapter (cron.Enable); without it, or on a parse error,
-// resolveSchedules fails fast (§9.7).
-func resolveSchedules(spec *StoreSpec, c *Config, aw agentWiring) (map[string]resolvedSchedule, error) {
-	out := make(map[string]resolvedSchedule)
-	set := func(kind string, every Duration, cron string, cfg any) error {
-		rs := resolvedSchedule{cfg: cfg}
-		switch {
-		case cron != "":
-			if aw.cronParser == nil {
-				return fmt.Errorf("scrinium: agent %q declares a cron schedule %q but cron is not enabled (pass cron.Enable())", kind, cron)
-			}
-			next, err := aw.cronParser(cron)
-			if err != nil {
-				return fmt.Errorf("scrinium: agent %q cron schedule %q: %w", kind, cron, err)
-			}
-			rs.next = next
-		case every > 0:
-			rs.interval = time.Duration(every)
-		default:
-			return nil // no trigger declared
-		}
-		out[kind] = rs // replace-by-kind
-		return nil
-	}
-
-	// Config policy blocks (gc/scrub/checkpoint). applyDefaults has filled the
-	// cadence of a present block, so each present block carries a trigger.
-	if spec != nil && spec.Policy != nil {
-		p := spec.Policy
-		if p.GC != nil {
-			if err := set("gc", p.GC.Every, p.GC.Schedule, agentCfg(aw, "gc")); err != nil {
-				return nil, err
-			}
-		}
-		if p.Scrub != nil {
-			if err := set("scrub", p.Scrub.Every, p.Scrub.Schedule, agentCfg(aw, "scrub")); err != nil {
-				return nil, err
-			}
-		}
-		if p.Checkpoint != nil {
-			if err := set("checkpoint", p.Checkpoint.Every, p.Checkpoint.Schedule, agentCfg(aw, "checkpoint")); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	// Config agents[] triggers. A WithAgentConfig override wins over the
-	// inline config map.
-	for _, ag := range c.Agents {
-		if ag.Every == 0 && ag.Schedule == "" {
-			continue
-		}
-		cfg := agentCfg(aw, ag.Kind)
-		if cfg == nil && len(ag.Config) > 0 {
-			cfg = ag.Config
-		}
-		if err := set(ag.Kind, ag.Every, ag.Schedule, cfg); err != nil {
-			return nil, err
-		}
-	}
-
-	// WithSchedule options override. expr is an interval (time.ParseDuration)
-	// or, failing that, a cron expression.
-	for kind, expr := range aw.schedules {
-		if d, derr := time.ParseDuration(expr); derr == nil {
-			if err := set(kind, Duration(d), "", agentCfg(aw, kind)); err != nil {
-				return nil, err
-			}
-		} else if err := set(kind, 0, expr, agentCfg(aw, kind)); err != nil {
-			return nil, err
-		}
-	}
-	return out, nil
-}
-
-// addHygieneDefaults adds the built-in maintenance schedules (gc/scrub/
-// checkpoint) to an active scheduler's set, but only for kinds that are
-// registered and not already scheduled. Technical hygiene runs whenever the
-// scheduler is active (§10.2.9); a built-in that was not blank-imported (so
-// not registered) is skipped rather than failing the build.
-func addHygieneDefaults(out map[string]resolvedSchedule, aw agentWiring) {
-	defaults := []struct {
-		kind  string
-		every Duration
-	}{
-		{"gc", defaultGCEvery},
-		{"scrub", defaultScrubEvery},
-		{"checkpoint", defaultCheckpointEvery},
-	}
-	for _, d := range defaults {
-		if _, ok := out[d.kind]; ok {
-			continue
-		}
-		if _, registered := agent.Lookup(d.kind); !registered {
-			continue
-		}
-		out[d.kind] = resolvedSchedule{interval: time.Duration(d.every), cfg: agentCfg(aw, d.kind)}
-	}
-}
-
 // agentCfg returns the WithAgentConfig override for kind, or nil.
 func agentCfg(aw agentWiring, kind string) any {
 	if aw.agentConfigs == nil {
@@ -623,64 +503,6 @@ func isNotFound(err error) bool {
 	return errors.Is(err, errs.ErrStoreNotFound)
 }
 
-// dialDriver resolves the store's driver: a custom index factory if one
-// is registered for the scheme, otherwise the engine's built-in
-// DialDriver (file://, s3:// when present, bare paths). The built-in
-// schemes are registered by the consumer's blank import (ADR-63).
-func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
-	scheme := schemeOf(spec.Driver)
-	if f, ok := reg.driver(scheme); ok {
-		creds, err := resolveCredentials(ctx, spec.Credentials)
-		if err != nil {
-			return nil, err
-		}
-		return f(ctx, spec.Driver, creds)
-	}
-	return driver.DialDriver(spec.Driver)
-}
-
-// dialIndex resolves the index along the default ladder (ADR-63): an
-// explicit spec.Index wins; else Config.Defaults.Index; else a built-in
-// sqlite in the store's index/ dir. The resolved URI is dialled through an
-// custom index factory if one is registered for its scheme, otherwise the
-// engine's built-in DialIndex.
-func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.StoreIndex, error) {
-	uri := spec.Index
-	if uri == "" && defaults != nil {
-		uri = defaults.Index
-	}
-	if uri == "" {
-		p, err := localStorePath(spec.Driver)
-		if err != nil {
-			return nil, fmt.Errorf("index URI is empty and cannot default for store %q (set index explicitly)", spec.Driver)
-		}
-		uri = "sqlite:///" + filepath.Join(p, "index", "index.db")
-	}
-	if f, ok := reg.indexFor(schemeOf(uri)); ok {
-		creds, err := resolveCredentials(ctx, spec.Credentials)
-		if err != nil {
-			return nil, err
-		}
-		return f(ctx, uri, creds)
-	}
-	return index.DialIndex(ctx, uri)
-}
-
-func resolveCredentials(ctx context.Context, creds Credentials) (map[string][]byte, error) {
-	if len(creds) == 0 {
-		return nil, nil
-	}
-	out := make(map[string][]byte, len(creds))
-	for name, ref := range creds {
-		b, err := ref.Resolve(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("credential %q: %w", name, err)
-		}
-		out[name] = b
-	}
-	return out, nil
-}
-
 // storeConfigFromPolicy maps a config policy onto a domain.StoreConfig.
 // Returns whether the store is encrypted. A nil policy → zero config
 // (engine defaults: Plain, no dedup).
@@ -724,96 +546,9 @@ func storeConfigFromPolicy(p *Policy) (domain.StoreConfig, bool) {
 	return cfg, encrypted
 }
 
-// passphraseProvider builds a store.PassphraseProvider from the
-// policy's encryption secret. The secret is resolved once at load
-// time; the provider returns the same bytes on every prompt (init,
-// unlock, rotation) — adequate for the file/env/plain schemes.
-func passphraseProvider(ctx context.Context, p *Policy) (store.PassphraseProvider, error) {
-	if p == nil || p.Encryption == nil {
-		return nil, nil
-	}
-	secret, err := p.Encryption.Passphrase.Resolve(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return func(_ context.Context, _ store.PassphraseHint) ([]byte, error) {
-		// Hand back a copy: the engine zeroes the buffer after KEK
-		// derivation, and we must survive a second prompt.
-		cp := make([]byte, len(secret))
-		copy(cp, secret)
-		return cp, nil
-	}, nil
-}
-
 func hashRegistry() domain.HashRegistry {
 	return hashing.NewHashRegistry().
 		Register("sha256", func() hash.Hash { return sha256.New() })
-}
-
-// --- URI helpers (a trimmed local copy of scrinium's; the assembler
-// cannot import the root package without a layering inversion). ---
-
-func schemeOf(uri string) string {
-	if i := strings.Index(uri, "://"); i > 0 {
-		return uri[:i]
-	}
-	if i := strings.IndexByte(uri, ':'); i > 0 && !strings.Contains(uri[:i], "/") {
-		return uri[:i]
-	}
-	return ""
-}
-
-func localStorePath(storeURI string) (string, error) {
-	if !looksLikeSchemeURI(storeURI) {
-		return filepath.Abs(expandTilde(storeURI))
-	}
-	u, err := url.Parse(storeURI)
-	if err != nil {
-		return "", err
-	}
-	if u.Scheme != "file" {
-		return "", fmt.Errorf("non-local store scheme %q", u.Scheme)
-	}
-	switch u.Host {
-	case "":
-		return filepath.Abs(u.Path)
-	case "~":
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		return filepath.Abs(filepath.Join(home, strings.TrimPrefix(u.Path, "/")))
-	case ".":
-		return filepath.Abs("." + u.Path)
-	}
-	return "", fmt.Errorf("unsupported file:// host %q", u.Host)
-}
-
-func looksLikeSchemeURI(s string) bool {
-	i := strings.Index(s, "://")
-	if i <= 0 {
-		return false
-	}
-	for j := 0; j < i; j++ {
-		c := s[j]
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z',
-			c >= '0' && c <= '9', c == '+', c == '-', c == '.':
-			continue
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func expandTilde(p string) string {
-	if strings.HasPrefix(p, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, p[2:])
-		}
-	}
-	return p
 }
 
 // wrappedStore presents a full Store whose data plane is decorated by one

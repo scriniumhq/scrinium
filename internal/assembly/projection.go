@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/internal/uri"
 	"scrinium.dev/projection"
 )
 
@@ -46,7 +47,7 @@ func resolveScratchDir(configured, storeURI string) (string, error) {
 	if configured != "" {
 		return configured, nil
 	}
-	p, err := localStorePath(storeURI)
+	p, err := uri.ResolveLocalURI(storeURI)
 	if err != nil {
 		// Non-local store: no sensible default. Leave empty rather
 		// than failing — an explicit scratchDir is required only when

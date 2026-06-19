@@ -7,7 +7,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/namedstore"
+	"scrinium.dev/engine/lease"
 	"scrinium.dev/event"
 )
 
@@ -28,11 +28,11 @@ const (
 
 // MaintenanceSpec parameterises RunLeased for one maintenance agent.
 type MaintenanceSpec struct {
-	AgentType    string            // registered kind; tags every lifecycle event
-	StoreID      string            // tags event payloads
-	Lease        namedstore.Config // Path, HostID, TTL; Lease.AgentType is the lease-owner tag (may differ from AgentType)
-	LeaseEnabled bool              // false → take no lease (e.g. gc SingleHost relies on location.lock)
-	Terminal     string            // event.EventAgentCompleted | event.EventAgentCycle
+	AgentType    string       // registered kind; tags every lifecycle event
+	StoreID      string       // tags event payloads
+	Lease        lease.Config // Path, HostID, TTL; Lease.AgentType is the lease-owner tag (may differ from AgentType)
+	LeaseEnabled bool         // false → take no lease (e.g. gc SingleHost relies on location.lock)
+	Terminal     string       // event.EventAgentCompleted | event.EventAgentCycle
 	TerminalMode TerminalMode
 	Bus          event.Publisher
 	Driver       driver.Driver
@@ -66,7 +66,7 @@ func RunLeased(
 	runCtx := ctx
 	var hbErr <-chan error
 	if spec.LeaseEnabled {
-		l, prev, err := namedstore.Acquire(ctx, spec.Driver, spec.Lease)
+		l, prev, err := lease.Acquire(ctx, spec.Driver, spec.Lease)
 		if err != nil {
 			return failTerminal(base, spec, &domain.AgentResult{
 				AgentType: spec.AgentType, StoreID: spec.StoreID, CompletedAt: time.Now(),

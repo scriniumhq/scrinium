@@ -11,37 +11,11 @@ import (
 	"fmt"
 	"io"
 
-	"scrinium.dev/domain"
-	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
-	"scrinium.dev/engine/store/internal/orphanscan"
-	"scrinium.dev/engine/store/internal/storeconfig"
 )
 
-// WriteSystemConfig is the test alias for storeconfig.Write. Under the
-// seq model (ADR-85) the config is published as a new system/config
-// version; there is no pointer file and no returned handle.
-func WriteSystemConfig(
-	ctx context.Context,
-	drv driver.Driver,
-	hashes domain.HashRegistry,
-	cfg domain.StoreConfig,
-) error {
-	return storeconfig.Write(ctx, drv, hashes, cfg)
-}
-
-// ReadSystemConfig is the test alias for readSystemConfig.
-func ReadSystemConfig(
-	ctx context.Context,
-	drv driver.Driver,
-	hashes domain.HashRegistry,
-) (domain.StoreConfig, error) {
-	return storeconfig.Read(ctx, drv, hashes)
-}
-
 // StoreKeyResolver exposes the internal keyResolver field for
-// tests so they can assert that promoteKeyResolverIfDefault
+// tests so they can assert that the default-resolver promotion
 // did or did not run. Returns nil for non-*store implementers
 // (e.g. test mocks) so the helper degrades cleanly.
 func StoreKeyResolver(s Store) pipeline.KeyResolver {
@@ -49,9 +23,18 @@ func StoreKeyResolver(s Store) pipeline.KeyResolver {
 	if !ok {
 		return nil
 	}
-	concrete.dataFacet.core.crypto.mu.Lock()
-	defer concrete.dataFacet.core.crypto.mu.Unlock()
-	return concrete.dataFacet.core.crypto.keyResolver
+	return concrete.crypto.Resolver()
+}
+
+// StoreHasDEK reports whether the Store currently holds a DEK, exposing
+// only the presence bit (never the key material). Tests use it to assert
+// that Close wiped the key. Returns false for non-*store implementers.
+func StoreHasDEK(s Store) bool {
+	concrete, ok := s.(*store)
+	if !ok {
+		return false
+	}
+	return concrete.crypto.HasDEK()
 }
 
 // ReadDriverFile reads a file from the Store's underlying Driver.
@@ -63,7 +46,7 @@ func ReadDriverFile(s Store, path string) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("ReadDriverFile: not a *store")
 	}
-	rc, err := concrete.dataFacet.core.drv.Get(context.Background(), path)
+	rc, err := concrete.drv.Get(context.Background(), path)
 	if err != nil {
 		return nil, err
 	}
@@ -80,13 +63,5 @@ func WriteDriverFile(s Store, path string, data []byte) error {
 	if !ok {
 		return fmt.Errorf("WriteDriverFile: not a *store")
 	}
-	return concrete.dataFacet.core.drv.Put(context.Background(), path, bytes.NewReader(data))
-}
-
-// RecoverOrphans is the test alias for the package-private
-// recoverOrphans function. Used by recovery_faulty_test.go to
-// drive the function with fake StoreIndex / faulty Driver values
-// directly, bypassing the full Init/Open path.
-func RecoverOrphans(ctx context.Context, drv driver.Driver, idx index.StoreIndex) (orphanscan.OrphanReport, error) {
-	return orphanscan.RecoverOrphans(ctx, drv, idx)
+	return concrete.drv.Put(context.Background(), path, bytes.NewReader(data))
 }

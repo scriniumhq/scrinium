@@ -151,11 +151,11 @@ func TestUnmarshal_RejectsMalformedJSON(t *testing.T) {
 	}
 }
 
-func TestPersist_Read_RoundTrip(t *testing.T) {
+func TestWriteBoth_Read_RoundTrip(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	src := validDescriptor(t)
-	if err := Persist(context.Background(), drv, src); err != nil {
-		t.Fatalf("Persist: %v", err)
+	if err := WriteBoth(context.Background(), drv, src); err != nil {
+		t.Fatalf("WriteBoth: %v", err)
 	}
 	got, err := Read(context.Background(), drv)
 	if err != nil {

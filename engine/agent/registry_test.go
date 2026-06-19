@@ -3,6 +3,8 @@ package agent_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync/atomic"
 	"testing"
 
 	"scrinium.dev/domain"
@@ -28,12 +30,20 @@ func (f fakeFactory) Build(_ store.Store, _ any, _ agent.AgentDeps) (agent.Agent
 	return fakeAgent{kind: f.kind}, nil
 }
 
+// probeSeq makes each test's registered agent type unique per run so
+// the suite is safe under -count>1: Register writes to a process-global
+// registry (an init-time, once-per-process API) and exposes no
+// Unregister, so re-running a test that registers a fixed name would
+// trip the duplicate-guard panic on the second iteration. A per-run
+// suffix sidesteps the collision without weakening the production guard.
+var probeSeq atomic.Int64
+
 // TestRegistry_RegisterLookupBuild exercises a full round trip with a
 // custom, namespaced agent type. (The built-in agents register in their
 // own subpackages now; that they are registered is checked in
 // engine/agent/agenttest via the preset bundle.)
 func TestRegistry_RegisterLookupBuild(t *testing.T) {
-	const kind = "acme.registry-probe"
+	kind := fmt.Sprintf("acme.registry-probe-%d", probeSeq.Add(1))
 	agent.Register(fakeFactory{kind: kind})
 
 	if _, ok := agent.Lookup(kind); !ok {
@@ -83,7 +93,7 @@ func TestRegistry_RegisterRejectsBadInput(t *testing.T) {
 	mustPanic("nil factory", func() { agent.Register(nil) })
 	mustPanic("invalid name", func() { agent.Register(fakeFactory{kind: "BadName"}) })
 
-	const dup = "acme.dup-probe"
+	dup := fmt.Sprintf("acme.dup-probe-%d", probeSeq.Add(1))
 	agent.Register(fakeFactory{kind: dup}) // first registration: ok
 	mustPanic("duplicate", func() { agent.Register(fakeFactory{kind: dup}) })
 }
