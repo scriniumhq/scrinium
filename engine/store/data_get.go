@@ -32,7 +32,7 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts ...domain.Ge
 		return nil, err
 	}
 
-	aio := s.cas()
+	aio := s.contentIO()
 	inner, err := aio.OpenHandle(ctx, manifest)
 	if err != nil {
 		return nil, err

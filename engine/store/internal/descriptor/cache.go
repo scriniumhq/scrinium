@@ -13,16 +13,10 @@ import (
 
 // store_meta keys for the descriptor L2 cache.
 const (
-	metaKeyDescriptorBlob     = "descriptor_blob"
+	MetaKeyDescriptorBlob     = "descriptor_blob"
 	metaKeyDescriptorSequence = "descriptor_sequence"
 	metaKeyDescriptorChecksum = "descriptor_checksum"
 )
-
-// MetaKeyBlob is the store_meta key holding the descriptor JSON blob, exported
-// so checkpoint-identity verification can read the store identity straight
-// from a checkpoint's store_meta (via Unmarshal) without loading the full L2
-// cache (which also needs the sequence and checksum keys).
-const MetaKeyBlob = metaKeyDescriptorBlob
 
 // MetaStore is the narrow store_meta surface the cache needs. The
 // engine's StoreIndex satisfies it implicitly.
@@ -46,7 +40,7 @@ type Cache struct {
 // partial or internally inconsistent (caller rebuilds from Location);
 // (cache, nil) when present and consistent.
 func Load(ctx context.Context, meta MetaStore) (*Cache, error) {
-	blob, blobErr := meta.GetMeta(ctx, metaKeyDescriptorBlob)
+	blob, blobErr := meta.GetMeta(ctx, MetaKeyDescriptorBlob)
 	seqStr, seqErr := meta.GetMeta(ctx, metaKeyDescriptorSequence)
 	csumHex, csumErr := meta.GetMeta(ctx, metaKeyDescriptorChecksum)
 
@@ -102,7 +96,7 @@ func Save(ctx context.Context, meta MetaStore, d *Descriptor) error {
 	if err != nil {
 		return fmt.Errorf("descriptor cache: checksum: %w", err)
 	}
-	if err := meta.SetMeta(ctx, metaKeyDescriptorBlob, string(blob)); err != nil {
+	if err := meta.SetMeta(ctx, MetaKeyDescriptorBlob, string(blob)); err != nil {
 		return fmt.Errorf("descriptor cache: write blob: %w", err)
 	}
 	if err := meta.SetMeta(ctx, metaKeyDescriptorSequence, strconv.FormatUint(d.Sequence, 10)); err != nil {

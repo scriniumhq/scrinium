@@ -108,16 +108,53 @@ func (s *store) enterAdmin(ctx context.Context) error {
 	return nil
 }
 
-// guardHandleless enforces the negative identity invariant (ADR-83): a
-// manifest with an empty identity slot (handle IS NULL) is not a
-// user-visible artifact — a pack container or other engine-internal
-// object — so user-facing Get/Delete/Verify collapse it to not-found
-// rather than leaking it. Structure (chunked/composite bodies) is no
-// longer dispatched here: the owning wrapper handles it (ADR-88), and a
-// body whose layout needs an absent decorator fails in the open path.
-func guardHandleless(m domain.Manifest) error {
-	if !m.IsUser() {
-		return errs.ErrArtifactNotFound
+// currentState reads the state field under stateMu, the uniform reader
+// used by State() and every gated method.
+func (s *store) currentState() domain.StoreState {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state
+}
+
+// maintenanceMode reads the current maintenance mode under the state
+// lock, for the methods that must honour it.
+func (s *store) maintenanceMode() domain.MaintenanceMode {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.maintenance
+}
+
+// checkOperational returns the first sentinel that blocks a read or
+// write, in priority order. Closed comes first — once Close is called,
+// no other state matters. ReadOnly + mutating-op is checked one layer
+// up by checkWritable.
+func (s *store) checkOperational() error {
+	s.stateMu.RLock()
+	closed := s.closed
+	state := s.state
+	mode := s.maintenance
+	s.stateMu.RUnlock()
+
+	// Priority order:
+	//   0. Closed        — shut down; no other state is meaningful past Close.
+	//   1. Corrupted     — API physically unreadable, overrides everything.
+	//   2. Offline       — explicit administrative block, overrides crypto.
+	//   3. Bootstrapping — initialisation in flight.
+	//   4. Locked        — passphrase required (encrypted store only).
+	if closed {
+		return os.ErrClosed
+	}
+	if state == domain.StateCorrupted {
+		return errs.ErrStoreCorrupted
+	}
+	if mode == domain.MaintenanceModeOffline {
+		return errs.ErrStoreOffline
+	}
+	if state == domain.StateBootstrapping {
+		return errs.ErrStoreNotReady
+	}
+	if state == domain.StateLocked {
+		return errs.ErrLocked
 	}
 	return nil
 }

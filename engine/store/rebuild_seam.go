@@ -61,7 +61,7 @@ func VerifyCheckpointIdentity(ctx context.Context, idx index.StoreIndex, srcPath
 	if !ok {
 		return nil
 	}
-	blob, err := insp.CheckpointMeta(ctx, srcPath, descriptor.MetaKeyBlob)
+	blob, err := insp.CheckpointMeta(ctx, srcPath, descriptor.MetaKeyDescriptorBlob)
 	if err != nil {
 		return fmt.Errorf("store: verify checkpoint identity: %w", err)
 	}

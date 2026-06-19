@@ -8,6 +8,7 @@ import (
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/internal/cas"
 	"scrinium.dev/engine/pipeline"
+	"scrinium.dev/errs"
 )
 
 // data_io.go — the shared data-plane plumbing on *store: the per-operation
@@ -16,10 +17,10 @@ import (
 // build on; they live together here rather than scattered across the
 // operation files.
 
-// cas builds an cas.IO bound to this store's driver, index,
+// contentIO builds an cas.IO bound to this store's driver, index,
 // and registries. The value is a cheap stateless handle, constructed per
 // operation rather than held as a field.
-func (s *store) cas() *cas.IO {
+func (s *store) contentIO() *cas.IO {
 	return cas.New(s.drv, s.index, s.hashes, s.transformers)
 }
 
@@ -34,7 +35,7 @@ func (s *store) cas() *cas.IO {
 // refusal. asKeyProvider maps a nil resolver to a nil provider (the
 // typed-nil guard).
 func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	return s.cas().Load(ctx, id, s.crypto.KeyProvider(), string(s.snapshotConfig().ContentHasher))
+	return s.contentIO().Load(ctx, id, s.crypto.KeyProvider(), string(s.snapshotConfig().ContentHasher))
 }
 
 // The store↔pipeline glue. The transform engine (Encoder/Decoder chain,
@@ -86,4 +87,18 @@ func (s *store) resolveWriteKeyID() string {
 		return ""
 	}
 	return r.ResolveWriteKey(pipeline.KeyContext{})
+}
+
+// guardHandleless enforces the negative identity invariant (ADR-83): a
+// manifest with an empty identity slot (handle IS NULL) is not a
+// user-visible artifact — a pack container or other engine-internal
+// object — so user-facing Get/Delete/Verify collapse it to not-found
+// rather than leaking it. Structure (chunked/composite bodies) is no
+// longer dispatched here: the owning wrapper handles it (ADR-88), and a
+// body whose layout needs an absent decorator fails in the open path.
+func guardHandleless(m domain.Manifest) error {
+	if !m.IsUser() {
+		return errs.ErrArtifactNotFound
+	}
+	return nil
 }

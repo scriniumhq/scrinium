@@ -79,10 +79,6 @@ type store struct {
 
 var _ Store = (*store)(nil)
 
-// System returns the SystemStore facade. Reached only through
-// AdminStore, so DataStore consumers cannot see system state.
-func (s *store) System() systemstore.Store { return s.system }
-
 // publish emits an event when a Publisher is configured. Cheap when
 // nil — the common case for tests and minimal-stack hosts.
 func (s *store) publish(typ string, payload any) {

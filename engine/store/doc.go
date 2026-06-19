@@ -27,7 +27,7 @@
 // A live *store is guarded by three mutexes with a fixed lock order
 // (crypto.mu → stateMu → cfgMu). The full model — what each guards, the
 // acquire/release discipline per call path, and the invariants a refactor
-// must preserve — lives in store_impl.go's header. Read it before touching
+// must preserve — lives in store_type.go's header. Read it before touching
 // any locking.
 //
 // This package is the canonical (foundation) instance of the system-wide
@@ -36,7 +36,7 @@
 //
 // # Reading order
 //
-// store.go (contracts) → store_impl.go (the type and lock order) →
+// store.go (contracts) → store_type.go (the type and lock order) →
 // access.go and admin_state.go (the entry gates every method funnels
 // through) → the data_* plane → the admin_* plane and crypto_state.go →
 // the lifecycle_* constructors → the system_* plumbing → internal/.
@@ -48,7 +48,7 @@
 //   - store.go        — the Store / DataStore / AdminStore / SystemStore
 //     interfaces and the SystemArtifact value type.
 //   - readhandle.go   — the ReadHandle interface.
-//   - store_impl.go   — the *store struct, its fields, the lock-order
+//   - store_type.go   — the *store struct, its fields, the lock-order
 //     invariant, and System().
 //   - options.go      — StoreOption constructors (With…) and the
 //     PassphraseProvider / PassphraseHint contract.
@@ -78,7 +78,7 @@
 //   - admin_config.go      — Config, UpdateConfig, ConfigHistory.
 //   - admin_crypto.go — Unlock, RotateKEK, SetPassphrase, and
 //     ExportRecoveryKit; holds crypto.mu for the whole operation. The
-//     pure mechanics (CallProvider, BuildRecoveryKit, InitEncryptedDEK)
+//     pure mechanics (CallProvider, buildRecoveryKit, InitEncryptedDEK)
 //     live in internal/crypto.
 //   - admin_close.go       — Close.
 //   - crypto material lives in internal/crypto (crypto.State): DEK,

@@ -53,7 +53,7 @@ func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
 		return err
 	}
 
-	if err := s.cas().VerifyBlob(ctx, manifest); err != nil {
+	if err := s.contentIO().VerifyBlob(ctx, manifest); err != nil {
 		s.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: id,
 			Err:        err,
@@ -122,7 +122,7 @@ func (s *store) VerifyBlobRef(ctx context.Context, blobRef string) error {
 		return err
 	}
 
-	if err := s.cas().VerifyBlob(ctx, manifest); err != nil {
+	if err := s.contentIO().VerifyBlob(ctx, manifest); err != nil {
 		s.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: consumerID,
 			Err:        err,

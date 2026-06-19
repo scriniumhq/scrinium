@@ -37,11 +37,11 @@ func CallProvider(ctx context.Context, p domain.PassphraseProvider, hint domain.
 	return pass, nil
 }
 
-// BuildRecoveryKit assembles the kit text for an encrypted descriptor.
+// buildRecoveryKit assembles the kit text for an encrypted descriptor.
 // Called at InitStore (and later RotateKEK / SetPassphrase) before disk
 // I/O — a kit-build failure aborts the operation rather than producing a
 // Store the host cannot recover.
-func BuildRecoveryKit(desc *descriptor.Descriptor, wrappedDEK []byte) ([]byte, error) {
+func buildRecoveryKit(desc *descriptor.Descriptor, wrappedDEK []byte) ([]byte, error) {
 	if desc.KDFParams == nil {
 		return nil, errors.New("crypto: descriptor missing KDFParams")
 	}
@@ -105,7 +105,7 @@ func InitEncryptedDEK(
 		SchemaVersion: descriptor.CurrentSchemaVersion,
 		KDFParams:     &params,
 	}
-	kitBytes, kerr := BuildRecoveryKit(probe, wrapped)
+	kitBytes, kerr := buildRecoveryKit(probe, wrapped)
 	if kerr != nil {
 		return nil, descriptor.KDFParams{}, nil, fmt.Errorf("build recovery kit: %w", kerr)
 	}

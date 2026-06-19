@@ -330,7 +330,7 @@ func (s *State) RecoveryKit() ([]byte, error) {
 	if !s.desc.DEKEncrypted {
 		return nil, fmt.Errorf("%w: Plain Store has no Recovery Kit", errs.ErrPassphraseRequired)
 	}
-	return BuildRecoveryKit(s.desc, s.desc.DEK)
+	return buildRecoveryKit(s.desc, s.desc.DEK)
 }
 
 // commitDescriptor persists the next descriptor (both replicas), refreshes

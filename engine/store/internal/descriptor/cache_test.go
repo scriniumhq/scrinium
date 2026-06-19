@@ -98,7 +98,7 @@ func TestCache_PartialIsCorruption(t *testing.T) {
 		{
 			"only_blob",
 			func(m *fakeMeta) {
-				m.data[metaKeyDescriptorBlob] = `{"store_id":"x"}`
+				m.data[MetaKeyDescriptorBlob] = `{"store_id":"x"}`
 			},
 		},
 		{
@@ -110,7 +110,7 @@ func TestCache_PartialIsCorruption(t *testing.T) {
 		{
 			"blob_and_sequence_no_checksum",
 			func(m *fakeMeta) {
-				m.data[metaKeyDescriptorBlob] = `{"store_id":"x"}`
+				m.data[MetaKeyDescriptorBlob] = `{"store_id":"x"}`
 				m.data[metaKeyDescriptorSequence] = "1"
 			},
 		},
@@ -179,7 +179,7 @@ func TestCache_RejectsChecksumMismatch(t *testing.T) {
 func TestCache_RejectsUnparseableSequence(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
-	meta.data[metaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
+	meta.data[MetaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
 	meta.data[metaKeyDescriptorSequence] = "not-a-number"
 	meta.data[metaKeyDescriptorChecksum] = strings.Repeat("00", ChecksumLen)
 	_, err := Load(ctx, meta)
@@ -191,7 +191,7 @@ func TestCache_RejectsUnparseableSequence(t *testing.T) {
 func TestCache_RejectsUnparseableChecksum(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
-	meta.data[metaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
+	meta.data[MetaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
 	meta.data[metaKeyDescriptorSequence] = "1"
 	meta.data[metaKeyDescriptorChecksum] = "not hex bytes!"
 	_, err := Load(ctx, meta)
@@ -203,7 +203,7 @@ func TestCache_RejectsUnparseableChecksum(t *testing.T) {
 func TestCache_RejectsBadChecksumLength(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
-	meta.data[metaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
+	meta.data[MetaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
 	meta.data[metaKeyDescriptorSequence] = "1"
 	meta.data[metaKeyDescriptorChecksum] = "ab" // 1 byte, not 32
 	_, err := Load(ctx, meta)
@@ -225,7 +225,7 @@ func TestCache_SaveWritesThreeKeys(t *testing.T) {
 		t.Errorf("writes: got %d, want 3", meta.writes)
 	}
 	for _, k := range []string{
-		metaKeyDescriptorBlob,
+		MetaKeyDescriptorBlob,
 		metaKeyDescriptorSequence,
 		metaKeyDescriptorChecksum,
 	} {
