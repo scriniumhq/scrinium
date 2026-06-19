@@ -1,3 +1,9 @@
+// StoreConfig.Pipeline: the blob payload transform chain (compression /
+// encryption) applied on Put and reversed on Get. Consolidated onto the
+// pipelinefx fixture as a table over the supported stage chains, and
+// extended with the blob-at-rest confidentiality property the per-algorithm
+// example tests lacked. The subject is the pipeline, not Put mechanics.
+
 package storesuite
 
 import (
@@ -20,14 +26,10 @@ import (
 	"scrinium.dev/testutil/storefx"
 )
 
-// Pipeline tests. These replace the five TestPut_Pipeline_* example
-// tests, consolidated onto the pipelinefx fixture and extended with the
-// blob-at-rest confidentiality property the old tests lacked.
-
-// TestPipeline_RoundTrip: content survives Put/Get through each
-// supported blob pipeline, the manifest records the stages in order, and
-// a non-empty pipeline disables random access (the blob is a transformed
-// stream, not the raw payload).
+// TestPipeline_RoundTrip: content survives Put/Get through each supported
+// blob pipeline, the manifest records the stages in order, and a non-empty
+// pipeline disables random access (the blob is a transformed stream, not the
+// raw payload).
 func TestPipeline_RoundTrip(t *testing.T) {
 	cases := [][]string{
 		{"zstd"},
@@ -76,8 +78,8 @@ func TestPipeline_RoundTrip(t *testing.T) {
 				if m.Pipeline[i].Algorithm != a {
 					t.Errorf("stage %d: got %q, want %q", i, m.Pipeline[i].Algorithm, a)
 				}
-				// Segmented AEAD keeps per-segment IVs in the blob body,
-				// so the manifest stage IV is empty (ADR-59).
+				// Segmented AEAD keeps per-segment IVs in the blob body, so
+				// the manifest stage IV is empty (ADR-59).
 				if a == "aes-gcm" && len(m.Pipeline[i].IV) != 0 {
 					t.Errorf("aes-gcm stage IV len = %d, want 0 (IVs live in frames)", len(m.Pipeline[i].IV))
 				}
@@ -91,10 +93,10 @@ func TestPipeline_RoundTrip(t *testing.T) {
 
 // TestPipeline_BlobConfidentialityAtRest: with an aes-gcm pipeline the
 // plaintext must not appear in the blob bytes on disk. This is the
-// blob-encryption-at-rest guarantee, and it is distinct from
-// ManifestCrypto (which encrypts manifest fields, not the payload). The
-// plain-store control proves the assertion has teeth — it would catch a
-// leak rather than passing vacuously.
+// blob-encryption-at-rest guarantee, distinct from ManifestCrypto (which
+// encrypts manifest fields, not the payload). The plain-store control proves
+// the assertion has teeth — it would catch a leak rather than passing
+// vacuously.
 func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 	marker := []byte("TOP-SECRET-PLAINTEXT-MARKER-7f3a9c2e")
 
@@ -157,10 +159,9 @@ func TestPipeline_BlobConfidentialityAtRest(t *testing.T) {
 	})
 }
 
-// TestPipeline_ConfigGuards: a pipeline naming an unregistered algorithm
-// is refused (ErrUnsupportedAlgorithm), and a pipeline combined with
-// inline storage is never silently accepted — refused either at
-// InitStore or at Put.
+// TestPipeline_ConfigGuards: a pipeline naming an unregistered algorithm is
+// refused (ErrUnsupportedAlgorithm), and a pipeline combined with inline
+// storage is never silently accepted — refused either at InitStore or at Put.
 func TestPipeline_ConfigGuards(t *testing.T) {
 	t.Run("unregistered algorithm", func(t *testing.T) {
 		reg := pipeline.NewTransformerRegistry() // empty: "zstd" not registered
@@ -189,8 +190,8 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 			store.WithReadRegistry(reg),
 			store.WithConfig(cfg))
 		if err != nil {
-			// Refused at config validation — also a valid outcome; the
-			// engine just must never silently accept the combination.
+			// Refused at config validation — also a valid outcome; the engine
+			// just must never silently accept the combination.
 			t.Skipf("InitStore refused inline+pipeline at startup: %v", err)
 		}
 		if _, err := s.Put(context.Background(),

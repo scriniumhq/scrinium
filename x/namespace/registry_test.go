@@ -21,7 +21,7 @@ type memSysStore struct{ items map[string][]byte }
 
 func newMemSysStore() *memSysStore { return &memSysStore{items: map[string][]byte{}} }
 
-func (m *memSysStore) Put(_ context.Context, a systemstore.Artifact) error {
+func (m *memSysStore) Put(_ context.Context, a systemstore.NamedArtifact) error {
 	b, err := io.ReadAll(a.Payload)
 	if err != nil {
 		return err

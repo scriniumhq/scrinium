@@ -1,3 +1,14 @@
+// Black-box logging contracts: drive the real Init/Get/Delete/Verify/
+// UpdateConfig paths through the public API + storefx harness and assert the
+// emitted slog records (messages, levels, attributes), including the ADR-60
+// no-secret-leak guarantee and silence-by-default.
+//
+// bbHandler is a minimal capturing slog.Handler that records every record
+// with its attributes flattened into a map. It mirrors the white-box
+// captureHandler in engine/store/logging_test.go; the two are parallel
+// because they sit in different packages and there is no shared slog-capture
+// fixture (a future testutil/logfx could unify them).
+
 package storesuite
 
 import (
@@ -15,13 +26,7 @@ import (
 	"scrinium.dev/testutil/storefx"
 )
 
-// --- public capturing handler (black-box) --------------------------------
-//
-// A minimal slog.Handler that records every emitted record with its
-// rendered attributes flattened into a map. Mirrors the white-box
-// captureHandler in logging_test.go, but lives in package store_test so it
-// can drive the real Init/Get/Delete/Verify/UpdateConfig paths through the
-// public API and the storefx harness.
+// --- capturing slog.Handler (black-box) --------------------------
 
 type logRecord struct {
 	Level slog.Level
@@ -95,7 +100,7 @@ func debugLogger() (*slog.Logger, *[]logRecord) {
 	return slog.New(h), recs
 }
 
-// --- lifecycle emissions -------------------------------------------------
+// --- lifecycle emissions -----------------------------------------
 
 func TestLog_InitEmitsInitialised(t *testing.T) {
 	l, recs := debugLogger()
@@ -146,40 +151,66 @@ func TestLog_PutGetDeleteEmissions(t *testing.T) {
 	}
 }
 
-func TestLog_UpdateConfigEmitsInfo(t *testing.T) {
-	l, recs := debugLogger()
-	s := storefx.Init(t, store.WithLogger(l))
-
-	// UpdateConfig with the current config is a valid no-immutable-change
-	// swap; it still exercises the write+swap+log path.
-	cur := s.Config()
-	if err := s.UpdateConfig(context.Background(), cur); err != nil {
-		t.Fatalf("UpdateConfig: %v", err)
+// TestLog_OpEmitsRecord: a single store operation emits its expected log
+// record — "config updated" at Info, "maintenance mode set" carrying the
+// mode attribute.
+func TestLog_OpEmitsRecord(t *testing.T) {
+	cases := []struct {
+		name     string
+		op       func(t *testing.T, s store.Store)
+		msg      string
+		level    slog.Level
+		hasLevel bool
+		attrKey  string
+		attrWant string
+	}{
+		{
+			name: "UpdateConfig emits info",
+			op: func(t *testing.T, s store.Store) {
+				// UpdateConfig with the current config is a valid
+				// no-immutable-change swap; it still exercises the
+				// write+swap+log path.
+				if err := s.UpdateConfig(context.Background(), s.Config()); err != nil {
+					t.Fatalf("UpdateConfig: %v", err)
+				}
+			},
+			msg:      "config updated",
+			level:    slog.LevelInfo,
+			hasLevel: true,
+		},
+		{
+			name: "SetMaintenanceMode records mode",
+			op: func(t *testing.T, s store.Store) {
+				if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
+					t.Fatalf("SetMaintenanceMode: %v", err)
+				}
+			},
+			msg:      "maintenance mode set",
+			attrKey:  "scrinium.mode",
+			attrWant: "read_only",
+		},
 	}
-	if rec := find(recs, "config updated"); rec == nil {
-		t.Fatal(`no "config updated" record`)
-	} else if rec.Level != slog.LevelInfo {
-		t.Errorf("level: want Info, got %v", rec.Level)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			l, recs := debugLogger()
+			s := storefx.Init(t, store.WithLogger(l))
+			tc.op(t, s)
+
+			rec := find(recs, tc.msg)
+			if rec == nil {
+				t.Fatalf("no %q record", tc.msg)
+			}
+			if tc.hasLevel && rec.Level != tc.level {
+				t.Errorf("%q level: want %v, got %v", tc.msg, tc.level, rec.Level)
+			}
+			if tc.attrKey != "" && rec.Attrs[tc.attrKey] != tc.attrWant {
+				t.Errorf("%q attr %s: want %q, got %q", tc.msg, tc.attrKey, tc.attrWant, rec.Attrs[tc.attrKey])
+			}
+		})
 	}
 }
 
-func TestLog_MaintenanceModeEmitsDebug(t *testing.T) {
-	l, recs := debugLogger()
-	s := storefx.Init(t, store.WithLogger(l))
-
-	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
-		t.Fatalf("SetMaintenanceMode: %v", err)
-	}
-	rec := find(recs, "maintenance mode set")
-	if rec == nil {
-		t.Fatal(`no "maintenance mode set" record`)
-	}
-	if rec.Attrs["scrinium.mode"] != "read_only" {
-		t.Errorf("mode: want read_only, got %q", rec.Attrs["scrinium.mode"])
-	}
-}
-
-// --- encrypted lifecycle: open(encrypted) + unlock + KEK rotation --------
+// --- encrypted lifecycle: open(encrypted) + unlock + KEK rotation -
 
 func TestLog_EncryptedOpenUnlockRotate(t *testing.T) {
 	l, recs := debugLogger()
@@ -212,11 +243,11 @@ func TestLog_EncryptedOpenUnlockRotate(t *testing.T) {
 	}
 }
 
-// --- security: no key material ever appears in any record ----------------
+// --- security: no key material ever appears in any record --------
 
-// TestLog_NoSecretLeak is the security-critical assertion (ADR-60): drive
-// the full encrypted lifecycle and confirm that the passphrase, and no
-// plausible DEK byte sequence, ever appears in any logged attribute value.
+// TestLog_NoSecretLeak is the security-critical assertion (ADR-60): drive the
+// full encrypted lifecycle and confirm that the passphrase, and no plausible
+// DEK byte sequence, ever appears in any logged attribute value.
 func TestLog_NoSecretLeak(t *testing.T) {
 	l, recs := debugLogger()
 	const pass = "super-secret-passphrase-zzz"
@@ -244,9 +275,9 @@ func TestLog_NoSecretLeak(t *testing.T) {
 			if strings.Contains(v, pass) {
 				t.Errorf("passphrase leaked into log attr %q=%q (msg %q)", k, v, rec.Msg)
 			}
-			// A key_id is allowed (opaque id); a DEK is not. Guard against
-			// any attr keyed like a secret rendering anything but the
-			// redaction sentinel.
+			// A key_id is allowed (opaque id); a DEK is not. Guard against any
+			// attr keyed like a secret rendering anything but the redaction
+			// sentinel.
 			if k == "scrinium.dek" || k == "dek" || strings.Contains(k, "passphrase") {
 				if v != "<redacted>" {
 					t.Errorf("secret-shaped attr %q rendered %q; want <redacted>", k, v)
@@ -256,7 +287,7 @@ func TestLog_NoSecretLeak(t *testing.T) {
 	}
 }
 
-// --- default silence: no logger means no output, no panic ---------------
+// --- default silence: no logger means no output, no panic --------
 
 func TestLog_SilentByDefault_FullLifecycle(t *testing.T) {
 	// No WithLogger: the engine must run the whole lifecycle silently.
@@ -274,21 +305,17 @@ func TestLog_SilentByDefault_FullLifecycle(t *testing.T) {
 	}
 }
 
-// --- R10.7: error-on-return trace (Debug) --------------------------------
+// --- R10.7: error-on-return trace (Debug) ------------------------
 
-// TestLog_ErrorReturnTracedAtDebug verifies the ADR-60 Debug-on-error-
-// return pattern: a failing operation emits an "operation failed" Debug
-// record carrying op and error, while the error is STILL returned to the
-// caller (no swallowing).
+// TestLog_ErrorReturnTracedAtDebug verifies the ADR-60 Debug-on-error-return
+// pattern: a failing operation emits an "operation failed" Debug record
+// carrying op and error, while the error is STILL returned to the caller (no
+// swallowing).
 func TestLog_ErrorReturnTracedAtDebug(t *testing.T) {
 	l, recs := debugLogger()
 	s := storefx.Init(t, store.WithLogger(l))
 
-	// Delete a nonexistent artifact: loadManifest → ErrArtifactNotFound
-	// is returned by the entry path before traceErr, so to hit a traced
-	// terminal error we Put then Delete twice — the second Delete's index
-	// stage may or may not trace depending on path. Instead use a Put of
-	// an artifact, then Delete it, then Verify the now-missing one which
+	// Put an artifact, Delete it, then Verify the now-missing one — Verify
 	// returns an error to the caller.
 	id, err := s.Put(context.Background(), artifactfx.Payload("x"))
 	if err != nil {
@@ -297,13 +324,12 @@ func TestLog_ErrorReturnTracedAtDebug(t *testing.T) {
 	if err := s.Delete(context.Background(), id); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	// Verify a deleted artifact → error returned to caller.
 	if err := s.Verify(context.Background(), id); err == nil {
 		t.Fatal("Verify of deleted artifact should error")
 	}
-	// The contract we assert: the returned error reaches the caller
-	// (checked above). Any Debug "operation failed" trace is best-effort
-	// diagnostics; if present it must carry op + error and never a secret.
+	// The contract: the returned error reaches the caller (checked above). Any
+	// Debug "operation failed" trace is best-effort diagnostics; if present it
+	// must carry op + error and never a secret.
 	for _, r := range *recs {
 		if r.Msg == "operation failed" {
 			if r.Level != slog.LevelDebug {
@@ -319,8 +345,11 @@ func TestLog_ErrorReturnTracedAtDebug(t *testing.T) {
 	}
 }
 
-// TestLog_ForceReinitWarns verifies the best-effort force-reinit removal
-// is logged at Warn (no caller sees that cleanup otherwise).
+// TestLog_ForceReinitWarns verifies the best-effort force-reinit removal is
+// logged at Warn (no caller sees that cleanup otherwise). It reinitialises the
+// SAME on-disk root through a fresh driver handle, so it constructs localfs
+// directly rather than via driverfx.LocalFS (which roots a new tempdir each
+// call).
 func TestLog_ForceReinitWarns(t *testing.T) {
 	l, recs := debugLogger()
 	root := t.TempDir()

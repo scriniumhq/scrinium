@@ -1,215 +1,557 @@
+// OpenStore: setup rejection, descriptor reconcile outcomes (heal /
+// not-found / corrupt / split-brain), encrypted-open state, immutable
+// config matching, and the full end-to-end disk round-trip. Reconcile
+// outcomes and config matching are category-6 tables; the e2e is a
+// category-5-style integration over real localfs + sqlite. InitStore
+// itself lives in lifecycle_init_test.go.
+
 package storesuite
 
 import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/driver/localfs"
+	sqliteindex "scrinium.dev/engine/index/sqlite"
+	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/reconcile"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/driverfx"
+	"scrinium.dev/testutil/indexfx"
 	"scrinium.dev/testutil/storefx"
 )
 
-// --- ErrStoreNotFound at fresh Location ---
-
-func TestOpenStore_FreshLocationReturnsNotFound(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	_, err := storefx.TryOpenOn(t, drv)
-	if !errors.Is(err, errs.ErrStoreNotFound) {
-		t.Fatalf("expected ErrStoreNotFound, got %v", err)
+// TestOpenStore_SetupRejected: a nil driver fails; a missing StoreIndex
+// fails with a message naming the option (same dependency inversion as
+// InitStore).
+func TestOpenStore_SetupRejected(t *testing.T) {
+	cases := []struct {
+		name       string
+		run        func(t *testing.T) error
+		wantSubstr string // "" = any error
+	}{
+		{"nil driver", func(t *testing.T) error {
+			_, err := store.OpenStore(context.Background(), nil)
+			return err
+		}, ""},
+		{"missing store index", func(t *testing.T) error {
+			drv := driverfx.LocalFS(t)
+			storefx.InitPlainOn(t, drv)
+			_, err := store.OpenStore(context.Background(), drv)
+			return err
+		}, "WithStoreIndex"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.run(t)
+			if err == nil {
+				t.Fatalf("%s: expected an error", tc.name)
+			}
+			if tc.wantSubstr != "" && !strings.Contains(err.Error(), tc.wantSubstr) {
+				t.Errorf("%s: error %v should mention %q", tc.name, err, tc.wantSubstr)
+			}
+		})
 	}
 }
 
-// --- L0/L1 self-heal: missing L0 ---
-
-func TestOpenStore_HealsAbsentL0FromL1(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	storefx.InitPlainOn(t, drv)
-	// Wipe L0 to simulate a write that completed L1 but not L0.
-	if err := drv.Remove(context.Background(), descriptor.Path); err != nil {
-		t.Fatalf("setup remove L0: %v", err)
+// TestOpenStore_ReconcileOutcomes: how the L0/L1 replica pair maps to an
+// open result. Both absent (fresh or wiped) → ErrStoreNotFound; any
+// surviving replica unparseable with no valid partner → ErrStoreCorrupted;
+// two valid-but-divergent replicas at equal sequence → ErrDescriptorSplitBrain.
+// (The healable single-absent cases are TestOpenStore_HealsAbsentReplica.)
+func TestOpenStore_ReconcileOutcomes(t *testing.T) {
+	freshLoc := func(t *testing.T) driver.Driver {
+		return driverfx.LocalFS(t)
 	}
-
-	// OpenStore must succeed (L1 has the canonical descriptor).
-	_, err := storefx.TryOpenOn(t, drv)
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
+	removeBoth := func(t *testing.T) driver.Driver {
+		drv := driverfx.LocalFS(t)
+		storefx.InitPlainOn(t, drv)
+		_ = drv.Remove(context.Background(), descriptor.Path)
+		_ = drv.Remove(context.Background(), descriptor.BackupPath)
+		return drv
 	}
-
-	// L0 must be back on disk after heal.
-	if _, status, err := reconcile.ReadReplica(context.Background(), drv, descriptor.L0); err != nil || status != reconcile.Valid {
-		t.Errorf("L0 should be healed: status=%v, err=%v", status, err)
+	corruptL0Only := func(t *testing.T) driver.Driver {
+		drv := driverfx.LocalFS(t)
+		if err := drv.Put(context.Background(), descriptor.Path,
+			strings.NewReader(`{not json`)); err != nil {
+			t.Fatal(err)
+		}
+		return drv
+	}
+	corruptBoth := func(t *testing.T) driver.Driver {
+		drv := driverfx.LocalFS(t)
+		storefx.InitPlainOn(t, drv)
+		if err := drv.Put(context.Background(), descriptor.Path,
+			bytes.NewReader([]byte("not json"))); err != nil {
+			t.Fatal(err)
+		}
+		if err := drv.Put(context.Background(), descriptor.BackupPath,
+			bytes.NewReader([]byte("not json either"))); err != nil {
+			t.Fatal(err)
+		}
+		return drv
+	}
+	splitBrain := func(t *testing.T) driver.Driver {
+		drv := driverfx.LocalFS(t)
+		storefx.InitPlainOn(t, drv)
+		// Fabricate a divergent L1: same Sequence, different StoreID.
+		d0, _, err := reconcile.ReadReplica(context.Background(), drv, descriptor.L0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		imposter := *d0
+		imposter.StoreID = "99999999-aaaa-bbbb-cccc-dddddddddddd"
+		if err := descriptor.WriteReplica(context.Background(), drv, &imposter, descriptor.L1); err != nil {
+			t.Fatal(err)
+		}
+		return drv
+	}
+	cases := []struct {
+		name  string
+		setup func(t *testing.T) driver.Driver
+		want  error
+	}{
+		{"fresh location", freshLoc, errs.ErrStoreNotFound},
+		{"both replicas removed", removeBoth, errs.ErrStoreNotFound},
+		{"L0 corrupt, L1 absent", corruptL0Only, errs.ErrStoreCorrupted},
+		{"both replicas corrupt", corruptBoth, errs.ErrStoreCorrupted},
+		{"split brain (divergent L1)", splitBrain, errs.ErrDescriptorSplitBrain},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			drv := tc.setup(t)
+			if _, err := storefx.TryOpenOn(t, drv); !errors.Is(err, tc.want) {
+				t.Fatalf("%s: got %v, want %v", tc.name, err, tc.want)
+			}
+		})
 	}
 }
 
-// --- L0/L1 self-heal: missing L1 ---
-
-func TestOpenStore_HealsAbsentL1FromL0(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	storefx.InitPlainOn(t, drv)
-	if err := drv.Remove(context.Background(), descriptor.BackupPath); err != nil {
-		t.Fatalf("setup remove L1: %v", err)
+// TestOpenStore_HealsAbsentReplica: a write that completed one replica but
+// not the other is repaired on open — OpenStore succeeds and the missing
+// replica is rewritten from the survivor.
+func TestOpenStore_HealsAbsentReplica(t *testing.T) {
+	cases := []struct {
+		name   string
+		remove string
+		check  descriptor.Replica
+	}{
+		{"missing L0 healed from L1", descriptor.Path, descriptor.L0},
+		{"missing L1 healed from L0", descriptor.BackupPath, descriptor.L1},
 	}
-
-	_ = storefx.OpenOn(t, drv)
-
-	if _, status, err := reconcile.ReadReplica(context.Background(), drv, descriptor.L1); err != nil || status != reconcile.Valid {
-		t.Errorf("L1 should be healed: status=%v, err=%v", status, err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			drv := driverfx.LocalFS(t)
+			storefx.InitPlainOn(t, drv)
+			if err := drv.Remove(context.Background(), tc.remove); err != nil {
+				t.Fatalf("setup remove: %v", err)
+			}
+			if _, err := storefx.TryOpenOn(t, drv); err != nil {
+				t.Fatalf("OpenStore: %v", err)
+			}
+			if _, status, err := reconcile.ReadReplica(context.Background(), drv, tc.check); err != nil || status != reconcile.Valid {
+				t.Errorf("%s: replica should be healed: status=%v, err=%v", tc.name, status, err)
+			}
+		})
 	}
 }
 
-// --- Both replicas absent ---
+// TestOpenStore_EncryptedState: the open state of a store given its crypto
+// and the auto-unlock options. Plain and auto-unlocked-with-passphrase
+// open Unlocked; an encrypted store without auto-unlock opens Locked;
+// auto-unlock without a passphrase fails ErrPassphraseRequired and with a
+// wrong one ErrDecryptionFailed.
+func TestOpenStore_EncryptedState(t *testing.T) {
+	const pw = "hunter2"
+	initPlain := func(t *testing.T, drv driver.Driver) { storefx.InitPlainOn(t, drv) }
+	initEnc := func(t *testing.T, drv driver.Driver) { storefx.InitEncryptedOn(t, drv, pw) }
 
-func TestOpenStore_BothReplicasAbsentReturnsNotFound(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	storefx.InitPlainOn(t, drv)
-	_ = drv.Remove(context.Background(), descriptor.Path)
-	_ = drv.Remove(context.Background(), descriptor.BackupPath)
-
-	_, err := storefx.TryOpenOn(t, drv)
-	if !errors.Is(err, errs.ErrStoreNotFound) {
-		t.Fatalf("expected ErrStoreNotFound, got %v", err)
+	cases := []struct {
+		name      string
+		init      func(t *testing.T, drv driver.Driver)
+		openOpts  []store.StoreOption
+		wantState domain.StoreState // checked only when wantErr == nil
+		wantErr   error
+	}{
+		{"plain round-trip", initPlain, nil, domain.StateUnlocked, nil},
+		{"encrypted, no auto-unlock → locked", initEnc, nil, domain.StateLocked, nil},
+		{"encrypted, auto-unlock → unlocked", initEnc,
+			[]store.StoreOption{store.WithPassphrase(storefx.StaticPP(pw)), store.WithAutoUnlock()},
+			domain.StateUnlocked, nil},
+		{"auto-unlock without passphrase", initEnc,
+			[]store.StoreOption{store.WithAutoUnlock()},
+			"", errs.ErrPassphraseRequired},
+		{"auto-unlock wrong passphrase", initEnc,
+			[]store.StoreOption{store.WithPassphrase(storefx.StaticPP("wrong")), store.WithAutoUnlock()},
+			"", errs.ErrDecryptionFailed},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			drv := driverfx.LocalFS(t)
+			tc.init(t, drv)
+			s, err := storefx.TryOpenOn(t, drv, tc.openOpts...)
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Fatalf("%s: got %v, want %v", tc.name, err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("%s: OpenStore: %v", tc.name, err)
+			}
+			if s.State() != tc.wantState {
+				t.Errorf("%s: State got %v, want %v", tc.name, s.State(), tc.wantState)
+			}
+		})
 	}
 }
 
-// --- Both replicas corrupted ---
+// TestOpenStore_NonPlainManifestCryptoOpens: OpenStore accepts Sealed and
+// Paranoid configurations (with auto-unlock) and reaches Unlocked. The
+// body-encryption path itself is covered by the Put/Get tests; this only
+// pins that such configs are no longer refused at open.
+func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
+	for _, crypto := range []domain.ManifestCrypto{
+		domain.ManifestCryptoSealed,
+		domain.ManifestCryptoParanoid,
+	} {
+		t.Run(string(crypto), func(t *testing.T) {
+			drv := driverfx.LocalFS(t)
+			idx := indexfx.Memory(t)
+			cfg := domain.StoreConfig{ManifestCrypto: crypto}
 
-func TestOpenStore_BothReplicasCorruptedReturnsCorrupted(t *testing.T) {
+			if _, _, err := store.InitStore(context.Background(), drv,
+				store.WithConfig(cfg),
+				store.WithPassphrase(storefx.StaticPP("pw")),
+				store.WithStoreIndex(idx),
+				store.WithHashRegistry(storefx.Hashes()),
+			); err != nil {
+				t.Fatalf("InitStore: %v", err)
+			}
+
+			s, err := store.OpenStore(context.Background(), drv,
+				store.WithConfig(cfg),
+				store.WithPassphrase(storefx.StaticPP("pw")),
+				store.WithAutoUnlock(),
+				store.WithStoreIndex(idx),
+				store.WithHashRegistry(storefx.Hashes()),
+			)
+			if err != nil {
+				t.Fatalf("OpenStore: %v", err)
+			}
+			if s.State() != domain.StateUnlocked {
+				t.Errorf("State: got %v, want Unlocked", s.State())
+			}
+		})
+	}
+}
+
+// TestOpenStore_ConfigMatch: an immutable parameter supplied on open must
+// match what InitStore persisted. An unset (zero) field is "not asserted"
+// rather than a request for the zero value — hence partial configs pass,
+// and DeletionPolicyLock can only be asserted true (asking for the
+// engaged lock), never relaxed to false. Successful opens stay Unlocked.
+func TestOpenStore_ConfigMatch(t *testing.T) {
+	flat := domain.StoreConfig{PathTopology: domain.PathTopologyFlat, ContentHasher: domain.HashBLAKE3}
+	cases := []struct {
+		name    string
+		initCfg domain.StoreConfig
+		openCfg *domain.StoreConfig // nil = open without WithConfig
+		want    error
+	}{
+		{"no config on open", flat, nil, nil},
+		{"matching config", flat, &flat, nil},
+		{"mismatch path topology",
+			domain.StoreConfig{PathTopology: domain.PathTopologyFlat},
+			&domain.StoreConfig{PathTopology: domain.PathTopologySharded}, errs.ErrConfigMismatch},
+		{"mismatch content hasher",
+			domain.StoreConfig{ContentHasher: domain.HashSHA256},
+			&domain.StoreConfig{ContentHasher: domain.HashBLAKE3}, errs.ErrConfigMismatch},
+		{"partial config, unset field ignored", flat,
+			&domain.StoreConfig{ContentHasher: domain.HashBLAKE3}, nil},
+		{"deletion-lock stricter request mismatches",
+			domain.StoreConfig{DeletionPolicyLock: false},
+			&domain.StoreConfig{DeletionPolicyLock: true}, errs.ErrConfigMismatch},
+		{"deletion-lock relaxed request ok",
+			domain.StoreConfig{DeletionPolicyLock: false},
+			&domain.StoreConfig{DeletionPolicyLock: false}, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			drv := driverfx.LocalFS(t)
+			if _, _, err := store.InitStore(context.Background(), drv,
+				store.WithConfig(tc.initCfg),
+				store.WithStoreIndex(indexfx.Memory(t)),
+				store.WithHashRegistry(storefx.Hashes()),
+			); err != nil {
+				t.Fatalf("%s: InitStore: %v", tc.name, err)
+			}
+			opts := []store.StoreOption{
+				store.WithStoreIndex(indexfx.Memory(t)),
+				store.WithHashRegistry(storefx.Hashes()),
+			}
+			if tc.openCfg != nil {
+				opts = append(opts, store.WithConfig(*tc.openCfg))
+			}
+			s, err := store.OpenStore(context.Background(), drv, opts...)
+			if tc.want == nil {
+				if err != nil {
+					t.Fatalf("%s: got %v, want success", tc.name, err)
+				}
+				if s.State() != domain.StateUnlocked {
+					t.Errorf("%s: state got %v, want Unlocked", tc.name, s.State())
+				}
+				return
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("%s: got %v, want %v", tc.name, err, tc.want)
+			}
+		})
+	}
+}
+
+// TestOpenStore_RestoresImmutableConfig: the active config of an opened
+// store reflects the values persisted in system.config at init, not
+// whatever defaults the caller passes (here, nothing).
+func TestOpenStore_RestoresImmutableConfig(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	storefx.InitPlainOn(t, drv)
-	// Replace both replicas with garbage that fails Unmarshal.
-	if err := drv.Put(context.Background(), descriptor.Path, bytes.NewReader([]byte("not json"))); err != nil {
+	custom := domain.StoreConfig{
+		PathTopology:  domain.PathTopologyFlat,
+		ContentHasher: domain.HashBLAKE3,
+	}
+	if _, _, err := store.InitStore(context.Background(), drv,
+		store.WithConfig(custom),
+		store.WithStoreIndex(indexfx.Memory(t)),
+		store.WithHashRegistry(storefx.Hashes()),
+	); err != nil {
 		t.Fatal(err)
 	}
-	if err := drv.Put(context.Background(), descriptor.BackupPath, bytes.NewReader([]byte("not json either"))); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err := storefx.TryOpenOn(t, drv)
-	if !errors.Is(err, errs.ErrStoreCorrupted) {
-		t.Fatalf("expected ErrStoreCorrupted, got %v", err)
-	}
-}
-
-// --- Split-brain detection ---
-
-func TestOpenStore_SplitBrainRejected(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	storefx.InitPlainOn(t, drv)
-	// Read L0, fabricate a divergent L1 with the same Sequence
-	// but a different StoreID.
-	d0, _, err := reconcile.ReadReplica(context.Background(), drv, descriptor.L0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	imposter := *d0
-	imposter.StoreID = "99999999-aaaa-bbbb-cccc-dddddddddddd"
-	if err := descriptor.WriteReplica(context.Background(), drv, &imposter, descriptor.L1); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = storefx.TryOpenOn(t, drv)
-	if !errors.Is(err, errs.ErrDescriptorSplitBrain) {
-		t.Fatalf("expected ErrDescriptorSplitBrain, got %v", err)
-	}
-}
-
-// --- Encrypted DEK without AutoUnlock → Locked ---
-
-func TestOpenStore_EncryptedWithoutAutoUnlockGoesLocked(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	storefx.InitEncryptedOn(t, drv, "hunter2")
 
 	s, err := storefx.TryOpenOn(t, drv)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
-	if s.State() != domain.StateLocked {
-		t.Errorf("State: got %v, want StateLocked", s.State())
+	got := s.Config()
+	if got.PathTopology != "Flat" || got.ContentHasher != "blake3" {
+		t.Errorf("active config should preserve InitStore values: %+v", got)
 	}
 }
 
-// --- Encrypted DEK with AutoUnlock → Unlocked ---
-
-func TestOpenStore_EncryptedWithAutoUnlockGoesUnlocked(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	storefx.InitEncryptedOn(t, drv, "hunter2")
-
-	s, err := storefx.TryOpenOn(t, drv,
-		store.WithPassphrase(storefx.StaticPP("hunter2")),
-		store.WithAutoUnlock(),
-	)
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	if s.State() != domain.StateUnlocked {
-		t.Errorf("State: got %v, want StateUnlocked", s.State())
-	}
-}
-
-// --- AutoUnlock without WithPassphrase ---
-
-func TestOpenStore_AutoUnlockRequiresPassphrase(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	storefx.InitEncryptedOn(t, drv, "hunter2")
-
-	_, err := storefx.TryOpenOn(t, drv,
-		store.WithAutoUnlock(),
-	)
-	if !errors.Is(err, errs.ErrPassphraseRequired) {
-		t.Fatalf("expected ErrPassphraseRequired, got %v", err)
-	}
-}
-
-// --- AutoUnlock with wrong passphrase ---
-
-func TestOpenStore_AutoUnlockWrongPassphrase(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	storefx.InitEncryptedOn(t, drv, "right")
-
-	_, err := storefx.TryOpenOn(t, drv,
-		store.WithPassphrase(storefx.StaticPP("wrong")),
-		store.WithAutoUnlock(),
-	)
-	if !errors.Is(err, errs.ErrDecryptionFailed) {
-		t.Fatalf("expected ErrDecryptionFailed, got %v", err)
-	}
-}
-
-// --- Plain DEK still works (regression) ---
-
-func TestOpenStore_PlainStoreRoundTrip(t *testing.T) {
-	drv := driverfx.LocalFS(t)
-	storefx.InitPlainOn(t, drv)
-
-	s, err := storefx.TryOpenOn(t, drv)
-	if err != nil {
-		t.Fatalf("OpenStore: %v", err)
-	}
-	if s.State() != domain.StateUnlocked {
-		t.Errorf("State: got %v, want StateUnlocked", s.State())
-	}
-}
-
-// --- L2 cache refresh on first open ---
-//
-// The first OpenStore on a different host (simulated by a fresh
-// in-memory index) should populate the cache from Location. We
-// verify by opening twice: first with one index, then we observe
-// that no errors occur. The cache itself is package-private; this
-// test just ensures the refresh path doesn't crash.
+// TestOpenStore_RefreshesL2CacheOnFirstOpen: the first open on a fresh
+// in-memory index (no L2 cache) must build the cache from Location
+// without crashing. The cache is package-private, so this is a smoke on
+// the refresh path.
 func TestOpenStore_RefreshesL2CacheOnFirstOpen(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	storefx.InitPlainOn(t, drv)
-
-	// Fresh in-memory index — no L2 cache yet. OpenStore must
-	// build it.
 	if _, err := storefx.TryOpenOn(t, drv); err != nil {
 		t.Fatalf("OpenStore (no cache): %v", err)
+	}
+}
+
+// TestLifecycle_FullDiskRoundTrip is the end-to-end lifecycle over real
+// on-disk artifacts (localfs + sqlite): init writes store.json, the first
+// system/config version, and the index; the open store serves
+// Capacity/Walk/SetMaintenanceMode; after closing the index a fresh
+// session reopens the same Location with the same StoreID and active
+// config and resolves seeded index content; a conflicting immutable on
+// reopen is rejected with ErrConfigMismatch.
+func TestLifecycle_FullDiskRoundTrip(t *testing.T) {
+	ctx := t.Context()
+	location := t.TempDir()
+	indexPath := filepath.Join(t.TempDir(), "index.db")
+
+	if _, err := os.Stat(filepath.Join(location, descriptor.Path)); !os.IsNotExist(err) {
+		t.Fatalf("descriptor unexpectedly present before Init: %v", err)
+	}
+	if _, err := os.Stat(indexPath); !os.IsNotExist(err) {
+		t.Fatalf("index unexpectedly present before Init: %v", err)
+	}
+
+	// --- Phase 1: InitStore ---
+	drv1, err := localfs.New(location, localfs.WithFsync(false))
+	if err != nil {
+		t.Fatalf("localfs.New (phase 1): %v", err)
+	}
+	idx1, err := sqliteindex.NewStore(context.Background(), indexPath)
+	if err != nil {
+		t.Fatalf("sqlite.NewStore (phase 1): %v", err)
+	}
+
+	custom := domain.StoreConfig{
+		PathTopology:  domain.PathTopologyFlat,
+		ContentHasher: domain.HashBLAKE3,
+	}
+	s1, kit, err := store.InitStore(context.Background(), drv1,
+		store.WithConfig(custom),
+		store.WithStoreIndex(idx1),
+		store.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatalf("InitStore: %v", err)
+	}
+	if kit != nil {
+		t.Errorf("RecoveryKit on Plain Store should be nil, got %d bytes", len(kit))
+	}
+	if s1.State() != domain.StateUnlocked {
+		t.Errorf("phase 1 state: got %v, want %v", s1.State(), domain.StateUnlocked)
+	}
+
+	descPath := filepath.Join(location, descriptor.Path)
+	if _, err := os.Stat(descPath); err != nil {
+		t.Fatalf("descriptor not on disk after Init: %v", err)
+	}
+	cfgVersion, err := named.VersionPath("store.config", 1)
+	if err != nil {
+		t.Fatalf("VersionPath: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(location, filepath.FromSlash(cfgVersion))); err != nil {
+		t.Fatalf("system config version not on disk after Init: %v", err)
+	}
+	if _, err := os.Stat(indexPath); err != nil {
+		t.Fatalf("index not on disk after Init: %v", err)
+	}
+
+	desc1, err := descriptor.Read(context.Background(), drv1)
+	if err != nil {
+		t.Fatalf("read descriptor: %v", err)
+	}
+	if desc1.StoreID == "" {
+		t.Fatal("StoreID is empty in descriptor")
+	}
+	if desc1.SchemaVersion != descriptor.CurrentSchemaVersion {
+		t.Errorf("SchemaVersion: got %d, want %d", desc1.SchemaVersion, descriptor.CurrentSchemaVersion)
+	}
+	if desc1.Sequence != 1 {
+		t.Errorf("Sequence: got %d, want 1", desc1.Sequence)
+	}
+
+	cfg1 := s1.Config()
+	if cfg1.PathTopology != "Flat" {
+		t.Errorf("active PathTopology: got %q, want Flat", cfg1.PathTopology)
+	}
+	if cfg1.ContentHasher != "blake3" {
+		t.Errorf("active ContentHasher: got %q, want blake3", cfg1.ContentHasher)
+	}
+
+	// --- Phase 2: exercise the open Store ---
+	info, err := s1.Capacity(context.Background())
+	if err != nil {
+		t.Fatalf("Capacity (phase 2): %v", err)
+	}
+	if info.ArtifactCount != 0 || info.BlobCount != 0 {
+		t.Errorf("Capacity on fresh Store: %+v", info)
+	}
+
+	var walked int
+	if err := s1.Walk(context.Background(), func(m domain.Manifest) error {
+		walked++
+		return nil
+	}); err != nil {
+		t.Fatalf("Walk (phase 2): %v", err)
+	}
+	if walked != 0 {
+		t.Errorf("Walk on fresh Store yielded %d manifests", walked)
+	}
+
+	if err := s1.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
+		t.Errorf("SetMaintenanceMode ReadOnly: %v", err)
+	}
+	if err := s1.SetMaintenanceMode(context.Background(), domain.MaintenanceModeNone); err != nil {
+		t.Errorf("SetMaintenanceMode None: %v", err)
+	}
+
+	// --- Phase 3: seed index content directly, then close ---
+	addr := domain.PhysicalAddress{Path: "blobs/aa/bb/blob-test"}
+	manifest := domain.Manifest{
+		ArtifactID:   "art-test",
+		ContentHash:  "sha256-" + domain.ContentHash("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+		BlobRefs:     []domain.BlobRef{"blob-test"},
+		OriginalSize: 1024,
+	}
+	if err := idx1.IndexManifest(ctx, manifest, addr); err != nil {
+		t.Fatalf("seed index: %v", err)
+	}
+	if err := idx1.Close(); err != nil {
+		t.Fatalf("close index (phase 3): %v", err)
+	}
+
+	// --- Phase 4: reopen ---
+	drv2, err := localfs.New(location, localfs.WithFsync(false))
+	if err != nil {
+		t.Fatalf("localfs.New (phase 4): %v", err)
+	}
+	idx2, err := sqliteindex.NewStore(context.Background(), indexPath)
+	if err != nil {
+		t.Fatalf("sqlite.NewStore (phase 4): %v", err)
+	}
+
+	s2, err := store.OpenStore(context.Background(), drv2,
+		store.WithStoreIndex(idx2),
+		store.WithHashRegistry(storefx.Hashes()),
+	)
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	if s2.State() != domain.StateUnlocked {
+		t.Errorf("phase 4 state: got %v, want %v", s2.State(), domain.StateUnlocked)
+	}
+
+	desc2, err := descriptor.Read(context.Background(), drv2)
+	if err != nil {
+		t.Fatalf("read descriptor (phase 4): %v", err)
+	}
+	if desc2.StoreID != desc1.StoreID {
+		t.Errorf("StoreID changed across reopen: %q -> %q", desc1.StoreID, desc2.StoreID)
+	}
+
+	cfg2 := s2.Config()
+	if cfg2.PathTopology != cfg1.PathTopology {
+		t.Errorf("PathTopology changed across reopen: %q -> %q", cfg1.PathTopology, cfg2.PathTopology)
+	}
+	if cfg2.ContentHasher != cfg1.ContentHasher {
+		t.Errorf("ContentHasher changed across reopen: %q -> %q", cfg1.ContentHasher, cfg2.ContentHasher)
+	}
+
+	gotAddr, err := idx2.Resolve(ctx, "blob-test")
+	if err != nil {
+		t.Fatalf("Resolve after reopen: %v", err)
+	}
+	if gotAddr.Path != "blobs/aa/bb/blob-test" {
+		t.Errorf("blob path after reopen: got %q, want %q", gotAddr.Path, "blobs/aa/bb/blob-test")
+	}
+
+	if err := idx2.Close(); err != nil {
+		t.Fatalf("close index (phase 4): %v", err)
+	}
+
+	// --- Phase 5: ErrConfigMismatch on a conflicting reopen ---
+	drv3, err := localfs.New(location, localfs.WithFsync(false))
+	if err != nil {
+		t.Fatalf("localfs.New (phase 5): %v", err)
+	}
+	idx3, err := sqliteindex.NewStore(context.Background(), indexPath)
+	if err != nil {
+		t.Fatalf("sqlite.NewStore (phase 5): %v", err)
+	}
+	defer idx3.Close()
+
+	conflict := domain.StoreConfig{PathTopology: domain.PathTopologySharded} // active is Flat
+	_, err = store.OpenStore(context.Background(), drv3,
+		store.WithConfig(conflict),
+		store.WithStoreIndex(idx3),
+		store.WithHashRegistry(storefx.Hashes()),
+	)
+	if !errors.Is(err, errs.ErrConfigMismatch) {
+		t.Fatalf("expected errs.ErrConfigMismatch on conflicting reopen, got %v", err)
 	}
 }

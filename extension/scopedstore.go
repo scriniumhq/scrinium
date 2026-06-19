@@ -53,7 +53,7 @@ func NewScopedSystemStore(name string, sys systemstore.Store) (*ScopedSystemStor
 func (s *ScopedSystemStore) Name() string { return s.name }
 
 // Put writes a with its Name scoped to this extension.
-func (s *ScopedSystemStore) Put(ctx context.Context, a systemstore.Artifact) error {
+func (s *ScopedSystemStore) Put(ctx context.Context, a systemstore.NamedArtifact) error {
 	scoped, err := s.scopeName(a.Name)
 	if err != nil {
 		return err

@@ -17,7 +17,7 @@ type recordingSysStore struct {
 	walkNames     []string // scoped names available to Walk
 }
 
-func (r *recordingSysStore) Put(_ context.Context, a systemstore.Artifact) error {
+func (r *recordingSysStore) Put(_ context.Context, a systemstore.NamedArtifact) error {
 	if a.Payload != nil {
 		_, _ = io.Copy(io.Discard, a.Payload)
 	}
@@ -56,7 +56,7 @@ func TestScopedSystemStore_PrefixesNames(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	if err := s.Put(ctx, systemstore.Artifact{Name: "registry", Keep: systemstore.KeepVersions(3)}); err != nil {
+	if err := s.Put(ctx, systemstore.NamedArtifact{Name: "registry", Keep: systemstore.KeepVersions(3)}); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
 	if _, err := s.Get(ctx, "registry"); err != nil {
@@ -140,7 +140,7 @@ func TestScopedSystemStore_RejectsEmptyArtifactName(t *testing.T) {
 	rec := &recordingSysStore{}
 	s, _ := NewScopedSystemStore("namespace", rec)
 	ctx := context.Background()
-	if err := s.Put(ctx, systemstore.Artifact{Name: ""}); err == nil {
+	if err := s.Put(ctx, systemstore.NamedArtifact{Name: ""}); err == nil {
 		t.Error("Put with empty name: want error, got nil")
 	}
 	if _, err := s.Get(ctx, ""); err == nil {

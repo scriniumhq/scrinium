@@ -1,7 +1,7 @@
-// Cross-operation tables. State guards, context cancellation, retention
-// and not-found/ID-validation are the same shape across Put/Get/Delete,
-// so they live here as tables rather than as one function per
-// (operation, condition) pair across three files. Per TESTING.md these
+// Cross-operation guard tables. State guards, context cancellation,
+// not-found/ID-validation and retention are the same shape across
+// Put/Get/Delete, so they live here as tables rather than as one function
+// per (operation, condition) pair across three files. Per TESTING.md these
 // are category 6 (enumerable facts).
 //
 // Note: the operation runners are named putOp/getOp/deleteOp to avoid

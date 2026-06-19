@@ -1,16 +1,3 @@
-// Package systemstore is the facade for engine-internal service
-// artifacts: versioned configuration, agent cursors, index snapshots, and
-// the like, each addressed by a slash-separated name rather than by
-// content hash. These artifacts live outside the content-addressed index,
-// in their own address space, and are invisible to the data-plane Walk.
-//
-// It is reached through the store's AdminStore.System(); it shares no
-// mutable state with the store core (only the driver, the hash registry,
-// the immutable ContentHasher, and a logger), which is why it lives in
-// its own package rather than as a facet over the store core.
-//
-// The on-disk layout (versioned names, keep=0 cells, exclusive-create
-// publishing, verify-on-read) lives in engine/internal/named (ADR-85).
 package systemstore
 
 import (
@@ -27,7 +14,7 @@ import (
 	"scrinium.dev/internal/slogx"
 )
 
-// Artifact is an engine-internal service artifact, addressed by a
+// NamedArtifact is an engine-internal service artifact, addressed by a
 // slash-separated Name rather than by content hash. Unlike a data-plane
 // domain.Artifact it carries no Ext/Usr metadata — system payloads are
 // small, opaque service blobs (config versions, agent cursors, index
@@ -40,7 +27,7 @@ import (
 // own data — not a general user-facing primitive — which is why it
 // lives behind AdminStore.System() and uses its own type rather than
 // overloading domain.Artifact.
-type Artifact struct {
+type NamedArtifact struct {
 	// Name is the slash-separated name under which the artifact is
 	// stored and later retrieved (e.g. "scrub/cursor").
 	Name string
@@ -61,11 +48,11 @@ type Artifact struct {
 	Keep *uint8
 }
 
-// KeepCell marks an Artifact as a keep=0 exclusive cell: a single
+// KeepCell marks an NamedArtifact as a keep=0 exclusive cell: a single
 // fixed slot, overwritten in place (ADR-100/101). The lock form.
 func KeepCell() *uint8 { var k uint8; return &k }
 
-// KeepVersions marks an Artifact as keep=n versioned storage
+// KeepVersions marks an NamedArtifact as keep=n versioned storage
 // (<name>/<seq>, active = max, pruned to n retained). n must be ≥ 1; n=0
 // is the cell form — use KeepCell for that.
 func KeepVersions(n uint8) *uint8 { return &n }
@@ -76,11 +63,11 @@ func KeepVersions(n uint8) *uint8 { return &n }
 // content-addressed index, in their own address space, and are invisible
 // to the data-plane Walk.
 type Store interface {
-	// Put writes an Artifact in the form its Keep selects (ADR-101):
+	// Put writes an NamedArtifact in the form its Keep selects (ADR-101):
 	// keep=0 overwrites the exclusive cell in place; keep≥1 publishes a
 	// new version (active = max seq) and prunes to Keep retained. Keep is
 	// optional — nil defaults to keep=1 (versioned latest, no history).
-	Put(ctx context.Context, a Artifact) error
+	Put(ctx context.Context, a NamedArtifact) error
 
 	// Get opens the active version (max seq) or, for a keep=0 name, the
 	// cell. Returns errs.ErrArtifactNotFound when the name has never been
@@ -111,7 +98,7 @@ type systemStore struct {
 	log    *slog.Logger
 }
 
-// defaultKeepVersions is the form an Artifact takes when Keep is nil
+// defaultKeepVersions is the form an NamedArtifact takes when Keep is nil
 // (unset): keep=1 — atomic, pointerless "latest" with no retained
 // history. The safe default — forgetting Keep yields working versioned
 // storage, never the exclusive-cell (lock) form, which requires an
@@ -141,7 +128,7 @@ func New(
 	}
 }
 
-// Put writes an Artifact in the form its Keep selects (ADR-101). The
+// Put writes an NamedArtifact in the form its Keep selects (ADR-101). The
 // payload is buffered (system payloads are small) and encoded as an
 // inline manifest. Keep is optional: nil defaults to keep=1 (atomic
 // versioned "latest", no history) — the safe default, so a forgotten
@@ -150,7 +137,7 @@ func New(
 // exclusive-acquire discipline is a caller-side policy over
 // named.WriteCell, not here); keep≥1 (KeepVersions) claims the
 // next seq and prunes older versions best-effort.
-func (ss *systemStore) Put(ctx context.Context, a Artifact) error {
+func (ss *systemStore) Put(ctx context.Context, a NamedArtifact) error {
 	if err := named.ValidateName(a.Name); err != nil {
 		return err
 	}

@@ -214,7 +214,7 @@ func (r *Registry) persist(ctx context.Context, snap snapshot) error {
 	if err != nil {
 		return fmt.Errorf("namespace registry: encode: %w", err)
 	}
-	if err := r.sys.Put(ctx, systemstore.Artifact{
+	if err := r.sys.Put(ctx, systemstore.NamedArtifact{
 		Name:    registryArtifact,
 		Payload: bytes.NewReader(body),
 		Keep:    systemstore.KeepVersions(registryKeep),

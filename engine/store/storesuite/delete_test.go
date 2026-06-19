@@ -1,11 +1,10 @@
-// Collapsed Delete tests. Delete-then-NotFound and Walk-removal are
-// exercised by the model test; retention, state/policy guards,
-// not-found / empty-id and double-delete moved to the cross-operation
-// tables. What remains here is the logical-delete on-disk contract
-// (manifest gone, blob retained for GC) for both layouts, and the
-// shared-blob ref-count lifecycle.
-//
-// Replaces the previous store_delete_test.go in full.
+// Delete behaviour beyond the model test (category 4) and the
+// cross-operation guard tables (category 6): the logical-delete on-disk
+// contract (manifest gone, blob retained for the GC agent) for both
+// layouts, and the shared-blob ref-count lifecycle — neither of which the
+// model test (content / Walk / blob-count, not refcounts) covers.
+// Delete-then-NotFound, retention, state/policy guards, not-found /
+// empty-id and double-delete live in guards_test.go and model_test.go.
 
 package storesuite
 
@@ -93,12 +92,12 @@ func TestDelete_RemovesManifest(t *testing.T) {
 	}
 }
 
-// TestStore_RefCountLifecycle: two artifacts sharing one blob — deleting
-// one keeps the other readable and the shared blob on disk (ref_count
-// drops 2→1, not to zero). The refcount itself is not visible through
-// the public API, so this is the store-level contract the model test
-// (which checks content/Walk/blob-count, not refcounts) does not cover.
-func TestStore_RefCountLifecycle(t *testing.T) {
+// TestDelete_SharedBlobRefCount: two artifacts sharing one blob —
+// deleting one keeps the other readable and the shared blob on disk
+// (ref_count drops 2→1, not to zero). The refcount itself is not visible
+// through the public API, so this is the store-level contract the model
+// test (content / Walk / blob-count, not refcounts) does not cover.
+func TestDelete_SharedBlobRefCount(t *testing.T) {
 	s, root := storefx.InitWithRoot(t)
 	const text = "shared content for delete"
 

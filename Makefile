@@ -162,9 +162,9 @@ endif
 .PHONY: smoke
 smoke:
 ifdef N
-	SCRINIUM_SMOKE=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./engine/store/
+	SCRINIUM_SMOKE=1 SCRINIUM_SMOKE_N=$(N) $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./engine/store/storesuite/
 else
-	SCRINIUM_SMOKE=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./engine/store/
+	SCRINIUM_SMOKE=1 $(GO) test -v -timeout 30m -count=1 -run TestSmoke_MillionSmallFiles ./engine/store/storesuite/
 endif
 
 # Encrypted smoke: round-trip on a Store with Paranoid manifests.

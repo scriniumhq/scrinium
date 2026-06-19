@@ -1,3 +1,10 @@
+// RollbackSession: delete every artifact written under a session id.
+// Guards (empty id, read-only, offline, cancelled ctx) and atomic refusals
+// (active retention, no-delete policy — nothing is deleted) are tables; the
+// successful-rollback shapes (single / multiple / expired-retention),
+// selective scope, unknown-session no-op, idempotency, and crash-resume are
+// focused tests.
+
 package storesuite
 
 import (
@@ -14,8 +21,7 @@ import (
 	"scrinium.dev/testutil/storekit"
 )
 
-// putWithSession is a one-liner Put helper for rollback tests.
-// Returns the resulting ArtifactID.
+// putWithSession puts an artifact under a session and returns its id.
 func putWithSession(t *testing.T, s store.Store, sid domain.SessionID, payload string) domain.ArtifactID {
 	t.Helper()
 	id, err := s.Put(context.Background(),
@@ -27,8 +33,8 @@ func putWithSession(t *testing.T, s store.Store, sid domain.SessionID, payload s
 	return id
 }
 
-// putWithRetention puts an artifact with the given session and an
-// active retention window.
+// putWithRetention puts an artifact under a session with an active
+// retention window and returns its id.
 func putWithRetention(t *testing.T, s store.Store, sid domain.SessionID, payload string, until time.Time) domain.ArtifactID {
 	t.Helper()
 	id, err := s.Put(context.Background(),
@@ -40,78 +46,66 @@ func putWithRetention(t *testing.T, s store.Store, sid domain.SessionID, payload
 	return id
 }
 
-// walkCount returns the number of user-visible manifests.
-
-// --- Empty session ID guard ---
-
-func TestRollbackSession_EmptyIDRejected(t *testing.T) {
-	s := storefx.Init(t)
-	err := s.RollbackSession(context.Background(), "")
-	if !errors.Is(err, errs.ErrEmptySessionID) {
-		t.Fatalf("expected errs.ErrEmptySessionID, got %v", err)
+// TestRollbackSession_DeletesSession: rolling back a session removes every
+// artifact written under it (each Get → ErrArtifactNotFound, Walk empty) —
+// for a single artifact, many artifacts, and a session whose retention has
+// already expired.
+func TestRollbackSession_DeletesSession(t *testing.T) {
+	const sid domain.SessionID = "imp"
+	cases := []struct {
+		name  string
+		setup func(t *testing.T, s store.Store) []domain.ArtifactID
+	}{
+		{"single artifact", func(t *testing.T, s store.Store) []domain.ArtifactID {
+			return []domain.ArtifactID{putWithSession(t, s, sid, "alpha")}
+		}},
+		{"multiple artifacts", func(t *testing.T, s store.Store) []domain.ArtifactID {
+			var ids []domain.ArtifactID
+			for _, p := range []string{"a", "b", "c", "d"} {
+				ids = append(ids, putWithSession(t, s, sid, p))
+			}
+			return ids
+		}},
+		{"expired retention does not block", func(t *testing.T, s store.Store) []domain.ArtifactID {
+			return []domain.ArtifactID{
+				putWithRetention(t, s, sid, "was-protected", time.Now().Add(-time.Hour)),
+				putWithSession(t, s, sid, "free"),
+			}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := storefx.Init(t)
+			ids := tc.setup(t, s)
+			if err := s.RollbackSession(context.Background(), sid); err != nil {
+				t.Fatalf("RollbackSession: %v", err)
+			}
+			for _, id := range ids {
+				if _, err := s.Get(context.Background(), id); !errors.Is(err, errs.ErrArtifactNotFound) {
+					t.Errorf("artifact %q should be gone, got %v", id, err)
+				}
+			}
+			if got := storekit.WalkCount(t, s); got != 0 {
+				t.Errorf("Walk count: got %d, want 0", got)
+			}
+		})
 	}
 }
 
-// --- No-op on missing session ---
-
-func TestRollbackSession_UnknownSessionIsNoOp(t *testing.T) {
-	s := storefx.Init(t)
-	if err := s.RollbackSession(context.Background(), "ghost"); err != nil {
-		t.Fatalf("expected nil for unknown session, got %v", err)
-	}
-}
-
-// --- Single artifact rollback ---
-
-func TestRollbackSession_SingleArtifactDeleted(t *testing.T) {
-	s := storefx.Init(t)
-	id := putWithSession(t, s, "imp-1", "alpha")
-
-	if err := s.RollbackSession(context.Background(), "imp-1"); err != nil {
-		t.Fatalf("RollbackSession: %v", err)
-	}
-
-	if _, err := s.Get(context.Background(), id); !errors.Is(err, errs.ErrArtifactNotFound) {
-		t.Fatalf("artifact should be gone, got Get err = %v", err)
-	}
-	if got := storekit.WalkCount(t, s); got != 0 {
-		t.Errorf("Walk count: got %d, want 0", got)
-	}
-}
-
-// --- Multiple artifacts in a session ---
-
-func TestRollbackSession_AllArtifactsInSessionDeleted(t *testing.T) {
-	s := storefx.Init(t)
-	for i, payload := range []string{"a", "b", "c", "d"} {
-		_ = putWithSession(t, s, "imp-2", payload)
-		_ = i
-	}
-
-	if err := s.RollbackSession(context.Background(), "imp-2"); err != nil {
-		t.Fatalf("RollbackSession: %v", err)
-	}
-	if got := storekit.WalkCount(t, s); got != 0 {
-		t.Errorf("Walk count after rollback: got %d, want 0", got)
-	}
-}
-
-// --- Mixed sessions: only the requested one is touched ---
-
+// TestRollbackSession_OtherSessionsUntouched: only the requested session is
+// rolled back; other sessions (and the default no-session bucket) survive.
 func TestRollbackSession_OtherSessionsUntouched(t *testing.T) {
 	s := storefx.Init(t)
-	target := putWithSession(t, s, "imp-3", "to-roll-back")
-	_ = target
+	_ = putWithSession(t, s, "imp-3", "to-roll-back")
 	keep1 := putWithSession(t, s, "imp-other", "keep-1")
 	keep2 := putWithSession(t, s, "", "keep-no-session")
 
 	if err := s.RollbackSession(context.Background(), "imp-3"); err != nil {
 		t.Fatalf("RollbackSession: %v", err)
 	}
-
 	for _, kept := range []domain.ArtifactID{keep1, keep2} {
 		if _, err := s.Get(context.Background(), kept); err != nil {
-			t.Errorf("artifact %q should still exist, got Get err = %v", kept, err)
+			t.Errorf("artifact %q should still exist, got %v", kept, err)
 		}
 	}
 	if got := storekit.WalkCount(t, s); got != 2 {
@@ -119,110 +113,112 @@ func TestRollbackSession_OtherSessionsUntouched(t *testing.T) {
 	}
 }
 
-// --- Atomic retention: if ANY artifact has active retention, nothing is deleted ---
-
-func TestRollbackSession_RetentionBlocksWholeSession(t *testing.T) {
+// TestRollbackSession_UnknownSessionIsNoOp: rolling back a session that
+// never existed succeeds with no error.
+func TestRollbackSession_UnknownSessionIsNoOp(t *testing.T) {
 	s := storefx.Init(t)
-	a := putWithSession(t, s, "imp-4", "free-1")
-	b := putWithRetention(t, s, "imp-4", "protected", time.Now().Add(time.Hour))
-	c := putWithSession(t, s, "imp-4", "free-2")
-
-	err := s.RollbackSession(context.Background(), "imp-4")
-	if !errors.Is(err, errs.ErrRetentionNotExpired) {
-		t.Fatalf("expected errs.ErrRetentionNotExpired, got %v", err)
-	}
-
-	// Atomicity: NONE of the three should be gone.
-	for _, id := range []domain.ArtifactID{a, b, c} {
-		if _, err := s.Get(context.Background(), id); err != nil {
-			t.Errorf("artifact %q must survive blocked rollback, got %v", id, err)
-		}
-	}
-	if got := storekit.WalkCount(t, s); got != 3 {
-		t.Errorf("Walk count: got %d, want 3 (atomic refusal)", got)
+	if err := s.RollbackSession(context.Background(), "ghost"); err != nil {
+		t.Fatalf("expected nil for unknown session, got %v", err)
 	}
 }
 
-// --- Retention does NOT block once expired ---
-
-func TestRollbackSession_ExpiredRetentionAllowsRollback(t *testing.T) {
-	s := storefx.Init(t)
-	_ = putWithRetention(t, s, "imp-5", "was-protected", time.Now().Add(-time.Hour))
-	_ = putWithSession(t, s, "imp-5", "free")
-
-	if err := s.RollbackSession(context.Background(), "imp-5"); err != nil {
-		t.Fatalf("RollbackSession: %v", err)
+// TestRollbackSession_AtomicRefusal: a rollback that hits an active
+// retention window (ErrRetentionNotExpired) or a NoDelete policy
+// (ErrDeletionForbidden) deletes nothing — every artifact survives.
+func TestRollbackSession_AtomicRefusal(t *testing.T) {
+	cases := []struct {
+		name    string
+		init    func(t *testing.T) store.Store
+		setup   func(t *testing.T, s store.Store) []domain.ArtifactID
+		want    error
+		wantCnt int
+	}{
+		{"active retention blocks whole session",
+			func(t *testing.T) store.Store { return storefx.Init(t) },
+			func(t *testing.T, s store.Store) []domain.ArtifactID {
+				return []domain.ArtifactID{
+					putWithSession(t, s, "imp", "free-1"),
+					putWithRetention(t, s, "imp", "protected", time.Now().Add(time.Hour)),
+					putWithSession(t, s, "imp", "free-2"),
+				}
+			}, errs.ErrRetentionNotExpired, 3},
+		{"no-delete policy refuses",
+			func(t *testing.T) store.Store {
+				return storefx.Init(t, store.WithConfig(domain.StoreConfig{DeletionPolicy: domain.DeletionPolicyNoDelete}))
+			},
+			func(t *testing.T, s store.Store) []domain.ArtifactID {
+				return []domain.ArtifactID{
+					putWithSession(t, s, "imp", "x"),
+					putWithSession(t, s, "imp", "y"),
+				}
+			}, errs.ErrDeletionForbidden, 2},
 	}
-	if got := storekit.WalkCount(t, s); got != 0 {
-		t.Errorf("Walk count: got %d, want 0", got)
-	}
-}
-
-// --- DeletionPolicy: NoDelete refuses the whole call ---
-
-func TestRollbackSession_NoDeletePolicyRefusesAtomically(t *testing.T) {
-	cfg := domain.StoreConfig{DeletionPolicy: domain.DeletionPolicyNoDelete}
-	s := storefx.Init(t, store.WithConfig(cfg))
-
-	a := putWithSession(t, s, "imp-6", "x")
-	b := putWithSession(t, s, "imp-6", "y")
-
-	err := s.RollbackSession(context.Background(), "imp-6")
-	if !errors.Is(err, errs.ErrDeletionForbidden) {
-		t.Fatalf("expected errs.ErrDeletionForbidden, got %v", err)
-	}
-
-	// Both artifacts must still be there.
-	for _, id := range []domain.ArtifactID{a, b} {
-		if _, err := s.Get(context.Background(), id); err != nil {
-			t.Errorf("artifact %q must survive blocked rollback, got %v", id, err)
-		}
-	}
-}
-
-// --- Maintenance modes ---
-
-func TestRollbackSession_BlockedInReadOnly(t *testing.T) {
-	s := storefx.Init(t)
-	_ = putWithSession(t, s, "imp-7", "z")
-	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
-		t.Fatalf("SetMaintenanceMode: %v", err)
-	}
-	err := s.RollbackSession(context.Background(), "imp-7")
-	if !errors.Is(err, errs.ErrStoreReadOnly) {
-		t.Fatalf("expected errs.ErrStoreReadOnly, got %v", err)
-	}
-}
-
-func TestRollbackSession_BlockedInOffline(t *testing.T) {
-	s := storefx.Init(t)
-	_ = putWithSession(t, s, "imp-8", "z")
-	if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeOffline); err != nil {
-		t.Fatalf("SetMaintenanceMode: %v", err)
-	}
-	err := s.RollbackSession(context.Background(), "imp-8")
-	if !errors.Is(err, errs.ErrStoreOffline) {
-		t.Fatalf("expected errs.ErrStoreOffline, got %v", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := tc.init(t)
+			ids := tc.setup(t, s)
+			if err := s.RollbackSession(context.Background(), "imp"); !errors.Is(err, tc.want) {
+				t.Fatalf("%s: got %v, want %v", tc.name, err, tc.want)
+			}
+			for _, id := range ids {
+				if _, err := s.Get(context.Background(), id); err != nil {
+					t.Errorf("%s: artifact %q must survive blocked rollback, got %v", tc.name, id, err)
+				}
+			}
+			if got := storekit.WalkCount(t, s); got != tc.wantCnt {
+				t.Errorf("%s: Walk count: got %d, want %d (atomic refusal)", tc.name, got, tc.wantCnt)
+			}
+		})
 	}
 }
 
-// --- Cancellation ---
-
-func TestRollbackSession_CtxCancelled(t *testing.T) {
-	s := storefx.Init(t)
-	_ = putWithSession(t, s, "imp-9", "z")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := s.RollbackSession(ctx, "imp-9")
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled, got %v", err)
+// TestRollbackSession_Guards: empty id, read-only, offline, and a cancelled
+// context each refuse with their sentinel.
+func TestRollbackSession_Guards(t *testing.T) {
+	cases := []struct {
+		name string
+		run  func(t *testing.T) error
+		want error
+	}{
+		{"empty session id", func(t *testing.T) error {
+			s := storefx.Init(t)
+			return s.RollbackSession(context.Background(), "")
+		}, errs.ErrEmptySessionID},
+		{"read-only mode", func(t *testing.T) error {
+			s := storefx.Init(t)
+			_ = putWithSession(t, s, "imp", "z")
+			if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
+				t.Fatalf("SetMaintenanceMode: %v", err)
+			}
+			return s.RollbackSession(context.Background(), "imp")
+		}, errs.ErrStoreReadOnly},
+		{"offline mode", func(t *testing.T) error {
+			s := storefx.Init(t)
+			_ = putWithSession(t, s, "imp", "z")
+			if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeOffline); err != nil {
+				t.Fatalf("SetMaintenanceMode: %v", err)
+			}
+			return s.RollbackSession(context.Background(), "imp")
+		}, errs.ErrStoreOffline},
+		{"cancelled context", func(t *testing.T) error {
+			s := storefx.Init(t)
+			_ = putWithSession(t, s, "imp", "z")
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return s.RollbackSession(ctx, "imp")
+		}, context.Canceled},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.run(t); !errors.Is(err, tc.want) {
+				t.Fatalf("%s: got %v, want %v", tc.name, err, tc.want)
+			}
+		})
 	}
 }
 
-// --- Idempotency on success ---
-
+// TestRollbackSession_IdempotentOnSuccess: a second rollback of an
+// already-rolled-back session is a no-op.
 func TestRollbackSession_IdempotentOnSuccess(t *testing.T) {
 	s := storefx.Init(t)
 	_ = putWithSession(t, s, "imp-10", "x")
@@ -236,19 +232,15 @@ func TestRollbackSession_IdempotentOnSuccess(t *testing.T) {
 	}
 }
 
-// --- Idempotency under partial-progress simulation ---
-//
-// We simulate the "crash mid-rollback" recovery by calling
-// store.Delete on one artifact in the session, then invoking
-// RollbackSession. The remaining artifacts must be cleaned up,
-// and the missing one must not re-surface as an error.
+// TestRollbackSession_ResumesAfterPartialDelete: simulating a crash
+// mid-rollback (one artifact already individually deleted), a fresh
+// RollbackSession cleans up the rest and does not error on the missing one.
 func TestRollbackSession_ResumesAfterPartialDelete(t *testing.T) {
 	s := storefx.Init(t)
 	a := putWithSession(t, s, "imp-11", "x")
 	b := putWithSession(t, s, "imp-11", "y")
 	c := putWithSession(t, s, "imp-11", "z")
 
-	// Pretend rollback was interrupted after deleting one.
 	if err := s.Delete(context.Background(), b); err != nil {
 		t.Fatalf("setup Delete: %v", err)
 	}

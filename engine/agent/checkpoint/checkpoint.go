@@ -230,7 +230,7 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 
 	name := checkpointfmt.Prefix + id
 	if err := a.store.System().Put(ctx,
-		systemstore.Artifact{Name: name, Payload: f},
+		systemstore.NamedArtifact{Name: name, Payload: f},
 	); err != nil {
 		return CheckpointStats{}, fmt.Errorf("publish checkpoint %q: %w", name, err)
 	}

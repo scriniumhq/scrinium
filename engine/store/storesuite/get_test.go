@@ -1,11 +1,9 @@
-// Collapsed Get tests. Round-trip (target + inline, empty + non-empty)
-// is covered by the seeded round-trip property and the model test;
-// not-found / empty-id, state guards and ctx cancellation moved to the
-// cross-operation tables. What remains here is Get-specific behaviour
-// no property covers: random access, on-disk integrity detection, and
-// ReadHandle semantics.
-//
-// Replaces the previous store_get_test.go in full.
+// Get behaviour not covered by the round-trip property (category 4) or
+// the cross-operation guard tables (category 6): random access for both
+// layouts, on-disk integrity detection (corrupt manifest / missing blob),
+// and ReadHandle semantics. Round-trip itself lives in properties_test.go
+// and model_test.go; not-found / empty-id / state guards / ctx live in
+// guards_test.go.
 
 package storesuite
 
