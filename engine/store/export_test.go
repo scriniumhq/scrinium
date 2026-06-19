@@ -23,7 +23,7 @@ func StoreKeyResolver(s Store) pipeline.KeyResolver {
 	if !ok {
 		return nil
 	}
-	return concrete.dataFacet.core.crypto.Resolver()
+	return concrete.crypto.Resolver()
 }
 
 // StoreHasDEK reports whether the Store currently holds a DEK, exposing
@@ -34,7 +34,7 @@ func StoreHasDEK(s Store) bool {
 	if !ok {
 		return false
 	}
-	return concrete.dataFacet.core.crypto.HasDEK()
+	return concrete.crypto.HasDEK()
 }
 
 // ReadDriverFile reads a file from the Store's underlying Driver.
@@ -46,7 +46,7 @@ func ReadDriverFile(s Store, path string) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("ReadDriverFile: not a *store")
 	}
-	rc, err := concrete.dataFacet.core.drv.Get(context.Background(), path)
+	rc, err := concrete.drv.Get(context.Background(), path)
 	if err != nil {
 		return nil, err
 	}
@@ -63,5 +63,5 @@ func WriteDriverFile(s Store, path string, data []byte) error {
 	if !ok {
 		return fmt.Errorf("WriteDriverFile: not a *store")
 	}
-	return concrete.dataFacet.core.drv.Put(context.Background(), path, bytes.NewReader(data))
+	return concrete.drv.Put(context.Background(), path, bytes.NewReader(data))
 }

@@ -13,8 +13,8 @@ import (
 // cas builds an cas.IO bound to this store's driver, index,
 // and registries. The value is a cheap stateless handle, constructed per
 // operation rather than held as a field.
-func (c *core) cas() *cas.IO {
-	return cas.New(c.drv, c.index, c.hashes, c.transformers)
+func (s *store) cas() *cas.IO {
+	return cas.New(s.drv, s.index, s.hashes, s.transformers)
 }
 
 // Get opens an artifact for reading. It reads only the manifest and
@@ -24,15 +24,15 @@ func (c *core) cas() *cas.IO {
 // so the read path follows where the blob was actually written.
 // VerifyOnRead may wrap the handle to re-check the content hash as bytes
 // flow.
-func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain.GetOption) (domain.ReadHandle, error) {
-	if err := d.enterRead(ctx); err != nil {
+func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts ...domain.GetOption) (domain.ReadHandle, error) {
+	if err := s.enterRead(ctx); err != nil {
 		return nil, err
 	}
 	if id == "" {
 		return nil, errs.ErrArtifactNotFound
 	}
 
-	manifest, err := d.loadManifest(ctx, id)
+	manifest, err := s.loadManifest(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 		return nil, err
 	}
 
-	aio := d.cas()
+	aio := s.cas()
 	inner, err := aio.OpenHandle(ctx, manifest)
 	if err != nil {
 		return nil, err
@@ -50,11 +50,11 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 	// engine is the only guard against silent bit rot. AEAD blobs and
 	// media with native checksums auto-skip; ForceEnabled always wraps;
 	// Disabled never does (see shouldVerifyOnRead).
-	cfg := d.snapshotConfig()
-	verify := shouldVerifyOnRead(cfg.VerifyOnRead, manifest.Pipeline, d.drv.Capabilities(), d.transformers)
-	if log := d.componentLogger("store"); log.Enabled(ctx, slog.LevelDebug) {
+	cfg := s.snapshotConfig()
+	verify := shouldVerifyOnRead(cfg.VerifyOnRead, manifest.Pipeline, s.drv.Capabilities(), s.transformers)
+	if log := s.componentLogger("store"); log.Enabled(ctx, slog.LevelDebug) {
 		log.LogAttrs(ctx, slog.LevelDebug, "get opened",
-			storeIDAttr(d.core), artifactIDAttr(id),
+			storeIDAttr(s), artifactIDAttr(id),
 			slog.String("blob_storage", manifest.LayoutHeader.BlobStorage),
 			slog.Bool("verify_on_read", verify))
 	}
@@ -63,7 +63,7 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 			// Fires inside the caller's Read (after Get returned), so the
 			// store could not observe vErr directly. Publish the scrub
 			// event here; the error itself still propagates to the reader.
-			d.publish(event.EventScrubFailed, event.ScrubFailedPayload{ArtifactID: aid, Err: vErr})
+			s.publish(event.EventScrubFailed, event.ScrubFailedPayload{ArtifactID: aid, Err: vErr})
 		})
 	}
 	return inner, nil
@@ -79,8 +79,8 @@ func (d dataFacet) Get(ctx context.Context, id domain.ArtifactID, opts ...domain
 // Store has a nil resolver, which surfaces ErrKeyNotFound — the correct
 // refusal. asKeyProvider maps a nil resolver to a nil provider (the
 // typed-nil guard).
-func (c *core) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
-	return c.cas().Load(ctx, id, c.crypto.KeyProvider(), string(c.snapshotConfig().ContentHasher))
+func (s *store) loadManifest(ctx context.Context, id domain.ArtifactID) (domain.Manifest, error) {
+	return s.cas().Load(ctx, id, s.crypto.KeyProvider(), string(s.snapshotConfig().ContentHasher))
 }
 
 // guardHandleless enforces the negative identity invariant (ADR-83): a

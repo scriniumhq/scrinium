@@ -38,7 +38,7 @@ import (
 // crypto); its methods take and release it entirely on their own, and the
 // store never holds stateMu or cfgMu while calling into crypto.State, so
 // that mutex is never nested with these two either.
-type core struct {
+type store struct {
 	// Identity and dependencies.
 	storeID string
 	drv     driver.Driver
@@ -77,45 +77,17 @@ type core struct {
 	crypto *crypto.State
 }
 
-// dataFacet is the artifact-facing facet (DataStore): Put, Get, Walk,
-// and friends. Methods live in data_*.go.
-type dataFacet struct{ *core }
-
-// adminFacet is the administrative facet (AdminStore): State, Unlock,
-// crypto rotation, Close, RunMaintenance, and the System() accessor.
-// Methods live in admin_*.go, maintenance.go.
-type adminFacet struct{ *core }
-
-// store is the concrete Store handed to clients. It is a thin wrapper
-// embedding the data and admin facets over one shared *core, so the
-// flat Store = DataStore + AdminStore interface is satisfied by method
-// promotion. systemFacet is NOT embedded here — it is reached through
-// adminFacet.System(), which keeps the system Put/Get/Delete/Walk from
-// colliding with the data ones of the same name.
-type store struct {
-	dataFacet
-	adminFacet
-}
-
 var _ Store = (*store)(nil)
-
-// newStore wraps a freshly built *core into the client-facing store.
-func newStore(c *core) *store {
-	return &store{
-		dataFacet:  dataFacet{c},
-		adminFacet: adminFacet{c},
-	}
-}
 
 // System returns the SystemStore facade. Reached only through
 // AdminStore, so DataStore consumers cannot see system state.
-func (a adminFacet) System() systemstore.Store { return a.core.system }
+func (s *store) System() systemstore.Store { return s.system }
 
 // publish emits an event when a Publisher is configured. Cheap when
 // nil — the common case for tests and minimal-stack hosts.
-func (c *core) publish(typ string, payload any) {
-	if c.pub == nil {
+func (s *store) publish(typ string, payload any) {
+	if s.pub == nil {
 		return
 	}
-	c.pub.Publish(event.Event{Type: typ, Payload: payload})
+	s.pub.Publish(event.Event{Type: typ, Payload: payload})
 }

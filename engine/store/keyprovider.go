@@ -17,5 +17,5 @@ func ManifestKeyProvider(s Store) artifact.KeyProvider {
 	if !ok {
 		return nil
 	}
-	return concrete.dataFacet.core.crypto.KeyProvider()
+	return concrete.crypto.KeyProvider()
 }

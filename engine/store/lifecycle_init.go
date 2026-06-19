@@ -204,7 +204,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		slog.Bool("encrypted_dek", desc.DEKEncrypted),
 		manifestCryptoAttr(cfg.ManifestCrypto),
 		slog.Bool("recovery_kit", kit != nil))
-	return newStore(s), kit, nil
+	return s, kit, nil
 }
 
 // prepareInitLocation probes the Driver for an existing descriptor and

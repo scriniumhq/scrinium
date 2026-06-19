@@ -22,8 +22,8 @@ import (
 // offline, bootstrapping, or locked stores with the appropriate
 // sentinel; operators can still read static metadata through State /
 // Capabilities. Honours ctx cancellation between the two operations.
-func (d dataFacet) Capacity(ctx context.Context) (domain.StorageInfo, error) {
-	if err := d.enterRead(ctx); err != nil {
+func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
+	if err := s.enterRead(ctx); err != nil {
 		return domain.StorageInfo{}, err
 	}
 
@@ -38,7 +38,7 @@ func (d dataFacet) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 	// system.* artifacts (not indexed), so system.config and the future
 	// system.state writers do not inflate user-facing storage stats.
 	var artifactCount int64
-	if err := d.index.IterateManifests(ctx, func(domain.Manifest) error {
+	if err := s.index.IterateManifests(ctx, func(domain.Manifest) error {
 		artifactCount++
 		return nil
 	}); err != nil {
@@ -52,7 +52,7 @@ func (d dataFacet) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 
 	// BlobCount: physical blobs/ count. Inline manifests carry no
 	// separate blob file, so they do not contribute here.
-	blobs, err := d.drv.CountObjects(ctx, "blobs")
+	blobs, err := s.drv.CountObjects(ctx, "blobs")
 	if err != nil {
 		return domain.StorageInfo{}, fmt.Errorf("store.Capacity: count blobs: %w", err)
 	}

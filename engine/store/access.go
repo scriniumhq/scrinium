@@ -11,11 +11,11 @@ import (
 // checkWritable extends checkOperational with the ReadOnly check.
 // Used at the entry of every mutating method; read-only operations
 // (Walk, Capacity, Get) use checkOperational alone.
-func (c *core) checkWritable() error {
-	if err := c.checkOperational(); err != nil {
+func (s *store) checkWritable() error {
+	if err := s.checkOperational(); err != nil {
 		return err
 	}
-	if c.maintenanceMode() == domain.MaintenanceModeReadOnly {
+	if s.maintenanceMode() == domain.MaintenanceModeReadOnly {
 		return errs.ErrStoreReadOnly
 	}
 	return nil
@@ -51,11 +51,11 @@ func (c *core) checkWritable() error {
 // (Get, Verify, Walk, Capacity, ConfigHistory, ExportRecoveryKit).
 // Combines context cancellation with the priority-of-checks gate.
 // Unlock uses enterAdmin instead, since Locked is its working state.
-func (c *core) enterRead(ctx context.Context) error {
+func (s *store) enterRead(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return c.checkOperational()
+	return s.checkOperational()
 }
 
 // enterWrite is the write-path counterpart: ctx + checkWritable
@@ -65,11 +65,11 @@ func (c *core) enterRead(ctx context.Context) error {
 // Those admin methods follow up with their own crypto-state checks
 // after taking cryptoMu — enterWrite handles only the universal
 // gate; specifics stay with each method.
-func (c *core) enterWrite(ctx context.Context) error {
+func (s *store) enterWrite(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return c.checkWritable()
+	return s.checkWritable()
 }
 
 // enterAdmin is the entry-preamble for admin methods that may
@@ -81,15 +81,15 @@ func (c *core) enterWrite(ctx context.Context) error {
 // Used only by Unlock today. ExportRecoveryKit, SetPassphrase,
 // RotateKEK reject Locked themselves and so go through enterRead
 // or enterWrite, which treat Locked as a refusal.
-func (c *core) enterAdmin(ctx context.Context) error {
+func (s *store) enterAdmin(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	c.stateMu.RLock()
-	closed := c.closed
-	state := c.state
-	mode := c.maintenance
-	c.stateMu.RUnlock()
+	s.stateMu.RLock()
+	closed := s.closed
+	state := s.state
+	mode := s.maintenance
+	s.stateMu.RUnlock()
 
 	if closed {
 		return os.ErrClosed

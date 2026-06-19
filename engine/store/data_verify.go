@@ -37,15 +37,15 @@ import (
 // Handleless manifests (empty identity slot) collapse to not-found via
 // guardHandleless; bodies whose layout needs an absent decorator fail in
 // the verify path.
-func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
-	if err := d.enterRead(ctx); err != nil {
+func (s *store) Verify(ctx context.Context, id domain.ArtifactID) error {
+	if err := s.enterRead(ctx); err != nil {
 		return err
 	}
 	if id == "" {
 		return errs.ErrArtifactNotFound
 	}
 
-	manifest, err := d.loadManifest(ctx, id)
+	manifest, err := s.loadManifest(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -53,8 +53,8 @@ func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
 		return err
 	}
 
-	if err := d.cas().VerifyBlob(ctx, manifest); err != nil {
-		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
+	if err := s.cas().VerifyBlob(ctx, manifest); err != nil {
+		s.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: id,
 			Err:        err,
 		})
@@ -62,8 +62,8 @@ func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
 		// verification failed for a specific artifact, recoverable at the
 		// operator level (restore from backup / investigate medium).
 		// Lock-free: Verify holds no mutex.
-		d.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "verify failed: blob integrity mismatch",
-			storeIDAttr(d.core), artifactIDAttr(id))
+		s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "verify failed: blob integrity mismatch",
+			storeIDAttr(s), artifactIDAttr(id))
 		return err
 	}
 	return nil
@@ -87,8 +87,8 @@ func (d dataFacet) Verify(ctx context.Context, id domain.ArtifactID) error {
 // A blob_ref with no consuming manifest (a race against Delete/GC, or
 // an orphan blob) returns errs.ErrArtifactNotFound, which the Scrub
 // Agent treats as "skip, not a corruption".
-func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
-	if err := d.enterRead(ctx); err != nil {
+func (s *store) VerifyBlobRef(ctx context.Context, blobRef string) error {
+	if err := s.enterRead(ctx); err != nil {
 		return err
 	}
 	if blobRef == "" {
@@ -102,7 +102,7 @@ func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
 	// clean stop, returning nil).
 	var consumerID domain.ArtifactID
 	found := false
-	err := d.index.ManifestsByBlobRef(ctx, blobRef, func(m domain.Manifest) error {
+	err := s.index.ManifestsByBlobRef(ctx, blobRef, func(m domain.Manifest) error {
 		consumerID = m.ArtifactID
 		found = true
 		return fs.SkipAll
@@ -114,7 +114,7 @@ func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
 		return errs.ErrArtifactNotFound
 	}
 
-	manifest, err := d.loadManifest(ctx, consumerID)
+	manifest, err := s.loadManifest(ctx, consumerID)
 	if err != nil {
 		return err
 	}
@@ -122,13 +122,13 @@ func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
 		return err
 	}
 
-	if err := d.cas().VerifyBlob(ctx, manifest); err != nil {
-		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
+	if err := s.cas().VerifyBlob(ctx, manifest); err != nil {
+		s.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: consumerID,
 			Err:        err,
 		})
-		d.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "scrub: blob integrity mismatch",
-			storeIDAttr(d.core), artifactIDAttr(consumerID))
+		s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "scrub: blob integrity mismatch",
+			storeIDAttr(s), artifactIDAttr(consumerID))
 		return err
 	}
 	return nil
@@ -149,14 +149,14 @@ func (d dataFacet) VerifyBlobRef(ctx context.Context, blobRef string) error {
 // On a corrupt manifest it publishes EventScrubFailed and returns the
 // underlying error (errs.ErrCorruptedManifest from VerifyArtifactID, or
 // a decrypt failure). A missing manifest returns errs.ErrArtifactNotFound.
-func (d dataFacet) VerifyManifest(ctx context.Context, id domain.ArtifactID) error {
-	if err := d.enterRead(ctx); err != nil {
+func (s *store) VerifyManifest(ctx context.Context, id domain.ArtifactID) error {
+	if err := s.enterRead(ctx); err != nil {
 		return err
 	}
 	if id == "" {
 		return errs.ErrArtifactNotFound
 	}
-	if _, err := d.loadManifest(ctx, id); err != nil {
+	if _, err := s.loadManifest(ctx, id); err != nil {
 		// loadManifest returns ErrArtifactNotFound for an absent
 		// manifest (a race against Delete) — propagate it untouched so
 		// the agent skips rather than alarms. Any other error is an
@@ -164,12 +164,12 @@ func (d dataFacet) VerifyManifest(ctx context.Context, id domain.ArtifactID) err
 		if errors.Is(err, errs.ErrArtifactNotFound) {
 			return err
 		}
-		d.publish(event.EventScrubFailed, event.ScrubFailedPayload{
+		s.publish(event.EventScrubFailed, event.ScrubFailedPayload{
 			ArtifactID: id,
 			Err:        err,
 		})
-		d.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "scrub: manifest integrity mismatch",
-			storeIDAttr(d.core), artifactIDAttr(id))
+		s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn, "scrub: manifest integrity mismatch",
+			storeIDAttr(s), artifactIDAttr(id))
 		return err
 	}
 	return nil

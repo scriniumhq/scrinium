@@ -26,16 +26,16 @@ import (
 //
 // Close does NOT close the StoreIndex — its lifetime belongs to the
 // host (see WithStoreIndex doc).
-func (a adminFacet) Close() error {
-	a.stateMu.Lock()
-	if a.closed {
-		a.stateMu.Unlock()
+func (s *store) Close() error {
+	s.stateMu.Lock()
+	if s.closed {
+		s.stateMu.Unlock()
 		return nil
 	}
-	a.closed = true
-	a.stateMu.Unlock()
+	s.closed = true
+	s.stateMu.Unlock()
 
-	resolver := a.crypto.CloseSecrets()
+	resolver := s.crypto.CloseSecrets()
 
 	if r, ok := resolver.(interface{ Close() }); ok {
 		r.Close()
@@ -44,8 +44,8 @@ func (a adminFacet) Close() error {
 	// Lock-free diagnostic trace (ADR-60): all locks are released and
 	// secrets are wiped by this point. context.Background() because Close
 	// takes no ctx; the record carries no cancellation semantics.
-	a.componentLogger("store").LogAttrs(context.Background(), slog.LevelDebug,
-		"store closed", storeIDAttr(a.core))
+	s.componentLogger("store").LogAttrs(context.Background(), slog.LevelDebug,
+		"store closed", storeIDAttr(s))
 
 	return nil
 }

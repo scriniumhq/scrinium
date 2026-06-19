@@ -13,23 +13,22 @@ import (
 
 // State returns the current state of the Store. Cheap and
 // lock-free for readers (RWMutex read).
-func (a adminFacet) State() domain.StoreState { return a.currentState() }
+func (s *store) State() domain.StoreState { return s.currentState() }
 
-// currentState reads the state field under stateMu. Lives on *core so
-// both the adminFacet.State() accessor and the private impl helpers
-// (unlockEncrypted, setPassphraseImpl, …) can read state uniformly.
-func (c *core) currentState() domain.StoreState {
-	c.stateMu.RLock()
-	defer c.stateMu.RUnlock()
-	return c.state
+// currentState reads the state field under stateMu, the uniform reader
+// used by State() and every gated method.
+func (s *store) currentState() domain.StoreState {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.state
 }
 
 // Capabilities returns the underlying Driver's capability mask.
 // Stable for the lifetime of the Store; not cached because the
 // Driver is the source of truth and a future Driver may want to
 // change its mask after a runtime probe.
-func (a adminFacet) Capabilities() driver.CapabilityMask {
-	return a.drv.Capabilities()
+func (s *store) Capabilities() driver.CapabilityMask {
+	return s.drv.Capabilities()
 }
 
 // SetMaintenanceMode transitions the Store into the requested
@@ -42,7 +41,7 @@ func (a adminFacet) Capabilities() driver.CapabilityMask {
 // covers it (every method checks ErrStoreOffline at its boundary).
 //
 // Idempotent: setting the current mode again is a no-op success.
-func (a adminFacet) SetMaintenanceMode(ctx context.Context, mode domain.MaintenanceMode) error {
+func (s *store) SetMaintenanceMode(ctx context.Context, mode domain.MaintenanceMode) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -53,38 +52,38 @@ func (a adminFacet) SetMaintenanceMode(ctx context.Context, mode domain.Maintena
 		return fmt.Errorf("store.SetMaintenanceMode: invalid mode %d", mode)
 	}
 
-	a.stateMu.Lock()
-	a.maintenance = mode
-	a.stateMu.Unlock()
+	s.stateMu.Lock()
+	s.maintenance = mode
+	s.stateMu.Unlock()
 
 	// No event is emitted yet: a log-only signal would create surprise
 	// state for the host, so deliberate silence is the safer default
 	// until a proper MaintenanceModeChanged event exists. A Debug log is
 	// not a host-visible event — safe to record the transition for
 	// diagnostics. Lock-free: stateMu released above.
-	a.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "maintenance mode set",
-		storeIDAttr(a.core), maintenanceModeAttr(mode))
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "maintenance mode set",
+		storeIDAttr(s), maintenanceModeAttr(mode))
 	return nil
 }
 
 // maintenanceMode reads the current maintenance mode under the state
 // lock, for the methods that must honour it.
-func (c *core) maintenanceMode() domain.MaintenanceMode {
-	c.stateMu.RLock()
-	defer c.stateMu.RUnlock()
-	return c.maintenance
+func (s *store) maintenanceMode() domain.MaintenanceMode {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.maintenance
 }
 
 // checkOperational returns the first sentinel that blocks a read or
 // write, in priority order. Closed comes first — once Close is called,
 // no other state matters. ReadOnly + mutating-op is checked one layer
 // up by checkWritable.
-func (c *core) checkOperational() error {
-	c.stateMu.RLock()
-	closed := c.closed
-	state := c.state
-	mode := c.maintenance
-	c.stateMu.RUnlock()
+func (s *store) checkOperational() error {
+	s.stateMu.RLock()
+	closed := s.closed
+	state := s.state
+	mode := s.maintenance
+	s.stateMu.RUnlock()
 
 	// Priority order:
 	//   0. Closed        — shut down; no other state is meaningful past Close.

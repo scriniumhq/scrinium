@@ -31,8 +31,8 @@ func buildStore(
 	cfg domain.StoreConfig,
 	desc *descriptor.Descriptor,
 	dek []byte,
-) (*core, error) {
-	c := &core{
+) (*store, error) {
+	c := &store{
 		storeID:      desc.StoreID,
 		drv:          drv,
 		index:        idx,
@@ -62,7 +62,7 @@ func buildStore(
 // An Orphan Scan error propagates with the *store left in
 // StateBootstrapping; the caller decides whether to retry, fall back to
 // Locked, or surface the failure.
-func unlockBootstrap(ctx context.Context, c *core, pub event.Publisher) error {
+func unlockBootstrap(ctx context.Context, c *store, pub event.Publisher) error {
 	report, err := orphanscan.RecoverOrphans(ctx, c.drv, c.index)
 	if err != nil {
 		return fmt.Errorf("orphan scan: %w", err)

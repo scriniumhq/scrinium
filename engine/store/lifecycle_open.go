@@ -130,7 +130,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
 			storeIDAttr(s), stateAttr(domain.StateUnlocked),
 			slog.Bool("encrypted_dek", false))
-		return newStore(s), nil
+		return s, nil
 	}
 
 	// Encrypted DEK below.
@@ -150,7 +150,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
 			storeIDAttr(s), stateAttr(domain.StateLocked),
 			slog.Bool("encrypted_dek", true))
-		return newStore(s), nil
+		return s, nil
 	}
 
 	// AutoUnlock: invoke the provider, derive KEK, unwrap DEK.
@@ -191,7 +191,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
 		storeIDAttr(s), stateAttr(domain.StateUnlocked),
 		slog.Bool("encrypted_dek", true), slog.Bool("auto_unlock", true))
-	return newStore(s), nil
+	return s, nil
 }
 
 // loadCanonicalDescriptor reads both descriptor replicas, reconciles

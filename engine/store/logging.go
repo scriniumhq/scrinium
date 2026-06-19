@@ -59,8 +59,8 @@ func resolveLogger(l *slog.Logger) *slog.Logger {
 
 // logger returns the store's logger, never nil. Mirrors the nil-safety of
 // publish: cheap and always callable.
-func (c *core) logger() *slog.Logger {
-	return slogx.OrDiscard(c.log)
+func (s *store) logger() *slog.Logger {
+	return slogx.OrDiscard(s.log)
 }
 
 // componentLogger derives a sublogger tagged with the component name
@@ -68,8 +68,8 @@ func (c *core) logger() *slog.Logger {
 // this rather than re-deriving the group, so the "scrinium" group is
 // applied exactly once (at construction) and the component attribute once
 // here — a Handler formats a With attribute a single time.
-func (c *core) componentLogger(component string) *slog.Logger {
-	return c.logger().With(slog.String("component", component))
+func (s *store) componentLogger(component string) *slog.Logger {
+	return s.logger().With(slog.String("component", component))
 }
 
 // optsLogger builds the lifecycle-phase logger for the package-level
@@ -117,7 +117,7 @@ func keyIDAttr(keyID string) slog.Attr {
 
 // storeIDAttr is the conventional attribute identifying which Store a
 // record came from. Safe: StoreID is a public UUID, not secret material.
-func storeIDAttr(c *core) slog.Attr {
+func storeIDAttr(c *store) slog.Attr {
 	return slog.String("store_id", c.storeID)
 }
 
@@ -171,10 +171,10 @@ func errAttr(err error) slog.Attr {
 // sense — that prohibition targets duplicate Warn/Error reporting; a
 // Debug trace is silent in production (DiscardHandler / level>Debug) and
 // exists purely for diagnostics. err must be non-nil.
-func (c *core) traceErr(ctx context.Context, op string, err error, attrs ...slog.Attr) error {
-	log := c.componentLogger("store")
+func (s *store) traceErr(ctx context.Context, op string, err error, attrs ...slog.Attr) error {
+	log := s.componentLogger("store")
 	if log.Enabled(ctx, slog.LevelDebug) {
-		rec := append([]slog.Attr{storeIDAttr(c), slog.String("op", op), errAttr(err)}, attrs...)
+		rec := append([]slog.Attr{storeIDAttr(s), slog.String("op", op), errAttr(err)}, attrs...)
 		log.LogAttrs(ctx, slog.LevelDebug, "operation failed", rec...)
 	}
 	return err

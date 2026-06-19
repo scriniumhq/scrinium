@@ -25,7 +25,7 @@ import (
 // outcome events through the bus it was constructed with — RunMaintenance
 // neither acquires the lease nor publishes agent.* events. It simply
 // orders Validate before Run and surfaces the result.
-func (a adminFacet) RunMaintenance(ctx context.Context, agent domain.MaintenanceAgent) (*domain.AgentResult, error) {
+func (s *store) RunMaintenance(ctx context.Context, agent domain.MaintenanceAgent) (*domain.AgentResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -33,26 +33,26 @@ func (a adminFacet) RunMaintenance(ctx context.Context, agent domain.Maintenance
 		return nil, fmt.Errorf("store.RunMaintenance: nil agent")
 	}
 
-	a.stateMu.RLock()
-	closed := a.closed
-	a.stateMu.RUnlock()
+	s.stateMu.RLock()
+	closed := s.closed
+	s.stateMu.RUnlock()
 	if closed {
 		return nil, os.ErrClosed
 	}
 
-	log := a.componentLogger("maintenance")
+	log := s.componentLogger("maintenance")
 	if err := agent.Validate(ctx); err != nil {
 		log.LogAttrs(ctx, slog.LevelDebug, "maintenance agent validation failed",
-			storeIDAttr(a.core), slog.String("error", err.Error()))
+			storeIDAttr(s), slog.String("error", err.Error()))
 		return nil, fmt.Errorf("store.RunMaintenance: validate: %w", err)
 	}
 
 	result, err := agent.Run(ctx)
 	if err != nil {
 		log.LogAttrs(ctx, slog.LevelDebug, "maintenance agent run failed",
-			storeIDAttr(a.core), slog.String("error", err.Error()))
+			storeIDAttr(s), slog.String("error", err.Error()))
 		return result, fmt.Errorf("store.RunMaintenance: run: %w", err)
 	}
-	log.LogAttrs(ctx, slog.LevelDebug, "maintenance agent completed", storeIDAttr(a.core))
+	log.LogAttrs(ctx, slog.LevelDebug, "maintenance agent completed", storeIDAttr(s))
 	return result, nil
 }

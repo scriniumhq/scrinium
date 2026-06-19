@@ -17,8 +17,8 @@ import (
 // &store{} construction sites. s.hashes / s.transformers remain on the
 // store: VerifyOnRead consults s.transformers directly, and manifest /
 // system.config hashing use s.hashes.
-func (c *core) pipelineRunner() *pipeline.Runner {
-	return pipeline.NewRunner(c.hashes, c.transformers)
+func (s *store) pipelineRunner() *pipeline.Runner {
+	return pipeline.NewRunner(s.hashes, s.transformers)
 }
 
 // errPipelineWithInline is returned when an Inline blob would have to

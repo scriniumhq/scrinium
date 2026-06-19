@@ -37,12 +37,12 @@ import (
 //
 // A crash between (4) and (5) leaves an on-disk manifest with no index
 // row; rebuilding the index from manifests is the recovery path.
-func (d dataFacet) Delete(ctx context.Context, id domain.ArtifactID) error {
-	if err := d.enterWrite(ctx); err != nil {
+func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
+	if err := s.enterWrite(ctx); err != nil {
 		return err
 	}
 
-	manifest, err := d.loadManifest(ctx, id)
+	manifest, err := s.loadManifest(ctx, id)
 	if err != nil {
 		return err // errs.ErrArtifactNotFound or errs.ErrCorruptedManifest
 	}
@@ -59,7 +59,7 @@ func (d dataFacet) Delete(ctx context.Context, id domain.ArtifactID) error {
 		return errs.ErrRetentionNotExpired
 	}
 
-	cfg := d.snapshotConfig()
+	cfg := s.snapshotConfig()
 	if cfg.DeletionPolicy == domain.DeletionPolicyNoDelete {
 		return errs.ErrDeletionForbidden
 	}
@@ -71,25 +71,25 @@ func (d dataFacet) Delete(ctx context.Context, id domain.ArtifactID) error {
 	// absent" window is recovered by an index rebuild. Deletion is keyed
 	// by digest; the index derives the blobs to decrement from
 	// manifest_blobs (Inline has no edges; Target has its one blob).
-	if err := d.index.DeleteManifest(ctx, manifest.Digest); err != nil {
-		return d.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: index: %w", err), artifactIDAttr(id), slog.String("stage", "index"))
+	if err := s.index.DeleteManifest(ctx, manifest.Digest); err != nil {
+		return s.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: index: %w", err), artifactIDAttr(id), slog.String("stage", "index"))
 	}
 
 	manifestPath, err := artifact.ManifestPath(manifest.Digest)
 	if err != nil {
 		return fmt.Errorf("store.Delete: manifest path: %w", err)
 	}
-	if err := d.drv.Remove(ctx, manifestPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := s.drv.Remove(ctx, manifestPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		// The index row is already gone, so the manifest file is now an
 		// orphan that the GC Orphan Scan reaps on its next sweep. We still
 		// surface the Remove error so the caller knows the operation was
 		// not fully clean.
-		return d.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: remove manifest file: %w", err), artifactIDAttr(id), slog.String("stage", "remove"))
+		return s.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: remove manifest file: %w", err), artifactIDAttr(id), slog.String("stage", "remove"))
 	}
 
-	d.publish(event.EventArtifactDeleted, event.ArtifactDeletedPayload{ArtifactID: id})
-	d.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "artifact deleted",
-		storeIDAttr(d.core), artifactIDAttr(id),
+	s.publish(event.EventArtifactDeleted, event.ArtifactDeletedPayload{ArtifactID: id})
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelDebug, "artifact deleted",
+		storeIDAttr(s), artifactIDAttr(id),
 		slog.String("blob_storage", manifest.LayoutHeader.BlobStorage))
 	return nil
 }

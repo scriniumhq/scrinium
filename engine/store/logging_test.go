@@ -106,7 +106,7 @@ func TestResolveLogger_NilIsSilent(t *testing.T) {
 }
 
 func TestStoreLogger_NilFieldIsSilent(t *testing.T) {
-	s := &core{} // log field left nil, as a hand-built test store
+	s := &store{} // log field left nil, as a hand-built test store
 	if s.logger() == nil {
 		t.Fatal("logger() returned nil; must substitute the discard logger")
 	}
@@ -119,7 +119,7 @@ func TestStoreLogger_NilFieldIsSilent(t *testing.T) {
 
 func TestResolveLogger_AddsScriniumGroup(t *testing.T) {
 	h, recs, _ := newCaptureHandler(slog.LevelDebug)
-	s := &core{storeID: "store-123", log: resolveLogger(slog.New(h))}
+	s := &store{storeID: "store-123", log: resolveLogger(slog.New(h))}
 
 	s.componentLogger("gc").Info("hello", slog.String("k", "v"))
 
@@ -188,12 +188,12 @@ func TestKeyIDAttr_EmptyIsVisibleNotOmitted(t *testing.T) {
 
 func TestClose_EmitsDebugTrace(t *testing.T) {
 	h, recs, _ := newCaptureHandler(slog.LevelDebug)
-	s := newStore(&core{
+	s := &store{
 		storeID: "store-xyz",
 		state:   domain.StateUnlocked,
 		log:     resolveLogger(slog.New(h)),
 		crypto:  crypto.New(nil, []byte{1, 2, 3, 4}, nil, nil, nil, nil),
-	})
+	}
 
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -220,7 +220,7 @@ func TestClose_EmitsDebugTrace(t *testing.T) {
 // TestClose_SilentByDefault ensures a store built without a logger emits
 // nothing on Close (no panic, no output).
 func TestClose_SilentByDefault(t *testing.T) {
-	s := newStore(&core{state: domain.StateUnlocked, crypto: crypto.New(nil, []byte{9}, nil, nil, nil, nil)})
+	s := &store{state: domain.StateUnlocked, crypto: crypto.New(nil, []byte{9}, nil, nil, nil, nil)}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on silent store: %v", err)
 	}
