@@ -1,0 +1,209 @@
+package storesuite
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"scrinium.dev/domain"
+	"scrinium.dev/errs"
+	"scrinium.dev/testutil/storefx"
+)
+
+var newStore = storefx.Init
+
+// --- State / Capabilities ---
+
+func TestStore_State_StartsUnlocked(t *testing.T) {
+	s := newStore(t)
+	if s.State() != domain.StateUnlocked {
+		t.Errorf("state: got %v, want %v", s.State(), domain.StateUnlocked)
+	}
+}
+
+func TestStore_Capabilities_DriverPassthrough(t *testing.T) {
+	s := newStore(t)
+	caps := s.Capabilities()
+	if caps == 0 {
+		t.Error("expected non-zero capabilities from localfs driver")
+	}
+}
+
+// --- SetMaintenanceMode ---
+
+func TestStore_SetMaintenanceMode_AllValidValues(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	for _, mode := range []domain.MaintenanceMode{
+		domain.MaintenanceModeNone,
+		domain.MaintenanceModeReadOnly,
+		domain.MaintenanceModeOffline,
+		domain.MaintenanceModeNone, // back to normal
+	} {
+		if err := s.SetMaintenanceMode(ctx, mode); err != nil {
+			t.Errorf("SetMaintenanceMode(%d): %v", mode, err)
+		}
+	}
+}
+
+func TestStore_SetMaintenanceMode_RejectsInvalid(t *testing.T) {
+	s := newStore(t)
+	err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceMode(99))
+	if err == nil {
+		t.Fatal("expected error on invalid mode")
+	}
+	if !strings.Contains(err.Error(), "invalid mode") {
+		t.Errorf("error message: %v", err)
+	}
+}
+
+// TestStore_SetMaintenanceMode_OfflineBlocksReads verifies that the
+// priority-of-checks flow surfaces errs.ErrStoreOffline through the
+// public methods that consult it (Capacity is the M1.3 example;
+// Put/Get/Delete arrive in M1.4).
+func TestStore_SetMaintenanceMode_OfflineBlocksCapacity(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	if err := s.SetMaintenanceMode(ctx, domain.MaintenanceModeOffline); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.Capacity(ctx)
+	if !errors.Is(err, errs.ErrStoreOffline) {
+		t.Fatalf("expected errs.ErrStoreOffline, got %v", err)
+	}
+
+	// Returning to None must restore Capacity.
+	if err := s.SetMaintenanceMode(ctx, domain.MaintenanceModeNone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Capacity(ctx); err != nil {
+		t.Errorf("Capacity should work after None: %v", err)
+	}
+}
+
+// --- Capacity ---
+
+func TestStore_Capacity_FreshStoreIsEmpty(t *testing.T) {
+	s := newStore(t)
+	info, err := s.Capacity(context.Background())
+	if err != nil {
+		t.Fatalf("Capacity: %v", err)
+	}
+	if info.ArtifactCount != 0 {
+		t.Errorf("ArtifactCount: got %d, want 0", info.ArtifactCount)
+	}
+	if info.BlobCount != 0 {
+		t.Errorf("BlobCount: got %d, want 0", info.BlobCount)
+	}
+	// Byte sentinels: -1 means "unavailable" — see StorageInfo doc.
+	if info.TotalBytes != -1 || info.AvailableBytes != -1 || info.UsedBytes != -1 {
+		t.Errorf("expected -1 sentinels for byte fields, got %+v", info)
+	}
+}
+
+// TestStore_Capacity_BlobCountReflectsDriver verifies that BlobCount
+// is sourced from the driver, not the index — so orphan blobs (files
+// on disk with no matching index row, e.g. between Driver.Put and
+// IndexManifest in the Put pipeline, or pre-GC) still show up. This
+// is what makes Capacity useful for diagnosing recovery situations.
+//
+// ArtifactCount, in contrast, comes from the index and is unaffected
+// by orphan manifest files.
+func TestStore_Capacity_BlobCountReflectsDriver(t *testing.T) {
+	s, root := storefx.InitWithRoot(t)
+
+	// Drop orphan blob files directly via the filesystem — Driver
+	// is wired through s but newStore does not export it.
+	for _, p := range []string{"blobs/aa/blob-1", "blobs/aa/blob-2", "blobs/bb/blob-3"} {
+		full := filepath.Join(root, p)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	info, err := s.Capacity(context.Background())
+	if err != nil {
+		t.Fatalf("Capacity: %v", err)
+	}
+	if info.BlobCount != 3 {
+		t.Errorf("BlobCount: got %d, want 3", info.BlobCount)
+	}
+	// ArtifactCount is index-sourced, so no user manifests exist
+	// (system.config is filtered out by the "*" wildcard).
+	if info.ArtifactCount != 0 {
+		t.Errorf("ArtifactCount: got %d, want 0 (orphan manifests don't count)", info.ArtifactCount)
+	}
+}
+
+func TestStore_Capacity_CtxCancelled(t *testing.T) {
+	s := newStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := s.Capacity(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
+
+// --- Walk ---
+
+func TestStore_Walk_EmptyStore(t *testing.T) {
+	s := newStore(t)
+	var seen int
+	err := s.Walk(context.Background(), func(m domain.Manifest) error {
+		seen++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	if seen != 0 {
+		t.Errorf("walked %d manifests on empty Store", seen)
+	}
+}
+
+func TestStore_Walk_CtxCancelled(t *testing.T) {
+	s := newStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := s.Walk(ctx, func(m domain.Manifest) error { return nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
+
+// --- Stub methods awaiting future milestones ---
+//
+// Defensive net: every method listed here is a deliberate stub
+// pending implementation in a later milestone. As each one is
+// wired up its line should be removed from this test. Methods
+// already implemented (Put, Get, Delete, Verify, RollbackSession)
+// have their own dedicated test files — do NOT add them back
+// here.
+func TestStore_PendingStubs(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	wantStub := func(label string, err error) {
+		t.Helper()
+		if err == nil {
+			t.Errorf("%s: expected stub error, got nil", label)
+			return
+		}
+		if !strings.Contains(err.Error(), "not implemented") {
+			t.Errorf("%s: expected 'not implemented', got %v", label, err)
+		}
+	}
+
+	// DataStore: PutBlob is reserved for level-3 decorators
+	// (chunker.Wrapper) and lands in M5.2.
+	_, err := s.PutBlob(ctx, strings.NewReader("x"), domain.BlobTypeChunk)
+	wantStub("PutBlob", err)
+}
