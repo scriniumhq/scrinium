@@ -1,4 +1,4 @@
-package casio_test
+package cas_test
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
-	"scrinium.dev/engine/internal/casio"
+	"scrinium.dev/engine/internal/cas"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/driverfx"
@@ -19,9 +19,9 @@ import (
 // harness wires a Writer over a localfs driver, in-memory index, the
 // artifactfx sha256 registry, and an empty transformer registry (no
 // pipeline stages → Plain content).
-func harness(t *testing.T) (*casio.IO, domain.StoreConfig) {
+func harness(t *testing.T) (*cas.IO, domain.StoreConfig) {
 	t.Helper()
-	w := casio.New(
+	w := cas.New(
 		driverfx.LocalFS(t),
 		indexfx.Memory(t),
 		artifactfx.Hashes(),

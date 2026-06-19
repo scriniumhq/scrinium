@@ -26,7 +26,7 @@ const scopeRoot = "extension."
 //
 // It satisfies systemstore.Store, so an extension can pass it anywhere a
 // SystemStore is expected — e.g. as the backing store of a versioned
-// registry built on the namedio Keep contract (ADR-85/101).
+// registry built on the named Keep contract (ADR-85/101).
 type ScopedSystemStore struct {
 	name   string
 	prefix string

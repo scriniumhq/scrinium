@@ -1,4 +1,4 @@
-package namedio
+package named
 
 import (
 	"bytes"

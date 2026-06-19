@@ -1,4 +1,4 @@
-package casio_test
+package cas_test
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/internal/casio"
+	"scrinium.dev/engine/internal/cas"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/artifactfx"
@@ -24,20 +24,20 @@ import (
 // rwHarness shares one (driver, index) pair between a Writer and a Reader,
 // so an artifact written by the Writer can be read back by the Reader —
 // the true round-trip.
-func rwHarness(t *testing.T) (*casio.IO, *casio.IO, driver.Driver, index.StoreIndex, domain.StoreConfig) {
+func rwHarness(t *testing.T) (*cas.IO, *cas.IO, driver.Driver, index.StoreIndex, domain.StoreConfig) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
 	tr := pipeline.NewTransformerRegistry()
-	w := casio.New(drv, idx, artifactfx.Hashes(), tr)
-	r := casio.New(drv, idx, artifactfx.Hashes(), tr)
+	w := cas.New(drv, idx, artifactfx.Hashes(), tr)
+	r := cas.New(drv, idx, artifactfx.Hashes(), tr)
 	cfg := storecfgfx.Plain()
 	return w, r, drv, idx, cfg
 }
 
 // write puts content through the Writer's three phases and returns the
 // artifact's floating ArtifactID (handle).
-func write(t *testing.T, w *casio.IO, cfg domain.StoreConfig, content string) domain.ArtifactID {
+func write(t *testing.T, w *cas.IO, cfg domain.StoreConfig, content string) domain.ArtifactID {
 	t.Helper()
 	ctx := context.Background()
 	opts := domain.PutOptions{}

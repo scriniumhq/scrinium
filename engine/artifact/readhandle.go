@@ -4,9 +4,9 @@ package artifact
 // payload. It is addressing-agnostic (it only needs the manifest's
 // InlineBlob), so it lives in the shared manifest layer and is used by
 // both addressing schemes: content-addressed inline blobs
-// (engine/internal/casio) and name-addressed system artifacts
+// (engine/internal/cas) and name-addressed system artifacts
 // (engine/systemstore). The blob-backed and verifying handles, which
-// need the driver and the inverse pipeline, stay in casio.
+// need the driver and the inverse pipeline, stay in cas.
 
 import (
 	"bytes"

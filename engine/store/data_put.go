@@ -9,7 +9,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
-	"scrinium.dev/engine/internal/casio"
+	"scrinium.dev/engine/internal/cas"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -20,7 +20,7 @@ import (
 // inputs against the active config, resolves the write key and borrows
 // the DEK (the only crypto-locked steps), and delegates the physical
 // mechanics — blob materialization, manifest assembly, persistence — to
-// casio. The store keeps the policy and the secrets; casio keeps the I/O.
+// cas. The store keeps the policy and the secrets; cas keeps the I/O.
 func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...domain.PutOption) (domain.ArtifactID, error) {
 	if err := d.enterWrite(ctx); err != nil {
 		return "", err
@@ -36,7 +36,7 @@ func (d dataFacet) Put(ctx context.Context, a domain.Artifact, opts ...domain.Pu
 		return "", err
 	}
 
-	aio := casio.New(d.drv, d.index, d.hashes, d.transformers)
+	aio := cas.New(d.drv, d.index, d.hashes, d.transformers)
 
 	// Resolve the write KeyID once and thread it through both the blob
 	// pipeline and the manifest body, so a blob and its manifest encrypt

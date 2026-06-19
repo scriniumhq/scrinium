@@ -63,9 +63,9 @@
 // Data plane (DataStore):
 //
 //   - data_put.go          — Put orchestrator and write-path policy; the
-//     physical mechanics live in internal/casio.
+//     physical mechanics live in internal/cas.
 //   - data_get.go          — Get, read-handle dispatch, manifest loading.
-//     The ReadHandle implementations live in internal/casio.
+//     The ReadHandle implementations live in internal/cas.
 //   - data_delete.go       — Delete.
 //   - data_verify.go       — Verify and the VerifyOnRead policy.
 //   - data_walk.go         — Walk.
@@ -94,24 +94,24 @@
 // System and config plumbing:
 //
 //   - systemstore.go    — the systemStore facade (Put/Get/Delete/Walk),
-//     a thin adapter over namedio. System artifacts are
+//     a thin adapter over named. System artifacts are
 //     addressed by name in their own system/ address space and are never
 //     indexed (ADR-85), so there is no pointer file and no opt-out flag.
 //
 // internal/ subpackages — concerns that own their state and so are
 // separate packages (the boundary along which the engine can be split):
 //
-//   - casio    — the artifact I/O mechanics over the engine/artifact
+//   - cas    — the artifact I/O mechanics over the engine/artifact
 //     format: blob materialization, manifest assembly/persistence (write)
 //     and manifest load, blob open, and verification (read).
 //   - descriptor   — the on-disk descriptor and its L2 cache.
 //   - keyring      — the KDF (Argon2id) and KEK/DEK wrap/unwrap kernels.
-//   - namedio — the system/<name>/<seq> address-space mechanics
+//   - named — the system/<name>/<seq> address-space mechanics
 //     (name validation, seq claim via atomic create, inline-manifest
 //     build, verify-on-read) shared by the systemStore facade and the
 //     storeconfig bootstrap path (ADR-85).
 //   - storeconfig  — the StoreConfig format, defaults, validation, and
-//     persistence (over namedio).
+//     persistence (over named).
 //   - orphanscan   — bootstrap-time orphan recovery.
 //   - reconcile    — replica reconciliation.
 //   - recoverykit  — the recovery-kit format.
