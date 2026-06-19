@@ -63,6 +63,19 @@ func WithPublisher(p event.Publisher) StoreOption {
 	return func(o *storeOptions) { o.publisher = p }
 }
 
+// WithLogger provides the *slog.Logger the Store and its components log
+// against. Optional: without it the Store is silent (slog.DiscardHandler).
+// A nil logger is treated as "silent" — WithLogger(nil) never panics and
+// is equivalent to omitting the option.
+//
+// The Store namespaces the supplied logger once at construction
+// (WithGroup("scrinium")) and derives per-component subloggers from it
+// (componentLogger). Hosts therefore pass a plain root logger; the engine
+// adds its own structure.
+func WithLogger(l *slog.Logger) StoreOption {
+	return func(o *storeOptions) { o.logger = l }
+}
+
 // WithHashRegistry provides the registry of hash algorithms.
 // Required. Used by the Pipeline runner, Recovery Agent, and
 // parsers.

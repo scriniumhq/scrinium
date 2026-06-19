@@ -33,19 +33,6 @@ import (
 //     slog.LogValuer and redact themselves; only KeyID (an opaque id) is
 //     logged, never the DEK / passphrase / KEK.
 
-// WithLogger provides the *slog.Logger the Store and its components log
-// against. Optional: without it the Store is silent (slog.DiscardHandler).
-// A nil logger is treated as "silent" — WithLogger(nil) never panics and
-// is equivalent to omitting the option.
-//
-// The Store namespaces the supplied logger once at construction
-// (WithGroup("scrinium")) and derives per-component subloggers from it
-// (componentLogger). Hosts therefore pass a plain root logger; the engine
-// adds its own structure.
-func WithLogger(l *slog.Logger) StoreOption {
-	return func(o *storeOptions) { o.logger = l }
-}
-
 // resolveLogger turns the (possibly nil) injected logger into the
 // store's namespaced logger. Called once, from buildStore. Never returns
 // nil — callers can log unconditionally and rely on Enabled-gating for
