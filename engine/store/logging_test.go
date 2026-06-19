@@ -225,3 +225,75 @@ func TestClose_SilentByDefault(t *testing.T) {
 		t.Fatalf("Close on silent store: %v", err)
 	}
 }
+
+// --- maintenance-mode attribute (enum → name, numeric fallback) ----------
+
+func TestMaintenanceModeAttr_NamesKnownModes(t *testing.T) {
+	cases := []struct {
+		mode domain.MaintenanceMode
+		want string
+	}{
+		{domain.MaintenanceModeNone, "none"},
+		{domain.MaintenanceModeReadOnly, "read_only"},
+		{domain.MaintenanceModeOffline, "offline"},
+	}
+	for _, tc := range cases {
+		a := maintenanceModeAttr(tc.mode)
+		if a.Key != "mode" {
+			t.Errorf("%v: key = %q, want \"mode\"", tc.mode, a.Key)
+		}
+		if a.Value.Kind() != slog.KindString || a.Value.String() != tc.want {
+			t.Errorf("%v: rendered %v(%q), want string %q", tc.mode, a.Value.Kind(), a.Value.String(), tc.want)
+		}
+	}
+}
+
+func TestMaintenanceModeAttr_UnknownFallsBackToNumeric(t *testing.T) {
+	// A mode the switch does not name must still log something meaningful
+	// — the numeric value — so a future MaintenanceMode addition stays
+	// visible in the record instead of being silently dropped.
+	const unknown = domain.MaintenanceMode(99)
+	a := maintenanceModeAttr(unknown)
+	if a.Key != "mode" {
+		t.Errorf("key = %q, want \"mode\"", a.Key)
+	}
+	if a.Value.Kind() != slog.KindInt64 {
+		t.Fatalf("unknown mode rendered as %v; want numeric (KindInt64)", a.Value.Kind())
+	}
+	if a.Value.Int64() != int64(unknown) {
+		t.Errorf("numeric value = %d, want %d", a.Value.Int64(), int64(unknown))
+	}
+}
+
+// --- construction-phase logger (Init/Open, before a *store exists) -------
+
+func TestOptsLogger_NilLoggerIsSilent(t *testing.T) {
+	l := optsLogger(storeOptions{}, "init") // logger field left nil
+	if l == nil {
+		t.Fatal("optsLogger returned nil; the construction path must be unconditionally loggable")
+	}
+	if l.Enabled(context.Background(), slog.LevelError) {
+		t.Error("nil-logger construction phase is not silent")
+	}
+}
+
+func TestOptsLogger_NamespacesAndTagsComponent(t *testing.T) {
+	h, recs, _ := newCaptureHandler(slog.LevelDebug)
+	l := optsLogger(storeOptions{logger: slog.New(h)}, "init")
+
+	l.Info("bootstrapping", slog.String("k", "v"))
+
+	if len(*recs) != 1 {
+		t.Fatalf("want 1 record, got %d", len(*recs))
+	}
+	got := (*recs)[0]
+	// Component tag and call attr both sit under "scrinium", exactly what
+	// buildStore installs on the live store — optsLogger must match it so
+	// construction-phase records and steady-state records read alike.
+	if got.Attrs["scrinium.component"] != "init" {
+		t.Errorf("component attr: want scrinium.component=init, got %q", got.Attrs["scrinium.component"])
+	}
+	if got.Attrs["scrinium.k"] != "v" {
+		t.Errorf("call attr: want scrinium.k=v, got %q", got.Attrs["scrinium.k"])
+	}
+}

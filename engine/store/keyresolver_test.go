@@ -126,3 +126,19 @@ func TestKeyResolverPromotion_OnInitStore(t *testing.T) {
 		t.Error("InitStore on encrypted Store should populate default KeyResolver")
 	}
 }
+
+// TestKeyResolverPromotion_PlainStorePromotesOverPlaintextDEK corrects an
+// earlier wrong assumption. A "plain" (no-passphrase) Store is NOT
+// unencrypted: InitStore always generates a DEK, and the plain path simply
+// stores it in the descriptor in the clear (DEKEncrypted=false) instead of
+// wrapping it under a passphrase. The DEK is therefore present, so with no
+// resolver injected promotion installs a default StaticKeyResolver over
+// it — the Store needs one to read manifests sealed under that DEK. Only a
+// genuinely DEK-less State (len(dek)==0) skips promotion, and InitStore
+// never produces one.
+func TestKeyResolverPromotion_PlainStorePromotesOverPlaintextDEK(t *testing.T) {
+	s := storefx.Init(t)
+	if store.StoreKeyResolver(s) == nil {
+		t.Error("plain Store should promote a default resolver over its plaintext DEK")
+	}
+}

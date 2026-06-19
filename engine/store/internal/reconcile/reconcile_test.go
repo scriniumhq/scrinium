@@ -1,12 +1,16 @@
 package reconcile
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"os"
 	"testing"
 
+	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/errs"
+	"scrinium.dev/testutil/driverfx"
 )
 
 func d(t *testing.T, seq uint64) *descriptor.Descriptor {
@@ -154,5 +158,131 @@ func TestReconcile_SplitBrain_SameSequenceDifferentContent(t *testing.T) {
 	_, err := Reconcile(l0, Valid, l1, Valid)
 	if !errors.Is(err, errs.ErrDescriptorSplitBrain) {
 		t.Fatalf("expected ErrDescriptorSplitBrain, got %v", err)
+	}
+}
+
+// --- ReadReplica / ReadBoth: on-disk read + corruption classification ----
+//
+// The Reconcile tests above run on constructed (descriptor, Status) pairs.
+// These cover the layer that PRODUCES those pairs from the driver — the
+// part that decides Valid / Absent / Corrupted from raw bytes — which the
+// pure-decision tests never touch.
+
+func writeReplica(t *testing.T, drv driver.Driver, path string, desc *descriptor.Descriptor) {
+	t.Helper()
+	data, err := descriptor.Marshal(desc)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if err := drv.Put(context.Background(), path, bytes.NewReader(data)); err != nil {
+		t.Fatalf("Put %q: %v", path, err)
+	}
+}
+
+func TestReadReplica_Valid(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	writeReplica(t, drv, descriptor.Path, d(t, 5))
+
+	got, status, err := ReadReplica(context.Background(), drv, descriptor.Path)
+	if err != nil {
+		t.Fatalf("ReadReplica: %v", err)
+	}
+	if status != Valid {
+		t.Errorf("status: got %v, want Valid", status)
+	}
+	if got == nil || got.Sequence != 5 {
+		t.Errorf("descriptor: got %+v, want Sequence=5", got)
+	}
+}
+
+func TestReadReplica_Absent(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	got, status, err := ReadReplica(context.Background(), drv, descriptor.Path)
+	if err != nil {
+		t.Fatalf("ReadReplica on a missing file must not error: %v", err)
+	}
+	if status != Absent {
+		t.Errorf("status: got %v, want Absent", status)
+	}
+	if got != nil {
+		t.Errorf("descriptor: got %+v, want nil", got)
+	}
+}
+
+func TestReadReplica_Corrupted(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	if err := drv.Put(context.Background(), descriptor.Path, bytes.NewReader([]byte("}{ not a descriptor"))); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, status, err := ReadReplica(context.Background(), drv, descriptor.Path)
+	if status != Corrupted {
+		t.Errorf("status: got %v, want Corrupted", status)
+	}
+	if err == nil {
+		t.Error("a Corrupted read should carry a diagnostic error")
+	}
+	if got != nil {
+		t.Errorf("descriptor: got %+v, want nil", got)
+	}
+}
+
+func TestReadBoth_BothValid(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	writeReplica(t, drv, descriptor.Path, d(t, 5))
+	writeReplica(t, drv, descriptor.BackupPath, d(t, 5))
+
+	l0, l1, l0s, l1s, err := ReadBoth(context.Background(), drv)
+	if err != nil {
+		t.Fatalf("ReadBoth: %v", err)
+	}
+	if l0s != Valid || l1s != Valid {
+		t.Errorf("statuses: got L0=%v L1=%v, want Valid/Valid", l0s, l1s)
+	}
+	if l0 == nil || l1 == nil {
+		t.Error("both descriptors should be non-nil when both valid")
+	}
+}
+
+func TestReadBoth_L0Valid_L1Absent(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	writeReplica(t, drv, descriptor.Path, d(t, 5)) // BackupPath (L1) left missing
+
+	l0, l1, l0s, l1s, err := ReadBoth(context.Background(), drv)
+	if err != nil {
+		t.Fatalf("ReadBoth: %v", err)
+	}
+	if l0s != Valid {
+		t.Errorf("L0 status: got %v, want Valid", l0s)
+	}
+	if l1s != Absent {
+		t.Errorf("L1 status: got %v, want Absent", l1s)
+	}
+	if l0 == nil {
+		t.Error("L0 should be non-nil")
+	}
+	if l1 != nil {
+		t.Errorf("L1 should be nil when absent, got %+v", l1)
+	}
+}
+
+// TestReadBoth_L0Corrupted_L1Valid confirms per-replica corruption is
+// reported through the status, NOT as a returned error (only a
+// non-ErrNotExist I/O failure is a returned error).
+func TestReadBoth_L0Corrupted_L1Valid(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	if err := drv.Put(context.Background(), descriptor.Path, bytes.NewReader([]byte("garbage"))); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	writeReplica(t, drv, descriptor.BackupPath, d(t, 9))
+
+	_, l1, l0s, l1s, err := ReadBoth(context.Background(), drv)
+	if err != nil {
+		t.Fatalf("ReadBoth must not return per-replica corruption as an error: %v", err)
+	}
+	if l0s != Corrupted {
+		t.Errorf("L0 status: got %v, want Corrupted", l0s)
+	}
+	if l1s != Valid || l1 == nil {
+		t.Errorf("L1: got status=%v desc=%+v, want Valid/non-nil", l1s, l1)
 	}
 }

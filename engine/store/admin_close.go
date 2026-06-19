@@ -14,9 +14,12 @@ import (
 //     checkOperational, which short-circuits to os.ErrClosed.
 //  2. Wipe DEK and capability token via crypto.CloseSecrets —
 //     long-lived secret material that does not survive shutdown.
-//  3. If a default StaticKeyResolver was promoted, ask it to drop
-//     its DEK copy. Custom resolvers are owned by the host and
-//     are left untouched.
+//  3. If the resolver in force exposes a Close() method, call it so it
+//     can drop its DEK copy. The default promoted StaticKeyResolver
+//     does. A host-supplied resolver is closed only if it opts in by
+//     exposing Close(); one that does not is left untouched. The
+//     trigger is the presence of the method, not ownership — a custom
+//     resolver that implements Close() WILL be closed here.
 //
 // Close does NOT transition state to Locked. "Closed" is its own
 // terminal condition and surfaces as os.ErrClosed; "Locked" is
