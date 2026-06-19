@@ -259,10 +259,10 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 // cache are written first so a config-write failure still leaves a
 // readable Store identity behind.
 func persistInitState(ctx context.Context, drv driver.Driver, idx index.StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
-	if err := descriptor.Persist(ctx, drv, desc); err != nil {
+	if err := descriptor.WriteBoth(ctx, drv, desc); err != nil {
 		return wrap("write descriptor", err)
 	}
-	if err := descriptor.Save(ctx, idx, desc); err != nil {
+	if err := descriptor.SaveCache(ctx, idx, desc); err != nil {
 		return wrap("save L2 cache", err)
 	}
 	if hashes == nil {

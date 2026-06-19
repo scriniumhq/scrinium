@@ -183,7 +183,7 @@ func TestReadReplica_Valid(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	writeReplica(t, drv, descriptor.Path, d(t, 5))
 
-	got, status, err := ReadReplica(context.Background(), drv, descriptor.Path)
+	got, status, err := ReadReplica(context.Background(), drv, descriptor.L0)
 	if err != nil {
 		t.Fatalf("ReadReplica: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestReadReplica_Valid(t *testing.T) {
 
 func TestReadReplica_Absent(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	got, status, err := ReadReplica(context.Background(), drv, descriptor.Path)
+	got, status, err := ReadReplica(context.Background(), drv, descriptor.L0)
 	if err != nil {
 		t.Fatalf("ReadReplica on a missing file must not error: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestReadReplica_Corrupted(t *testing.T) {
 	if err := drv.Put(context.Background(), descriptor.Path, bytes.NewReader([]byte("}{ not a descriptor"))); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	got, status, err := ReadReplica(context.Background(), drv, descriptor.Path)
+	got, status, err := ReadReplica(context.Background(), drv, descriptor.L0)
 	if status != Corrupted {
 		t.Errorf("status: got %v, want Corrupted", status)
 	}

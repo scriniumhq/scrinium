@@ -97,7 +97,11 @@ type Result struct {
 // the file is missing; (nil, Corrupted, err) when it exists but
 // parses badly (err is diagnostic; Corrupted is reconcilable); and
 // (nil, Absent, err) on a non-ErrNotExist I/O failure (propagate).
-func ReadReplica(ctx context.Context, drv driver.Driver, path string) (*descriptor.Descriptor, Status, error) {
+func ReadReplica(ctx context.Context, drv driver.Driver, r descriptor.Replica) (*descriptor.Descriptor, Status, error) {
+	path, err := r.Path()
+	if err != nil {
+		return nil, Absent, fmt.Errorf("reconcile.ReadReplica: %w", err)
+	}
 	rc, err := drv.Get(ctx, path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -109,11 +113,11 @@ func ReadReplica(ctx context.Context, drv driver.Driver, path string) (*descript
 
 	data, err := readAll(rc)
 	if err != nil {
-		return nil, Corrupted, fmt.Errorf("reconcile.ReadReplica %q: read: %w", path, err)
+		return nil, Corrupted, fmt.Errorf("reconcile.ReadReplica %s: read: %w", r, err)
 	}
 	d, err := descriptor.Unmarshal(data)
 	if err != nil {
-		return nil, Corrupted, fmt.Errorf("reconcile.ReadReplica %q: parse: %w", path, err)
+		return nil, Corrupted, fmt.Errorf("reconcile.ReadReplica %s: parse: %w", r, err)
 	}
 	return d, Valid, nil
 }
@@ -122,8 +126,8 @@ func ReadReplica(ctx context.Context, drv driver.Driver, path string) (*descript
 // through the status; only a non-ErrNotExist I/O failure is returned
 // as err (with the matching descriptor nil and status Absent).
 func ReadBoth(ctx context.Context, drv driver.Driver) (l0, l1 *descriptor.Descriptor, l0s, l1s Status, err error) {
-	l0, l0s, err0 := ReadReplica(ctx, drv, descriptor.Path)
-	l1, l1s, err1 := ReadReplica(ctx, drv, descriptor.BackupPath)
+	l0, l0s, err0 := ReadReplica(ctx, drv, descriptor.L0)
+	l1, l1s, err1 := ReadReplica(ctx, drv, descriptor.L1)
 
 	if l0s == Absent && err0 != nil {
 		return nil, nil, l0s, l1s, err0

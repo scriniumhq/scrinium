@@ -885,7 +885,7 @@ func TestInitStore_WritesL1Replica(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	storefx.InitEncryptedOn(t, drv, "pw")
 
-	d, status, err := reconcile.ReadReplica(context.Background(), drv, descriptor.BackupPath)
+	d, status, err := reconcile.ReadReplica(context.Background(), drv, descriptor.L1)
 	if err != nil {
 		t.Fatalf("ReadReplica L1: %v", err)
 	}

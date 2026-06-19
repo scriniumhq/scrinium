@@ -45,10 +45,10 @@ func TestCache_RoundTrip(t *testing.T) {
 	meta := newFakeMeta()
 	src := validDescriptor(t)
 
-	if err := Save(ctx, meta, src); err != nil {
+	if err := SaveCache(ctx, meta, src); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	got, err := Load(ctx, meta)
+	got, err := LoadCache(ctx, meta)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCache_RoundTrip(t *testing.T) {
 func TestCache_AbsentReturnsNilNoError(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
-	got, err := Load(ctx, meta)
+	got, err := LoadCache(ctx, meta)
 	if err != nil {
 		t.Fatalf("expected nil error on empty cache, got %v", err)
 	}
@@ -120,7 +120,7 @@ func TestCache_PartialIsCorruption(t *testing.T) {
 			ctx := t.Context()
 			meta := newFakeMeta()
 			tc.set(meta)
-			_, err := Load(ctx, meta)
+			_, err := LoadCache(ctx, meta)
 			if err == nil {
 				t.Fatal("expected error on partial cache")
 			}
@@ -138,14 +138,14 @@ func TestCache_RejectsSequenceMismatch(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	src := validDescriptor(t) // Sequence = 7
-	if err := Save(ctx, meta, src); err != nil {
+	if err := SaveCache(ctx, meta, src); err != nil {
 		t.Fatal(err)
 	}
 	// Hand-edit: bump the stored sequence so it disagrees with
 	// what the blob encodes.
 	meta.data[metaKeyDescriptorSequence] = "999"
 
-	_, err := Load(ctx, meta)
+	_, err := LoadCache(ctx, meta)
 	if err == nil {
 		t.Fatal("expected error on sequence mismatch")
 	}
@@ -158,14 +158,14 @@ func TestCache_RejectsChecksumMismatch(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	src := validDescriptor(t)
-	if err := Save(ctx, meta, src); err != nil {
+	if err := SaveCache(ctx, meta, src); err != nil {
 		t.Fatal(err)
 	}
 	// Hand-edit: corrupt the checksum.
 	bogus := make([]byte, ChecksumLen)
 	meta.data[metaKeyDescriptorChecksum] = hex.EncodeToString(bogus)
 
-	_, err := Load(ctx, meta)
+	_, err := LoadCache(ctx, meta)
 	if err == nil {
 		t.Fatal("expected error on checksum mismatch")
 	}
@@ -182,7 +182,7 @@ func TestCache_RejectsUnparseableSequence(t *testing.T) {
 	meta.data[MetaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
 	meta.data[metaKeyDescriptorSequence] = "not-a-number"
 	meta.data[metaKeyDescriptorChecksum] = strings.Repeat("00", ChecksumLen)
-	_, err := Load(ctx, meta)
+	_, err := LoadCache(ctx, meta)
 	if err == nil {
 		t.Fatal("expected parse error")
 	}
@@ -194,7 +194,7 @@ func TestCache_RejectsUnparseableChecksum(t *testing.T) {
 	meta.data[MetaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
 	meta.data[metaKeyDescriptorSequence] = "1"
 	meta.data[metaKeyDescriptorChecksum] = "not hex bytes!"
-	_, err := Load(ctx, meta)
+	_, err := LoadCache(ctx, meta)
 	if err == nil {
 		t.Fatal("expected hex decode error")
 	}
@@ -206,7 +206,7 @@ func TestCache_RejectsBadChecksumLength(t *testing.T) {
 	meta.data[MetaKeyDescriptorBlob] = `{"store_id":"x","schema_version":1,"sequence":1}`
 	meta.data[metaKeyDescriptorSequence] = "1"
 	meta.data[metaKeyDescriptorChecksum] = "ab" // 1 byte, not 32
-	_, err := Load(ctx, meta)
+	_, err := LoadCache(ctx, meta)
 	if err == nil {
 		t.Fatal("expected length error")
 	}
@@ -218,7 +218,7 @@ func TestCache_SaveWritesThreeKeys(t *testing.T) {
 	ctx := t.Context()
 	meta := newFakeMeta()
 	src := validDescriptor(t)
-	if err := Save(ctx, meta, src); err != nil {
+	if err := SaveCache(ctx, meta, src); err != nil {
 		t.Fatal(err)
 	}
 	if meta.writes != 3 {
@@ -245,14 +245,14 @@ func TestCache_SaveOverwrites(t *testing.T) {
 	b := validDescriptor(t)
 	b.Sequence = 12
 
-	if err := Save(ctx, meta, a); err != nil {
+	if err := SaveCache(ctx, meta, a); err != nil {
 		t.Fatal(err)
 	}
-	if err := Save(ctx, meta, b); err != nil {
+	if err := SaveCache(ctx, meta, b); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := Load(ctx, meta)
+	got, err := LoadCache(ctx, meta)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +271,7 @@ func (m *errMeta) SetMeta(context.Context, string, string) error   { return m.er
 func TestCache_LoadPropagatesIOError(t *testing.T) {
 	ctx := t.Context()
 	sentinel := errors.New("disk on fire")
-	_, err := Load(ctx, &errMeta{err: sentinel})
+	_, err := LoadCache(ctx, &errMeta{err: sentinel})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -284,7 +284,7 @@ func TestCache_SavePropagatesIOError(t *testing.T) {
 	ctx := t.Context()
 	sentinel := errors.New("disk on fire")
 	src := validDescriptor(t)
-	err := Save(ctx, &errMeta{err: sentinel}, src)
+	err := SaveCache(ctx, &errMeta{err: sentinel}, src)
 	if err == nil {
 		t.Fatal("expected error")
 	}

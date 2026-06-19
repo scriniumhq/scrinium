@@ -35,11 +35,11 @@ type Cache struct {
 	Checksum []byte // SHA-256 over Blob, ChecksumLen bytes
 }
 
-// Load reads the three cache keys out of meta. Returns (nil, nil)
+// LoadCache reads the three cache keys out of meta. Returns (nil, nil)
 // when the cache is fully absent (fresh host); (nil, err) when it is
 // partial or internally inconsistent (caller rebuilds from Location);
 // (cache, nil) when present and consistent.
-func Load(ctx context.Context, meta MetaStore) (*Cache, error) {
+func LoadCache(ctx context.Context, meta MetaStore) (*Cache, error) {
 	blob, blobErr := meta.GetMeta(ctx, MetaKeyDescriptorBlob)
 	seqStr, seqErr := meta.GetMeta(ctx, metaKeyDescriptorSequence)
 	csumHex, csumErr := meta.GetMeta(ctx, metaKeyDescriptorChecksum)
@@ -84,10 +84,10 @@ func Load(ctx context.Context, meta MetaStore) (*Cache, error) {
 	return cache, nil
 }
 
-// Save writes the cache for d to meta. The three keys are written
+// SaveCache writes the cache for d to meta. The three keys are written
 // sequentially; a crash mid-trio leaves a partial cache that the next
-// Load rejects, prompting a re-save. Idempotent.
-func Save(ctx context.Context, meta MetaStore, d *Descriptor) error {
+// LoadCache rejects, prompting a re-save. Idempotent.
+func SaveCache(ctx context.Context, meta MetaStore, d *Descriptor) error {
 	blob, err := Marshal(d)
 	if err != nil {
 		return fmt.Errorf("descriptor cache: marshal: %w", err)
@@ -108,11 +108,11 @@ func Save(ctx context.Context, meta MetaStore, d *Descriptor) error {
 	return nil
 }
 
-// Refresh rewrites the cache when it is absent, corrupt, or diverged
+// RefreshCache rewrites the cache when it is absent, corrupt, or diverged
 // from canonical. A load error is swallowed on purpose: the cache is
-// recoverable from Location, and Save is idempotent.
-func Refresh(ctx context.Context, meta MetaStore, canonical *Descriptor) error {
-	cache, _ := Load(ctx, meta)
+// recoverable from Location, and SaveCache is idempotent.
+func RefreshCache(ctx context.Context, meta MetaStore, canonical *Descriptor) error {
+	cache, _ := LoadCache(ctx, meta)
 	if cache != nil {
 		want, err := Checksum(canonical)
 		if err != nil {
@@ -122,7 +122,7 @@ func Refresh(ctx context.Context, meta MetaStore, canonical *Descriptor) error {
 			return nil
 		}
 	}
-	if err := Save(ctx, meta, canonical); err != nil {
+	if err := SaveCache(ctx, meta, canonical); err != nil {
 		return fmt.Errorf("save: %w", err)
 	}
 	return nil

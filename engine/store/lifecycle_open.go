@@ -241,7 +241,7 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx index.S
 
 	// Save the L2 cache when absent, corrupted, or checksum-divergent.
 	// Read errors are non-fatal — the canonical is always the fallback.
-	if err := descriptor.Refresh(ctx, idx, desc); err != nil {
+	if err := descriptor.RefreshCache(ctx, idx, desc); err != nil {
 		return nil, wrap("refresh L2 cache", err)
 	}
 	return desc, nil

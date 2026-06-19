@@ -338,10 +338,10 @@ func (s *State) RecoveryKit() ([]byte, error) {
 // error s.desc / s.dek are left unchanged so a retry re-derives from the
 // same starting point.
 func (s *State) commitDescriptor(ctx context.Context, next *descriptor.Descriptor) error {
-	if err := descriptor.Persist(ctx, s.drv, next); err != nil {
+	if err := descriptor.WriteBoth(ctx, s.drv, next); err != nil {
 		return fmt.Errorf("persist descriptor: %w", err)
 	}
-	if err := descriptor.Save(ctx, s.index, next); err != nil {
+	if err := descriptor.SaveCache(ctx, s.index, next); err != nil {
 		// Persisted on disk but cache write failed. The next OpenStore
 		// will rebuild the cache from Location, so this is recoverable;
 		// surface the error so the caller knows it was not fully done.
