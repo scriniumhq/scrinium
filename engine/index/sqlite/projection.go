@@ -61,7 +61,7 @@ func (i *Index) applyIndexers(ctx context.Context, tx *sql.Tx, m domain.Manifest
 				if usrOn == -1 {
 					on, err := usrIndexingEnabled(ctx, tx)
 					if err != nil {
-						return err
+						return fmt.Errorf("read usr_indexing: %w", err)
 					}
 					if on {
 						usrOn = 1
@@ -163,21 +163,19 @@ func upsertProjUsr(ctx context.Context, tx *sql.Tx, digest, field string, kind c
 	return err
 }
 
-// usrIndexingEnabled reads the global store_meta.usr_indexing switch (default
-// off). Any value other than "on"/"true"/"1" — including absence — is off.
-func usrIndexingEnabled(ctx context.Context, tx *sql.Tx) (bool, error) {
+// usrIndexingEnabled reports the global store_meta.usr_indexing switch
+// (default off). Any value other than "on"/"true"/"1" — including absence
+// — is off. It takes a sqlExecutor so the read path (*sql.DB, via
+// QueryByUsrField) and the write path (*sql.Tx, via applyIndexers) share
+// one gate; wrapping the error is left to the caller.
+func usrIndexingEnabled(ctx context.Context, ex sqlExecutor) (bool, error) {
 	var v string
-	err := tx.QueryRowContext(ctx, `SELECT value FROM store_meta WHERE key = 'usr_indexing'`).Scan(&v)
+	err := ex.QueryRowContext(ctx, `SELECT value FROM store_meta WHERE key = 'usr_indexing'`).Scan(&v)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return false, nil
 	case err != nil:
-		return false, fmt.Errorf("read usr_indexing: %w", err)
+		return false, err
 	}
-	switch v {
-	case "on", "true", "1":
-		return true, nil
-	default:
-		return false, nil
-	}
+	return v == "on" || v == "true" || v == "1", nil
 }
