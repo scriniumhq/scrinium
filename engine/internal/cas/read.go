@@ -34,11 +34,11 @@ import (
 // keys is the manifest key provider (store passes its KeyResolver adapted
 // to artifact.KeyProvider; nil means "no resolver" — Plain decodes, an
 // encrypted manifest surfaces ErrKeyNotFound).
-func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyProvider, hashAlgo string) (domain.Manifest, error) {
+func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyProvider, hashAlgo string) (domain.Manifest, error) {
 	if id == "" {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
 	}
-	digest, ok, err := x.index.ResolveManifestDigest(ctx, id)
+	digest, ok, err := e.index.ResolveManifestDigest(ctx, id)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("cas.Load: resolve digest: %w", err)
 	}
@@ -49,7 +49,7 @@ func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("cas.Load: path: %w", err)
 	}
-	rc, err := x.drv.Get(ctx, manifestPath)
+	rc, err := e.drv.Get(ctx, manifestPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return domain.Manifest{}, errs.ErrArtifactNotFound
@@ -64,7 +64,7 @@ func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 	if len(raw) > domain.MaxManifestSize {
 		return domain.Manifest{}, errs.ErrManifestTooLarge
 	}
-	if err := artifact.VerifyManifestDigest(digest, raw, hashAlgo, x.hashes); err != nil {
+	if err := artifact.VerifyManifestDigest(digest, raw, hashAlgo, e.hashes); err != nil {
 		return domain.Manifest{}, err
 	}
 	m, err := artifact.DecodeEncrypted(raw, keys)
@@ -87,12 +87,12 @@ func (x *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 // through the index (the read path follows where the blob was actually
 // written, not what the current topology would compute) and opened
 // through the Driver.
-func (x *IO) OpenBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser, error) {
-	raw, err := x.openRawBlob(ctx, m)
+func (e *IO) OpenBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser, error) {
+	raw, err := e.openRawBlob(ctx, m)
 	if err != nil {
 		return nil, err
 	}
-	decoded, err := x.runner().BuildGet(m.Pipeline, raw)
+	decoded, err := e.runner().BuildGet(m.Pipeline, raw)
 	if err != nil {
 		// BuildGet closed raw on its failure path.
 		return nil, fmt.Errorf("cas.OpenBlob: build pipeline: %w", err)
@@ -103,17 +103,17 @@ func (x *IO) OpenBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser, er
 // openRawBlob returns the on-disk (ciphertext-shaped) bytes without any
 // pipeline decoding. Closing the returned reader releases driver-side
 // resources; for Inline it is a no-op.
-func (x *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser, error) {
+func (e *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser, error) {
 	switch m.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
 		return io.NopCloser(bytes.NewReader(m.InlineBlob)), nil
 
 	case domain.LayoutTarget:
-		addr, err := x.index.Resolve(ctx, string(m.PrimaryBlobRef()))
+		addr, err := e.index.Resolve(ctx, string(m.PrimaryBlobRef()))
 		if err != nil {
 			return nil, fmt.Errorf("cas: resolve blob path: %w", err)
 		}
-		rc, err := x.drv.Get(ctx, addr.Path)
+		rc, err := e.drv.Get(ctx, addr.Path)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				return nil, errs.ErrCorruptedBlob
@@ -133,13 +133,13 @@ func (x *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser,
 // decode-side failure inside the inverse pipeline (AEAD tag mismatch,
 // decompressor error) is folded into ErrCorruptedBlob; a context error is
 // returned as-is. The caller decides whether to publish EventScrubFailed.
-func (x *IO) VerifyBlob(ctx context.Context, m domain.Manifest) error {
-	want, hasher, err := artifact.ParseContentHash(x.hashes, m.HashAlgo, m.ContentHash)
+func (e *IO) VerifyBlob(ctx context.Context, m domain.Manifest) error {
+	want, hasher, err := artifact.ParseContentHash(e.hashes, m.HashAlgo, m.ContentHash)
 	if err != nil {
 		return fmt.Errorf("cas.VerifyBlob: %w", err)
 	}
 
-	plaintext, err := x.OpenBlob(ctx, m)
+	plaintext, err := e.OpenBlob(ctx, m)
 	if err != nil {
 		return err
 	}
