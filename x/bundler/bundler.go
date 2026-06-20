@@ -17,7 +17,7 @@ import (
 //
 // Storage is the backend-agnostic Substrate — one table keyed by
 // the packed ArtifactID, value = the encoded PlacementOverlay. The
-// store is captured in Setup (db-mode after registration: committed
+// sub is captured in Setup (db-mode after registration: committed
 // reads, autocommit writes).
 //
 // Placement is recorded explicitly through RecordPack (ADR-86,
@@ -32,7 +32,7 @@ import (
 // accounting and copy-forward compaction, ADR-86) land with the pack
 // GC contract. This stub implements only the Resolver overlay.
 type customIndex struct {
-	store customindex.Substrate
+	sub customindex.Substrate
 }
 
 const (
@@ -63,18 +63,18 @@ func (e *customIndex) SchemaVersion() int { return ciSchemaVersion }
 // entries are not present in EventArgs).
 func (e *customIndex) Subscribe() []customindex.EventKind { return nil }
 
-// Setup captures the long-lived store for the read/write API. The
+// Setup captures the long-lived sub for the read/write API. The
 // stored value flips to db-mode once registration commits.
 //
 // TODO(M4): when oldVersion indicates an existing map, or on a cold
 // start, rebuild placement by scanning each volume's TOC-blob.
-func (e *customIndex) Setup(ctx context.Context, store customindex.Substrate, oldVersion int) error {
-	e.store = store
+func (e *customIndex) Setup(ctx context.Context, sub customindex.Substrate, oldVersion int) error {
+	e.sub = sub
 	return nil
 }
 
 // Apply is a no-op: this custom index has no subscriptions.
-func (e *customIndex) Apply(ctx context.Context, store customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
+func (e *customIndex) Apply(ctx context.Context, sub customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
 	return nil
 }
 
@@ -88,7 +88,7 @@ func (e *customIndex) Close() error { return nil }
 // custom index owns. The pack volume's blob_ref is the container's body
 // blob (container.BlobRef).
 func (e *customIndex) RecordPack(ctx context.Context, container domain.Manifest, entries []PackedEntry) error {
-	if e.store == nil {
+	if e.sub == nil {
 		return fmt.Errorf("bundler: RecordPack before Setup")
 	}
 	packBlobRef := string(container.PrimaryBlobRef())
@@ -105,7 +105,7 @@ func (e *customIndex) RecordPack(ctx context.Context, container domain.Manifest,
 		if err != nil {
 			return fmt.Errorf("bundler: encode placement for %q: %w", entry.ArtifactID, err)
 		}
-		if err := e.store.Put(placementTable, string(entry.ArtifactID), value); err != nil {
+		if err := e.sub.Put(placementTable, string(entry.ArtifactID), value); err != nil {
 			return fmt.Errorf("bundler: record placement for %q: %w", entry.ArtifactID, err)
 		}
 	}
@@ -116,10 +116,10 @@ func (e *customIndex) RecordPack(ctx context.Context, container domain.Manifest,
 // placement of a packed artifact by its ArtifactID. A false return
 // means the artifact is not packed (the caller falls back to россыпь).
 func (e *customIndex) ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (customindex.PlacementOverlay, bool, error) {
-	if e.store == nil {
+	if e.sub == nil {
 		return customindex.PlacementOverlay{}, false, fmt.Errorf("bundler: ResolvePacked before Setup")
 	}
-	value, ok, err := e.store.Get(placementTable, string(artifactID))
+	value, ok, err := e.sub.Get(placementTable, string(artifactID))
 	if err != nil {
 		return customindex.PlacementOverlay{}, false, fmt.Errorf("bundler: lookup placement for %q: %w", artifactID, err)
 	}
@@ -140,11 +140,11 @@ func (e *customIndex) ResolvePacked(ctx context.Context, artifactID domain.Artif
 // PackBlobRef. Used by compaction/tombstoning (ADR-86); physical
 // reclaim of the volume itself is the Compactor's job.
 func (e *customIndex) DeletePack(ctx context.Context, packBlobRef string) error {
-	if e.store == nil {
+	if e.sub == nil {
 		return fmt.Errorf("bundler: DeletePack before Setup")
 	}
 	var victims []string
-	scanErr := e.store.Scan(placementTable, "", func(key string, value []byte) error {
+	scanErr := e.sub.Scan(placementTable, "", func(key string, value []byte) error {
 		var ov customindex.PlacementOverlay
 		if err := json.Unmarshal(value, &ov); err != nil {
 			return fmt.Errorf("bundler: decode placement at %q: %w", key, err)
@@ -158,7 +158,7 @@ func (e *customIndex) DeletePack(ctx context.Context, packBlobRef string) error 
 		return scanErr
 	}
 	for _, key := range victims {
-		if err := e.store.Delete(placementTable, key); err != nil {
+		if err := e.sub.Delete(placementTable, key); err != nil {
 			return fmt.Errorf("bundler: delete placement %q: %w", key, err)
 		}
 	}
