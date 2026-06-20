@@ -56,7 +56,7 @@ type jsonSys struct {
 	LayoutHeader     jsonLayoutHeader    `json:"layout_header"`
 	OriginalSize     *int64              `json:"original_size,omitempty"`
 	Pipeline         []jsonPipelineStage `json:"pipeline"`
-	RetentionTime    string              `json:"retention_until,omitempty"`
+	RetentionUntil   string              `json:"retention_until,omitempty"`
 	SchemaVersion    int                 `json:"schema_version"`
 	SessionID        string              `json:"session_id"`
 }
@@ -104,7 +104,7 @@ func marshalBodyJSON(m domain.Manifest) ([]byte, error) {
 		body.InlineBlob = base64.StdEncoding.EncodeToString(m.InlineBlob)
 	}
 	if !m.RetentionUntil.IsZero() {
-		body.Sys.RetentionTime = timefmt.Format(m.RetentionUntil)
+		body.Sys.RetentionUntil = timefmt.Format(m.RetentionUntil)
 	}
 
 	return json.Marshal(&body)
@@ -153,6 +153,10 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 			errs.ErrUnsupportedSchemaVersion, b.Sys.SchemaVersion, SchemaVersion)
 	}
 
+	pipeline, err := pipelineFromJSON(b.Sys.Pipeline)
+	if err != nil {
+		return domain.Manifest{}, err
+	}
 	m := domain.Manifest{
 		ArtifactID:       domain.ArtifactID(b.Sys.ArtifactID),
 		IdentityMetaHash: b.Sys.IdentityMetaHash,
@@ -166,7 +170,7 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 		LayoutHeader: domain.LayoutHeader{
 			BlobStorage: b.Sys.LayoutHeader.BlobStorage,
 		},
-		Pipeline: pipelineFromJSON(b.Sys.Pipeline),
+		Pipeline: pipeline,
 	}
 	if b.Sys.IdentityNonce != "" {
 		raw, err := base64.StdEncoding.DecodeString(b.Sys.IdentityNonce)
@@ -192,8 +196,8 @@ func unmarshalBodyJSON(body []byte) (domain.Manifest, error) {
 		}
 		m.CreatedAt = t
 	}
-	if b.Sys.RetentionTime != "" {
-		t, err := timefmt.Parse(b.Sys.RetentionTime)
+	if b.Sys.RetentionUntil != "" {
+		t, err := timefmt.Parse(b.Sys.RetentionUntil)
 		if err != nil {
 			return domain.Manifest{}, fmt.Errorf("artifact: retention_until: %w", err)
 		}
@@ -250,9 +254,9 @@ func pipelineToJSON(stages []domain.PipelineStage) []jsonPipelineStage {
 	return out
 }
 
-func pipelineFromJSON(stages []jsonPipelineStage) []domain.PipelineStage {
+func pipelineFromJSON(stages []jsonPipelineStage) ([]domain.PipelineStage, error) {
 	if len(stages) == 0 {
-		return nil
+		return nil, nil
 	}
 	out := make([]domain.PipelineStage, 0, len(stages))
 	for _, s := range stages {
@@ -262,16 +266,18 @@ func pipelineFromJSON(stages []jsonPipelineStage) []domain.PipelineStage {
 			KeyID:     s.KeyID,
 		}
 		if s.IV != "" {
+			// A non-base64 IV is a hard error, matching identity_nonce and
+			// inline_blob. The ManifestDigest is the hash of the raw file
+			// bytes, so a VerifyManifestDigest pass does NOT validate field
+			// syntax — silently dropping a bad IV would fail open into a
+			// later, worse-sited decryption fault.
 			raw, err := base64.StdEncoding.DecodeString(s.IV)
-			if err == nil {
-				ps.IV = raw
+			if err != nil {
+				return nil, fmt.Errorf("artifact: pipeline iv base64: %w", err)
 			}
-			// Decode failures are silent here: the format guarantees IV is
-			// base64 if present, so a decode error means the manifest is
-			// corrupt — caught upstream by VerifyManifestDigest. We keep the
-			// partial result and let that check surface the corruption.
+			ps.IV = raw
 		}
 		out = append(out, ps)
 	}
-	return out
+	return out, nil
 }
