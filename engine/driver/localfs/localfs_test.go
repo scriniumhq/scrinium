@@ -1,16 +1,12 @@
 package localfs
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,9 +14,16 @@ import (
 	"scrinium.dev/errs"
 )
 
-// helper: spin up a fresh driver in a t.TempDir() with fsync off
-// so tests stay fast on slow CI machines. Tests that need fsync
-// semantics call New directly.
+// This file holds the localfs-SPECIFIC (glass-box) tests: construction,
+// path resolution, the file:// scheme, on-disk tombstone mechanics,
+// dotfile/temp filtering, empty-directory pruning, and the exact
+// Capabilities mask. The backend-independent contract (Put/Get, ReadAt,
+// Remove/Rename/Clone, Stat/List/iteration, the tombstone lifecycle) is
+// exercised by the shared suite in conformance_test.go.
+
+// helper: spin up a fresh driver in a t.TempDir() with fsync off so
+// tests stay fast on slow CI machines. Tests that need fsync semantics
+// call New directly.
 func newTestDriver(t *testing.T) *Driver {
 	t.Helper()
 	d, err := New(t.TempDir(), WithFsync(false))
@@ -77,7 +80,7 @@ func TestNew_AbsolutePathReturned(t *testing.T) {
 	}
 }
 
-// --- Path safety ---
+// --- Path safety (resolve): rejection phrasing is localfs-specific ---
 
 func TestPathSafety_RejectsAbsolute(t *testing.T) {
 	d := newTestDriver(t)
@@ -103,219 +106,7 @@ func TestPathSafety_RejectsEmpty(t *testing.T) {
 	}
 }
 
-func TestPathSafety_NestedPathsOK(t *testing.T) {
-	d := newTestDriver(t)
-	if err := d.Put(context.Background(), "a/b/c/d.txt", strings.NewReader("ok")); err != nil {
-		t.Fatalf("nested put: %v", err)
-	}
-	r, err := d.Get(context.Background(), "a/b/c/d.txt")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	defer r.Close()
-	got, _ := io.ReadAll(r)
-	if string(got) != "ok" {
-		t.Fatalf("got %q, want %q", got, "ok")
-	}
-}
-
-// --- Put / Get round-trip ---
-
-func TestPutGet_RoundTrip(t *testing.T) {
-	d := newTestDriver(t)
-	payload := []byte("hello, scrinium")
-
-	if err := d.Put(context.Background(), "blob/x", bytes.NewReader(payload)); err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-	r, err := d.Get(context.Background(), "blob/x")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
-	defer r.Close()
-	got, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-	if !bytes.Equal(got, payload) {
-		t.Fatalf("got %q, want %q", got, payload)
-	}
-}
-
-func TestGet_NotFound(t *testing.T) {
-	d := newTestDriver(t)
-	_, err := d.Get(context.Background(), "missing")
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected ErrNotExist, got %v", err)
-	}
-}
-
-func TestPut_Overwrite(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	if err := d.Put(ctx, "f", strings.NewReader("first")); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.Put(ctx, "f", strings.NewReader("second")); err != nil {
-		t.Fatal(err)
-	}
-	r, _ := d.Get(ctx, "f")
-	defer r.Close()
-	got, _ := io.ReadAll(r)
-	if string(got) != "second" {
-		t.Fatalf("got %q, want %q", got, "second")
-	}
-}
-
-// TestPut_AtomicityUnderRead is the core safety test: a parallel
-// Get during a long Put never observes a partial file. It must
-// either return ErrNotExist (Put has not committed yet) or read
-// the previous content in full (commit happened mid-read of the
-// old file — which is impossible because we only see a snapshot
-// of one inode through Open).
-func TestPut_AtomicityUnderRead(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-
-	// Seed the file with a known "old" payload.
-	oldPayload := bytes.Repeat([]byte("OLD"), 100)
-	if err := d.Put(ctx, "live", bytes.NewReader(oldPayload)); err != nil {
-		t.Fatal(err)
-	}
-
-	// New payload of a clearly different size and content.
-	newPayload := bytes.Repeat([]byte("NEW"), 5000)
-
-	var wg sync.WaitGroup
-	var partial atomic.Bool
-
-	// Reader: many parallel Get calls; verifies the file is either
-	// fully OLD or fully NEW.
-	for i := 0; i < 40; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 50; j++ {
-				r, err := d.Get(ctx, "live")
-				if errors.Is(err, os.ErrNotExist) {
-					continue
-				}
-				if err != nil {
-					t.Errorf("Get: %v", err)
-					return
-				}
-				data, err := io.ReadAll(r)
-				r.Close()
-				if err != nil {
-					t.Errorf("ReadAll: %v", err)
-					return
-				}
-				if !bytes.Equal(data, oldPayload) && !bytes.Equal(data, newPayload) {
-					partial.Store(true)
-					return
-				}
-			}
-		}()
-	}
-
-	// Writer: a single Put that overwrites the file.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		// Tiny sleep so readers warm up first.
-		time.Sleep(2 * time.Millisecond)
-		if err := d.Put(ctx, "live", bytes.NewReader(newPayload)); err != nil {
-			t.Errorf("Put: %v", err)
-		}
-	}()
-
-	wg.Wait()
-
-	if partial.Load() {
-		t.Fatal("observed a partial read during Put — atomicity broken")
-	}
-}
-
-// --- Remove / Rename ---
-
-func TestRemove_Idempotent(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	if err := d.Put(ctx, "f", strings.NewReader("x")); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.Remove(ctx, "f"); err != nil {
-		t.Fatalf("Remove (existing): %v", err)
-	}
-	if err := d.Remove(ctx, "f"); err != nil {
-		t.Fatalf("Remove (missing): %v", err)
-	}
-}
-
-func TestRename(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	if err := d.Put(ctx, "src", strings.NewReader("data")); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.Rename(ctx, "src", "deeper/dst"); err != nil {
-		t.Fatalf("Rename: %v", err)
-	}
-	r, err := d.Get(ctx, "deeper/dst")
-	if err != nil {
-		t.Fatalf("Get after rename: %v", err)
-	}
-	r.Close()
-	if _, err := d.Stat(ctx, "src"); !os.IsNotExist(err) {
-		t.Fatalf("src still exists: %v", err)
-	}
-}
-
-// --- ReadAt ---
-
-func TestReadAt_Range(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	payload := []byte("0123456789abcdef")
-	if err := d.Put(ctx, "f", bytes.NewReader(payload)); err != nil {
-		t.Fatal(err)
-	}
-	r, err := d.ReadAt(ctx, "f", 4, 6)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r.Close()
-	got, _ := io.ReadAll(r)
-	if !bytes.Equal(got, []byte("456789")) {
-		t.Fatalf("got %q, want %q", got, "456789")
-	}
-}
-
-func TestReadAt_PastEnd(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	if err := d.Put(ctx, "f", strings.NewReader("abc")); err != nil {
-		t.Fatal(err)
-	}
-	r, err := d.ReadAt(ctx, "f", 1, 100)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r.Close()
-	got, _ := io.ReadAll(r)
-	if string(got) != "bc" {
-		t.Fatalf("got %q, want %q", got, "bc")
-	}
-}
-
-func TestReadAt_NegativeOffset(t *testing.T) {
-	d := newTestDriver(t)
-	if _, err := d.ReadAt(context.Background(), "f", -1, 1); err == nil {
-		t.Fatal("expected error on negative offset")
-	}
-}
-
-// --- Open (file:// URI) ---
+// --- Open (file:// URI): which schemes are supported is backend-specific ---
 
 func TestOpen_FileURI(t *testing.T) {
 	tmp := t.TempDir()
@@ -343,28 +134,7 @@ func TestOpen_UnsupportedScheme(t *testing.T) {
 	}
 }
 
-// --- Stat / List ---
-
-func TestStat(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	if err := d.Put(ctx, "f", strings.NewReader("hello")); err != nil {
-		t.Fatal(err)
-	}
-	info, err := d.Stat(ctx, "f")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Size != 5 {
-		t.Errorf("size: got %d, want 5", info.Size)
-	}
-	if info.IsDir {
-		t.Error("expected file, got dir")
-	}
-	if info.ModTime.IsZero() {
-		t.Error("ModTime not set")
-	}
-}
+// --- List: dotfile / tombstone filtering (on-disk markers) ---
 
 func TestList_FiltersHidden(t *testing.T) {
 	d := newTestDriver(t)
@@ -373,7 +143,7 @@ func TestList_FiltersHidden(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Drop a tombstone marker directly to simulate a tombstoned file.
-	if err := os.WriteFile(filepath.Join(d.Root(), "dir", "tombstoned.tombstone"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(d.Root(), "dir", "tombstoned"+tombstoneSuffix), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// Drop a temp-file remnant.
@@ -390,7 +160,7 @@ func TestList_FiltersHidden(t *testing.T) {
 	}
 }
 
-// --- ListObjectsWithModTime ---
+// --- ListObjectsWithModTime: since-filter via a backdated mtime ---
 
 func TestListObjectsWithModTime_FiltersBySince(t *testing.T) {
 	d := newTestDriver(t)
@@ -422,62 +192,7 @@ func TestListObjectsWithModTime_FiltersBySince(t *testing.T) {
 	}
 }
 
-func TestListObjectsWithModTime_StopWalk(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	for i := 0; i < 5; i++ {
-		if err := d.Put(ctx, string(rune('a'+i)), strings.NewReader("x")); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	var seen int
-	err := d.ListObjectsWithModTime(ctx, "", time.Time{}, func(m driver.ObjectMeta) error {
-		seen++
-		if seen == 2 {
-			return fs.SkipAll
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("fs.SkipAll should be swallowed, got %v", err)
-	}
-	if seen != 2 {
-		t.Fatalf("expected to stop at 2, saw %d", seen)
-	}
-}
-
-func TestListObjectsWithModTime_MissingPrefixIsEmpty(t *testing.T) {
-	d := newTestDriver(t)
-	err := d.ListObjectsWithModTime(context.Background(), "nonexistent", time.Time{}, func(m driver.ObjectMeta) error {
-		t.Fatalf("callback should not be invoked, got %v", m)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("missing prefix should be empty walk, got %v", err)
-	}
-}
-
-// --- CountObjects ---
-
-func TestCountObjects(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	for _, p := range []string{"a", "sub/b", "sub/c", "sub/deep/d"} {
-		if err := d.Put(ctx, p, strings.NewReader("x")); err != nil {
-			t.Fatal(err)
-		}
-	}
-	n, err := d.CountObjects(ctx, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 4 {
-		t.Fatalf("count: got %d, want 4", n)
-	}
-}
-
-// --- Tombstones ---
+// --- Tombstone on-disk mechanism (rename to "<path>.tombstone") ---
 
 func TestMarkTombstone_RenamesExisting(t *testing.T) {
 	d := newTestDriver(t)
@@ -488,62 +203,38 @@ func TestMarkTombstone_RenamesExisting(t *testing.T) {
 	if err := d.MarkTombstone(ctx, "f"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Stat(ctx, "f"); !os.IsNotExist(err) {
-		t.Fatalf("original still visible: %v", err)
+	// Mechanism: the original is renamed to "<path>.tombstone" via
+	// rename(2) — the original is gone and the marker holds the
+	// preserved content (kept for forensics and Recovery).
+	if _, err := os.Stat(filepath.Join(d.Root(), "f")); !os.IsNotExist(err) {
+		t.Fatalf("original still on disk: %v", err)
 	}
-	on, err := d.IsTombstone(ctx, "f")
+	got, err := os.ReadFile(filepath.Join(d.Root(), "f"+tombstoneSuffix))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("marker not found: %v", err)
 	}
-	if !on {
-		t.Fatal("expected tombstone marker to exist")
+	if string(got) != "data" {
+		t.Fatalf("marker content: got %q, want %q", got, "data")
 	}
 }
 
 func TestMarkTombstone_CreatesEmptyMarkerWhenMissing(t *testing.T) {
 	d := newTestDriver(t)
-	ctx := context.Background()
-	if err := d.MarkTombstone(ctx, "never_existed"); err != nil {
+	if err := d.MarkTombstone(context.Background(), "never_existed"); err != nil {
 		t.Fatal(err)
 	}
-	on, err := d.IsTombstone(ctx, "never_existed")
+	// Mechanism: with no original, an empty marker file is created so a
+	// future IsTombstone reports the deletion intent.
+	info, err := os.Stat(filepath.Join(d.Root(), "never_existed"+tombstoneSuffix))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("marker not created: %v", err)
 	}
-	if !on {
-		t.Fatal("expected marker to be created")
-	}
-}
-
-func TestMarkTombstone_Idempotent(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	if err := d.Put(ctx, "f", strings.NewReader("data")); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 3; i++ {
-		if err := d.MarkTombstone(ctx, "f"); err != nil {
-			t.Fatalf("iter %d: %v", i, err)
-		}
+	if info.Size() != 0 {
+		t.Fatalf("marker should be empty, got %d bytes", info.Size())
 	}
 }
 
-func TestIsTombstone_FalseForUntombstoned(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	if err := d.Put(ctx, "f", strings.NewReader("data")); err != nil {
-		t.Fatal(err)
-	}
-	on, err := d.IsTombstone(ctx, "f")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if on {
-		t.Fatal("expected no tombstone")
-	}
-}
-
-// --- PruneEmptyDirs ---
+// --- PruneEmptyDirs (empty-subtree removal; a filesystem concept) ---
 
 func TestPruneEmptyDirs(t *testing.T) {
 	d := newTestDriver(t)
@@ -570,14 +261,7 @@ func TestPruneEmptyDirs(t *testing.T) {
 	}
 }
 
-func TestPruneEmptyDirs_MissingRootIsNoOp(t *testing.T) {
-	d := newTestDriver(t)
-	if err := d.PruneEmptyDirs(context.Background(), "no/such/path"); err != nil {
-		t.Fatalf("expected no-op, got %v", err)
-	}
-}
-
-// --- Capabilities ---
+// --- Capabilities (exact localfs mask) ---
 
 func TestCapabilities(t *testing.T) {
 	d := newTestDriver(t)
@@ -593,43 +277,5 @@ func TestCapabilities(t *testing.T) {
 	}
 	if caps.Has(driver.CapNativeChecksum) {
 		t.Error("ext4/xfs default: must not declare CapNativeChecksum")
-	}
-}
-
-// --- Clone ---
-
-func TestClone(t *testing.T) {
-	d := newTestDriver(t)
-	ctx := context.Background()
-	if err := d.Put(ctx, "src/file", strings.NewReader("payload")); err != nil {
-		t.Fatal(err)
-	}
-	if err := d.Clone(ctx, "src/file", "dst/copy"); err != nil {
-		t.Fatal(err)
-	}
-	r, err := d.Get(ctx, "dst/copy")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r.Close()
-	got, _ := io.ReadAll(r)
-	if string(got) != "payload" {
-		t.Fatalf("got %q, want %q", got, "payload")
-	}
-	// Source must be intact.
-	if _, err := d.Stat(ctx, "src/file"); err != nil {
-		t.Fatalf("source disturbed: %v", err)
-	}
-}
-
-// --- Context cancellation ---
-
-func TestPut_ContextCancelled(t *testing.T) {
-	d := newTestDriver(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err := d.Put(ctx, "f", strings.NewReader("x"))
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }
