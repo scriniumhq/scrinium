@@ -86,7 +86,7 @@ func (i *Index) applyIndexers(ctx context.Context, tx *sql.Tx, m domain.Manifest
 // applyUnindexers runs every registered Indexer's Unindex over the manifest
 // being deleted, in the delete transaction (§9.2.1) — the symmetric inverse of
 // applyIndexers. Each index removes the rows it wrote to its OWN tables through
-// its Substrate. The core has already removed the штатные proj_* rows by digest
+// its Substrate. The core has already removed the built-in proj_* rows by digest
 // (deleteProjections); this covers the own-table side a digest alone cannot
 // reach. The manifest passed carries the indexed identity (ArtifactID/Digest);
 // its body (Ext) is not available at delete time, so an Unindex that needs the
@@ -107,7 +107,7 @@ func (i *Index) applyUnindexers(ctx context.Context, tx *sql.Tx, m domain.Manife
 	return nil
 }
 
-// deleteProjections removes every штатная-проекция row for digest, in the
+// deleteProjections removes every built-in projection row for digest, in the
 // delete transaction. The core owns proj_*, so it removes them by digest — the
 // symmetric inverse of having written them, and robust to an index toggled off
 // since the write (no orphan rows). An index's OWN tables (Substrate, §9.7) are

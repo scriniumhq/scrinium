@@ -15,7 +15,7 @@ import (
 
 // CustomIndexes returns the registry for installing index custom indexes
 // against this backend. Method on the concrete *Index type rather
-// than on store.StoreIndex — see ADR-49 for the rationale (avoids
+// than on index.StoreIndex — see ADR-49 for the rationale (avoids
 // a core ↔ index import cycle and respects backends that don't
 // support custom indexes).
 //

@@ -24,8 +24,8 @@ import (
 type StoreIndex interface {
 	// Writes and deletes.
 
-	// IndexManifest registers an artifact in the index. россыпь,
-	// composite and headless pack container index uniformly (ADR-87/92):
+	// IndexManifest registers an artifact in the index. Loose,
+	// composite and headless pack containers index uniformly (ADR-87/92):
 	// every blob in blob_refs is registered, ref-counted and linked
 	// positionally — a composite's chunk list lives in blob_refs and the
 	// core keeps its ref_count. Pack PLACEMENT (the per-member slice map)

@@ -21,7 +21,7 @@ import (
 // contention without hiding real deadlocks for too long.
 const DefaultBusyTimeout = 5 * time.Second
 
-// Index is the SQLite-backed implementation of store.StoreIndex.
+// Index is the SQLite-backed implementation of index.StoreIndex.
 // Construct via NewStore; Close when done.
 type Index struct {
 	db   *sql.DB
@@ -58,7 +58,7 @@ type Index struct {
 }
 
 // Compile-time interface conformance. Catches signature drift
-// between store.StoreIndex and *Index immediately at build time
+// between index.StoreIndex and *Index immediately at build time
 // instead of at the first assignment site.
 var _ index.StoreIndex = (*Index)(nil)
 
@@ -210,14 +210,10 @@ func buildDSN(path string, o options) string {
 	if path == ":memory:" {
 		return ":memory:"
 	}
+	// Relative paths are kept as-is; the caller is responsible for the
+	// working directory. We do NOT reach for filepath.Abs here because
+	// it depends on os.Getwd() and would surprise tests that chdir.
 	abs := path
-	if !filepath.IsAbs(path) {
-		// Relative paths are kept as-is; the caller is responsible
-		// for the working directory. We do NOT reach for
-		// filepath.Abs here because it depends on os.Getwd() and
-		// would surprise tests that chdir.
-		abs = path
-	}
 	// _foreign_keys=1 enforces FK constraints (we will rely on this
 	// once we add manifest_blobs cleanup triggers in a later pack).
 	q := []string{"_foreign_keys=1"}
