@@ -114,12 +114,10 @@ func defaultOptions() options {
 // migrations are applied forward-only. A version newer than
 // CurrentSchemaVersion returns errs.ErrIndexSchemaMismatch.
 //
-// The signature carries ctx and error even though some docs show a
-// simplified form without them.
-// Opening SQLite is real I/O: it can fail on bad paths,
-// permission errors, mid-flight migrations, or mmap limits, and
-// migrations are long-running and deserve cancellation. Doc
-// amendment tracked separately.
+// ctx and error are part of the signature because opening SQLite is
+// real I/O: it can fail on bad paths, permission errors, mid-flight
+// migrations, or mmap limits, and migrations are long-running and
+// deserve cancellation.
 func NewStore(ctx context.Context, path string, opts ...index.IndexOption) (*Index, error) {
 	// Resolve umbrella IndexOptions, then map them onto our local
 	// options struct. The reverse direction (sqlite-private knobs

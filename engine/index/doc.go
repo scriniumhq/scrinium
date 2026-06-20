@@ -7,10 +7,9 @@
 //     embedded mode. (M1.2)
 //   - index/postgres — a shared StoreIndex for multi-host deployments.
 //     Lands when needed.
-//   - index/memory — an in-memory implementation for tests.
 //
-// In M0 this package contains only a stub doc and the shared
-// types/options used across implementations.
+// Besides the contract, this package holds the shared types and
+// options used across implementations.
 //
 // DAG: index defines the StoreIndex contract and imports domain and
 // event (for emitting metric events). Implementations that need driver

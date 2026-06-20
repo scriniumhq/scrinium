@@ -21,7 +21,7 @@ import (
 //     ref_count bump per chunkRef and positional manifest -> chunk links.
 //   - headless pack container (empty slot): indexed exactly like a plain
 //     blob (its body blob_ref flows through manifest_blobs). The pack
-//     PLACEMENT map is owned by the bundler index-custom index's Resolver
+//     PLACEMENT map is owned by the bundler's custom-index Resolver
 //     (ADR-86), not the core — the core holds no pack table and does not
 //     branch on pack-ness.
 //
@@ -59,8 +59,8 @@ func (i *Index) indexManifestTx(
 		// registered + ref-counted + linked positionally — a composite's
 		// chunk list lives in blob_refs (the core keeps its ref_count), a
 		// plain blob has one, a headless pack container [toc, pack]. Pack
-		// PLACEMENT (the per-member slice map) is owned by the bundler
-		// index-custom index's Resolver (ADR-86), recorded out-of-band via
+		// PLACEMENT (the per-member slice map) is owned by the bundler's
+		// custom-index Resolver (ADR-86), recorded out-of-band via
 		// RecordPack — the core holds no pack table (closure, ADR-83).
 		if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
 			return err
@@ -297,7 +297,7 @@ func linkManifestToHandle(
 	return err
 }
 
-// --- Per-type registration paths ---
+// --- Registration path ---
 
 func indexBlobManifest(
 	ctx context.Context,

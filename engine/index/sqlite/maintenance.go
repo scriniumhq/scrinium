@@ -33,7 +33,7 @@ func (i *Index) MarkVerified(ctx context.Context, blobRef string, timestamp time
 
 // MarkManifestVerified records that the Scrub Agent has fully verified
 // the artifact: its manifest re-hashed and (for blob-backed artifacts)
-// its blobs confirmed fresh. The manifest-level stamp (schema v5)
+// its blobs confirmed fresh. The manifest-level stamp
 // complements MarkVerified, which stamps physical blobs — it is the
 // only place an Inline artifact's verification can be recorded, since
 // Inline carries no blobs row.
