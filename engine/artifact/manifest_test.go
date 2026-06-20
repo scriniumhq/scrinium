@@ -2,8 +2,10 @@ package artifact_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
@@ -11,7 +13,7 @@ import (
 	"scrinium.dev/testutil/artifactfx"
 )
 
-// --- Plain: encode/decode round-trip ---
+// --- Plain: encode/decode round-trip (full-field) ---
 
 func TestEncodeDecode_PlainRoundTrip(t *testing.T) {
 	m := artifactfx.Manifest()
@@ -23,11 +25,63 @@ func TestEncodeDecode_PlainRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) || got.OriginalSize != m.OriginalSize {
-		t.Errorf("round-trip lost sys fields: %+v", got)
+	if got.SessionID != m.SessionID {
+		t.Errorf("session id lost: %+v", got)
+	}
+	if string(got.ContentHash) != string(m.ContentHash) || string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) {
+		t.Errorf("content/blob ref lost: %+v", got)
+	}
+	if got.OriginalSize != m.OriginalSize {
+		t.Errorf("OriginalSize lost: got %d want %d", got.OriginalSize, m.OriginalSize)
+	}
+	if !got.CreatedAt.Equal(m.CreatedAt) {
+		t.Errorf("CreatedAt lost: got %v want %v", got.CreatedAt, m.CreatedAt)
+	}
+	if !bytes.Equal(got.Ext, m.Ext) {
+		t.Errorf("Ext lost: got %s", got.Ext)
+	}
+	if !bytes.Equal(got.Usr, m.Usr) {
+		t.Errorf("Usr lost: got %s", got.Usr)
 	}
 	if !bytes.Equal(got.InlineBlob, m.InlineBlob) {
-		t.Errorf("inline blob lost: got %q", got.InlineBlob)
+		t.Errorf("InlineBlob lost: got %q", got.InlineBlob)
+	}
+}
+
+// TestEncodeDecode_RetentionRoundTrip pins that RetentionUntil survives a
+// Plain round-trip (the field is omitempty and was previously untested).
+func TestEncodeDecode_RetentionRoundTrip(t *testing.T) {
+	want := time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)
+	m := artifactfx.Manifest(func(m *domain.Manifest) { m.RetentionUntil = want })
+	b, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := artifact.Decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.RetentionUntil.Equal(want) {
+		t.Errorf("RetentionUntil did not survive round-trip: got %v want %v", got.RetentionUntil, want)
+	}
+}
+
+// TestEncode_PlainExtUsrVisibleOnDisk is the plaintext contrast to the
+// Sealed/Paranoid hiding tests: Plain leaves ext and usr readable on disk.
+func TestEncode_PlainExtUsrVisibleOnDisk(t *testing.T) {
+	m := artifactfx.Manifest(func(m *domain.Manifest) {
+		m.Ext = json.RawMessage(`{"m":"EXTMARKER_7f3a"}`)
+		m.Usr = json.RawMessage(`{"m":"USRMARKER_91b2"}`)
+	})
+	b, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(b, []byte("EXTMARKER_7f3a")) {
+		t.Error("Plain should leave ext in plaintext on disk")
+	}
+	if !bytes.Contains(b, []byte("USRMARKER_91b2")) {
+		t.Error("Plain should leave usr in plaintext on disk")
 	}
 }
 
@@ -83,6 +137,14 @@ func TestComputeManifestDigest_DifferentManifestsDifferentIDs(t *testing.T) {
 	}
 }
 
+// TestComputeManifestDigest_RejectsEmptyDEKOnEncrypted: a non-Plain mode with
+// no DEK is rejected before any encoding work.
+func TestComputeManifestDigest_RejectsEmptyDEKOnEncrypted(t *testing.T) {
+	if _, _, _, err := artifact.ComputeManifestDigest(artifactfx.Manifest(), "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoSealed, nil, ""); err == nil {
+		t.Fatal("Sealed encode with empty DEK must be rejected")
+	}
+}
+
 // --- VerifyManifestDigest: tamper detection ---
 
 func TestVerifyManifestDigest_AcceptsUntampered(t *testing.T) {
@@ -100,7 +162,7 @@ func TestVerifyManifestDigest_DetectsTampering(t *testing.T) {
 	}
 }
 
-// --- Sealed: round-trip + sys stays plaintext ---
+// --- Sealed: round-trip (full-field) + sys stays plaintext ---
 
 func TestSealed_RoundTrip(t *testing.T) {
 	m := artifactfx.Manifest()
@@ -109,11 +171,17 @@ func TestSealed_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(got.InlineBlob, m.InlineBlob) {
-		t.Errorf("inline blob did not survive Sealed round-trip: %q", got.InlineBlob)
+	if string(got.PrimaryBlobRef()) != string(m.PrimaryBlobRef()) {
+		t.Errorf("BlobRef lost: got %q", got.PrimaryBlobRef())
 	}
 	if !bytes.Equal(got.Ext, m.Ext) {
-		t.Errorf("ext did not survive: %s", got.Ext)
+		t.Errorf("Ext lost: got %s", got.Ext)
+	}
+	if !bytes.Equal(got.Usr, m.Usr) {
+		t.Errorf("Usr lost: got %s", got.Usr)
+	}
+	if !bytes.Equal(got.InlineBlob, m.InlineBlob) {
+		t.Errorf("InlineBlob lost: got %q", got.InlineBlob)
 	}
 }
 
@@ -128,7 +196,27 @@ func TestSealed_SysFieldsArePlaintextOnDisk(t *testing.T) {
 	}
 }
 
-// --- Paranoid: round-trip + everything hidden ---
+// TestSealed_EmptyExtAndUsr: empty ext/usr are omitted (not sealed empty) and
+// come back empty, not as a decryption error.
+func TestSealed_EmptyExtAndUsr(t *testing.T) {
+	m := artifactfx.Manifest(func(m *domain.Manifest) {
+		m.Ext = nil
+		m.Usr = nil
+	})
+	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoSealed)
+	got, err := artifact.DecodeEncrypted(b, artifactfx.Keys())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Ext) != 0 {
+		t.Errorf("expected empty Ext, got %s", got.Ext)
+	}
+	if len(got.Usr) != 0 {
+		t.Errorf("expected empty Usr, got %s", got.Usr)
+	}
+}
+
+// --- Paranoid: round-trip (full-field) + everything hidden ---
 
 func TestParanoid_RoundTrip(t *testing.T) {
 	m := artifactfx.Manifest()
@@ -137,8 +225,14 @@ func TestParanoid_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !bytes.Equal(got.Ext, m.Ext) {
+		t.Errorf("Ext lost: got %s", got.Ext)
+	}
+	if !bytes.Equal(got.Usr, m.Usr) {
+		t.Errorf("Usr lost: got %s", got.Usr)
+	}
 	if !bytes.Equal(got.InlineBlob, m.InlineBlob) {
-		t.Error("Paranoid round-trip lost fields")
+		t.Errorf("InlineBlob lost: got %q", got.InlineBlob)
 	}
 }
 
@@ -147,6 +241,21 @@ func TestParanoid_HidesSysOnDisk(t *testing.T) {
 	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoParanoid)
 	if bytes.Contains(b, []byte("sess-1")) {
 		t.Error("Paranoid should encrypt the whole body including sys (session id)")
+	}
+}
+
+// TestParanoid_HidesExtAndUsr: Paranoid encrypts ext and usr too, not just sys.
+func TestParanoid_HidesExtAndUsr(t *testing.T) {
+	m := artifactfx.Manifest(func(m *domain.Manifest) {
+		m.Ext = json.RawMessage(`{"m":"EXTMARKER_7f3a"}`)
+		m.Usr = json.RawMessage(`{"m":"USRMARKER_91b2"}`)
+	})
+	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoParanoid)
+	if bytes.Contains(b, []byte("EXTMARKER_7f3a")) {
+		t.Error("Paranoid leaked ext plaintext on disk")
+	}
+	if bytes.Contains(b, []byte("USRMARKER_91b2")) {
+		t.Error("Paranoid leaked usr plaintext on disk")
 	}
 }
 
@@ -181,6 +290,8 @@ func TestDecodeEncrypted_PlainForwards(t *testing.T) {
 	}
 }
 
+// --- Decode guards ---
+
 func TestDecode_ManifestTooLarge(t *testing.T) {
 	oversized := make([]byte, domain.MaxManifestSize+1)
 	if _, err := artifact.Decode(oversized); !errors.Is(err, errs.ErrManifestTooLarge) {
@@ -204,27 +315,43 @@ func TestEncode_TooManyRefs(t *testing.T) {
 	}
 }
 
-func TestEncodeDecode_PipelineKeyIDRoundTrip(t *testing.T) {
+// --- Pipeline: multi-stage round-trip incl. IV + KeyID co-presence ---
+//
+// A non-crypto stage must omit iv/key_id; a crypto stage must carry both, and
+// the IV must survive base64 round-trip.
+
+func TestEncodeDecode_PipelineMultiStageRoundTrip(t *testing.T) {
 	m := artifactfx.Manifest(func(m *domain.Manifest) {
 		m.Pipeline = []domain.PipelineStage{
-			{
-				Algorithm: "aes-gcm",
-				Hash:      "sha256-abcdef",
-				IV:        []byte{0x10, 0x20, 0x30},
-				KeyID:     "tenant-42",
-			},
+			{Algorithm: "zstd", Hash: "sha256-cccc"},
+			{Algorithm: "aes-gcm", Hash: "sha256-dddd", IV: []byte{1, 2, 3, 4}, KeyID: "tenant-42"},
 		}
 	})
-	bs, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	b, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
 	if err != nil {
-		t.Fatalf("Encode: %v", err)
+		t.Fatal(err)
 	}
-	got, err := artifact.Decode(bs)
+	got, err := artifact.Decode(b)
 	if err != nil {
-		t.Fatalf("Decode: %v", err)
+		t.Fatal(err)
 	}
-	if got.Pipeline[0].KeyID != "tenant-42" {
-		t.Errorf("crypto stage KeyID: got %q, want %q", got.Pipeline[0].KeyID, "tenant-42")
+	if len(got.Pipeline) != 2 {
+		t.Fatalf("expected 2 pipeline stages, got %d", len(got.Pipeline))
+	}
+	if got.Pipeline[0].Algorithm != "zstd" {
+		t.Errorf("stage 0 algorithm: got %q", got.Pipeline[0].Algorithm)
+	}
+	if len(got.Pipeline[0].IV) != 0 || got.Pipeline[0].KeyID != "" {
+		t.Errorf("non-crypto stage should omit iv/key_id, got iv=%x key_id=%q", got.Pipeline[0].IV, got.Pipeline[0].KeyID)
+	}
+	if got.Pipeline[1].Algorithm != "aes-gcm" {
+		t.Errorf("stage 1 algorithm: got %q", got.Pipeline[1].Algorithm)
+	}
+	if !bytes.Equal(got.Pipeline[1].IV, []byte{1, 2, 3, 4}) {
+		t.Errorf("stage 1 IV did not survive: got %x", got.Pipeline[1].IV)
+	}
+	if got.Pipeline[1].KeyID != "tenant-42" {
+		t.Errorf("stage 1 KeyID did not survive: got %q", got.Pipeline[1].KeyID)
 	}
 }
 
