@@ -48,13 +48,13 @@ type Index struct {
 	ciMu     sync.Mutex
 	ciByName map[string]customindex.CustomIndex
 	ciByKind map[customindex.EventKind][]customindex.CustomIndex
-	// ciStores keeps the long-lived CustomIndexStore handed to each
-	// CustomIndex during Setup. Apply uses fresh tx-scoped stores
-	// (allocated per call); the long-lived stores in this map are
+	// ciSubstrates keeps the long-lived substrate handed to each
+	// CustomIndex during Setup. Apply uses fresh tx-scoped substrates
+	// (allocated per call); the long-lived substrates in this map are
 	// the ones custom indexes may have captured for read-side use.
 	// Maintained so Close can release them in lockstep with the
 	// custom index list.
-	ciStores map[string]*sqliteCIStore
+	ciSubstrates map[string]*sqliteSubstrate
 }
 
 // Compile-time interface conformance. Catches signature drift
@@ -193,11 +193,11 @@ func newStoreInternal(ctx context.Context, path string, o options) (*Index, erro
 	}
 
 	return &Index{
-		db:       db,
-		opts:     o,
-		ciByName: make(map[string]customindex.CustomIndex),
-		ciByKind: make(map[customindex.EventKind][]customindex.CustomIndex),
-		ciStores: make(map[string]*sqliteCIStore),
+		db:           db,
+		opts:         o,
+		ciByName:     make(map[string]customindex.CustomIndex),
+		ciByKind:     make(map[customindex.EventKind][]customindex.CustomIndex),
+		ciSubstrates: make(map[string]*sqliteSubstrate),
 	}, nil
 }
 
@@ -262,16 +262,16 @@ func (i *Index) Close() error {
 		for _, ext := range i.ciByName {
 			_ = ext.Close()
 		}
-		// Drop store-side references so Get/Scan calls from a
-		// host that mistakenly held a captured store after
+		// Drop substrate-side references so Get/Scan calls from a
+		// host that mistakenly held a captured substrate after
 		// Close fail with a clear errSubstrateClosed instead of
 		// hitting a closed *sql.DB.
-		for _, store := range i.ciStores {
-			store.executor.Store(nil)
+		for _, sub := range i.ciSubstrates {
+			sub.executor.Store(nil)
 		}
 		i.ciByName = nil
 		i.ciByKind = nil
-		i.ciStores = nil
+		i.ciSubstrates = nil
 		i.ciMu.Unlock()
 
 		i.closeErr = i.db.Close()

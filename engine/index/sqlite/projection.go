@@ -45,9 +45,9 @@ func (i *Index) applyIndexers(ctx context.Context, tx *sql.Tx, m domain.Manifest
 	usrOn := -1 // tri-state: -1 unknown, 0 off, 1 on
 	for _, ci := range idxs {
 		name := ci.Name()
-		store := newSqliteSubstrate(name)
-		store.useTx(tx)
-		projs, err := ci.(customindex.Indexer).Index(ctx, store, m)
+		sub := newSqliteSubstrate(name)
+		sub.useTx(tx)
+		projs, err := ci.(customindex.Indexer).Index(ctx, sub, m)
 		if err != nil {
 			return fmt.Errorf("indexer %q index: %w", name, err)
 		}
@@ -98,9 +98,9 @@ func (i *Index) applyUnindexers(ctx context.Context, tx *sql.Tx, m domain.Manife
 	}
 	for _, ci := range idxs {
 		name := ci.Name()
-		store := newSqliteSubstrate(name)
-		store.useTx(tx)
-		if err := ci.(customindex.Indexer).Unindex(ctx, store, m); err != nil {
+		sub := newSqliteSubstrate(name)
+		sub.useTx(tx)
+		if err := ci.(customindex.Indexer).Unindex(ctx, sub, m); err != nil {
 			return fmt.Errorf("indexer %q unindex: %w", name, err)
 		}
 	}
