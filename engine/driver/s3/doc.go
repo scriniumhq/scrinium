@@ -6,11 +6,11 @@
 //
 //  1. Create localfs-equivalent Driver struct backed by an
 //     S3 client (aws-sdk-go-v2 or minio-go).
-//  2. Implement all 15 methods of driver.Driver against S3
+//  2. Implement all 17 methods of driver.Driver against S3
 //     primitives. Notable mappings:
 //     - Put → PutObject; large bodies via UploadPartCopy.
 //     - Get → GetObject (range support via Range header).
-//     - Delete → DeleteObject.
+//     - Remove → DeleteObject.
 //     - List → ListObjectsV2.
 //     Latency, eventual consistency, and partial failures are
 //     the operational concerns.

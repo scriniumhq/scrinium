@@ -36,10 +36,16 @@ type ObjectMeta struct {
 // The tombstone methods (MarkTombstone, IsTombstone) are mandatory
 // for supporting Two-Phase Deletion in a multi-host environment.
 //
-// Sentinel errors: ErrUnsupportedURIScheme (errs package) signals
-// an Open with a scheme no driver registered. The ListObjectsWithModTime
-// callback uses fs.SkipAll (stdlib) for early termination — same idiom
-// as filepath.WalkDir. Both are matched via errors.Is.
+// Sentinel errors (all matched via errors.Is):
+//   - os.ErrNotExist (stdlib): Get, ReadAt, Open, and Stat on a path
+//     that does not exist.
+//   - errs.ErrAlreadyExists (errs package): an Exclusive Put (see
+//     WithExclusive) when the destination path is already populated.
+//   - errs.ErrUnsupportedURIScheme (errs package): an Open with a
+//     scheme no driver registered.
+//
+// The ListObjectsWithModTime callback uses fs.SkipAll (stdlib) for
+// early termination — same idiom as filepath.WalkDir.
 type Driver interface {
 	// I/O.
 	Put(ctx context.Context, path string, r io.Reader, opts ...PutOption) error

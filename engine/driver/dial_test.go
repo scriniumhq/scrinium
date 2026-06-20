@@ -72,6 +72,13 @@ func TestDialDriver_FileURI_TildeHostExpands(t *testing.T) {
 	if _, err := os.UserHomeDir(); err != nil {
 		t.Skipf("no home dir: %v", err)
 	}
+	// "~" expands via os.UserHomeDir and DialDriver -> localfs.New CREATES the
+	// directory; point the home dir at a temp dir (HOME on Unix, USERPROFILE on
+	// Windows) so the created tree is auto-removed instead of leaking into the
+	// real home directory.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	d, err := driver.DialDriver("file://~/scrinium-dial-test-host")
 	if err != nil {
 		t.Fatalf("DialDriver(file://~/...): %v", err)
@@ -84,6 +91,10 @@ func TestDialDriver_FileURI_TildeHostExpands(t *testing.T) {
 // TestDialDriver_FileURI_DotHostExpands mirrors the above for the
 // cwd-relative alias file://./path.
 func TestDialDriver_FileURI_DotHostExpands(t *testing.T) {
+	// "." expands against the working directory and DialDriver -> localfs.New
+	// CREATES the directory; chdir into a temp dir so the created tree lands
+	// there and is auto-removed, instead of leaking into the working directory.
+	t.Chdir(t.TempDir())
 	d, err := driver.DialDriver("file://./scrinium-dial-test-cwd")
 	if err != nil {
 		t.Fatalf("DialDriver(file://./...): %v", err)
