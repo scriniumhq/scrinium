@@ -15,17 +15,29 @@ import (
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 )
+
+// writeIndex is the slice of index.StoreIndex the write path depends on:
+// it resolves a blob to its physical address, checks content existence for
+// dedup, and registers the finished manifest. Declaring the narrow port
+// here — rather than holding the full StoreIndex — keeps cas decoupled from
+// index methods it never calls. The concrete *sqlite.Index, and any full
+// index.StoreIndex value, satisfies it structurally.
+type writeIndex interface {
+	IndexManifest(ctx context.Context, m domain.Manifest, addr domain.PhysicalAddress) error
+	Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error)
+	ResolveManifestDigest(ctx context.Context, id domain.ArtifactID) (domain.ManifestDigest, bool, error)
+	ExistsByContent(ctx context.Context, hash domain.ContentHash, originalSize int64, crypto domain.CryptoIdentity) (blobRef string, exists bool, err error)
+}
 
 // IO is the artifact I/O engine bound to a store's Driver, StoreIndex,
 // and registries. Construct once with New; the value is a thin
 // handle over its dependencies and holds no mutable state.
 type IO struct {
 	drv          driver.Driver
-	index        index.StoreIndex
+	index        writeIndex
 	hashes       domain.HashRegistry
 	transformers pipeline.TransformerRegistry
 }
@@ -35,7 +47,7 @@ type IO struct {
 // internals.
 func New(
 	drv driver.Driver,
-	index index.StoreIndex,
+	index writeIndex,
 	hashes domain.HashRegistry,
 	transformers pipeline.TransformerRegistry,
 ) *IO {

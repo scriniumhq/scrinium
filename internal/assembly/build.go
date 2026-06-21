@@ -276,7 +276,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		return nil, serr
 	}
 
-	// Paired agents from extensions (фоновый довесок): the kind must be
+	// Paired agents from extensions (background add-on): the kind must be
 	// registered; a declared schedule (interval or cron) joins the set
 	// (replace-by-kind) and activates the scheduler, mirroring config
 	// schedules. Without a schedule the kind is available via

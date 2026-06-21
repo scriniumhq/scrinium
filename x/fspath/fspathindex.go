@@ -46,7 +46,7 @@ const schemaVersion = 1
 // Population is via the Indexer capability, NOT the Subscribe/Apply
 // event path: the core runs Index/Unindex inside the index-write and
 // delete transactions (09 §9.2). fspathindex keeps an OWN path tree
-// (queried through the Accessor) and projects nothing into the штатные
+// (queried through the Accessor) and projects nothing into the standard
 // proj_ext/proj_usr tables — "namespace projects nsid; fspathindex
 // writes an own path tree" (09 §9.2).
 type CustomIndex struct {
@@ -119,7 +119,7 @@ func (e *CustomIndex) Close() error {
 //     through without an fspathindex migration);
 //   - byPath: "<path>\x00<artifactID>" → artifactID (the path tree).
 //
-// It returns NO штатные projections: path lookup is served by the
+// It returns NO standard projections: path lookup is served by the
 // Accessor over the own path tree, not by proj_ext equality (09 §9.2).
 //
 // Manifests that carry no vfsmeta payload (foreign schema, system

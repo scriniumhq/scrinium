@@ -40,7 +40,7 @@ type jsonBody struct {
 // so the handle stays reproducible and survives index loss.
 //
 // Reference model (ADR-92/93): blob_refs is the ordered array of blob
-// references (россыпь — one, composite — chunks, pack — [toc, pack]) and
+// references (plain — one, composite — chunks, pack — [toc, pack]) and
 // handle_refs the ordered array of artifact→artifact edges (the DAG).
 // MIGRATION: namespace is still written transitionally — until its
 // readers move to ext (ADR-79).

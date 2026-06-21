@@ -64,10 +64,10 @@ func formatSeq(seq uint64) string {
 	return fmt.Sprintf("%0*d", seqWidth, seq)
 }
 
-// parseSeq reads a seq back from a directory leaf. It is deliberately strict —
-// exactly seqWidth decimal digits — so non-version entries (a nested name's
-// subdirectory, a stray file) parse as not-a-seq and are skipped by the
-// directory scan rather than mistaken for a version.
+// parseSeq reads a seq back from a key's trailing leaf. It is deliberately
+// strict — exactly seqWidth decimal digits — so non-version entries (a deeper
+// key under the same prefix, a stray file) parse as not-a-seq and are skipped
+// by the keyspace scan rather than mistaken for a version.
 func parseSeq(leaf string) (uint64, bool) {
 	if len(leaf) != seqWidth {
 		return 0, false
@@ -176,17 +176,27 @@ func ClaimVersion(ctx context.Context, drv driver.Driver, name string, body []by
 
 // ListActive enumerates every system name whose name has the given prefix and
 // returns each one's active (max-seq) version, sorted by name. An empty prefix
-// enumerates every system name. The listing is recursive (names are nested),
-// driven by ListObjectsWithModTime, which reports files only and treats a
-// missing prefix as an empty walk.
+// enumerates every system name. The keyspace is planar, so the listing is a
+// flat enumeration of every key under the root (names may contain slashes,
+// matched as flat keys), driven by ListObjectsWithModTime, which reports files
+// only and treats a missing prefix as an empty walk.
 func ListActive(ctx context.Context, drv driver.Driver, prefix string) ([]Active, error) {
 	rootSlash := root + "/"
 
 	best := map[string]Active{}
 	// Versions are flat files "named/<name>.<seq>". Split each entry at its
-	// last '.': the trailing leaf is the seq, the rest is the (dotted) name.
+	// last '.': the trailing leaf is the seq, the rest is the name.
 	// prefix is matched as a string over the name. The root is small, so the
 	// full walk is cheap.
+	//
+	// TODO(s3): push prefix into the driver list instead of filtering in
+	// memory. This passes the bare root and matches prefix here, so cost is
+	// O(whole named root) per call (same in scanSeqs and ListCells). On an
+	// object store this should map to ListObjectsV2(Prefix=root/prefix) →
+	// O(matches), server-side. Needs the driver "prefix" arg defined as a
+	// true string-prefix (localfs treats it as a dir path today) plus a
+	// drivertest case for a partial-key prefix. Marginal on localfs (one
+	// readdir either way); the win is the S3 backend.
 	err := drv.ListObjectsWithModTime(ctx, root, time.Time{}, func(o driver.ObjectMeta) error {
 		rel := strings.TrimPrefix(o.Path, rootSlash)
 		if rel == o.Path || rel == "" {

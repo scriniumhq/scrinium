@@ -114,7 +114,7 @@ func (e *customIndex) RecordPack(ctx context.Context, container domain.Manifest,
 
 // ResolvePacked implements customindex.Resolver: it overlays the
 // placement of a packed artifact by its ArtifactID. A false return
-// means the artifact is not packed (the caller falls back to россыпь).
+// means the artifact is not packed (the caller falls back to plain).
 func (e *customIndex) ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (customindex.PlacementOverlay, bool, error) {
 	if e.sub == nil {
 		return customindex.PlacementOverlay{}, false, fmt.Errorf("bundler: ResolvePacked before Setup")

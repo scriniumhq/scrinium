@@ -3,9 +3,9 @@
 // parts it carries are routed to their levels — a CustomIndex into the
 // StoreIndex (Tier 2), a behavior wrapper onto the store's data plane
 // (Tier 3), a paired background agent onto the scheduler (the optional
-// "фоновый довесок"). The host reasons about extensions as wholes, not
-// about the axes underneath (ADR-88, "Клиент = дескриптор-управляемая
-// авто-разводка").
+// "background add-on"). The host reasons about extensions as wholes, not
+// about the axes underneath (ADR-88, "Client = descriptor-driven
+// auto-wiring").
 //
 // The additive axes here follow ADR-88's per-store descriptor: behavior
 // (wrapper), CustomIndex, and the optional background agent. (The
@@ -39,7 +39,7 @@ type Descriptor struct {
 }
 
 // Agent is one paired background worker an extension brings along (the
-// "фоновый довесок"): an agent Kind that must be registered in the agent
+// "background add-on"): an agent Kind that must be registered in the agent
 // registry (blank-import its package, as with drivers), optionally
 // scheduled. Schedule is "" for manual-only (run via RunMaintenance), an
 // interval string ("6h"), or a cron expression (requires cron.Enable).

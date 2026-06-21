@@ -121,7 +121,7 @@ type EventArgs struct {
 
 // PlacementOverlay is the physical location of an artifact whose
 // storage is OWNED by an index custom index rather than the core
-// (ADR-88/86) — the overlay counterpart of the core's россыпь
+// (ADR-88/86) — the overlay counterpart of the core's plain
 // resolution. A packed artifact lives as two slices of a .pack
 // volume (its member manifest and its blob) plus the pipeline
 // parameters needed to decode the blob.
@@ -152,7 +152,7 @@ type PlacementOverlay struct {
 
 // Resolver is the optional capability a CustomIndex implements
 // to OVERLAY physical placement for the artifacts it owns
-// (ADR-88/86). The core resolves россыпь itself; for anything it
+// (ADR-88/86). The core resolves plain blobs itself; for anything it
 // does not find, it probes registered Resolvers, each covering its
 // own structure. The core never branches on artifact type —
 // ownership of the index record decides who answers, so a new
@@ -168,7 +168,7 @@ type Resolver interface {
 	// ResolvePacked reports the placement of an artifact this
 	// custom index owns, by its ArtifactID. The second return is false
 	// when the artifact is not owned here — the caller continues to
-	// the next resolver or falls back to россыпь. Reads see committed
+	// the next resolver or falls back to plain. Reads see committed
 	// state.
 	ResolvePacked(ctx context.Context, artifactID domain.ArtifactID) (PlacementOverlay, bool, error)
 }
@@ -176,7 +176,7 @@ type Resolver interface {
 // Key is a position in a CustomIndex's OWN ordered key space — a path for a
 // tree index — written via Substrate inside Index and scanned by the Accessor
 // family (KeyLookup/PrefixScan/RangeScan over own tables, §9.7). It is distinct
-// from a Projection: equality projection into the штатные tables (proj_ext/
+// from a Projection: equality projection into the standard tables (proj_ext/
 // proj_usr) is expressed by RETURNING Projections from Index, not Keys.
 type Key string
 
@@ -206,7 +206,7 @@ const (
 )
 
 // Projection is one equality row an Indexer emits for the core to write into
-// the штатные tables (proj_ext for PocketExt, proj_usr for PocketUsr, §9.5).
+// the standard tables (proj_ext for PocketExt, proj_usr for PocketUsr, §9.5).
 // The index supplies Field/Value(/Kind); the core stamps the manifest digest
 // and ext_name (= Name()), so an index cannot project under another index's
 // name (Principle 8). proj_* is the core-maintained equality store; an index
