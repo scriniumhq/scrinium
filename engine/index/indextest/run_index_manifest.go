@@ -19,13 +19,17 @@ func runIndexManifest(t *testing.T, f Factory) {
 		if err := idx.IndexManifest(ctx, m, manifestfx.PhysAddr("blobs/aa/bb/blob-1")); err != nil {
 			t.Fatalf("IndexManifest: %v", err)
 		}
-		// Manifest visible.
-		_, exists, err := idx.ResolveManifestDigest(ctx, "art-1")
+		// Manifest visible, and ResolveManifestDigest returns the digest
+		// the manifest was registered under.
+		digest, exists, err := idx.ResolveManifestDigest(ctx, "art-1")
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !exists {
 			t.Error("manifest must be visible after IndexManifest")
+		}
+		if digest != m.Digest {
+			t.Errorf("ResolveManifestDigest: got digest %q, want %q", digest, m.Digest)
 		}
 		// Blob has a ref.
 		n, err := idx.GetRefCount(ctx, "blob-1")

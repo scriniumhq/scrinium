@@ -21,13 +21,13 @@ import (
 //     ref_count bump per chunkRef and positional manifest -> chunk links.
 //   - headless pack container (empty slot): indexed exactly like a plain
 //     blob (its body blob_ref flows through manifest_blobs). The pack
-//     PLACEMENT map is owned by the bundler index-custom index's Resolver
+//     PLACEMENT map is owned by the bundler's custom-index Resolver
 //     (ADR-86), not the core — the core holds no pack table and does not
 //     branch on pack-ness.
 //
 // Regardless of strategy, the manifest's HandleRefs (artifact→artifact
 // edges, ADR-92) are linked into manifest_handles after the per-strategy
-// step. россыпь and composite carry none; pack containers carry their
+// step. Loose and composite carry none; pack containers carry their
 // members. The manifests table is keyed by ManifestDigest (the file
 // hash); the floating handle and the system name are nullable slot
 // columns (ADR-83/85/92).
@@ -59,15 +59,15 @@ func (i *Index) indexManifestTx(
 		// registered + ref-counted + linked positionally — a composite's
 		// chunk list lives in blob_refs (the core keeps its ref_count), a
 		// plain blob has one, a headless pack container [toc, pack]. Pack
-		// PLACEMENT (the per-member slice map) is owned by the bundler
-		// index-custom index's Resolver (ADR-86), recorded out-of-band via
+		// PLACEMENT (the per-member slice map) is owned by the bundler's
+		// custom-index Resolver (ADR-86), recorded out-of-band via
 		// RecordPack — the core holds no pack table (closure, ADR-83).
 		if err := indexBlobManifest(ctx, tx, m, addr); err != nil {
 			return err
 		}
 
 		// Link the artifact→artifact edges (HandleRefs, ADR-92). Empty
-		// for россыпь and composite; populated for pack containers
+		// for loose and composite; populated for pack containers
 		// (placement of members). Current fixtures set none, so the loop
 		// is a no-op until the bundler populates HandleRefs.
 		for pos, hr := range m.HandleRefs {
@@ -277,7 +277,7 @@ func linkManifestToBlob(
 //
 // NOTE: this stores the artifact→artifact edge only. Reference-count
 // accounting for HandleRefs (the filled-slot consumption direction,
-// ADR-92) is deferred until a producer exists — no россыпь or composite
+// ADR-92) is deferred until a producer exists — no loose or composite
 // carries handle edges, and pack containers arrive with the rebuilt
 // bundler.
 func linkManifestToHandle(
@@ -297,7 +297,7 @@ func linkManifestToHandle(
 	return err
 }
 
-// --- Per-type registration paths ---
+// --- Registration path ---
 
 func indexBlobManifest(
 	ctx context.Context,
@@ -322,7 +322,7 @@ func indexBlobManifest(
 		return fmt.Errorf("sqlite: manifest %q has no BlobRefs", m.ArtifactID)
 	}
 	// Every blob in blob_refs is registered + ref-counted (ADR-87/92):
-	// россыпь one, a composite the ordered chunk list, a pack
+	// a loose blob has one, a composite the ordered chunk list, a pack
 	// container [toc_blob, pack_blob]. registerBlob is upsert+bump, so a
 	// blob the chunker or bundler already wrote keeps its own metadata
 	// (ON CONFLICT DO NOTHING) and only gains a ref.
@@ -433,7 +433,7 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 			return err
 		}
 
-		// Remove the manifest's штатные projections (core-owned, by digest).
+		// Remove the manifest's built-in projections (core-owned, by digest).
 		if err := deleteProjections(ctx, tx, dg); err != nil {
 			return err
 		}

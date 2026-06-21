@@ -3,6 +3,7 @@ package pathx
 import "testing"
 
 func TestLastSegment(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ in, want string }{
 		{"", ""},
 		{"foo", "foo"},
@@ -18,6 +19,7 @@ func TestLastSegment(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
 			if got := LastSegment(tc.in); got != tc.want {
 				t.Errorf("LastSegment(%q) = %q, want %q", tc.in, got, tc.want)
 			}
@@ -26,6 +28,7 @@ func TestLastSegment(t *testing.T) {
 }
 
 func TestParent(t *testing.T) {
+	t.Parallel()
 	tests := []struct{ in, want string }{
 		{"", ""},
 		{"foo", ""},
@@ -38,6 +41,7 @@ func TestParent(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
 			if got := Parent(tc.in); got != tc.want {
 				t.Errorf("Parent(%q) = %q, want %q", tc.in, got, tc.want)
 			}
@@ -46,6 +50,7 @@ func TestParent(t *testing.T) {
 }
 
 func TestSplitFirst(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		in, wantFirst, wantRest string
 	}{
@@ -59,6 +64,7 @@ func TestSplitFirst(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
 			f, r := SplitFirst(tc.in)
 			if f != tc.wantFirst || r != tc.wantRest {
 				t.Errorf("SplitFirst(%q) = (%q, %q), want (%q, %q)",
@@ -69,6 +75,7 @@ func TestSplitFirst(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		parent, child, want string
 	}{
@@ -82,6 +89,7 @@ func TestJoin(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.parent+"|"+tc.child, func(t *testing.T) {
+			t.Parallel()
 			if got := Join(tc.parent, tc.child); got != tc.want {
 				t.Errorf("Join(%q, %q) = %q, want %q",
 					tc.parent, tc.child, got, tc.want)
@@ -91,6 +99,7 @@ func TestJoin(t *testing.T) {
 }
 
 func TestIsUnder(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		p, prefix string
 		want      bool
@@ -106,6 +115,7 @@ func TestIsUnder(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.p+"|"+tc.prefix, func(t *testing.T) {
+			t.Parallel()
 			if got := IsUnder(tc.p, tc.prefix); got != tc.want {
 				t.Errorf("IsUnder(%q, %q) = %v, want %v",
 					tc.p, tc.prefix, got, tc.want)
@@ -115,6 +125,7 @@ func TestIsUnder(t *testing.T) {
 }
 
 func TestIsStrictUnder(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		p, prefix string
 		want      bool
@@ -128,6 +139,7 @@ func TestIsStrictUnder(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.p+"|"+tc.prefix, func(t *testing.T) {
+			t.Parallel()
 			if got := IsStrictUnder(tc.p, tc.prefix); got != tc.want {
 				t.Errorf("IsStrictUnder(%q, %q) = %v, want %v",
 					tc.p, tc.prefix, got, tc.want)

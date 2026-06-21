@@ -24,12 +24,12 @@ import (
 type StoreIndex interface {
 	// Writes and deletes.
 
-	// IndexManifest registers an artifact in the index. россыпь,
-	// composite and headless pack container index uniformly (ADR-87/92):
+	// IndexManifest registers an artifact in the index. Loose,
+	// composite and headless pack containers index uniformly (ADR-87/92):
 	// every blob in blob_refs is registered, ref-counted and linked
 	// positionally — a composite's chunk list lives in blob_refs and the
 	// core keeps its ref_count. Pack PLACEMENT (the per-member slice map)
-	// is owned by the bundler index-custom index's Resolver (ADR-86),
+	// is owned by the bundler's custom-index Resolver (ADR-86),
 	// recorded out-of-band via its RecordPack API — the core index holds
 	// no pack state.
 	IndexManifest(
@@ -168,7 +168,7 @@ type StoreIndex interface {
 	MarkVerified(ctx context.Context, blobRef string, timestamp time.Time) error
 
 	// MarkManifestVerified updates last_verified_at for a manifest
-	// (the manifest-level scrub stamp, schema v5). Set by the Scrub
+	// (the manifest-level scrub stamp). Set by the Scrub
 	// Agent once an artifact is fully verified: for a single-blob
 	// artifact after its blob and manifest pass; for Inline artifacts
 	// after the manifest re-hash; for multi-blob (TOC) artifacts once

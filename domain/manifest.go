@@ -67,7 +67,7 @@ type PipelineStage struct {
 // slot: a filled slot consumes its members (top-down, +ref_count); an
 // empty slot (pack container) places them (bottom-up, no ref_count).
 //
-// The legacy single BlobRef has been removed (ADR-92) — the россыпь
+// The legacy single BlobRef has been removed (ADR-92) — the plain
 // blob is BlobRefs[0].
 type Manifest struct {
 	// ArtifactID is the floating external identity (handle):
@@ -125,7 +125,7 @@ type Manifest struct {
 	// BlobRefs is the ordered array of blob references the manifest
 	// owns (ADR-92/93), at most 65535. Direction is implied by the
 	// identity slot:
-	//   - plain blob (россыпь): a single element;
+	//   - plain blob: a single element;
 	//   - composite (chunker, "composite" flag in Ext): the ordered
 	//     list of chunk hashes — the source of truth, no TOC blob
 	//     (ADR-87);
@@ -170,7 +170,7 @@ func (m *Manifest) IsSystem() bool { return m.Name != "" }
 // placement) and is excluded from the user Walk.
 func (m *Manifest) IsContainer() bool { return m.ArtifactID == "" && m.Name == "" }
 
-// PrimaryBlobRef returns the россыпь blob reference (BlobRefs[0]) — the
+// PrimaryBlobRef returns the plain blob reference (BlobRefs[0]) — the
 // single physical blob a plain-blob manifest owns — or "" when the
 // manifest has no blobs (Inline). Convenience for readers that handled
 // a single BlobRef before ADR-92; the array stays the source of truth.

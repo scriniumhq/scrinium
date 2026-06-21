@@ -241,3 +241,24 @@ func TestRefFromBlobPath_RoundTripsBlobPath(t *testing.T) {
 		}
 	}
 }
+
+// --- relocated from the old blobpath suite (was past_recovery_test.go) ---
+
+// RefFromBlobPath's other error tests cover an empty path, a no-algo-prefix
+// tail, and a non-hex tail; this is the remaining gap — a tail that is valid
+// hex but shorter than the four-char minimum. (The original input was
+// "sha256-abc", a NON-hex tail, so it duplicated the non-hex case and missed
+// the length guard it claimed to test; corrected to a short hex tail.)
+func TestRefFromBlobPath_RejectsTooShortHex(t *testing.T) {
+	if _, err := artifact.RefFromBlobPath("blobs/aa/bb/abc"); err == nil {
+		t.Fatal("expected error on too-short hex tail")
+	}
+}
+
+// DigestFromManifestPath had a round-trip and a malformed-segment test, but no
+// explicit empty-path case.
+func TestDigestFromManifestPath_RejectsEmpty(t *testing.T) {
+	if _, err := artifact.DigestFromManifestPath(""); err == nil {
+		t.Fatal("expected error on empty manifest path")
+	}
+}

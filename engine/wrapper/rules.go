@@ -23,7 +23,7 @@ type ValidateOptions struct {
 var structuralSet = map[string]bool{"chunker": true, "bundler": true}
 
 // Validate checks a wrapper stack at assembly time — not at runtime
-// (ADR-75, "Валидация композиции"). It enforces:
+// (ADR-75, "Composition validation"). It enforces:
 //   - the structural set is closed to {chunker, bundler};
 //   - at most one of each structural wrapper (no duplicate chunker/bundler);
 //   - the forced structural order chunker → bundler → store;

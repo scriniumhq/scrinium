@@ -67,9 +67,9 @@ func (i *Index) ListByExtField(ctx context.Context, extName, field, value string
 // integer form when it parses), so text / number / hash fields are all
 // reachable from one signature.
 func (i *Index) QueryByUsrField(ctx context.Context, field, value string, cb func(domain.ArtifactID) error) error {
-	on, err := i.usrIndexingOn(ctx)
+	on, err := usrIndexingEnabled(ctx, i.db)
 	if err != nil {
-		return err
+		return classifyError(err)
 	}
 	if !on {
 		return nil
@@ -92,21 +92,6 @@ func (i *Index) QueryByUsrField(ctx context.Context, field, value string, cb fun
 	}
 	defer rows.Close()
 	return iterateArtifactIDRows(ctx, rows, cb)
-}
-
-// usrIndexingOn reads the global store_meta.usr_indexing switch (default off)
-// on the read path. Any value other than "on"/"true"/"1" — including absence —
-// is off. Mirrors the tx-side gate in projection.go (write path).
-func (i *Index) usrIndexingOn(ctx context.Context) (bool, error) {
-	var v string
-	err := i.db.QueryRowContext(ctx, `SELECT value FROM store_meta WHERE key = 'usr_indexing'`).Scan(&v)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return false, nil
-	case err != nil:
-		return false, classifyError(err)
-	}
-	return v == "on" || v == "true" || v == "1", nil
 }
 
 // iterateArtifactIDRows streams a single-column artifact_id result set through

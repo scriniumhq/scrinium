@@ -22,8 +22,8 @@ import (
 // perspective there is no separate "blob not found" — the index
 // either knows where to find a blob or it does not.
 //
-// Resolves loose (россыпь) blobs only — blobs.physical_path. Packed
-// placement is owned by index-custom index Resolvers (ADR-86), not a column
+// Resolves loose blobs only — blobs.physical_path. Packed
+// placement is owned by custom-index Resolvers (ADR-86), not a column
 // here; the core never branches on pack state.
 func (i *Index) Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error) {
 	const stmt = `SELECT physical_path FROM blobs WHERE blob_ref = ?`

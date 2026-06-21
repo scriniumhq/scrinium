@@ -65,7 +65,7 @@ func (e *Index) Subscribe() []customindex.EventKind { return nil }
 // Setup runs once per registration. The index keeps no own tables, so
 // there is nothing to create or migrate; it only rejects an unknown
 // stored version.
-func (e *Index) Setup(ctx context.Context, store customindex.Substrate, oldVersion int) error {
+func (e *Index) Setup(ctx context.Context, sub customindex.Substrate, oldVersion int) error {
 	switch oldVersion {
 	case 0, 1:
 		return nil
@@ -77,7 +77,7 @@ func (e *Index) Setup(ctx context.Context, store customindex.Substrate, oldVersi
 // Apply is unreachable: Subscribe declares no events. It satisfies
 // customindex.CustomIndex and fails loudly if a backend regression ever
 // dispatches to a non-subscriber.
-func (e *Index) Apply(ctx context.Context, store customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
+func (e *Index) Apply(ctx context.Context, sub customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
 	return fmt.Errorf("namespace index: Apply called for %s but the index subscribes to no events (it projects via the Indexer capability)", kind)
 }
 
@@ -92,7 +92,7 @@ func (e *Index) Close() error { return nil }
 // stamps with the manifest digest and ext_name="namespace". A manifest
 // with no nsid (most artifacts, system artifacts, nil Ext) is skipped —
 // it simply belongs to no namespace. It writes nothing to its own store.
-func (e *Index) Index(ctx context.Context, store customindex.Substrate, m domain.Manifest) ([]customindex.Projection, error) {
+func (e *Index) Index(ctx context.Context, sub customindex.Substrate, m domain.Manifest) ([]customindex.Projection, error) {
 	id, ok, err := nsidOf(m.Ext)
 	if err != nil {
 		return nil, fmt.Errorf("namespace index: decode ext for %q: %w", m.ArtifactID, err)
@@ -110,7 +110,7 @@ func (e *Index) Index(ctx context.Context, store customindex.Substrate, m domain
 // Unindex is a no-op: the index keeps no own tables, and the core removes
 // a manifest's proj_ext rows by digest on delete (09 §9.2). It exists to
 // satisfy the symmetric Indexer contract and stays idempotent.
-func (e *Index) Unindex(ctx context.Context, store customindex.Substrate, m domain.Manifest) error {
+func (e *Index) Unindex(ctx context.Context, sub customindex.Substrate, m domain.Manifest) error {
 	return nil
 }
 

@@ -9,7 +9,6 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -80,7 +79,7 @@ type ScrubAgent interface {
 func NewScrubAgent(
 	st store.Store,
 	drv driver.Driver,
-	idx index.StoreIndex,
+	idx scrubIndex,
 	bus event.Publisher,
 	hostID string,
 	storeID string,
@@ -127,11 +126,26 @@ func applyScrubDefaults(cfg ScrubConfig) ScrubConfig {
 	return cfg
 }
 
+// scrubIndex is the slice of index.StoreIndex the Scrub agent depends
+// on: it lists unverified blobs and manifests, maps a blob to the
+// manifests that reference it, and stamps a verified blob/manifest.
+// Declaring the narrow port here — rather than accepting the full
+// StoreIndex — keeps Scrub decoupled from index methods it never calls
+// and lets a test supply a small fake. The concrete *sqlite.Index, and
+// any full index.StoreIndex value, satisfies it structurally.
+type scrubIndex interface {
+	ListUnverifiedBlobs(ctx context.Context, before time.Time, cb func(blobRef string) error) error
+	ListUnverifiedManifests(ctx context.Context, before time.Time, cb func(domain.Manifest) error) error
+	ManifestsByBlobRef(ctx context.Context, blobRef string, cb func(domain.Manifest) error) error
+	MarkVerified(ctx context.Context, blobRef string, timestamp time.Time) error
+	MarkManifestVerified(ctx context.Context, artifactID domain.ArtifactID, timestamp time.Time) error
+}
+
 // scrubAgent is the concrete ScrubAgent.
 type scrubAgent struct {
 	store   store.Store
 	drv     driver.Driver
-	idx     index.StoreIndex
+	idx     scrubIndex
 	bus     event.Publisher
 	hostID  string
 	storeID string

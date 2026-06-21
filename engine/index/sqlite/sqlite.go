@@ -21,7 +21,7 @@ import (
 // contention without hiding real deadlocks for too long.
 const DefaultBusyTimeout = 5 * time.Second
 
-// Index is the SQLite-backed implementation of store.StoreIndex.
+// Index is the SQLite-backed implementation of index.StoreIndex.
 // Construct via NewStore; Close when done.
 type Index struct {
 	db   *sql.DB
@@ -48,17 +48,17 @@ type Index struct {
 	ciMu     sync.Mutex
 	ciByName map[string]customindex.CustomIndex
 	ciByKind map[customindex.EventKind][]customindex.CustomIndex
-	// ciStores keeps the long-lived CustomIndexStore handed to each
-	// CustomIndex during Setup. Apply uses fresh tx-scoped stores
-	// (allocated per call); the long-lived stores in this map are
+	// ciSubstrates keeps the long-lived substrate handed to each
+	// CustomIndex during Setup. Apply uses fresh tx-scoped substrates
+	// (allocated per call); the long-lived substrates in this map are
 	// the ones custom indexes may have captured for read-side use.
 	// Maintained so Close can release them in lockstep with the
 	// custom index list.
-	ciStores map[string]*sqliteCIStore
+	ciSubstrates map[string]*sqliteSubstrate
 }
 
 // Compile-time interface conformance. Catches signature drift
-// between store.StoreIndex and *Index immediately at build time
+// between index.StoreIndex and *Index immediately at build time
 // instead of at the first assignment site.
 var _ index.StoreIndex = (*Index)(nil)
 
@@ -114,12 +114,10 @@ func defaultOptions() options {
 // migrations are applied forward-only. A version newer than
 // CurrentSchemaVersion returns errs.ErrIndexSchemaMismatch.
 //
-// The signature carries ctx and error even though some docs show a
-// simplified form without them.
-// Opening SQLite is real I/O: it can fail on bad paths,
-// permission errors, mid-flight migrations, or mmap limits, and
-// migrations are long-running and deserve cancellation. Doc
-// amendment tracked separately.
+// ctx and error are part of the signature because opening SQLite is
+// real I/O: it can fail on bad paths, permission errors, mid-flight
+// migrations, or mmap limits, and migrations are long-running and
+// deserve cancellation.
 func NewStore(ctx context.Context, path string, opts ...index.IndexOption) (*Index, error) {
 	// Resolve umbrella IndexOptions, then map them onto our local
 	// options struct. The reverse direction (sqlite-private knobs
@@ -195,11 +193,11 @@ func newStoreInternal(ctx context.Context, path string, o options) (*Index, erro
 	}
 
 	return &Index{
-		db:       db,
-		opts:     o,
-		ciByName: make(map[string]customindex.CustomIndex),
-		ciByKind: make(map[customindex.EventKind][]customindex.CustomIndex),
-		ciStores: make(map[string]*sqliteCIStore),
+		db:           db,
+		opts:         o,
+		ciByName:     make(map[string]customindex.CustomIndex),
+		ciByKind:     make(map[customindex.EventKind][]customindex.CustomIndex),
+		ciSubstrates: make(map[string]*sqliteSubstrate),
 	}, nil
 }
 
@@ -210,14 +208,10 @@ func buildDSN(path string, o options) string {
 	if path == ":memory:" {
 		return ":memory:"
 	}
+	// Relative paths are kept as-is; the caller is responsible for the
+	// working directory. We do NOT reach for filepath.Abs here because
+	// it depends on os.Getwd() and would surprise tests that chdir.
 	abs := path
-	if !filepath.IsAbs(path) {
-		// Relative paths are kept as-is; the caller is responsible
-		// for the working directory. We do NOT reach for
-		// filepath.Abs here because it depends on os.Getwd() and
-		// would surprise tests that chdir.
-		abs = path
-	}
 	// _foreign_keys=1 enforces FK constraints (we will rely on this
 	// once we add manifest_blobs cleanup triggers in a later pack).
 	q := []string{"_foreign_keys=1"}
@@ -268,16 +262,16 @@ func (i *Index) Close() error {
 		for _, ext := range i.ciByName {
 			_ = ext.Close()
 		}
-		// Drop store-side references so Get/Scan calls from a
-		// host that mistakenly held a captured store after
+		// Drop substrate-side references so Get/Scan calls from a
+		// host that mistakenly held a captured substrate after
 		// Close fail with a clear errSubstrateClosed instead of
 		// hitting a closed *sql.DB.
-		for _, store := range i.ciStores {
-			store.executor.Store(nil)
+		for _, sub := range i.ciSubstrates {
+			sub.executor.Store(nil)
 		}
 		i.ciByName = nil
 		i.ciByKind = nil
-		i.ciStores = nil
+		i.ciSubstrates = nil
 		i.ciMu.Unlock()
 
 		i.closeErr = i.db.Close()

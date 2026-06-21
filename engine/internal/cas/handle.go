@@ -151,20 +151,20 @@ func (h *targetReadHandle) Manifest() domain.Manifest { return h.manifest }
 //
 // ctx is captured for the deferred open of a Target blob (the io contracts
 // give Read/ReadAt no context of their own); ReadAtCtx still uses its own.
-func (x *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHandle, error) {
+func (e *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHandle, error) {
 	switch m.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
 		return artifact.NewInlineHandle(m), nil
 
 	case domain.LayoutTarget:
-		addr, err := x.index.Resolve(ctx, string(m.PrimaryBlobRef()))
+		addr, err := e.index.Resolve(ctx, string(m.PrimaryBlobRef()))
 		if err != nil {
 			return nil, fmt.Errorf("cas.OpenHandle: resolve blob path: %w", err)
 		}
 		return &targetReadHandle{
 			manifest: m,
-			drv:      x.drv,
-			runner:   x.runner(),
+			drv:      e.drv,
+			runner:   e.runner(),
 			blobPath: addr.Path,
 			ctx:      ctx,
 		}, nil
@@ -214,13 +214,13 @@ type verifyingReadHandle struct {
 // inside the caller's Read, after Get has returned, so the store cannot
 // observe the error directly — the callback is how EventScrubFailed gets
 // published). It may be nil.
-func (x *IO) WrapVerifying(inner domain.ReadHandle, onMismatch func(domain.ArtifactID, error)) (domain.ReadHandle, error) {
+func (e *IO) WrapVerifying(inner domain.ReadHandle, onMismatch func(domain.ArtifactID, error)) (domain.ReadHandle, error) {
 	m := inner.Manifest()
 	if m.ContentHash == "" {
 		return inner, nil
 	}
 	algo := m.HashAlgo
-	want, hasher, err := artifact.ParseContentHash(x.hashes, algo, m.ContentHash)
+	want, hasher, err := artifact.ParseContentHash(e.hashes, algo, m.ContentHash)
 	if err != nil {
 		_ = inner.Close()
 		return nil, fmt.Errorf("cas.WrapVerifying: %w", err)

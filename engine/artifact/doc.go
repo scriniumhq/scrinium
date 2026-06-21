@@ -30,8 +30,8 @@
 //
 // # On-disk format
 //
-// A manifest file is: a 5+ byte header (magic "\x00SC1\x00", a crypto
-// flag, and for encrypted modes a KeyID) followed by the body. In Plain
+// A manifest file is: a 5+ byte header (4-byte magic "\x00SC1", a 1-byte
+// crypto flag, and for encrypted modes a KeyID) followed by the body. In Plain
 // mode the body is deterministic JSON. In Sealed mode the ext / usr /
 // inline_blob blocks are each an independent AEAD block (system fields stay
 // plaintext). In Paranoid mode the entire body is a single AEAD block.

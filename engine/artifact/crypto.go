@@ -269,20 +269,20 @@ func wrapBase64AsJSONString(raw []byte) json.RawMessage {
 
 // --- Paranoid ---
 
-func encodeParanoid(m domain.Manifest, dek, aad []byte) ([]byte, error) {
+func encodeParanoid(m domain.Manifest, dek, header []byte) ([]byte, error) {
 	plain, err := marshalBodyJSON(m)
 	if err != nil {
 		return nil, err
 	}
-	ciphertext, err := sealBody(plain, dek, aad)
+	ciphertext, err := sealBody(plain, dek, header)
 	if err != nil {
 		return nil, fmt.Errorf("artifact: seal Paranoid: %w", err)
 	}
 	return ciphertext, nil
 }
 
-func decodeParanoid(body []byte, candidates [][]byte, aad []byte) (domain.Manifest, error) {
-	plaintext, err := tryDecrypt(body, candidates, aad)
+func decodeParanoid(body []byte, candidates [][]byte, header []byte) (domain.Manifest, error) {
+	plaintext, err := tryDecrypt(body, candidates, header)
 	if err != nil {
 		return domain.Manifest{}, err
 	}

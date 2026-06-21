@@ -42,13 +42,17 @@ func Run(t *testing.T, f Factory) {
 	t.Run(f.Name+"/DeleteManifest", func(t *testing.T) { runDeleteManifest(t, f) })
 	t.Run(f.Name+"/ManifestExists", func(t *testing.T) { runManifestExists(t, f) })
 	t.Run(f.Name+"/MarkVerified", func(t *testing.T) { runMarkVerified(t, f) })
-	t.Run(f.Name+"/MarkManifestVerified", func(t *testing.T) { runListUnverifiedManifests(t, f) })
+	t.Run(f.Name+"/ListUnverifiedManifests", func(t *testing.T) { runListUnverifiedManifests(t, f) })
 	t.Run(f.Name+"/ManifestsByBlobRef", func(t *testing.T) { runManifestsByBlobRef(t, f) })
 	t.Run(f.Name+"/IterateManifests", func(t *testing.T) { runIterateManifests(t, f) })
+	t.Run(f.Name+"/QueryByExtField", func(t *testing.T) { runQueryByExtField(t, f) })
+	t.Run(f.Name+"/ListByExtField", func(t *testing.T) { runListByExtField(t, f) })
+	t.Run(f.Name+"/QueryByUsrField", func(t *testing.T) { runQueryByUsrField(t, f) })
 	t.Run(f.Name+"/GetBySession", func(t *testing.T) { runGetBySession(t, f) })
 	t.Run(f.Name+"/ListOrphanBlobs", func(t *testing.T) { runListOrphanBlobs(t, f) })
 	t.Run(f.Name+"/DeleteOrphanBlob", func(t *testing.T) { runDeleteOrphanBlob(t, f) })
 	t.Run(f.Name+"/ListUnverifiedBlobs", func(t *testing.T) { runListUnverifiedBlobs(t, f) })
+	t.Run(f.Name+"/Meta", func(t *testing.T) { runMeta(t, f) })
 }
 
 // collectAll turns a streaming IterateManifests into a slice for

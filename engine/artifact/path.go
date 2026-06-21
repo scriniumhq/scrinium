@@ -92,14 +92,13 @@ func ManifestPath(digest domain.ManifestDigest) (string, error) {
 	return "manifests/" + s1 + "/" + s2 + "/" + string(digest), nil
 }
 
-// RefFromBlobPath extracts the blob ref ("<algo>-<hex>") from a
-// driver-side blob path produced by BlobPath. Both topologies are
-// supported (the ref is always the last path segment). The check is
-// purely structural — last-segment is bare hex (ADR-93) of at least four
-// chars. It does NOT cross-check the
-// segment against the topology shards; a caller that needs that paranoia
-// re-runs BlobPath on the result and compares. Used by the Orphan Scan to
-// map a driver-listed file back to a StoreIndex key.
+// RefFromBlobPath extracts the blob ref (bare hex per ADR-93, no "<algo>-"
+// prefix) from a driver-side blob path produced by BlobPath. Both topologies
+// are supported (the ref is always the last path segment). The check is
+// purely structural — last-segment is bare hex of at least four chars. It
+// does NOT cross-check the segment against the topology shards; a caller that
+// needs that paranoia re-runs BlobPath on the result and compares. Used by the
+// Orphan Scan to map a driver-listed file back to a StoreIndex key.
 func RefFromBlobPath(p string) (string, error) {
 	last, err := lastSegment(p)
 	if err != nil {

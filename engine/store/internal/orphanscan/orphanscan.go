@@ -9,7 +9,6 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
@@ -23,6 +22,16 @@ type OrphanReport struct {
 	ManifestsRemoved int
 	Errors           []error
 	Duration         time.Duration
+}
+
+// recoverIndex is the slice of index.StoreIndex RecoverOrphans depends on:
+// it resolves a blob ref to detect a dangling blob file, and checks whether
+// a manifest digest is present to detect a dangling manifest file. Declaring
+// the narrow port here keeps orphan recovery decoupled from index methods it
+// never calls. Any full index.StoreIndex value satisfies it structurally.
+type recoverIndex interface {
+	Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error)
+	ManifestExistsByDigest(ctx context.Context, digest domain.ManifestDigest) (bool, error)
 }
 
 // RecoverOrphans is a forward sweep of the filesystem against the
@@ -40,7 +49,7 @@ type OrphanReport struct {
 // rebuild agent's job, not this one. ListObjectsWithModTime treats a
 // missing prefix as an empty walk, so this is safe to call after both
 // InitStore and OpenStore.
-func RecoverOrphans(ctx context.Context, drv driver.Driver, idx index.StoreIndex) (OrphanReport, error) {
+func RecoverOrphans(ctx context.Context, drv driver.Driver, idx recoverIndex) (OrphanReport, error) {
 	start := time.Now()
 	report := OrphanReport{}
 

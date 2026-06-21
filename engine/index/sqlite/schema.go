@@ -9,12 +9,10 @@ const CurrentSchemaVersion = 1
 // Each migration is applied inside its own transaction; if any step
 // fails the entire migration rolls back and Open returns an error.
 //
-// Pre-v1 the schema went through five incremental migrations. With no
-// real installations yet, that history is collapsed into a single
-// baseline at version 1 (schemaBaseline). The forward-migration
-// mechanism (migrate.go) is retained for future versions: append a new
-// entry here and bump CurrentSchemaVersion. Migrations are append-only
-// — never edit one that has already shipped.
+// The schema is a single baseline at version 1 (schemaBaseline). The
+// forward-migration mechanism (migrate.go) is retained for future
+// versions: append a new entry here and bump CurrentSchemaVersion.
+// Migrations are append-only — never edit one that has already shipped.
 var migrations = []migration{
 	{
 		Version: 1,
@@ -33,7 +31,7 @@ type migration struct {
 	Statements  []string
 }
 
-// schemaBaseline is the full DDL of the collapsed v1 baseline. All
+// schemaBaseline is the full DDL of the v1 baseline. All
 // identifiers stay lowercase and snake_case for SQLite ergonomics.
 // Tables:
 //

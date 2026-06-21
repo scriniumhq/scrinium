@@ -46,17 +46,17 @@ const schemaVersion = 1
 // Population is via the Indexer capability, NOT the Subscribe/Apply
 // event path: the core runs Index/Unindex inside the index-write and
 // delete transactions (09 §9.2). fspathindex keeps an OWN path tree
-// (queried through the Accessor) and projects nothing into the штатные
+// (queried through the Accessor) and projects nothing into the standard
 // proj_ext/proj_usr tables — "namespace projects nsid; fspathindex
 // writes an own path tree" (09 §9.2).
 type CustomIndex struct {
-	// store is captured during Setup and used by the read-side
+	// sub is captured during Setup and used by the read-side
 	// API (Metadata, GetByID, LookupByPath, WalkAll, and the
 	// Accessor methods) for the lifetime of the StoreIndex. The
 	// backend swaps the underlying executor from tx-mode to
 	// db-mode atomically after Register commits; the captured
 	// reference stays valid throughout.
-	store customindex.Substrate
+	sub customindex.Substrate
 }
 
 // NewIndex returns a fresh customindex. The instance is not registered
@@ -81,7 +81,7 @@ func (e *CustomIndex) Subscribe() []customindex.EventKind { return nil }
 
 // Setup runs once per registration. v1 is initial; nothing to
 // migrate on a fresh DB or on an existing v1.
-func (e *CustomIndex) Setup(ctx context.Context, store customindex.Substrate, oldVersion int) error {
+func (e *CustomIndex) Setup(ctx context.Context, sub customindex.Substrate, oldVersion int) error {
 	switch oldVersion {
 	case 0, 1:
 		// Nothing to do — schema is implicit (the K/V tables
@@ -90,7 +90,7 @@ func (e *CustomIndex) Setup(ctx context.Context, store customindex.Substrate, ol
 	default:
 		return fmt.Errorf("fspathindex: unsupported old schema version: %d", oldVersion)
 	}
-	e.store = store
+	e.sub = sub
 	return nil
 }
 
@@ -98,14 +98,14 @@ func (e *CustomIndex) Setup(ctx context.Context, store customindex.Substrate, ol
 // never dispatches here. It exists to satisfy customindex.CustomIndex
 // and fails loudly if a backend regression ever dispatches to a
 // non-subscriber.
-func (e *CustomIndex) Apply(ctx context.Context, store customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
+func (e *CustomIndex) Apply(ctx context.Context, sub customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
 	return fmt.Errorf("fspathindex: Apply called for %s but the index subscribes to no events (it writes via the Indexer capability)", kind)
 }
 
 // Close releases custom index-side resources. Backend storage stays
 // owned by the StoreIndex.
 func (e *CustomIndex) Close() error {
-	e.store = nil
+	e.sub = nil
 	return nil
 }
 
@@ -119,7 +119,7 @@ func (e *CustomIndex) Close() error {
 //     through without an fspathindex migration);
 //   - byPath: "<path>\x00<artifactID>" → artifactID (the path tree).
 //
-// It returns NO штатные projections: path lookup is served by the
+// It returns NO standard projections: path lookup is served by the
 // Accessor over the own path tree, not by proj_ext equality (09 §9.2).
 //
 // Manifests that carry no vfsmeta payload (foreign schema, system
@@ -127,7 +127,7 @@ func (e *CustomIndex) Close() error {
 // it understands. A payload that claims the vfsmeta marker but is
 // structurally broken returns an error, which rolls the whole write back
 // (strict consistency, ADR-49).
-func (e *CustomIndex) Index(ctx context.Context, store customindex.Substrate, m domain.Manifest) ([]customindex.Projection, error) {
+func (e *CustomIndex) Index(ctx context.Context, sub customindex.Substrate, m domain.Manifest) ([]customindex.Projection, error) {
 	fs, ok, err := vfsmeta.Decode(m.Ext)
 	if err != nil {
 		return nil, fmt.Errorf("fspathindex: decode ext for %q: %w", m.ArtifactID, err)
@@ -139,10 +139,10 @@ func (e *CustomIndex) Index(ctx context.Context, store customindex.Substrate, m 
 
 	id := string(m.ArtifactID)
 
-	if err := store.Put(tableByID, id, []byte(m.Ext)); err != nil {
+	if err := sub.Put(tableByID, id, []byte(m.Ext)); err != nil {
 		return nil, fmt.Errorf("fspathindex: put byID: %w", err)
 	}
-	if err := store.Put(tableByPath, fs.Path+"\x00"+id, []byte(id)); err != nil {
+	if err := sub.Put(tableByPath, fs.Path+"\x00"+id, []byte(id)); err != nil {
 		return nil, fmt.Errorf("fspathindex: put byPath: %w", err)
 	}
 	return nil, nil
@@ -161,10 +161,10 @@ func (e *CustomIndex) Index(ctx context.Context, store customindex.Substrate, m 
 // reconciler. Blocking a manifest deletion on a damaged derived row
 // would be the wrong trade — the manifest, not the index, is the source
 // of truth.
-func (e *CustomIndex) Unindex(ctx context.Context, store customindex.Substrate, m domain.Manifest) error {
+func (e *CustomIndex) Unindex(ctx context.Context, sub customindex.Substrate, m domain.Manifest) error {
 	id := string(m.ArtifactID)
 
-	raw, ok, err := store.Get(tableByID, id)
+	raw, ok, err := sub.Get(tableByID, id)
 	if err != nil {
 		return fmt.Errorf("fspathindex: get byID for unindex: %w", err)
 	}
@@ -173,7 +173,7 @@ func (e *CustomIndex) Unindex(ctx context.Context, store customindex.Substrate, 
 		return nil
 	}
 
-	if err := store.Delete(tableByID, id); err != nil {
+	if err := sub.Delete(tableByID, id); err != nil {
 		return fmt.Errorf("fspathindex: delete byID: %w", err)
 	}
 
@@ -185,7 +185,7 @@ func (e *CustomIndex) Unindex(ctx context.Context, store customindex.Substrate, 
 		// than fail the delete.
 		return nil
 	}
-	if err := store.Delete(tableByPath, fs.Path+"\x00"+id); err != nil {
+	if err := sub.Delete(tableByPath, fs.Path+"\x00"+id); err != nil {
 		return fmt.Errorf("fspathindex: delete byPath: %w", err)
 	}
 	return nil
@@ -200,14 +200,14 @@ func (e *CustomIndex) Unindex(ctx context.Context, store customindex.Substrate, 
 // view's call (07 Projection), not the accessor's. Order is the stable
 // lexicographic order of the byPath suffix (the artifactID).
 func (e *CustomIndex) Lookup(key string) ([]domain.ArtifactID, error) {
-	if e.store == nil {
+	if e.sub == nil {
 		return nil, fmt.Errorf("fspathindex: not registered")
 	}
 	var ids []domain.ArtifactID
 	// key+"\x00" pins the match to the exact path: a longer path that
 	// shares `key` as a byte-prefix (e.g. key="a/b", "a/bc") cannot match,
 	// because its key byte after `key` is a path byte, never \x00.
-	err := e.store.Scan(tableByPath, key+"\x00", func(_ string, value []byte) error {
+	err := e.sub.Scan(tableByPath, key+"\x00", func(_ string, value []byte) error {
 		ids = append(ids, domain.ArtifactID(value))
 		return nil
 	})
@@ -226,7 +226,7 @@ func (e *CustomIndex) Lookup(key string) ([]domain.ArtifactID, error) {
 // coalesced into a single callback (their ids batched). Returning an
 // error from cb stops the scan and propagates that error.
 func (e *CustomIndex) ScanPrefix(prefix string, cb func(customindex.Key, []domain.ArtifactID) error) error {
-	if e.store == nil {
+	if e.sub == nil {
 		return fmt.Errorf("fspathindex: not registered")
 	}
 	var (
@@ -235,7 +235,7 @@ func (e *CustomIndex) ScanPrefix(prefix string, cb func(customindex.Key, []domai
 		have    bool
 		cbErr   error
 	)
-	scanErr := e.store.Scan(tableByPath, prefix, func(k string, value []byte) error {
+	scanErr := e.sub.Scan(tableByPath, prefix, func(k string, value []byte) error {
 		path, _, ok := splitPathKey(k)
 		if !ok {
 			// Malformed key (no separator) — skip defensively.
@@ -296,10 +296,10 @@ func (e *CustomIndex) Metadata(id domain.ArtifactID) (json.RawMessage, bool, err
 // or (nil, false, nil) if not indexed. Same bytes as the manifest
 // carried at write time.
 func (e *CustomIndex) GetByID(id domain.ArtifactID) (json.RawMessage, bool, error) {
-	if e.store == nil {
+	if e.sub == nil {
 		return nil, false, fmt.Errorf("fspathindex: not registered")
 	}
-	value, ok, err := e.store.Get(tableByID, string(id))
+	value, ok, err := e.sub.Get(tableByID, string(id))
 	if err != nil {
 		return nil, false, fmt.Errorf("fspathindex: GetByID: %w", err)
 	}
@@ -330,10 +330,10 @@ func (e *CustomIndex) LookupByPath(path string) (domain.ArtifactID, bool, error)
 // cleanly. A convenience for tooling that wants the whole path index in
 // one pass (the View takes the bulk path through Metadata).
 func (e *CustomIndex) WalkAll(cb func(id domain.ArtifactID, raw json.RawMessage) error) error {
-	if e.store == nil {
+	if e.sub == nil {
 		return fmt.Errorf("fspathindex: not registered")
 	}
-	return e.store.Scan(tableByID, "", func(key string, value []byte) error {
+	return e.sub.Scan(tableByID, "", func(key string, value []byte) error {
 		return cb(domain.ArtifactID(key), json.RawMessage(value))
 	})
 }

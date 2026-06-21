@@ -9,7 +9,6 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -82,7 +81,7 @@ type GCAgent interface {
 func NewGCAgent(
 	st store.Store,
 	drv driver.Driver,
-	idx index.StoreIndex,
+	idx gcIndex,
 	bus event.Publisher,
 	hostID string,
 	storeID string,
@@ -130,11 +129,24 @@ func applyGCDefaults(cfg GCConfig) GCConfig {
 	return cfg
 }
 
+// gcIndex is the slice of index.StoreIndex the GC agent depends on: it
+// lists orphan blobs, resolves a blob to its physical address, and
+// deletes a confirmed orphan. Declaring the narrow port here — rather
+// than accepting the full StoreIndex — keeps GC decoupled from index
+// methods it never calls and lets a test supply a small fake. The
+// concrete *sqlite.Index, and any full index.StoreIndex value, satisfies
+// it structurally.
+type gcIndex interface {
+	ListOrphanBlobs(ctx context.Context, cb func(blobRef string) error) error
+	Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error)
+	DeleteOrphanBlob(ctx context.Context, blobRef string) (removed bool, err error)
+}
+
 // gcAgent is the concrete GCAgent.
 type gcAgent struct {
 	store   store.Store
 	drv     driver.Driver
-	idx     index.StoreIndex
+	idx     gcIndex
 	bus     event.Publisher
 	hostID  string
 	storeID string

@@ -29,7 +29,7 @@ import (
 // overloading domain.Artifact.
 type NamedArtifact struct {
 	// Name is the slash-separated name under which the artifact is
-	// stored and later retrieved (e.g. "scrub/cursor").
+	// stored and later retrieved (e.g. "scrub.cursor").
 	Name string
 
 	// Payload is the artifact body. System payloads are small enough to
@@ -53,7 +53,7 @@ type NamedArtifact struct {
 func KeepCell() *uint8 { var k uint8; return &k }
 
 // KeepVersions marks an NamedArtifact as keep=n versioned storage
-// (<name>/<seq>, active = max, pruned to n retained). n must be ≥ 1; n=0
+// (<name>.<seq>, active = max, pruned to n retained). n must be ≥ 1; n=0
 // is the cell form — use KeepCell for that.
 func KeepVersions(n uint8) *uint8 { return &n }
 

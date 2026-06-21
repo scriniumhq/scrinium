@@ -15,7 +15,7 @@ import (
 
 // CustomIndexes returns the registry for installing index custom indexes
 // against this backend. Method on the concrete *Index type rather
-// than on store.StoreIndex — see ADR-49 for the rationale (avoids
+// than on index.StoreIndex — see ADR-49 for the rationale (avoids
 // a core ↔ index import cycle and respects backends that don't
 // support custom indexes).
 //
@@ -74,12 +74,12 @@ func (r *customIndexRegistry) Register(ctx context.Context, ci customindex.Custo
 		return fmt.Errorf("%w: %q", customindex.ErrAlreadyRegistered, name)
 	}
 
-	// store is captured inside the tx closure and reused after
+	// sub is captured inside the tx closure and reused after
 	// commit (useDB switch + cache insertion).
-	var store *sqliteCIStore
+	var sub *sqliteSubstrate
 
 	// Begin a transaction for Setup. The persisted version is read,
-	// Setup runs against a tx-bound store, and the new version is
+	// Setup runs against a tx-bound sub, and the new version is
 	// written — all atomically. On error nothing changes on disk
 	// nor in the in-memory dispatch maps.
 	err := r.idx.inTx(ctx, func(tx *sql.Tx) error {
@@ -93,10 +93,10 @@ func (r *customIndexRegistry) Register(ctx context.Context, ci customindex.Custo
 				customindex.ErrSchemaRegression, name, oldVersion, newVersion)
 		}
 
-		store = newSqliteSubstrate(name)
-		store.useTx(tx)
+		sub = newSqliteSubstrate(name)
+		sub.useTx(tx)
 
-		if err := ci.Setup(ctx, store, oldVersion); err != nil {
+		if err := ci.Setup(ctx, sub, oldVersion); err != nil {
 			return fmt.Errorf("custom index %q setup: %w", name, err)
 		}
 
@@ -109,17 +109,17 @@ func (r *customIndexRegistry) Register(ctx context.Context, ci customindex.Custo
 		return err
 	}
 
-	// After commit the store flips to db-mode for read-side use
-	// after Setup. The custom index may have captured the store
+	// After commit the sub flips to db-mode for read-side use
+	// after Setup. The custom index may have captured the sub
 	// reference during Setup; the swap is transparent.
-	store.useDB(r.idx.db)
+	sub.useDB(r.idx.db)
 
-	// Cache subscriptions and the long-lived store. Subscribe is
+	// Cache subscriptions and the long-lived sub. Subscribe is
 	// called once at registration and the result is final; if a
 	// later restart re-creates the custom index instance, that's a
 	// new Register call and the new Subscribe() result wins.
 	r.idx.ciByName[name] = ci
-	r.idx.ciStores[name] = store
+	r.idx.ciSubstrates[name] = sub
 	for _, kind := range ci.Subscribe() {
 		r.idx.ciByKind[kind] = append(r.idx.ciByKind[kind], ci)
 	}
@@ -159,17 +159,17 @@ func upsertSchemaVersion(ctx context.Context, tx *sql.Tx, name string, version i
 
 // --- Substrate implementation ---
 
-// sqliteCIStore is the customindex.Substrate implementation for the
+// sqliteSubstrate is the customindex.Substrate implementation for the
 // sqlite backend. It carries an executor — either *sql.Tx (during
 // Setup or Apply) or *sql.DB (for read-side after Setup) — and
 // dispatches every method through it.
 //
 // The two states are tracked via an atomic.Pointer so a Setup
-// callback that captures the store reference observes the swap to
+// callback that captures the substrate reference observes the swap to
 // db-mode atomically once Register commits. Without atomicity, a
 // concurrent reader caller could race against the swap and see a
 // stale tx pointer pointing at a closed transaction.
-type sqliteCIStore struct {
+type sqliteSubstrate struct {
 	ciName   string
 	executor atomic.Pointer[sqlExecutor]
 }
@@ -182,21 +182,21 @@ type sqlExecutor interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-func newSqliteSubstrate(name string) *sqliteCIStore {
-	return &sqliteCIStore{ciName: name}
+func newSqliteSubstrate(name string) *sqliteSubstrate {
+	return &sqliteSubstrate{ciName: name}
 }
 
-func (s *sqliteCIStore) useTx(tx *sql.Tx) {
+func (s *sqliteSubstrate) useTx(tx *sql.Tx) {
 	var ex sqlExecutor = tx
 	s.executor.Store(&ex)
 }
 
-func (s *sqliteCIStore) useDB(db *sql.DB) {
+func (s *sqliteSubstrate) useDB(db *sql.DB) {
 	var ex sqlExecutor = db
 	s.executor.Store(&ex)
 }
 
-func (s *sqliteCIStore) exec() sqlExecutor {
+func (s *sqliteSubstrate) exec() sqlExecutor {
 	p := s.executor.Load()
 	if p == nil {
 		// Should never happen — newSqliteSubstrate is followed
@@ -206,7 +206,7 @@ func (s *sqliteCIStore) exec() sqlExecutor {
 	return *p
 }
 
-func (s *sqliteCIStore) Put(table, key string, value []byte) error {
+func (s *sqliteSubstrate) Put(table, key string, value []byte) error {
 	const stmt = `
 		INSERT INTO ext_data (extension, table_name, key, value)
 		VALUES (?, ?, ?, ?)
@@ -221,7 +221,7 @@ func (s *sqliteCIStore) Put(table, key string, value []byte) error {
 	return err
 }
 
-func (s *sqliteCIStore) Get(table, key string) ([]byte, bool, error) {
+func (s *sqliteSubstrate) Get(table, key string) ([]byte, bool, error) {
 	const stmt = `
 		SELECT value FROM ext_data
 		WHERE extension = ? AND table_name = ? AND key = ?`
@@ -241,7 +241,7 @@ func (s *sqliteCIStore) Get(table, key string) ([]byte, bool, error) {
 	return value, true, nil
 }
 
-func (s *sqliteCIStore) Delete(table, key string) error {
+func (s *sqliteSubstrate) Delete(table, key string) error {
 	const stmt = `
 		DELETE FROM ext_data
 		WHERE extension = ? AND table_name = ? AND key = ?`
@@ -254,7 +254,7 @@ func (s *sqliteCIStore) Delete(table, key string) error {
 	return err
 }
 
-func (s *sqliteCIStore) DeletePrefix(table, prefix string) error {
+func (s *sqliteSubstrate) DeletePrefix(table, prefix string) error {
 	if prefix == "" {
 		return customindex.ErrEmptyPrefix
 	}
@@ -281,7 +281,7 @@ func (s *sqliteCIStore) DeletePrefix(table, prefix string) error {
 	return err
 }
 
-func (s *sqliteCIStore) Scan(table, prefix string, cb func(key string, value []byte) error) error {
+func (s *sqliteSubstrate) Scan(table, prefix string, cb func(key string, value []byte) error) error {
 	ex := s.exec()
 	if ex == nil {
 		return errSubstrateClosed
@@ -336,7 +336,7 @@ func (s *sqliteCIStore) Scan(table, prefix string, cb func(key string, value []b
 	return rows.Err()
 }
 
-func (s *sqliteCIStore) Inc(table, key string, delta int64) (int64, error) {
+func (s *sqliteSubstrate) Inc(table, key string, delta int64) (int64, error) {
 	ex := s.exec()
 	if ex == nil {
 		return 0, errSubstrateClosed
@@ -384,7 +384,7 @@ func (s *sqliteCIStore) Inc(table, key string, delta int64) (int64, error) {
 	return next, nil
 }
 
-// errSubstrateClosed is the internal error returned when the store
+// errSubstrateClosed is the internal error returned when the substrate
 // is used after Index.Close has zeroed its executor pointer. Not
 // expected in well-behaved code; surfaces as a normal error so
 // the caller can log and recover.
@@ -432,9 +432,9 @@ func (i *Index) snapshotSubscribers(kind customindex.EventKind) []customindex.Cu
 // which the caller must let propagate so the surrounding
 // transaction rolls back.
 //
-// A new sqliteCIStore is allocated per (Apply call, custom index)
+// A new sqliteSubstrate is allocated per (Apply call, custom index)
 // pair — short-lived, tx-scoped, never captured outside Apply.
-// The long-lived store the custom index captured during Setup is a
+// The long-lived substrate the custom index captured during Setup is a
 // different instance that lives on the index until Close.
 func (i *Index) dispatchCustomIndexes(
 	ctx context.Context,
@@ -444,9 +444,9 @@ func (i *Index) dispatchCustomIndexes(
 ) error {
 	subs := i.snapshotSubscribers(kind)
 	for _, ext := range subs {
-		store := newSqliteSubstrate(ext.Name())
-		store.useTx(tx)
-		if err := ext.Apply(ctx, store, kind, args); err != nil {
+		sub := newSqliteSubstrate(ext.Name())
+		sub.useTx(tx)
+		if err := ext.Apply(ctx, sub, kind, args); err != nil {
 			return fmt.Errorf("custom index %q apply (%s): %w",
 				ext.Name(), kind.String(), err)
 		}

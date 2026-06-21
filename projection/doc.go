@@ -1,22 +1,19 @@
-// Package projection builds virtual human-friendly views over the
-// store without copying data. A read-only alternative to searching
-// by namespace/SessionID for cases when the natural mental model is
-// a hierarchy (by path, by session, by type).
+// Package projection builds virtual filesystem-like views over the
+// flat content-addressed store. The package is the seam at which
+// transport-specific daemons (cmd/scrinium-fuse, cmd/scrinium-webdav)
+// plug in: projection itself does no syscalls and no networking.
 //
-// A View is a snapshot of the state at the moment it was created.
-// Live updates are on the backlog. The data source can be either a
-// single store.DataStore or a multistore: in the first case
-// StorageFacet remains nil; in the second it is filled from
-// MultistoreIndex.
+// Architecture: View is the in-memory tree (read side) populated by
+// backfill from a source.Provider. FSOps adds the write side —
+// create/unlink/rename/setattr — and is the place where scratch
+// buffering, path-level locks and editing policies live. Together
+// they cover ~80% of what FUSE and WebDAV daemons need; the
+// transport layer is a thin dispatcher.
 //
-// Mounting (FUSE, WebDAV) ships as separate integrations gated by
-// the build tags `fuse` and `webdav`. Without the tags the API is
-// available (so development stays transparent) but returns
-// ErrFUSENotSupported / ErrWebDAVNotSupported.
+// Schemas describing how artifacts map to filesystem paths live in
+// subpackages (domain/vfsmeta is the standard one). They are
+// pluggable through the source.Resolver function passed to view.New.
 //
-// DAG: projection imports domain, event. It does not import the engine
-// packages (store, agent) — the store dependency is inverted via
-// source.Provider.
-//
-// Implementation lands in M6. In M0 — the type contracts.
+// Specification: docs/3 §5 Projection API, docs/4 §13 Projection,
+// docs/4 §14 FUSE Mount.
 package projection

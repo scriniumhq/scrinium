@@ -242,7 +242,7 @@ func TestSetMeta_BinarySafe(t *testing.T) {
 // --- Compile-time interface conformance ---
 
 func TestIndex_ImplementsStoreIndex(t *testing.T) {
-	// The compile-time check var _ store.StoreIndex = (*Index)(nil)
+	// The compile-time check var _ index.StoreIndex = (*Index)(nil)
 	// in sqlite.go is the real guarantee; this test just confirms
 	// it at runtime so a regression shows up in test output, not
 	// just a build error.
@@ -257,6 +257,6 @@ func TestIndex_ImplementsStoreIndex(t *testing.T) {
 	idx := newMemoryIndex(t)
 	var asInterface index.StoreIndex = idx
 	if asInterface == nil {
-		t.Fatal("Index does not satisfy store.StoreIndex")
+		t.Fatal("Index does not satisfy index.StoreIndex")
 	}
 }

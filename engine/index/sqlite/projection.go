@@ -45,9 +45,9 @@ func (i *Index) applyIndexers(ctx context.Context, tx *sql.Tx, m domain.Manifest
 	usrOn := -1 // tri-state: -1 unknown, 0 off, 1 on
 	for _, ci := range idxs {
 		name := ci.Name()
-		store := newSqliteSubstrate(name)
-		store.useTx(tx)
-		projs, err := ci.(customindex.Indexer).Index(ctx, store, m)
+		sub := newSqliteSubstrate(name)
+		sub.useTx(tx)
+		projs, err := ci.(customindex.Indexer).Index(ctx, sub, m)
 		if err != nil {
 			return fmt.Errorf("indexer %q index: %w", name, err)
 		}
@@ -61,7 +61,7 @@ func (i *Index) applyIndexers(ctx context.Context, tx *sql.Tx, m domain.Manifest
 				if usrOn == -1 {
 					on, err := usrIndexingEnabled(ctx, tx)
 					if err != nil {
-						return err
+						return fmt.Errorf("read usr_indexing: %w", err)
 					}
 					if on {
 						usrOn = 1
@@ -86,7 +86,7 @@ func (i *Index) applyIndexers(ctx context.Context, tx *sql.Tx, m domain.Manifest
 // applyUnindexers runs every registered Indexer's Unindex over the manifest
 // being deleted, in the delete transaction (§9.2.1) — the symmetric inverse of
 // applyIndexers. Each index removes the rows it wrote to its OWN tables through
-// its Substrate. The core has already removed the штатные proj_* rows by digest
+// its Substrate. The core has already removed the built-in proj_* rows by digest
 // (deleteProjections); this covers the own-table side a digest alone cannot
 // reach. The manifest passed carries the indexed identity (ArtifactID/Digest);
 // its body (Ext) is not available at delete time, so an Unindex that needs the
@@ -98,16 +98,16 @@ func (i *Index) applyUnindexers(ctx context.Context, tx *sql.Tx, m domain.Manife
 	}
 	for _, ci := range idxs {
 		name := ci.Name()
-		store := newSqliteSubstrate(name)
-		store.useTx(tx)
-		if err := ci.(customindex.Indexer).Unindex(ctx, store, m); err != nil {
+		sub := newSqliteSubstrate(name)
+		sub.useTx(tx)
+		if err := ci.(customindex.Indexer).Unindex(ctx, sub, m); err != nil {
 			return fmt.Errorf("indexer %q unindex: %w", name, err)
 		}
 	}
 	return nil
 }
 
-// deleteProjections removes every штатная-проекция row for digest, in the
+// deleteProjections removes every built-in projection row for digest, in the
 // delete transaction. The core owns proj_*, so it removes them by digest — the
 // symmetric inverse of having written them, and robust to an index toggled off
 // since the write (no orphan rows). An index's OWN tables (Substrate, §9.7) are
@@ -163,21 +163,19 @@ func upsertProjUsr(ctx context.Context, tx *sql.Tx, digest, field string, kind c
 	return err
 }
 
-// usrIndexingEnabled reads the global store_meta.usr_indexing switch (default
-// off). Any value other than "on"/"true"/"1" — including absence — is off.
-func usrIndexingEnabled(ctx context.Context, tx *sql.Tx) (bool, error) {
+// usrIndexingEnabled reports the global store_meta.usr_indexing switch
+// (default off). Any value other than "on"/"true"/"1" — including absence
+// — is off. It takes a sqlExecutor so the read path (*sql.DB, via
+// QueryByUsrField) and the write path (*sql.Tx, via applyIndexers) share
+// one gate; wrapping the error is left to the caller.
+func usrIndexingEnabled(ctx context.Context, ex sqlExecutor) (bool, error) {
 	var v string
-	err := tx.QueryRowContext(ctx, `SELECT value FROM store_meta WHERE key = 'usr_indexing'`).Scan(&v)
+	err := ex.QueryRowContext(ctx, `SELECT value FROM store_meta WHERE key = 'usr_indexing'`).Scan(&v)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return false, nil
 	case err != nil:
-		return false, fmt.Errorf("read usr_indexing: %w", err)
+		return false, err
 	}
-	switch v {
-	case "on", "true", "1":
-		return true, nil
-	default:
-		return false, nil
-	}
+	return v == "on" || v == "true" || v == "1", nil
 }
