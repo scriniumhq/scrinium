@@ -45,8 +45,9 @@
 //
 // Contracts and core type:
 //
-//   - store.go        — the Store / DataStore / AdminStore / SystemStore
-//     interfaces and the SystemArtifact value type.
+//   - store.go        — the Store / DataStore / AdminStore interfaces.
+//     The system facade (systemstore.Store) and its NamedArtifact value
+//     type live in the systemstore package; Store exposes it via System().
 //   - readhandle.go   — the ReadHandle interface.
 //   - store_type.go   — the *store struct, its fields, the lock-order
 //     invariant, and System().
@@ -106,7 +107,7 @@
 //     and manifest load, blob open, and verification (read).
 //   - descriptor   — the on-disk descriptor and its L2 cache.
 //   - keyring      — the KDF (Argon2id) and KEK/DEK wrap/unwrap kernels.
-//   - named — the system/<name>/<seq> address-space mechanics
+//   - named — the named/<name>.<seq> flat address-space mechanics
 //     (name validation, seq claim via atomic create, inline-manifest
 //     build, verify-on-read) shared by the systemStore facade and the
 //     storeconfig bootstrap path (ADR-85).

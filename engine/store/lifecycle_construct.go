@@ -44,7 +44,7 @@ func buildStore(
 		transformers: o.readRegistry,
 		crypto:       crypto.New(desc, dek, o.passphrase, o.keyResolver, drv, idx),
 	}
-	// SystemStore facade over the pointer-free layout (ADR-85). It needs
+	// systemstore.Store facade over the pointer-free layout (ADR-85). It needs
 	// only the driver, the hash registry, the active config (for its
 	// immutable ContentHasher), and a logger — no StoreIndex and no write
 	// indirection, since system artifacts are unindexed and the inline

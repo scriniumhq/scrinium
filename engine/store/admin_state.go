@@ -57,6 +57,6 @@ func (s *store) SetMaintenanceMode(ctx context.Context, mode domain.MaintenanceM
 	return nil
 }
 
-// System returns the SystemStore facade. Reached only through
+// System returns the systemstore.Store facade. Reached only through
 // AdminStore, so DataStore consumers cannot see system state.
 func (s *store) System() systemstore.Store { return s.system }
