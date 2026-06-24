@@ -2,15 +2,15 @@ package errs
 
 import "errors"
 
-// Configuration: active-config resolution (max system/config seq, no pointer) and immutable-param
+// Configuration: active-config resolution (max store.config seq, no pointer) and immutable-param
 // validation. ErrInvalidConfig is produced by the Rules Engine.
 
-// ErrConfigMissing — no system/config version has ever been written.
+// ErrConfigMissing — no store.config version has ever been written.
 var ErrConfigMissing = errors.New("scrinium: config missing")
 
 // ErrConfigMismatch — an attempt to change an immutable parameter
 // through UpdateConfig, or a conflict between the cfg passed to
-// OpenStore and the active system/config version, or an attempt to
+// OpenStore and the active store.config version, or an attempt to
 // remove NoDelete while
 // DeletionPolicyLock is in effect.
 var ErrConfigMismatch = errors.New("scrinium: config mismatch")

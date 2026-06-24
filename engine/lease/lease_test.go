@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	leaseName = "store.state.maintenance.lease"
+	leaseName = "store.agent.maintenance.lease"
 	hostA     = "host-A"
 	hostB     = "host-B"
 )

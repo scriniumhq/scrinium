@@ -10,6 +10,13 @@ import "errors"
 // in the corresponding registry.
 var ErrUnsupportedAlgorithm = errors.New("scrinium: unsupported algorithm")
 
+// ErrInvalidPipeline — the configured pipeline composition is illegal:
+// a crypto (AEAD) stage is not terminal (a compressor or any other
+// stage follows it). Crypto must always be the last stage so the
+// on-disk bytes are the encrypted bytes. Surfaced by
+// Runner.ValidateAlgos at InitStore / OpenStore and on the write path.
+var ErrInvalidPipeline = errors.New("scrinium: invalid pipeline composition")
+
 // ErrInjected is the sentinel returned by the faulty test driver
 // for a deliberately injected fault. Test code asserts
 // errors.Is(err, ErrInjected) to confirm a fault landed.

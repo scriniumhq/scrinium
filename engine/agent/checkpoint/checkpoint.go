@@ -71,7 +71,7 @@ type CheckpointAgent interface {
 }
 
 const (
-	checkpointLeaseName       = "store.state.checkpoint.lease"
+	checkpointLeaseName       = "store.agent.checkpoint.lease"
 	defaultCheckpointIntv     = 6 * time.Hour
 	defaultCheckpointKeep     = 3
 	defaultCheckpointLeaseTTL = 15 * time.Minute
@@ -265,6 +265,14 @@ func (a *checkpointAgent) pruneOldCheckpoints(ctx context.Context) error {
 	err := a.store.System().Walk(ctx, checkpointfmt.Prefix, func(name string, _ domain.Manifest) error {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		// The checkpoint lease (store.agent.checkpoint.lease) and any other
+		// foreign object share the Prefix but are not checkpoints. Skip
+		// anything whose suffix is not a valid checkpoint timestamp — the
+		// same discrimination Latest applies — so retention counts and
+		// prunes only real checkpoints.
+		if _, perr := checkpointfmt.ParseID(name); perr != nil {
+			return nil
 		}
 		names = append(names, name)
 		return nil

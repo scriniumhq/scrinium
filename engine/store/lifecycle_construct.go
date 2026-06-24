@@ -44,12 +44,25 @@ func buildStore(
 		transformers: o.readRegistry,
 		crypto:       crypto.New(desc, dek, o.passphrase, o.keyResolver, drv, idx),
 	}
-	// SystemStore facade over the pointer-free layout (ADR-85). It needs
+	// systemstore.Store facade over the pointer-free layout (ADR-85). It needs
 	// only the driver, the hash registry, the active config (for its
 	// immutable ContentHasher), and a logger — no StoreIndex and no write
 	// indirection, since system artifacts are unindexed and the inline
 	// write is self-contained in system artifact.
 	c.system = systemstore.New(drv, o.hashRegistry, cfg, c.log)
+
+	// Reject an illegal pipeline composition at construction time
+	// (InitStore / OpenStore): a crypto (AEAD) stage must be terminal,
+	// so a compressor after a crypto plugin is errs.ErrInvalidPipeline
+	// (2. Internals/03 Cryptography). Composition only — an unregistered
+	// algorithm is not an open-time failure; it surfaces at Put as
+	// errs.ErrUnsupportedAlgorithm. No-op for an empty pipeline; skipped
+	// when no transformer registry is configured.
+	if len(cfg.Pipeline) > 0 && c.transformers != nil {
+		if err := c.pipelineRunner().ValidateComposition(cfg.Pipeline); err != nil {
+			return nil, err
+		}
+	}
 	return c, nil
 }
 

@@ -29,7 +29,7 @@ import (
 // overloading domain.Artifact.
 type NamedArtifact struct {
 	// Name is the slash-separated name under which the artifact is
-	// stored and later retrieved (e.g. "scrub.cursor").
+	// stored and later retrieved (e.g. "scrub/cursor").
 	Name string
 
 	// Payload is the artifact body. System payloads are small enough to
@@ -43,7 +43,7 @@ type NamedArtifact struct {
 	//   *Keep == 0      → exclusive cell: one fixed slot (<name>), no
 	//                     versions, overwrite in place (the keep=0 / lock
 	//                     form). Opt-in only — build it with KeepCell().
-	//   *Keep ∈ [1,255] → versions: <name>/<seq>, active = max(seq),
+	//   *Keep ∈ [1,255] → versions: <name>.<seq> (flat, ADR-100), active = max(seq),
 	//                     pruned to *Keep retained. Build with KeepVersions(n).
 	Keep *uint8
 }
@@ -85,7 +85,8 @@ type Store interface {
 }
 
 // systemStore is the Store facade over the pointer-free layout (ADR-85,
-// engine/internal/named). Every system name maps to system/<name>/<seq>; the
+// engine/internal/named). Every system name maps to a flat key
+// named/<name>.<seq> (ADR-100), no subdirectories; the
 // active version is max(seq); a write claims the next seq with an
 // exclusive create. System artifacts are never indexed in StoreIndex and
 // never written under manifests/ — they live in their own address space,

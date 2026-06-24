@@ -66,7 +66,7 @@ type store struct {
 	hashes       domain.HashRegistry
 	transformers pipeline.TransformerRegistry
 
-	// SystemStore facade, wired once at construction. nil only in
+	// systemstore.Store facade, wired once at construction. nil only in
 	// unit tests that build a *core by hand.
 	system systemstore.Store
 

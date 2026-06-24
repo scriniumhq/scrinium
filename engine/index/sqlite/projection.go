@@ -114,10 +114,10 @@ func (i *Index) applyUnindexers(ctx context.Context, tx *sql.Tx, m domain.Manife
 // cleaned by Unindex (applyUnindexers, wired in deleteManifestTx). proj_* delete
 // needs only the digest, so it is handled here.
 func deleteProjections(ctx context.Context, tx *sql.Tx, digest string) error {
-	if _, err := tx.ExecContext(ctx, `DELETE FROM proj_ext WHERE digest = ?`, digest); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM proj_ext WHERE manifest_digest = ?`, digest); err != nil {
 		return fmt.Errorf("delete proj_ext: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM proj_usr WHERE digest = ?`, digest); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM proj_usr WHERE manifest_digest = ?`, digest); err != nil {
 		return fmt.Errorf("delete proj_usr: %w", err)
 	}
 	return nil
@@ -127,7 +127,7 @@ func deleteProjections(ctx context.Context, tx *sql.Tx, digest string) error {
 
 func upsertProjExt(ctx context.Context, tx *sql.Tx, digest, extName, field, value string) error {
 	_, err := tx.ExecContext(ctx,
-		`INSERT OR REPLACE INTO proj_ext (digest, ext_name, field, value) VALUES (?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO proj_ext (manifest_digest, ext_name, field, value) VALUES (?, ?, ?, ?)`,
 		digest, extName, field, value)
 	return err
 }
@@ -158,7 +158,7 @@ func upsertProjUsr(ctx context.Context, tx *sql.Tx, digest, field string, kind c
 		return fmt.Errorf("unknown value kind %d", kind)
 	}
 	_, err := tx.ExecContext(ctx,
-		`INSERT OR REPLACE INTO proj_usr (digest, field, value_text, value_number, value_hash) VALUES (?, ?, ?, ?, ?)`,
+		`INSERT OR REPLACE INTO proj_usr (manifest_digest, field, value_text, value_number, value_hash) VALUES (?, ?, ?, ?, ?)`,
 		digest, field, text, num, hash)
 	return err
 }

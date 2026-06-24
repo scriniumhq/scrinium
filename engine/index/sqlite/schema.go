@@ -166,11 +166,11 @@ CREATE TABLE ext_data (
 -- extension's Indexer, in the manifest transaction; the core does not
 -- branch on manifest type.
 CREATE TABLE proj_ext (
-    digest    TEXT    NOT NULL,
+    manifest_digest TEXT NOT NULL,
     ext_name  TEXT    NOT NULL,
     field     TEXT    NOT NULL,
     value     TEXT    NOT NULL,
-    PRIMARY KEY (digest, ext_name, field)
+    PRIMARY KEY (manifest_digest, ext_name, field)
 ) WITHOUT ROWID;
 
 -- Equality lookup by (ext_name, field, value); serves Walk(ns) and search.
@@ -180,12 +180,12 @@ CREATE INDEX proj_ext_lookup ON proj_ext(ext_name, field, value);
 -- (default off) plus a per-field flag (ADR-78). The only place with binary —
 -- by hash of the DECODED value (value_hash); opaque bytes are not indexed.
 CREATE TABLE proj_usr (
-    digest       TEXT    NOT NULL,
+    manifest_digest TEXT NOT NULL,
     field        TEXT    NOT NULL,
     value_text   TEXT,
     value_number INTEGER,
     value_hash   TEXT,
-    PRIMARY KEY (digest, field)
+    PRIMARY KEY (manifest_digest, field)
 ) WITHOUT ROWID;
 
 -- Equality by field over structural values and the decoded-binary hash.

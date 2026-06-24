@@ -10,13 +10,13 @@
 // duplication into one mechanism.
 //
 // A system artifact is identified by a NAME — a flat, dot-separated
-// key: "store.config", "store.checkpoint.<ts>", "store.state.gc.lease".
+// key: "store.config", "store.agent.checkpoint.<ts>", "store.agent.gc.lease".
 // The name maps deterministically to a flat file under the named root;
 // each write of that name claims a new, monotonically increasing SEQ,
 // stored as a dot-suffixed flat file (no per-artifact subdirectory):
 //
 //	named/<name>.<seq>     e.g. named/store.config.0000000001
-//	                            named/store.checkpoint.<ts>.0000000001
+//	                            named/store.agent.checkpoint.<ts>.0000000001
 //
 // The file at named/<name>.<seq> IS the (inline) manifest — system artifacts
 // are short and unique per write, so they carry their payload inline
