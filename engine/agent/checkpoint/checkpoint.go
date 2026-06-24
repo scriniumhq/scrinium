@@ -71,7 +71,7 @@ type CheckpointAgent interface {
 }
 
 const (
-	checkpointLeaseName       = "store.state.checkpoint.lease"
+	checkpointLeaseName       = "store.agent.checkpoint.lease"
 	defaultCheckpointIntv     = 6 * time.Hour
 	defaultCheckpointKeep     = 3
 	defaultCheckpointLeaseTTL = 15 * time.Minute

@@ -101,7 +101,7 @@ func NewScrubAgent(
 }
 
 const (
-	scrubLeaseName           = "store.state.scrub.lease"
+	scrubLeaseName           = "store.agent.scrub.lease"
 	defaultScrubScanInterval = 24 * time.Hour
 	defaultScrubMaxAge       = 30 * 24 * time.Hour
 	defaultScrubBatchSize    = 1000

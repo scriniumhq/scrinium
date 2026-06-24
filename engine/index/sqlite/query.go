@@ -21,7 +21,7 @@ func (i *Index) QueryByExtField(ctx context.Context, extName, field, value strin
 	const stmt = `
 		SELECT DISTINCT m.artifact_id
 		FROM proj_ext p
-		JOIN manifests m ON m.manifest_digest = p.digest
+		JOIN manifests m ON m.manifest_digest = p.manifest_digest
 		WHERE p.ext_name = ? AND p.field = ? AND p.value = ?
 		  AND m.artifact_id IS NOT NULL
 		ORDER BY m.artifact_id`
@@ -46,7 +46,7 @@ func (i *Index) ListByExtField(ctx context.Context, extName, field, value string
 	const stmt = `
 		SELECT ` + manifestProjection + `
 		FROM manifests m
-		JOIN proj_ext p ON p.digest = m.manifest_digest
+		JOIN proj_ext p ON p.manifest_digest = m.manifest_digest
 		LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
 		WHERE p.ext_name = ? AND p.field = ? AND p.value = ?
 		  AND m.artifact_id IS NOT NULL
@@ -81,7 +81,7 @@ func (i *Index) QueryByUsrField(ctx context.Context, field, value string, cb fun
 	const stmt = `
 		SELECT DISTINCT m.artifact_id
 		FROM proj_usr p
-		JOIN manifests m ON m.manifest_digest = p.digest
+		JOIN manifests m ON m.manifest_digest = p.manifest_digest
 		WHERE p.field = ?
 		  AND (p.value_text = ? OR p.value_hash = ? OR p.value_number = ?)
 		  AND m.artifact_id IS NOT NULL

@@ -1,6 +1,6 @@
 // Package migration is the Migration Agent (3. Reference/06 Agents/08
 // Migration): the bundler's paired background worker. It drains the
-// migration queue (system.state/migration/pending), packs small blobs
+// migration queue (extension.bundler.migration.pending), packs small blobs
 // accumulated in the transit store into volumes (container manifest + TOC
 // blob + body blob) and delivers the result to the destination store. It
 // appears in the stack only when a Target is wrapped by the bundler.
@@ -11,7 +11,7 @@
 // STATUS: architectural skeleton. The contract (MigrationConfig,
 // MigrationStats, MigrationAgent, registration as agent kind "migration")
 // matches the doc. The cycle (lease, read queue, group, pack, deliver,
-// prune) is a stub (ErrNotImplemented / TODO).
+// prune) is a stub (errs.ErrNotImplemented / TODO).
 //
 // NOT the same as MigrateIndexAgent (index schema/backend migration) or
 // namespace migration — three distinct "migration" operations, no shared
@@ -20,16 +20,13 @@ package migration
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/store"
+	"scrinium.dev/errs"
 )
-
-// ErrNotImplemented marks a skeleton method whose body is not yet written.
-var ErrNotImplemented = errors.New("migration: not implemented (skeleton)")
 
 // MigrationConfig configures the migration agent (08 Migration §8.2).
 type MigrationConfig struct {
@@ -76,12 +73,12 @@ func (a *migrationAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 	// (BatchSize), group by Finalize policy, pack ref_count>0 blobs into a
 	// volume, deliver to dest (commit dest index THEN prune transit), emit
 	// EventPackSealed / EventArtifactMigrated.
-	return nil, ErrNotImplemented
+	return nil, errs.ErrNotImplemented
 }
 
 func (a *migrationAgent) Trigger(ctx context.Context, dest string) error {
 	// TODO(migration): force finalize for dest off-schedule.
-	return ErrNotImplemented
+	return errs.ErrNotImplemented
 }
 
 type migrationFactory struct{}

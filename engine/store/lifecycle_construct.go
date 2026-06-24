@@ -50,6 +50,17 @@ func buildStore(
 	// indirection, since system artifacts are unindexed and the inline
 	// write is self-contained in system artifact.
 	c.system = systemstore.New(drv, o.hashRegistry, cfg, c.log)
+
+	// Reject an illegal pipeline composition at construction time
+	// (InitStore / OpenStore): a crypto (AEAD) stage must be terminal,
+	// so a compressor after a crypto plugin is errs.ErrInvalidPipeline
+	// (2. Internals/03 Cryptography). No-op for an empty pipeline; skipped
+	// when no transformer registry is configured (other paths catch that).
+	if len(cfg.Pipeline) > 0 && c.transformers != nil {
+		if err := c.pipelineRunner().ValidateAlgos(cfg.Pipeline); err != nil {
+			return nil, err
+		}
+	}
 	return c, nil
 }
 

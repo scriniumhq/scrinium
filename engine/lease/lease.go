@@ -111,7 +111,7 @@ type Lease struct {
 // Config configures Acquire.
 type Config struct {
 	// Name is the system-artifact name of the lease cell, e.g.
-	// "store.state.gc.lease". The cell lives at named.CellPath(Name).
+	// "store.agent.gc.lease". The cell lives at named.CellPath(Name).
 	// Required and must be a valid name (see ValidateName).
 	Name string
 

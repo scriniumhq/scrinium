@@ -33,6 +33,7 @@ import (
 	"io"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/errs"
 )
 
 // Runner builds and drives Encoder/Decoder chains over streaming
@@ -202,13 +203,26 @@ func (r *Runner) BuildGet(
 	return &decoderReadCloser{r: cur, underlying: underlying}, nil
 }
 
-// ValidateAlgos checks that every algorithm referenced in algoIDs is
-// present in the registry. Returns errs.ErrUnsupportedAlgorithm
-// wrapped with the missing id.
+// ValidateAlgos checks that the configured pipeline is legal:
+//   - every algorithm referenced in algoIDs is present in the registry
+//     (else errs.ErrUnsupportedAlgorithm, wrapped with the missing id);
+//   - a crypto (AEAD) stage is terminal — nothing may follow it, so a
+//     compressor after a crypto plugin is rejected with
+//     errs.ErrInvalidPipeline. Crypto must be last so the on-disk bytes
+//     are the encrypted bytes (2. Internals/03 Cryptography).
+//
+// Called at InitStore / OpenStore (configured pipeline) and on the
+// write path before building the PutPipeline.
 func (r *Runner) ValidateAlgos(algoIDs []string) error {
-	for _, algo := range algoIDs {
-		if _, err := r.transformers.Get(algo); err != nil {
+	for i, algo := range algoIDs {
+		factory, err := r.transformers.Get(algo)
+		if err != nil {
 			return fmt.Errorf("pipeline: %q: %w", algo, err)
+		}
+		if _, isAEAD := factory.(AEADCapable); isAEAD && i != len(algoIDs)-1 {
+			return fmt.Errorf(
+				"pipeline: crypto stage %q must be last, found %q after it: %w",
+				algo, algoIDs[i+1], errs.ErrInvalidPipeline)
 		}
 	}
 	return nil
