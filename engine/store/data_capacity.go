@@ -10,7 +10,7 @@ import (
 // Capacity returns aggregated storage info. Best-effort:
 //
 //   - ArtifactCount: user-visible manifests, from the index walked with
-//     the "*" wildcard. system.* namespaces are excluded — Capacity
+//     the "*" wildcard. System artifacts are excluded — Capacity
 //     reports what users see through Walk, not the raw manifest count.
 //   - BlobCount: physical count of files under "blobs/" via the Driver.
 //     Inline manifests carry no separate blob file and do not appear.
@@ -35,8 +35,8 @@ func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 
 	// ArtifactCount: count of user-visible manifests. Iterates every
 	// user manifest (artifact_id present), which already excludes
-	// system.* artifacts (not indexed), so system.config and the future
-	// system.state writers do not inflate user-facing storage stats.
+	// system artifacts (name-addressed, not indexed), so store.config and
+	// the future store.state writers do not inflate user-facing storage stats.
 	var artifactCount int64
 	if err := s.index.IterateManifests(ctx, func(domain.Manifest) error {
 		artifactCount++

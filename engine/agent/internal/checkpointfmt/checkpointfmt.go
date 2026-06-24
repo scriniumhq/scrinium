@@ -4,7 +4,7 @@
 // so the two can never drift on the prefix or the timestamp layout.
 //
 // A checkpoint is a full, self-contained copy of the StoreIndex published as
-// engine state under Prefix, in the system/ address space that is never
+// engine state under Prefix, in the name-addressed space that is never
 // indexed (ADR-85). Recovery lists the prefix, picks the newest, restores
 // it, and replays the tail of manifests written since.
 package checkpointfmt
@@ -21,7 +21,7 @@ import (
 // Prefix is the System() namespace every checkpoint artifact lives under.
 // It is a flat, dot-separated key prefix (not a directory): a checkpoint
 // is named "store.checkpoint.<ts>" and the set is enumerated by a
-// string-prefix Walk over the system root.
+// string-prefix Walk over the named root.
 const Prefix = "store.checkpoint."
 
 // TimeLayout encodes the checkpoint instant. It is path-safe and

@@ -70,7 +70,7 @@ func TestInitStore_FreshLocation_Succeeds(t *testing.T) {
 		t.Error("descriptor.DEKEncrypted should be false on Plain Store")
 	}
 
-	// Projection params live in system.config — read them via the active
+	// Projection params live in store.config — read them via the active
 	// config snapshot.
 	cfg := s.Config()
 	if cfg.ManifestCrypto != "Plain" {
@@ -291,7 +291,7 @@ func TestInitStore_DiskBackedIndex(t *testing.T) {
 	if _, err := os.Stat(idxPath); err != nil {
 		t.Errorf("disk-backed index file: %v", err)
 	}
-	defaultPath := filepath.Join(drv.Root(), "system.index", "index.db")
+	defaultPath := filepath.Join(drv.Root(), "index", "index.db")
 	if _, err := os.Stat(defaultPath); err == nil {
 		t.Errorf("core unexpectedly created %s", defaultPath)
 	}

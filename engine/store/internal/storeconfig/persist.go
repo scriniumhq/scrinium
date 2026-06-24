@@ -12,18 +12,18 @@ import (
 )
 
 // configName is the system-artifact name under which the active
-// StoreConfig and its history live: system/store.config/<seq> (ADR-85). The
+// StoreConfig and its history live: store.config.<seq> (ADR-85). The
 // active config is max(seq); a new config is published by claiming the
 // next seq. There is no pointer file — the config path uses the same
 // name→seq mechanism as every other system artifact (named),
 // which is what removed the bespoke pointer this package used to carry.
 const configName = "store.config"
 
-// Write persists cfg as a new system/config version and returns once the
+// Write persists cfg as a new store.config version and returns once the
 // version is durably written. The active config becomes the one just
 // written (max seq).
 //
-// storeconfig owns the system.config FORMAT (StoreConfig serialisation);
+// storeconfig owns the store.config FORMAT (StoreConfig serialisation);
 // named owns the MECHANICS (inline manifest build, seq claim,
 // verify-on-read) shared with every other system artifact.
 func Write(
@@ -48,7 +48,7 @@ func Write(
 	return nil
 }
 
-// Read returns the active StoreConfig (the highest system/config
+// Read returns the active StoreConfig (the highest store.config
 // version). It bypasses the StoreIndex entirely — config must be
 // readable at store-open before the index is trusted — by reading the
 // version directory directly. Returns errs.ErrConfigMissing when
@@ -69,7 +69,7 @@ func Read(
 	return loadVersion(ctx, drv, hashes, seq)
 }
 
-// History returns every system/config version decoded and defaulted,
+// History returns every store.config version decoded and defaulted,
 // newest first (the active config is therefore element zero). Like Read,
 // it enumerates the version directory rather than the index.
 func History(
@@ -95,7 +95,7 @@ func History(
 }
 
 // loadVersion reads, verifies, and unmarshals the config at a specific
-// system/config seq.
+// store.config seq.
 func loadVersion(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, seq uint64) (domain.StoreConfig, error) {
 	path, err := named.VersionPath(configName, seq)
 	if err != nil {

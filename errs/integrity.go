@@ -8,7 +8,7 @@ import "errors"
 // the Scrub Agent.
 
 // ErrCorruptedManifest — the hash of the manifest file does not
-// match its ArtifactID.
+// match its digest (the on-disk file name; ADR-73).
 var ErrCorruptedManifest = errors.New("scrinium: corrupted manifest")
 
 // ErrCorruptedBlob — the hash of the physical blob does not match

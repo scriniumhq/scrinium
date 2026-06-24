@@ -135,9 +135,9 @@ func (s *store) VerifyBlobRef(ctx context.Context, blobRef string) error {
 }
 
 // VerifyManifest checks a manifest's integrity only — that the manifest
-// file still hashes to its ArtifactID — without touching the blob. It
+// file still hashes to its digest (the file name) — without touching the blob. It
 // is the cheap half of verification: loadManifest already re-hashes the
-// file via VerifyArtifactID (and decrypts Sealed/Paranoid bodies), so a
+// file via VerifyManifestDigest (and decrypts Sealed/Paranoid bodies), so a
 // successful load IS a successful manifest verification.
 //
 // It is the Scrub Agent's cascade step: after the expensive
@@ -147,7 +147,7 @@ func (s *store) VerifyBlobRef(ctx context.Context, blobRef string) error {
 // so manifest integrity is the whole of their integrity.
 //
 // On a corrupt manifest it publishes EventScrubFailed and returns the
-// underlying error (errs.ErrCorruptedManifest from VerifyArtifactID, or
+// underlying error (errs.ErrCorruptedManifest from VerifyManifestDigest, or
 // a decrypt failure). A missing manifest returns errs.ErrArtifactNotFound.
 func (s *store) VerifyManifest(ctx context.Context, id domain.ArtifactID) error {
 	if err := s.enterRead(ctx); err != nil {

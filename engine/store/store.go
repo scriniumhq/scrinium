@@ -27,8 +27,9 @@ type DataStore interface {
 
 	// Put stores an artifact: it runs Payload through the Pipeline,
 	// performs deduplication, and writes the blob and the manifest.
-	// It returns ArtifactID — the cryptographic hash of the
-	// serialised manifest file.
+	// It returns ArtifactID — the floating handle PRF(NK, cd‖md)
+	// (ADR-73). The hash of the serialised manifest is a separate
+	// value (the manifest digest, i.e. the file name), not this.
 	Put(ctx context.Context, a domain.Artifact, opts ...domain.PutOption) (domain.ArtifactID, error)
 
 	// PutBlob writes an anonymous blob without creating a manifest.
@@ -65,7 +66,7 @@ type DataStore interface {
 	VerifyBlobRef(ctx context.Context, blobRef string) error
 
 	// VerifyManifest checks a manifest's integrity only (its file
-	// still hashes to its ArtifactID), without touching the blob —
+	// still hashes to its digest — the file name), without touching the blob —
 	// the cheap half of verification. It is the Scrub Agent's cascade
 	// step over a verified blob's consumers, and the whole check for
 	// Inline artifacts. On corruption it publishes EventScrubFailed
@@ -80,7 +81,7 @@ type DataStore interface {
 
 	// Iteration and introspection.
 
-	// Walk iterates over every user manifest, namespace-agnostic. system.*
+	// Walk iterates over every user manifest, namespace-agnostic. System
 	// artifacts are unreachable here; they live behind System().
 	// Namespace-filtered traversal is an extension concern (WalkByExt).
 	Walk(ctx context.Context, cb func(domain.Manifest) error) error
@@ -153,7 +154,7 @@ type AdminStore interface {
 	UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error
 
 	// Config returns a snapshot of the active StoreConfig — the
-	// projection persisted as the active system/config version, with
+	// projection persisted as the active store.config version, with
 	// defaults applied. Read-only; mutations of the returned value
 	// have no effect on the running Store.
 	Config() domain.StoreConfig
