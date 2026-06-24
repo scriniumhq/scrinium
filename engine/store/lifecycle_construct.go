@@ -54,10 +54,12 @@ func buildStore(
 	// Reject an illegal pipeline composition at construction time
 	// (InitStore / OpenStore): a crypto (AEAD) stage must be terminal,
 	// so a compressor after a crypto plugin is errs.ErrInvalidPipeline
-	// (2. Internals/03 Cryptography). No-op for an empty pipeline; skipped
-	// when no transformer registry is configured (other paths catch that).
+	// (2. Internals/03 Cryptography). Composition only — an unregistered
+	// algorithm is not an open-time failure; it surfaces at Put as
+	// errs.ErrUnsupportedAlgorithm. No-op for an empty pipeline; skipped
+	// when no transformer registry is configured.
 	if len(cfg.Pipeline) > 0 && c.transformers != nil {
-		if err := c.pipelineRunner().ValidateAlgos(cfg.Pipeline); err != nil {
+		if err := c.pipelineRunner().ValidateComposition(cfg.Pipeline); err != nil {
 			return nil, err
 		}
 	}

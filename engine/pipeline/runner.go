@@ -203,21 +203,46 @@ func (r *Runner) BuildGet(
 	return &decoderReadCloser{r: cur, underlying: underlying}, nil
 }
 
-// ValidateAlgos checks that the configured pipeline is legal:
-//   - every algorithm referenced in algoIDs is present in the registry
-//     (else errs.ErrUnsupportedAlgorithm, wrapped with the missing id);
-//   - a crypto (AEAD) stage is terminal — nothing may follow it, so a
-//     compressor after a crypto plugin is rejected with
-//     errs.ErrInvalidPipeline. Crypto must be last so the on-disk bytes
-//     are the encrypted bytes (2. Internals/03 Cryptography).
+// ValidateAlgos checks that the configured pipeline is legal on the
+// WRITE path: every algorithm is present in the registry (else
+// errs.ErrUnsupportedAlgorithm, wrapped with the missing id) AND a crypto
+// (AEAD) stage is terminal (else errs.ErrInvalidPipeline). Crypto must be
+// last so the on-disk bytes are the encrypted bytes
+// (2. Internals/03 Cryptography).
 //
-// Called at InitStore / OpenStore (configured pipeline) and on the
-// write path before building the PutPipeline.
+// Called on the write path before building the PutPipeline. Construction
+// (InitStore / OpenStore) uses ValidateComposition, which checks ordering
+// without requiring every plugin to be registered yet.
 func (r *Runner) ValidateAlgos(algoIDs []string) error {
 	for i, algo := range algoIDs {
 		factory, err := r.transformers.Get(algo)
 		if err != nil {
 			return fmt.Errorf("pipeline: %q: %w", algo, err)
+		}
+		if _, isAEAD := factory.(AEADCapable); isAEAD && i != len(algoIDs)-1 {
+			return fmt.Errorf(
+				"pipeline: crypto stage %q must be last, found %q after it: %w",
+				algo, algoIDs[i+1], errs.ErrInvalidPipeline)
+		}
+	}
+	return nil
+}
+
+// ValidateComposition checks only pipeline COMPOSITION (stage ordering),
+// not stage presence: a crypto (AEAD) stage must be terminal, so a
+// compressor after a crypto plugin is errs.ErrInvalidPipeline. Algorithms
+// missing from the registry are skipped — presence is validated separately
+// (ValidateAlgos, on the write path), so an unregistered algorithm surfaces
+// at Put as errs.ErrUnsupportedAlgorithm rather than at InitStore/OpenStore.
+//
+// This is the check run at construction time (InitStore / OpenStore): it
+// rejects an illegal composition early without coupling store open to the
+// set of registered plugins.
+func (r *Runner) ValidateComposition(algoIDs []string) error {
+	for i, algo := range algoIDs {
+		factory, err := r.transformers.Get(algo)
+		if err != nil {
+			continue // presence is a write-path concern; cannot classify an unknown stage
 		}
 		if _, isAEAD := factory.(AEADCapable); isAEAD && i != len(algoIDs)-1 {
 			return fmt.Errorf(
