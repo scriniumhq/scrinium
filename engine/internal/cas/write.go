@@ -290,6 +290,53 @@ func (e *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 	return sm, fileBytes, nil
 }
 
+// WriteHeadless writes a headless blob-backed data artifact (ADR-105): input
+// is materialized to a physical blob and wrapped in a CONTAINER manifest —
+// both identity slots empty (no handle, no name, no identity-meta),
+// blob_refs=[blob] — which is persisted and indexed, so orphan scan / GC
+// treat it as live (a headless data artifact is reachable only by its digest,
+// so it must be indexed or it would be reaped). Returns the ManifestDigest:
+// the stable external reference an envelope's external_payload_ref carries.
+//
+// This is the simplest case of the pack container (one blob, no members, no
+// TOC). A data artifact is never inline — it always streams to a Target blob,
+// regardless of the store's inline-blob policy — because its whole purpose is
+// to carry a payload too large for an inline manifest. The manifest body
+// follows the store's ManifestCrypto (dek/keyID supplied by the caller, as for
+// a user Put), so the blob and its manifest encrypt under the same key.
+func (e *IO) WriteHeadless(ctx context.Context, cfg domain.StoreConfig, input io.Reader, dek []byte, keyID string) (domain.ManifestDigest, error) {
+	hashAlgo := string(cfg.ContentHasher)
+	blob, err := e.streamToTarget(ctx, cfg, hashAlgo, keyID, input)
+	if err != nil {
+		return "", fmt.Errorf("cas: headless materialize: %w", err)
+	}
+
+	// Container slot: no handle, no name, no identity-meta; blob_refs holds
+	// the single data blob. validateSlot accepts this as a container.
+	m := domain.Manifest{
+		CreatedAt:    time.Now().UTC(),
+		ContentHash:  blob.ContentHash,
+		OriginalSize: blob.OriginalSize,
+		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
+		Pipeline:     blob.Stages,
+		BlobRefs:     []domain.BlobRef{blob.BlobRef},
+	}
+
+	_, fileBytes, sm, err := artifact.ComputeManifestDigest(
+		m, hashAlgo, e.hashes,
+		cfg.ManifestEncoding, cfg.ManifestCrypto, dek, keyID,
+	)
+	if err != nil {
+		// The blob is already committed; we do not roll it back (an orphan
+		// blob is harmless — ref_count stays 0 and GC reaps it).
+		return "", fmt.Errorf("cas: headless manifest: %w", err)
+	}
+	if err := e.PersistManifest(ctx, sm, fileBytes, blob.Addr); err != nil {
+		return "", err
+	}
+	return sm.Digest, nil
+}
+
 // identityNonce returns a fresh 16-byte nonce for IdentityMode=Unique (the
 // default when unset) and nil for Coalesced, so the handle is unique
 // per-Put or deterministic respectively (ADR-73).

@@ -45,6 +45,22 @@ func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys domain.KeyProv
 	if !ok {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
 	}
+	m, err := e.loadManifestByDigest(ctx, digest, keys, hashAlgo)
+	if err != nil {
+		return domain.Manifest{}, err
+	}
+	// The handle is also carried in the body; set the requested handle so
+	// callers have both it and the physical digest.
+	m.ArtifactID = id
+	return m, nil
+}
+
+// loadManifestByDigest reads, verifies, and decodes the manifest file named
+// directly by digest — no handle indirection. Load uses it after resolving
+// id → digest through the index; headless resolution (ADR-105) uses it
+// directly, since a headless data artifact's external reference IS its
+// ManifestDigest. Plain bypasses the resolver; Sealed/Paranoid consult keys.
+func (e *IO) loadManifestByDigest(ctx context.Context, digest domain.ManifestDigest, keys domain.KeyProvider, hashAlgo string) (domain.Manifest, error) {
 	manifestPath, err := artifact.ManifestPath(digest)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("cas.Load: path: %w", err)
@@ -71,11 +87,20 @@ func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys domain.KeyProv
 	if err != nil {
 		return domain.Manifest{}, err
 	}
-	// The handle is also carried in the body; set both the physical digest
-	// (the form we read) and the requested handle so callers have both.
 	m.Digest = digest
-	m.ArtifactID = id
 	return m, nil
+}
+
+// OpenByDigest resolves a headless data artifact by its ManifestDigest — the
+// external_payload_ref form (ADR-105) — and opens its blob for streaming. No
+// handle indirection: the digest names the manifest file directly. Used to
+// resolve an external system-artifact payload (e.g. a checkpoint .db).
+func (e *IO) OpenByDigest(ctx context.Context, digest domain.ManifestDigest, keys domain.KeyProvider, hashAlgo string) (io.ReadCloser, error) {
+	m, err := e.loadManifestByDigest(ctx, digest, keys, hashAlgo)
+	if err != nil {
+		return nil, err
+	}
+	return e.OpenBlob(ctx, m)
 }
 
 // OpenBlob returns a reader over the artifact's plaintext bytes: it opens
