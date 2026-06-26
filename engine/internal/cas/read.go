@@ -92,16 +92,17 @@ func (e *IO) loadManifestByDigest(ctx context.Context, digest domain.ManifestDig
 	return m, nil
 }
 
-// OpenByDigest resolves a headless data artifact by its ManifestDigest — the
-// external_payload_ref form (ADR-105) — and opens its blob for streaming. No
+// OpenHandleByDigest resolves a headless data artifact by its ManifestDigest — the
+// external_payload_ref form (ADR-105) — and returns a ReadHandle over its
+// plaintext bytes. No
 // handle indirection: the digest names the manifest file directly. Used to
 // resolve an external system-artifact payload (e.g. a checkpoint .db).
-func (e *IO) OpenByDigest(ctx context.Context, digest domain.ManifestDigest, keys domain.KeyProvider, hashAlgo string) (io.ReadCloser, error) {
+func (e *IO) OpenHandleByDigest(ctx context.Context, digest domain.ManifestDigest, keys domain.KeyProvider, hashAlgo string) (domain.ReadHandle, error) {
 	m, err := e.loadManifestByDigest(ctx, digest, keys, hashAlgo)
 	if err != nil {
 		return nil, err
 	}
-	return e.OpenBlob(ctx, m)
+	return e.OpenHandle(ctx, m)
 }
 
 // OpenBlob returns a reader over the artifact's plaintext bytes: it opens

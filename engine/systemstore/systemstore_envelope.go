@@ -42,6 +42,16 @@ func wrapEnvelope(storeID string, payload []byte) ([]byte, error) {
 	return b, nil
 }
 
+// wrapExternalEnvelope builds the pointer envelope for an external headless
+// payload (ADR-105): store identity plus external_payload_ref, no inline body.
+func wrapExternalEnvelope(storeID, ref string) ([]byte, error) {
+	b, err := json.Marshal(envelope{StoreID: storeID, ExternalPayloadRef: ref})
+	if err != nil {
+		return nil, fmt.Errorf("system store: marshal external envelope: %w", err)
+	}
+	return b, nil
+}
+
 // openEnvelope parses and validates the envelope in a loaded manifest's
 // InlineBlob against the reading store's authoritative storeID. It returns the
 // parsed envelope or a typed category error: ErrSystemArtifactMalformed
