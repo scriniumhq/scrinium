@@ -47,6 +47,12 @@ type Record struct {
 	ExpiresAt  time.Time
 	AgentType  string
 	Nonce      string
+	// StoreID is the identity of the store this lease belongs to (the
+	// descriptor StoreID, ADR-104). Empty for location.lock, which is
+	// acquired before the descriptor is read, and for leases written by
+	// pre-store_id code; an empty StoreID is treated as "unknown", never
+	// as foreign (see Acquire).
+	StoreID string
 }
 
 // recordWire is the on-disk JSON shape: timestamps as canonical
@@ -57,6 +63,7 @@ type recordWire struct {
 	ExpiresAt  string `json:"expires_at"`
 	AgentType  string `json:"agent_type"`
 	Nonce      string `json:"nonce"`
+	StoreID    string `json:"store_id,omitempty"`
 }
 
 // MarshalJSON encodes the record with timefmt-formatted timestamps.
@@ -67,6 +74,7 @@ func (r Record) MarshalJSON() ([]byte, error) {
 		ExpiresAt:  timefmt.Format(r.ExpiresAt),
 		AgentType:  r.AgentType,
 		Nonce:      r.Nonce,
+		StoreID:    r.StoreID,
 	})
 }
 
@@ -90,6 +98,7 @@ func (r *Record) UnmarshalJSON(b []byte) error {
 	r.ExpiresAt = expires
 	r.AgentType = w.AgentType
 	r.Nonce = w.Nonce
+	r.StoreID = w.StoreID
 	return nil
 }
 
@@ -106,6 +115,7 @@ type Lease struct {
 	agentType string
 	ttl       time.Duration
 	nonce     string
+	storeID   string
 }
 
 // Config configures Acquire.
@@ -127,16 +137,63 @@ type Config struct {
 	// TTL is the hold time; ExpiresAt = AcquiredAt + TTL. Required
 	// (> 0).
 	TTL time.Duration
+
+	// StoreID is the identity of the store this lease belongs to (the
+	// descriptor StoreID, ADR-104). Optional: location.lock is acquired
+	// before the descriptor is read and passes "". When set, Acquire
+	// treats a live lease that explicitly carries a DIFFERENT StoreID as
+	// absent and reclaims the slot — a foreign store's lease that leaked
+	// through a shared/copied Location is not a conflict to wait out. A
+	// lease with no recorded StoreID (location.lock, or pre-store_id code)
+	// is "unknown", never foreign, so it keeps the normal live-lease
+	// protection.
+	StoreID string
+
+	// Force overrides a live lease held by a DIFFERENT host of the SAME
+	// store — an explicit operator escape hatch. It does NOT affect the
+	// foreign-store reclaim (always reclaimed) or the expired-lease
+	// takeover (always taken); it has no effect on an empty or expired
+	// slot. Dangerous: the override writes a fresh Nonce, so the displaced
+	// holder aborts on its next Renew (ErrLeaseLost) — callers MUST log a
+	// forced acquisition loudly and emit an event.
+	Force bool
 }
 
-// Acquire takes the lease per §11.2. It succeeds when the slot is
-// empty (exclusive create wins) or the current lease has expired
-// (takeover). It returns ErrLeaseHeld when a live lease is held by a
-// different host.
+// LeaseHeldError reports that Acquire refused because a live lease is
+// held by a different host of the same store and Force was not set. It
+// carries the current holder's identity for an actionable message and
+// unwraps to errs.ErrLeaseHeld, so existing errors.Is(err,
+// errs.ErrLeaseHeld) checks — including the transient-retry classifier —
+// keep working.
+type LeaseHeldError struct {
+	HostID    string
+	AgentType string
+	ExpiresAt time.Time
+}
+
+func (e *LeaseHeldError) Error() string {
+	agent := e.AgentType
+	if agent == "" {
+		agent = "(none)"
+	}
+	return fmt.Sprintf("scrinium: lease held by host %s (agent %s) until %s",
+		e.HostID, agent, timefmt.Format(e.ExpiresAt))
+}
+
+func (e *LeaseHeldError) Unwrap() error { return errs.ErrLeaseHeld }
+
+// Acquire takes the lease per §11.2 (ADR-104 reaction table). It succeeds
+// when the slot is empty (exclusive create wins), the current lease has
+// expired (takeover), the current lease explicitly belongs to a different
+// store (foreign-store reclaim), or Force overrides a live same-store
+// lease held by another host. A live lease held by a different host of the
+// same (or unknown) store, without Force, is refused with a
+// *LeaseHeldError that names the holder and unwraps to errs.ErrLeaseHeld.
 //
-// On a takeover of an expired lease, prev is the record that was
-// overwritten (so the caller can emit a stale-lease takeover event);
-// prev is nil when the slot was empty.
+// prev is the record we displaced when it belonged to a different host (a
+// stale takeover, a foreign-store reclaim, or a forced override), so the
+// caller can emit the corresponding event / loud log; prev is nil when the
+// slot was empty or the lease was already ours.
 func Acquire(ctx context.Context, drv driver.Driver, cfg Config) (l *Lease, prev *Record, err error) {
 	if cfg.Name == "" || cfg.HostID == "" || cfg.TTL <= 0 {
 		return nil, nil, fmt.Errorf("lease.Acquire: Name, HostID and TTL>0 are required")
@@ -155,6 +212,7 @@ func Acquire(ctx context.Context, drv driver.Driver, cfg Config) (l *Lease, prev
 		agentType: cfg.AgentType,
 		ttl:       cfg.TTL,
 		nonce:     nonce,
+		storeID:   cfg.StoreID,
 	}
 
 	current, err := l.read(ctx)
@@ -174,12 +232,26 @@ func Acquire(ctx context.Context, drv driver.Driver, cfg Config) (l *Lease, prev
 	}
 
 	now := time.Now()
-	if !current.expired(now) && current.HostID != cfg.HostID {
-		return nil, nil, errs.ErrLeaseHeld
+	// Foreign store: a lease explicitly owned by a different store leaked
+	// through a shared/copied Location — not our lease, not a conflict, so
+	// reclaim the slot (fall through to the takeover write). The same
+	// classifier backs the system-artifact read check (ADR-104); an empty
+	// StoreID on either side is "unknown", never foreign, so location.lock
+	// and pre-store_id leases keep the normal protection below.
+	foreign := domain.ClassifyStoreOwnership(current.StoreID, cfg.StoreID) == domain.StoreOwnershipForeign
+	if !foreign && !current.expired(now) && current.HostID != cfg.HostID && !cfg.Force {
+		// Live lease, same (or unknown) store, different host, no override:
+		// refuse with an actionable error naming the current holder.
+		return nil, nil, &LeaseHeldError{
+			HostID:    current.HostID,
+			AgentType: current.AgentType,
+			ExpiresAt: current.ExpiresAt,
+		}
 	}
 
-	// Expired (or ours): overwrite, then read back and verify our
-	// nonce won — settles concurrent takeover without a coordinator.
+	// Reclaim the slot — expired, ours (re-acquire), foreign-store, or a
+	// forced override: overwrite, then read back and verify our nonce won,
+	// which settles concurrent takeover without a coordinator.
 	if werr := l.write(ctx, false); werr != nil {
 		return nil, nil, fmt.Errorf("lease.Acquire: takeover write: %w", werr)
 	}
@@ -190,7 +262,11 @@ func Acquire(ctx context.Context, drv driver.Driver, cfg Config) (l *Lease, prev
 	if after.Nonce != l.nonce {
 		return nil, nil, errs.ErrLeaseHeld // another taker won the race
 	}
-	if current.expired(now) && current.HostID != cfg.HostID {
+	// prev is the record we displaced when it belonged to a different host
+	// — a stale-lease takeover, a foreign-store reclaim, or a forced
+	// override — so the caller can emit the corresponding event / loud log.
+	// nil when the slot was empty or the lease was already ours.
+	if current.HostID != cfg.HostID {
 		c := current
 		prev = &c
 	}
@@ -273,6 +349,7 @@ func (l *Lease) record() Record {
 		ExpiresAt:  now.Add(l.ttl),
 		AgentType:  l.agentType,
 		Nonce:      l.nonce,
+		StoreID:    l.storeID,
 	}
 }
 
