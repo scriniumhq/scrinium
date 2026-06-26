@@ -13,11 +13,12 @@ import (
 // a manifest is exactly one kind and carries the structure its kind requires.
 func TestValidateSlot(t *testing.T) {
 	var (
-		md     = "sha256-" + strings.Repeat("c", 64)
-		handle = domain.ArtifactID(strings.Repeat("e", 64))
-		blob   = []domain.BlobRef{domain.BlobRef(strings.Repeat("b", 64))}
-		nonce  = []byte("0123456789abcdef")
-		inline = []byte("envelope-bytes")
+		md        = "sha256-" + strings.Repeat("c", 64)
+		handle    = domain.ArtifactID(strings.Repeat("e", 64))
+		blob      = []domain.BlobRef{domain.BlobRef(strings.Repeat("b", 64))}
+		nonce     = []byte("0123456789abcdef")
+		inline    = []byte("envelope-bytes")
+		inlineHdr = domain.LayoutHeader{BlobStorage: domain.LayoutInline}
 	)
 
 	cases := []struct {
@@ -26,9 +27,10 @@ func TestValidateSlot(t *testing.T) {
 		wantErr bool
 	}{
 		// Valid: one kind, complete structure.
-		{"user with identity-meta", domain.Manifest{ArtifactID: handle, IdentityMetaHash: md, BlobRefs: blob}, false},
+		{"user blob-backed", domain.Manifest{ArtifactID: handle, IdentityMetaHash: md, BlobRefs: blob}, false},
+		{"user inline, no blob_refs", domain.Manifest{ArtifactID: handle, IdentityMetaHash: md, LayoutHeader: inlineHdr, InlineBlob: inline}, false},
 		{"user identity via nonce only", domain.Manifest{ArtifactID: handle, IdentityNonce: nonce, BlobRefs: blob}, false},
-		{"system inline, no identity-meta", domain.Manifest{Name: "config.1", InlineBlob: inline, BlobRefs: blob}, false},
+		{"system inline, no blob_refs", domain.Manifest{Name: "config.1", LayoutHeader: inlineHdr, InlineBlob: inline}, false},
 		{"container blob-backed", domain.Manifest{BlobRefs: blob}, false},
 
 		// Invalid: two slots at once.
@@ -40,8 +42,13 @@ func TestValidateSlot(t *testing.T) {
 
 		// Invalid: a system artifact missing or contradicting its shape.
 		{"system without inline", domain.Manifest{Name: "config.1", BlobRefs: blob}, true},
-		{"system with identity-meta", domain.Manifest{Name: "config.1", InlineBlob: inline, IdentityMetaHash: md}, true},
-		{"system with identity nonce", domain.Manifest{Name: "config.1", InlineBlob: inline, IdentityNonce: nonce}, true},
+		{"system with identity-meta", domain.Manifest{Name: "config.1", LayoutHeader: inlineHdr, InlineBlob: inline, IdentityMetaHash: md}, true},
+		{"system with identity nonce", domain.Manifest{Name: "config.1", LayoutHeader: inlineHdr, InlineBlob: inline, IdentityNonce: nonce}, true},
+
+		// Invalid: inline content is embedded, not a physical blob — it
+		// carries no blob_ref (ADR-66/92, Option A).
+		{"system inline carries blob_refs", domain.Manifest{Name: "config.1", LayoutHeader: inlineHdr, InlineBlob: inline, BlobRefs: blob}, true},
+		{"user inline carries blob_refs", domain.Manifest{ArtifactID: handle, IdentityMetaHash: md, LayoutHeader: inlineHdr, InlineBlob: inline, BlobRefs: blob}, true},
 
 		// Invalid: a container contradicting its blob-backed, handle-less shape.
 		{"container without blob_refs", domain.Manifest{}, true},

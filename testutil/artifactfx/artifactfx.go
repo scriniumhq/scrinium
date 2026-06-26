@@ -68,7 +68,7 @@ func SizedBytes(n int) []byte {
 // any KeyID. Each call returns fresh copies, matching production resolvers
 // (which give defensive copies that the codec wipes after use). With no
 // arguments it defaults to a single DEK().
-func Keys(deks ...[]byte) artifact.KeyProvider {
+func Keys(deks ...[]byte) domain.KeyProvider {
 	if len(deks) == 0 {
 		deks = [][]byte{DEK()}
 	}

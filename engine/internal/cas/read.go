@@ -32,9 +32,9 @@ import (
 // ErrCorruptedManifest.
 //
 // keys is the manifest key provider (store passes its KeyResolver adapted
-// to artifact.KeyProvider; nil means "no resolver" — Plain decodes, an
+// to domain.KeyProvider; nil means "no resolver" — Plain decodes, an
 // encrypted manifest surfaces ErrKeyNotFound).
-func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyProvider, hashAlgo string) (domain.Manifest, error) {
+func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys domain.KeyProvider, hashAlgo string) (domain.Manifest, error) {
 	if id == "" {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
 	}

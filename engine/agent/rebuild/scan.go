@@ -20,7 +20,7 @@ import (
 // Manifest paths are collected first (a streaming List whose callback only
 // appends), then each file is fetched, decoded, and indexed — the per-file
 // index writes must not run inside the List cursor.
-func (a *rebuildAgent) scanManifests(ctx context.Context, keys artifact.KeyProvider, since time.Time) error {
+func (a *rebuildAgent) scanManifests(ctx context.Context, keys domain.KeyProvider, since time.Time) error {
 	var paths []string
 	listErr := a.drv.ListObjectsWithModTime(ctx, manifestsPrefix, since,
 		func(om driver.ObjectMeta) error {
@@ -58,7 +58,7 @@ func (a *rebuildAgent) scanManifests(ctx context.Context, keys artifact.KeyProvi
 
 // reindexManifestFile fetches one manifest file, decodes it, and writes
 // the reconstructed index rows.
-func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string, keys artifact.KeyProvider) error {
+func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string, keys domain.KeyProvider) error {
 	digest, err := artifact.DigestFromManifestPath(path)
 	if err != nil {
 		return fmt.Errorf("parse manifest id from %q: %w", path, err)

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"scrinium.dev/engine/artifact"
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store/internal/descriptor"
 )
@@ -27,7 +27,7 @@ import (
 // implementation; the caller then falls back to the Plain-only decoder.
 // The crypto.State accessor takes the crypto mutex and adapts the resolver,
 // so this no longer reaches into crypto internals.
-func ManifestKeyProvider(s Store) artifact.KeyProvider {
+func ManifestKeyProvider(s Store) domain.KeyProvider {
 	concrete, ok := s.(*store)
 	if !ok {
 		return nil

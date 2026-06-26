@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
@@ -99,15 +98,27 @@ func (s *State) Resolver() pipeline.KeyResolver {
 	return s.keyResolver
 }
 
-// KeyProvider returns the resolver adapted to an artifact.KeyProvider for
+// KeyProvider returns the resolver adapted to a domain.KeyProvider for
 // decoding encrypted manifests read directly off the Driver (the rebuild
 // agent's out-of-band path). Returns nil for an unencrypted Store. This
 // is the sanctioned accessor; callers never reach into the resolver field
 // directly.
-func (s *State) KeyProvider() artifact.KeyProvider {
+func (s *State) KeyProvider() domain.KeyProvider {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return asKeyProvider(s.keyResolver)
+}
+
+// WriteKeyID returns the KeyID a new encrypted artifact records — the
+// resolver's write key (ADR-104 §2c). Empty for a Locked or resolver-less
+// Store; the systemstore only consults it for an encrypting ManifestCrypto.
+func (s *State) WriteKeyID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.keyResolver == nil {
+		return ""
+	}
+	return s.keyResolver.ResolveWriteKey(pipeline.KeyContext{})
 }
 
 // PromoteResolverIfDefault installs a default StaticKeyResolver over the
@@ -351,12 +362,12 @@ func (s *State) commitDescriptor(ctx context.Context, next *descriptor.Descripto
 	return nil
 }
 
-// asKeyProvider adapts a pipeline.KeyResolver to an artifact.KeyProvider,
+// asKeyProvider adapts a pipeline.KeyResolver to a domain.KeyProvider,
 // mapping a nil resolver to a nil provider (the codec turns that into the
 // correct ErrKeyNotFound refusal). pipeline.KeyResolver satisfies
-// artifact.KeyProvider structurally (GetKeys), so this only nil-guards
+// domain.KeyProvider structurally (GetKeys), so this only nil-guards
 // and forwards.
-func asKeyProvider(r pipeline.KeyResolver) artifact.KeyProvider {
+func asKeyProvider(r pipeline.KeyResolver) domain.KeyProvider {
 	if r == nil {
 		return nil
 	}

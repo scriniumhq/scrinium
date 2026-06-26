@@ -102,8 +102,10 @@ func (e *IO) Materialize(ctx context.Context, cfg domain.StoreConfig, a domain.A
 }
 
 // materializeInline hashes an already-buffered payload and returns it as
-// an inline blob. No driver entry, no dedup probe; BlobRef equals the
-// ContentHash of the embedded bytes (docs §7.2).
+// an inline blob. No driver entry, no dedup probe, and no blob_ref: the
+// embedded bytes are not a physical blob, so they carry no blob address.
+// Their stored-form integrity rides the manifest digest (InlineBlob is part
+// of the hashed body); their identity is content_hash (ADR-66/92).
 func (e *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
 	h, err := e.hashes.NewHasher(hashAlgo)
 	if err != nil {
@@ -115,7 +117,6 @@ func (e *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
 	ch := domain.ContentHash(hex.EncodeToString(h.Sum(nil)))
 	return Result{
 		ContentHash:  ch,
-		BlobRef:      domain.BlobRef(ch),
 		OriginalSize: int64(len(body)),
 		Stages:       []domain.PipelineStage{},
 		InlineBytes:  body,

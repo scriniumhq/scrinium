@@ -25,14 +25,6 @@ import (
 	"scrinium.dev/errs"
 )
 
-// KeyProvider is the minimal slice of a key resolver that DecodeEncrypted
-// needs. Defining it here keeps the dependency one-way (artifact ← store):
-// store's KeyResolver satisfies it implicitly; tests substitute a
-// hand-rolled one.
-type KeyProvider interface {
-	GetKeys(keyID string) ([][]byte, error)
-}
-
 // identityMetaCanonEmpty is the canonical encoding of an empty identity
 // partition — the v1 default (no fields are opted into identity). md =
 // H(identityMetaCanonEmpty) is then a fixed token. The real canonical
@@ -138,6 +130,17 @@ func validateSlot(m domain.Manifest) error {
 				errs.ErrInvalidManifestSlot)
 		}
 	}
+
+	// Layout coherence (ADR-66/92): inline content is embedded in the body,
+	// not a physical blob, so an inline manifest carries no blob_ref — its
+	// stored-form integrity rides the manifest digest, its identity is
+	// content_hash. (The blob-backed direction is not enforced here: the
+	// codec stays agnostic about a manifest that also carries inline bytes.)
+	if m.LayoutHeader.BlobStorage == domain.LayoutInline && len(m.BlobRefs) != 0 {
+		return fmt.Errorf("%w: inline manifest carries blob_refs",
+			errs.ErrInvalidManifestSlot)
+	}
+
 	return nil
 }
 
@@ -170,7 +173,7 @@ func Decode(data []byte) (domain.Manifest, error) {
 // surfaces ErrKeyNotFound. Failure classes: structural header errors (as
 // in Decode); no resolver / zero candidates → ErrKeyNotFound; no candidate
 // decrypts → ErrDecryptionFailed; decrypted-but-invalid JSON → wrapped error.
-func DecodeEncrypted(data []byte, keys KeyProvider) (domain.Manifest, error) {
+func DecodeEncrypted(data []byte, keys domain.KeyProvider) (domain.Manifest, error) {
 	if len(data) > domain.MaxManifestSize {
 		return domain.Manifest{}, errs.ErrManifestTooLarge
 	}

@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent/internal/checkpointfmt"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 )
@@ -18,7 +18,7 @@ import (
 // error) when the index cannot restore checkpoints or none exists, leaving
 // the caller to fall back. The checkpoint is fetched from the Store's own
 // System() namespace, so it is by construction a checkpoint of this Store.
-func (a *rebuildAgent) tryCheckpointFastPath(ctx context.Context, keys artifact.KeyProvider) (used bool, err error) {
+func (a *rebuildAgent) tryCheckpointFastPath(ctx context.Context, keys domain.KeyProvider) (used bool, err error) {
 	restorer, ok := a.idx.(index.CheckpointRestorer)
 	if !ok {
 		return false, nil

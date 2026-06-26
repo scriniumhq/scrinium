@@ -67,11 +67,17 @@ func WriteCell(ctx context.Context, drv driver.Driver, name string, body []byte,
 // LoadCell reads, decodes, and verifies name's cell (verify-on-read via
 // Load). An absent cell maps to errs.ErrArtifactNotFound.
 func LoadCell(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, name string) (domain.Manifest, error) {
+	return LoadCellWithKeys(ctx, drv, hashes, name, nil)
+}
+
+// LoadCellWithKeys is LoadCell with a key provider for encrypted cells
+// (ADR-104 §2c); see LoadWithKeys. A nil keys is the bootstrap/Plain path.
+func LoadCellWithKeys(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, name string, keys domain.KeyProvider) (domain.Manifest, error) {
 	path, err := CellPath(name)
 	if err != nil {
 		return domain.Manifest{}, err
 	}
-	return Load(ctx, drv, hashes, path)
+	return LoadWithKeys(ctx, drv, hashes, path, keys)
 }
 
 // RemoveCell deletes name's cell. Idempotent: an absent cell is not an

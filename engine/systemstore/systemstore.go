@@ -10,6 +10,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/internal/slogx"
 )
@@ -92,11 +93,31 @@ type Store interface {
 // never written under manifests/ — they live in their own address space,
 // so they are invisible to the data-plane Walk (handle-IS-NULL) by
 // construction rather than by an index filter.
+// CryptoProvider supplies the crypto material a system-artifact write/read
+// needs per the store's ManifestCrypto policy (ADR-104 §2c). Declared here,
+// not imported from engine/store/internal/crypto (unreachable across the
+// engine root), and structurally satisfied by the store's *crypto.State. A
+// Plain store is never asked for a DEK; KeyProvider returns nil and the read
+// path decodes plaintext.
+type CryptoProvider interface {
+	// DEKForWrite returns a private DEK copy for an encrypting write (the
+	// caller wipes it). Errors if the store is Locked or has no resolver.
+	// Never called for Plain.
+	DEKForWrite(crypto domain.ManifestCrypto) ([]byte, error)
+	// WriteKeyID is the KeyID a new encrypted artifact records. Empty for an
+	// unencrypted store.
+	WriteKeyID() string
+	// KeyProvider adapts the resolver for decoding encrypted manifests on
+	// read. nil for an unencrypted store.
+	KeyProvider() domain.KeyProvider
+}
+
 type systemStore struct {
 	drv     driver.Driver
 	hashes  domain.HashRegistry
 	cfg     domain.StoreConfig // immutable fields only (ContentHasher); see New
 	storeID string             // authoritative store_id (descriptor), stamped on write, checked on read
+	crypto  CryptoProvider     // ADR-104 §2c: policy DEK/keyID on write, KeyProvider on read
 	log     *slog.Logger
 }
 
@@ -122,6 +143,7 @@ func New(
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
 	storeID string,
+	crypto CryptoProvider,
 	log *slog.Logger,
 ) Store {
 	return &systemStore{
@@ -129,6 +151,7 @@ func New(
 		hashes:  hashes,
 		cfg:     cfg,
 		storeID: storeID,
+		crypto:  crypto,
 		log:     log,
 	}
 }
@@ -156,7 +179,22 @@ func (ss *systemStore) Put(ctx context.Context, a NamedArtifact) error {
 	if err != nil {
 		return fmt.Errorf("system store: %q: %w", a.Name, err)
 	}
-	fileBytes, _, err := named.BuildInlineManifest(a.Name, envBytes, string(ss.cfg.ContentHasher), ss.hashes)
+	// Crypto by policy (ADR-104 §2c): the inline payload follows the store's
+	// ManifestCrypto. Plain → as-is; Sealed/Paranoid → sealed under a DEK
+	// borrowed from the crypto provider (wiped once the manifest is built).
+	// The bootstrap chain (descriptor/config/lease) never reaches here.
+	mc := ss.cfg.ManifestCrypto
+	var dek []byte
+	var keyID string
+	if mc != "" && mc != domain.ManifestCryptoPlain {
+		dek, err = ss.crypto.DEKForWrite(mc)
+		if err != nil {
+			return fmt.Errorf("system store: %q: %w", a.Name, err)
+		}
+		defer aead.Wipe(dek)
+		keyID = ss.crypto.WriteKeyID()
+	}
+	fileBytes, _, err := named.BuildInlineManifest(a.Name, envBytes, string(ss.cfg.ContentHasher), ss.hashes, mc, dek, keyID)
 	if err != nil {
 		return fmt.Errorf("system store: build %q: %w", a.Name, err)
 	}
@@ -208,14 +246,14 @@ func (ss *systemStore) Get(ctx context.Context, name string) (domain.ReadHandle,
 		if perr != nil {
 			return nil, perr
 		}
-		m, err = named.Load(ctx, ss.drv, ss.hashes, path)
+		m, err = named.LoadWithKeys(ctx, ss.drv, ss.hashes, path, ss.crypto.KeyProvider())
 		if err != nil {
 			return nil, fmt.Errorf("system store: get %q: %w", name, err)
 		}
 	} else {
 		// No versions — try the cell. LoadCell maps an absent cell to
 		// errs.ErrArtifactNotFound, so this is also the not-found path.
-		m, err = named.LoadCell(ctx, ss.drv, ss.hashes, name)
+		m, err = named.LoadCellWithKeys(ctx, ss.drv, ss.hashes, name, ss.crypto.KeyProvider())
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +298,7 @@ func (ss *systemStore) Walk(ctx context.Context, prefix string, cb func(name str
 	all := append(versions, cells...)
 	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
 	for _, a := range all {
-		m, err := named.Load(ctx, ss.drv, ss.hashes, a.Path)
+		m, err := named.LoadWithKeys(ctx, ss.drv, ss.hashes, a.Path, ss.crypto.KeyProvider())
 		if err != nil {
 			// A version/cell that vanished or failed verification
 			// mid-walk is skipped rather than aborting the rest.

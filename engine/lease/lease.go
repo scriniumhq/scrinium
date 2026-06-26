@@ -362,7 +362,7 @@ func (l *Lease) write(ctx context.Context, exclusive bool) error {
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
-	fileBytes, _, err := named.BuildInlineManifest(l.name, recordJSON, leaseHashAlgo, leaseHashes)
+	fileBytes, _, err := named.BuildInlineManifest(l.name, recordJSON, leaseHashAlgo, leaseHashes, domain.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		return fmt.Errorf("build lease manifest: %w", err)
 	}

@@ -39,7 +39,7 @@ const sessionID = domain.SessionID("init")
 //
 // The serialised manifest's own digest is not the address (the address is
 // name+seq), so it is computed only as a byproduct of encoding and discarded.
-func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes domain.HashRegistry) ([]byte, domain.Manifest, error) {
+func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes domain.HashRegistry, crypto domain.ManifestCrypto, dek []byte, keyID string) ([]byte, domain.Manifest, error) {
 	hasher, err := hashes.NewHasher(hashAlgo)
 	if err != nil {
 		return nil, domain.Manifest{}, fmt.Errorf("system artifact: content hasher: %w", err)
@@ -53,7 +53,6 @@ func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes do
 		Name:         name,
 		SessionID:    sessionID,
 		ContentHash:  contentHash,
-		BlobRefs:     []domain.BlobRef{domain.BlobRef(contentHash)},
 		OriginalSize: int64(len(payload)),
 		InlineBlob:   payload,
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutInline},
@@ -62,8 +61,8 @@ func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes do
 
 	_, fileBytes, m, err := artifact.ComputeManifestDigest(
 		m, hashAlgo, hashes,
-		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain,
-		nil, "")
+		domain.ManifestEncodingJSON, crypto,
+		dek, keyID)
 	if err != nil {
 		return nil, domain.Manifest{}, fmt.Errorf("system artifact: encode: %w", err)
 	}
@@ -77,6 +76,16 @@ func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes do
 // content hash is the integrity anchor. A missing file maps to
 // errs.ErrArtifactNotFound.
 func Load(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, path string) (domain.Manifest, error) {
+	return LoadWithKeys(ctx, drv, hashes, path, nil)
+}
+
+// LoadWithKeys is Load with a key provider for encrypted system artifacts
+// (ADR-104 §2c): an encrypted header makes DecodeEncrypted recover the
+// plaintext inline payload (using keys) before verify-on-read, which hashes
+// the plaintext payload against the manifest's ContentHash. A nil keys is the
+// bootstrap path — Plain only (descriptor/config/lease, read before the DEK);
+// an encrypted header with nil keys is a decode error.
+func LoadWithKeys(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, path string, keys domain.KeyProvider) (domain.Manifest, error) {
 	rc, err := drv.Get(ctx, path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -93,7 +102,7 @@ func Load(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, pa
 	if len(fileBytes) > domain.MaxManifestSize {
 		return domain.Manifest{}, fmt.Errorf("system artifact %q: %w", path, errs.ErrManifestTooLarge)
 	}
-	m, err := artifact.Decode(fileBytes)
+	m, err := artifact.DecodeEncrypted(fileBytes, keys)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("system artifact: decode %q: %w", path, err)
 	}
