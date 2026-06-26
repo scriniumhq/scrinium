@@ -59,14 +59,6 @@ type RebuildConfig struct {
 	// Zero means no overlap (tail starts exactly at the checkpoint
 	// instant); a small positive value (minutes) is recommended.
 	RecoveryOverlap time.Duration
-
-	// IgnoreStoreID is currently inert. Checkpoint identity is enforced
-	// unconditionally by the systemstore: System().Get opens the checkpoint
-	// pointer envelope and rejects a foreign store_id (ADR-103/104/105), so the
-	// former rebuild-side guard this flag gated no longer exists. The field is
-	// retained pending the cross-store rebuild story (S-18), which will define
-	// its replacement or remove it.
-	IgnoreStoreID bool
 }
 
 const (

@@ -259,7 +259,8 @@ func (f rebuildFixture) publishCheckpointExternal(t *testing.T) string {
 // The rebuild fast-path restores from a checkpoint stored as an external
 // headless artifact (ADR-105): System().Get resolves the pointer envelope back
 // to the .db stream, which fetchCheckpoint writes to a temp file and replays.
-// Identity holds by construction (same store), so no IgnoreStoreID is needed.
+// Identity holds by construction (same store); the systemstore enforces the
+// checkpoint store_id unconditionally (ADR-104).
 func TestRebuild_Checkpoint_FastPath_External(t *testing.T) {
 	f := newRebuildFixture(t)
 	f.put(t, "ns", "artifact written before the checkpoint")
