@@ -221,6 +221,65 @@ func TestRebuild_Checkpoint_FastPath(t *testing.T) {
 	}
 }
 
+// publishCheckpointExternal mirrors publishCheckpoint but stores the .db as an
+// external headless data artifact and publishes a pointer envelope under the
+// checkpoint name — exactly as the checkpoint agent does post-ADR-105.
+func (f rebuildFixture) publishCheckpointExternal(t *testing.T) string {
+	t.Helper()
+	cw, ok := f.origIdx.(index.CheckpointWriter)
+	if !ok {
+		t.Fatal("origIdx does not implement index.CheckpointWriter")
+	}
+	tmp := filepath.Join(t.TempDir(), "cp.db")
+	if err := cw.WriteCheckpoint(context.Background(), tmp); err != nil {
+		t.Fatalf("WriteCheckpoint: %v", err)
+	}
+	rc, err := os.Open(tmp)
+	if err != nil {
+		t.Fatalf("open checkpoint: %v", err)
+	}
+	defer rc.Close()
+	hw, ok := store.HeadlessOf(f.store)
+	if !ok {
+		t.Fatal("store has no headless data plane")
+	}
+	digest, err := hw.WriteHeadless(context.Background(), rc)
+	if err != nil {
+		t.Fatalf("WriteHeadless: %v", err)
+	}
+	name := checkpointfmt.Name(time.Now())
+	if err := f.store.System().Put(context.Background(),
+		systemstore.NamedArtifact{Name: name, ExternalRef: digest}); err != nil {
+		t.Fatalf("publish external checkpoint: %v", err)
+	}
+	return name
+}
+
+// The rebuild fast-path restores from a checkpoint stored as an external
+// headless artifact (ADR-105): System().Get resolves the pointer envelope back
+// to the .db stream, which fetchCheckpoint writes to a temp file and replays.
+// Identity holds by construction (same store), so no IgnoreStoreID is needed.
+func TestRebuild_Checkpoint_FastPath_External(t *testing.T) {
+	f := newRebuildFixture(t)
+	f.put(t, "ns", "artifact written before the checkpoint")
+	name := f.publishCheckpointExternal(t)
+
+	a := newRebuild(t, f, rebuild.RebuildConfig{
+		Source:   rebuild.RebuildSourceCheckpoint,
+		LeaseTTL: time.Minute,
+	})
+	if _, err := a.Run(context.Background()); err != nil {
+		t.Fatalf("Run (external checkpoint fast-path): %v", err)
+	}
+	st := a.Stats()
+	if st.Source != rebuild.RebuildSourceCheckpoint {
+		t.Errorf("Source = %q, want %q", st.Source, rebuild.RebuildSourceCheckpoint)
+	}
+	if st.CheckpointUsed != name {
+		t.Errorf("CheckpointUsed = %q, want %q", st.CheckpointUsed, name)
+	}
+}
+
 func TestRebuild_Auto_FallsBackToFullScanWithoutCheckpoint(t *testing.T) {
 	f := newRebuildFixture(t)
 	f.put(t, "ns", "artifact on the location")
