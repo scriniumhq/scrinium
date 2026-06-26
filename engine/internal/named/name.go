@@ -19,7 +19,10 @@ import (
 // file directly under this one root: "named/<name>.<seq>" for a version,
 // "named/<name>.cell" for a keep=0 cell. No per-artifact subdirectory; the
 // layout is planar.
-const root = "named"
+const (
+	root      = "named"
+	rootSlash = "named/"
+)
 
 // ValidateName enforces the name contract. Names are slash-separated,
 // path-like strings: non-empty, no leading or trailing slash, no empty

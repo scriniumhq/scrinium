@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +10,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/errs"
 )
 
 // MarkVerified and MarkVerified-related listing
@@ -20,9 +18,7 @@ import (
 // behaviour: WriteCheckpoint (the optional index.CheckpointWriter
 // capability, which sqlite implements via VACUUM INTO — it needs an
 // on-disk source and so does not map to in-memory backends, and other
-// backends such as Postgres need not implement it at all), and the
-// store_meta storage details that rely on SQLite's UPSERT and TEXT
-// encoding.
+// backends such as Postgres need not implement it at all).
 
 // --- WriteCheckpoint ---
 
@@ -176,69 +172,6 @@ func TestRestoreCheckpoint_RejectsEmptyAndMemory(t *testing.T) {
 	}
 }
 
-// --- GetMeta / SetMeta ---
-
-func TestSetMeta_GetMeta_RoundTrip(t *testing.T) {
-	ctx := t.Context()
-	idx := newMemoryIndex(t)
-	if err := idx.SetMeta(ctx, "schema_notes", "v1: initial"); err != nil {
-		t.Fatalf("SetMeta: %v", err)
-	}
-	got, err := idx.GetMeta(ctx, "schema_notes")
-	if err != nil {
-		t.Fatalf("GetMeta: %v", err)
-	}
-	if got != "v1: initial" {
-		t.Errorf("value: got %q, want %q", got, "v1: initial")
-	}
-}
-
-func TestSetMeta_Overwrites(t *testing.T) {
-	ctx := t.Context()
-	idx := newMemoryIndex(t)
-	if err := idx.SetMeta(ctx, "k", "first"); err != nil {
-		t.Fatal(err)
-	}
-	if err := idx.SetMeta(ctx, "k", "second"); err != nil {
-		t.Fatal(err)
-	}
-	got, _ := idx.GetMeta(ctx, "k")
-	if got != "second" {
-		t.Errorf("got %q, want %q", got, "second")
-	}
-	// Still one row total — the UPSERT replaced, not appended.
-	if got := countRows(t, idx, "store_meta"); got != 1 {
-		t.Errorf("store_meta rows: got %d, want 1", got)
-	}
-}
-
-func TestGetMeta_Missing(t *testing.T) {
-	ctx := t.Context()
-	idx := newMemoryIndex(t)
-	_, err := idx.GetMeta(ctx, "never-set")
-	if !errors.Is(err, errs.ErrMetaKeyNotFound) {
-		t.Fatalf("expected errs.ErrMetaKeyNotFound, got %v", err)
-	}
-}
-
-func TestSetMeta_BinarySafe(t *testing.T) {
-	ctx := t.Context()
-	idx := newMemoryIndex(t)
-	// Unicode, tabs, newlines, quotes — store_meta must survive
-	// arbitrary text payloads.
-	weird := "lineA\nlineB\tcol\u200b\"quoted'mixed"
-	if err := idx.SetMeta(ctx, "weird", weird); err != nil {
-		t.Fatal(err)
-	}
-	got, err := idx.GetMeta(ctx, "weird")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != weird {
-		t.Errorf("value mangled: got %q, want %q", got, weird)
-	}
-}
-
 // --- Compile-time interface conformance ---
 
 func TestIndex_ImplementsStoreIndex(t *testing.T) {
@@ -252,8 +185,6 @@ func TestIndex_ImplementsStoreIndex(t *testing.T) {
 	var _ index.CheckpointWriter = (*Index)(nil)
 	// RestoreCheckpoint is the read side (CheckpointRestorer); sqlite implements it.
 	var _ index.CheckpointRestorer = (*Index)(nil)
-	// CheckpointMeta inspects a checkpoint's store_meta (CheckpointInspector).
-	var _ index.CheckpointInspector = (*Index)(nil)
 	idx := newMemoryIndex(t)
 	var asInterface index.StoreIndex = idx
 	if asInterface == nil {

@@ -38,7 +38,7 @@ func Write(
 	}
 	payload = append(payload, '\n')
 
-	fileBytes, _, err := named.BuildInlineManifest(payload, string(cfg.ContentHasher), hashes)
+	fileBytes, _, err := named.BuildInlineManifest(configName, payload, string(cfg.ContentHasher), hashes, domain.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		return fmt.Errorf("system config: build: %w", err)
 	}

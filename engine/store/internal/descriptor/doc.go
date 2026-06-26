@@ -5,14 +5,13 @@
 //
 // The descriptor is stored as two byte-identical replicas, L0
 // (store.json) and L1 (.store.backup.json), written together by
-// Persist. The L2 cache (Cache, in cache.go) is a fast-start
-// projection in store_meta, never authoritative.
+// Persist.
 //
 // Replica reading and the heal/split-brain decision algorithm live in
 // the reconcile subpackage. This package owns the descriptor's shape,
 // (de)serialisation, checksum, equality, and the two-replica write;
 // reconcile owns the recovery decision over them.
 //
-// Depends only on driver.Driver, errs, and a narrow MetaStore. No
-// imports from store, domain, or any consumer package.
+// Depends only on driver.Driver and errs. No imports from store,
+// domain, or any consumer package.
 package descriptor

@@ -13,6 +13,7 @@ import (
 	"scrinium.dev/engine/agent/rebuild"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"
@@ -208,10 +209,6 @@ func TestRebuild_Checkpoint_FastPath(t *testing.T) {
 	a := newRebuild(t, f, rebuild.RebuildConfig{
 		Source:   rebuild.RebuildSourceCheckpoint,
 		LeaseTTL: time.Minute,
-		// The fixture's agent store id ("store-rebuild") is a label, not the
-		// real descriptor StoreID the checkpoint carries; bypass the identity
-		// guard so this test exercises the restore mechanics.
-		IgnoreStoreID: true,
 	})
 	if _, err := a.Run(context.Background()); err != nil {
 		t.Fatalf("Run (checkpoint fast-path): %v", err)
@@ -225,19 +222,63 @@ func TestRebuild_Checkpoint_FastPath(t *testing.T) {
 	}
 }
 
-func TestRebuild_Checkpoint_RejectsForeignIdentity(t *testing.T) {
-	f := newRebuildFixture(t)
-	f.put(t, "ns", "artifact")
-	f.publishCheckpoint(t)
+// publishCheckpointExternal mirrors publishCheckpoint but stores the .db as an
+// external headless data artifact and publishes a pointer envelope under the
+// checkpoint name — exactly as the checkpoint agent does post-ADR-105.
+func (f rebuildFixture) publishCheckpointExternal(t *testing.T) string {
+	t.Helper()
+	cw, ok := f.origIdx.(index.CheckpointWriter)
+	if !ok {
+		t.Fatal("origIdx does not implement index.CheckpointWriter")
+	}
+	tmp := filepath.Join(t.TempDir(), "cp.db")
+	if err := cw.WriteCheckpoint(context.Background(), tmp); err != nil {
+		t.Fatalf("WriteCheckpoint: %v", err)
+	}
+	rc, err := os.Open(tmp)
+	if err != nil {
+		t.Fatalf("open checkpoint: %v", err)
+	}
+	defer rc.Close()
+	hw, ok := store.HeadlessOf(f.store)
+	if !ok {
+		t.Fatal("store has no headless data plane")
+	}
+	digest, err := hw.WriteHeadless(context.Background(), rc)
+	if err != nil {
+		t.Fatalf("WriteHeadless: %v", err)
+	}
+	name := checkpointfmt.Name(time.Now())
+	if err := f.store.System().Put(context.Background(),
+		systemstore.NamedArtifact{Name: name, ExternalRef: digest}); err != nil {
+		t.Fatalf("publish external checkpoint: %v", err)
+	}
+	return name
+}
 
-	// Default agent store id ("store-rebuild") differs from the real StoreID
-	// the checkpoint's descriptor carries, so the identity guard must reject.
+// The rebuild fast-path restores from a checkpoint stored as an external
+// headless artifact (ADR-105): System().Get resolves the pointer envelope back
+// to the .db stream, which fetchCheckpoint writes to a temp file and replays.
+// Identity holds by construction (same store); the systemstore enforces the
+// checkpoint store_id unconditionally (ADR-104).
+func TestRebuild_Checkpoint_FastPath_External(t *testing.T) {
+	f := newRebuildFixture(t)
+	f.put(t, "ns", "artifact written before the checkpoint")
+	name := f.publishCheckpointExternal(t)
+
 	a := newRebuild(t, f, rebuild.RebuildConfig{
 		Source:   rebuild.RebuildSourceCheckpoint,
 		LeaseTTL: time.Minute,
 	})
-	if _, err := a.Run(context.Background()); err == nil {
-		t.Fatal("Run should reject a checkpoint with a foreign store identity")
+	if _, err := a.Run(context.Background()); err != nil {
+		t.Fatalf("Run (external checkpoint fast-path): %v", err)
+	}
+	st := a.Stats()
+	if st.Source != rebuild.RebuildSourceCheckpoint {
+		t.Errorf("Source = %q, want %q", st.Source, rebuild.RebuildSourceCheckpoint)
+	}
+	if st.CheckpointUsed != name {
+		t.Errorf("CheckpointUsed = %q, want %q", st.CheckpointUsed, name)
 	}
 }
 
@@ -302,8 +343,12 @@ func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
 
 	// Simulate catastrophic descriptor loss.
 	root := drv.Root()
-	for _, name := range []string{"store.json", ".store.backup.json"} {
-		if err := os.Remove(filepath.Join(root, name)); err != nil {
+	for _, name := range []string{"store.descriptor", "store.descriptor.backup"} {
+		cp, err := named.CellPath(name)
+		if err != nil {
+			t.Fatalf("CellPath %s: %v", name, err)
+		}
+		if err := os.Remove(filepath.Join(root, cp)); err != nil {
 			t.Fatalf("remove %s: %v", name, err)
 		}
 	}
@@ -326,8 +371,12 @@ func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
 		t.Error("DescriptorRewrote = false, want true")
 	}
 
-	// store.json is back on the Location.
-	rc, err := drv.Get(ctx, "store.json")
+	// The descriptor cell is back on the Location.
+	descCellPath, err := named.CellPath("store.descriptor")
+	if err != nil {
+		t.Fatalf("CellPath: %v", err)
+	}
+	rc, err := drv.Get(ctx, descCellPath)
 	if err != nil {
 		t.Fatalf("descriptor not restored on disk: %v", err)
 	}

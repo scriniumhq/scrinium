@@ -31,7 +31,7 @@ func CellPath(name string) (string, error) {
 	if err := ValidateName(name); err != nil {
 		return "", err
 	}
-	return root + "/" + name + "." + cellLeaf, nil
+	return rootSlash + name + "." + cellLeaf, nil
 }
 
 // WriteCell writes body (an encoded inline manifest from
@@ -67,11 +67,17 @@ func WriteCell(ctx context.Context, drv driver.Driver, name string, body []byte,
 // LoadCell reads, decodes, and verifies name's cell (verify-on-read via
 // Load). An absent cell maps to errs.ErrArtifactNotFound.
 func LoadCell(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, name string) (domain.Manifest, error) {
+	return LoadCellWithKeys(ctx, drv, hashes, name, nil)
+}
+
+// LoadCellWithKeys is LoadCell with a key provider for encrypted cells
+// (ADR-104 §2c); see LoadWithKeys. A nil keys is the bootstrap/Plain path.
+func LoadCellWithKeys(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, name string, keys domain.KeyProvider) (domain.Manifest, error) {
 	path, err := CellPath(name)
 	if err != nil {
 		return domain.Manifest{}, err
 	}
-	return Load(ctx, drv, hashes, path)
+	return LoadWithKeys(ctx, drv, hashes, path, keys)
 }
 
 // RemoveCell deletes name's cell. Idempotent: an absent cell is not an
@@ -95,22 +101,21 @@ func RemoveCell(ctx context.Context, drv driver.Driver, name string) error {
 // system view. A name is exactly one form, so the two lists never
 // overlap.
 func ListCells(ctx context.Context, drv driver.Driver, prefix string) ([]Active, error) {
-	rootSlash := root + "/"
-
 	var out []Active
+	fullPfx := rootSlash + prefix
 	// Cells are flat files "named/<name>.cell". Split each entry at its
 	// last '.'; keep those whose leaf is the cell marker (see ListActive).
 	err := drv.ListObjectsWithModTime(ctx, root, time.Time{}, func(o driver.ObjectMeta) error {
-		rel := strings.TrimPrefix(o.Path, rootSlash)
-		if rel == o.Path || rel == "" {
-			return nil // not under the named root
+		if !strings.HasPrefix(o.Path, fullPfx) {
+			return nil // outside the requested name prefix
+		}
+		rel := o.Path[len(rootSlash):]
+		if len(rel) == 0 {
+			return nil
 		}
 		name, leaf, ok := splitLeaf(rel)
 		if !ok || leaf != cellLeaf {
 			return nil // not a cell file (a version, or a stray object)
-		}
-		if !strings.HasPrefix(name, prefix) {
-			return nil // outside the requested name prefix
 		}
 		out = append(out, Active{Name: name, Path: o.Path})
 		return nil

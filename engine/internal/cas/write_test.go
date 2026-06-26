@@ -9,6 +9,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/internal/cas"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/driverfx"
@@ -152,7 +153,7 @@ func TestWritePath_AddrMatchesBlobPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := artifact.BlobPath(cfg.PathTopology, domain.BlobTypeRegular, string(b.BlobRef))
+	want, err := layout.BlobPath(cfg.PathTopology, domain.BlobTypeRegular, string(b.BlobRef))
 	if err != nil {
 		t.Fatal(err)
 	}

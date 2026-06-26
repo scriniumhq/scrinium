@@ -7,6 +7,7 @@ package named
 // the inline payload against the manifest's embedded ContentHash.
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -30,13 +31,16 @@ const sessionID = domain.SessionID("init")
 // BuildInlineManifest constructs the encoded inline manifest for a system
 // payload: an Inline blob manifest with an empty Pipeline (ContentHash ==
 // BlobRef == hash(payload)), serialised to the bytes that ClaimVersion writes.
-// It returns the encoded file bytes and the in-memory manifest. No disk write
-// and no indexing happen here — the caller writes the bytes through
-// ClaimVersion.
+// name fills the identity slot (Manifest.Name) — this is what makes the
+// manifest IsSystem() and lets validateSlot recognise it (ADR-104); the path
+// (named/<name>.<seq>) remains the seq authority, so name is the only slot
+// component carried in the manifest. It returns the encoded file bytes and the
+// in-memory manifest. No disk write and no indexing happen here — the caller
+// writes the bytes through ClaimVersion (or WriteCell).
 //
 // The serialised manifest's own digest is not the address (the address is
 // name+seq), so it is computed only as a byproduct of encoding and discarded.
-func BuildInlineManifest(payload []byte, hashAlgo string, hashes domain.HashRegistry) ([]byte, domain.Manifest, error) {
+func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes domain.HashRegistry, crypto domain.ManifestCrypto, dek []byte, keyID string) ([]byte, domain.Manifest, error) {
 	hasher, err := hashes.NewHasher(hashAlgo)
 	if err != nil {
 		return nil, domain.Manifest{}, fmt.Errorf("system artifact: content hasher: %w", err)
@@ -47,9 +51,9 @@ func BuildInlineManifest(payload []byte, hashAlgo string, hashes domain.HashRegi
 	contentHash := domain.ContentHash(hex.EncodeToString(hasher.Sum(nil)))
 
 	m := domain.Manifest{
+		Name:         name,
 		SessionID:    sessionID,
 		ContentHash:  contentHash,
-		BlobRefs:     []domain.BlobRef{domain.BlobRef(contentHash)},
 		OriginalSize: int64(len(payload)),
 		InlineBlob:   payload,
 		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutInline},
@@ -58,8 +62,8 @@ func BuildInlineManifest(payload []byte, hashAlgo string, hashes domain.HashRegi
 
 	_, fileBytes, m, err := artifact.ComputeManifestDigest(
 		m, hashAlgo, hashes,
-		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain,
-		nil, "")
+		domain.ManifestEncodingJSON, crypto,
+		dek, keyID)
 	if err != nil {
 		return nil, domain.Manifest{}, fmt.Errorf("system artifact: encode: %w", err)
 	}
@@ -73,6 +77,16 @@ func BuildInlineManifest(payload []byte, hashAlgo string, hashes domain.HashRegi
 // content hash is the integrity anchor. A missing file maps to
 // errs.ErrArtifactNotFound.
 func Load(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, path string) (domain.Manifest, error) {
+	return LoadWithKeys(ctx, drv, hashes, path, nil)
+}
+
+// LoadWithKeys is Load with a key provider for encrypted system artifacts
+// (ADR-104 §2c): an encrypted header makes DecodeEncrypted recover the
+// plaintext inline payload (using keys) before verify-on-read, which hashes
+// the plaintext payload against the manifest's ContentHash. A nil keys is the
+// bootstrap path — Plain only (descriptor/config/lease, read before the DEK);
+// an encrypted header with nil keys is a decode error.
+func LoadWithKeys(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, path string, keys domain.KeyProvider) (domain.Manifest, error) {
 	rc, err := drv.Get(ctx, path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -89,7 +103,7 @@ func Load(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, pa
 	if len(fileBytes) > domain.MaxManifestSize {
 		return domain.Manifest{}, fmt.Errorf("system artifact %q: %w", path, errs.ErrManifestTooLarge)
 	}
-	m, err := artifact.Decode(fileBytes)
+	m, err := artifact.DecodeEncrypted(fileBytes, keys)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("system artifact: decode %q: %w", path, err)
 	}
@@ -108,17 +122,15 @@ func Load(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, pa
 // system artifact the Pipeline is empty, so the content hash is just
 // hash(InlineBlob).
 func verifyInlinePayload(m domain.Manifest, hashes domain.HashRegistry) error {
-	// ADR-93: ContentHash is bare hex; the algorithm is the manifest's
-	// recorded hash_algo (populated on decode, which precedes this check).
-	h, err := hashes.NewHasher(m.HashAlgo)
+	want, hasher, err := artifact.ParseContentHash(hashes, m.HashAlgo, m.ContentHash)
 	if err != nil {
-		return fmt.Errorf("%w: content hasher: %v", errs.ErrCorruptedContent, err)
+		return fmt.Errorf("%w: parse content hash: %v", errs.ErrCorruptedContent, err)
 	}
-	if _, err := h.Write(m.InlineBlob); err != nil {
+	if _, err := hasher.Write(m.InlineBlob); err != nil {
 		return fmt.Errorf("%w: hash payload: %v", errs.ErrCorruptedContent, err)
 	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != string(m.ContentHash) {
-		return fmt.Errorf("%w: payload hash %s != declared %s", errs.ErrCorruptedContent, got, m.ContentHash)
+	if !bytes.Equal(hasher.Sum(nil), want) {
+		return fmt.Errorf("%w: payload hash mismatch", errs.ErrCorruptedContent)
 	}
 	return nil
 }

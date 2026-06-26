@@ -17,6 +17,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/errs"
 )
 
@@ -32,34 +33,50 @@ import (
 // ErrCorruptedManifest.
 //
 // keys is the manifest key provider (store passes its KeyResolver adapted
-// to artifact.KeyProvider; nil means "no resolver" — Plain decodes, an
+// to domain.KeyProvider; nil means "no resolver" — Plain decodes, an
 // encrypted manifest surfaces ErrKeyNotFound).
-func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyProvider, hashAlgo string) (domain.Manifest, error) {
+func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys domain.KeyProvider, hashAlgo string) (domain.Manifest, error) {
 	if id == "" {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
 	}
 	digest, ok, err := e.index.ResolveManifestDigest(ctx, id)
 	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("cas.Load: resolve digest: %w", err)
+		return domain.Manifest{}, fmt.Errorf("cas: resolve digest: %w", err)
 	}
 	if !ok {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
 	}
-	manifestPath, err := artifact.ManifestPath(digest)
+	m, err := e.loadManifestByDigest(ctx, digest, keys, hashAlgo)
 	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("cas.Load: path: %w", err)
+		return domain.Manifest{}, err
+	}
+	// The handle is also carried in the body; set the requested handle so
+	// callers have both it and the physical digest.
+	m.ArtifactID = id
+	return m, nil
+}
+
+// loadManifestByDigest reads, verifies, and decodes the manifest file named
+// directly by digest — no handle indirection. Load uses it after resolving
+// id → digest through the index; headless resolution (ADR-105) uses it
+// directly, since a headless data artifact's external reference IS its
+// ManifestDigest. Plain bypasses the resolver; Sealed/Paranoid consult keys.
+func (e *IO) loadManifestByDigest(ctx context.Context, digest domain.ManifestDigest, keys domain.KeyProvider, hashAlgo string) (domain.Manifest, error) {
+	manifestPath, err := layout.ManifestPath(digest)
+	if err != nil {
+		return domain.Manifest{}, fmt.Errorf("cas: manifest path: %w", err)
 	}
 	rc, err := e.drv.Get(ctx, manifestPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return domain.Manifest{}, errs.ErrArtifactNotFound
 		}
-		return domain.Manifest{}, fmt.Errorf("cas.Load: read: %w", err)
+		return domain.Manifest{}, fmt.Errorf("cas: read manifest: %w", err)
 	}
 	raw, err := io.ReadAll(io.LimitReader(rc, domain.MaxManifestSize+1))
 	_ = rc.Close()
 	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("cas.Load: read body: %w", err)
+		return domain.Manifest{}, fmt.Errorf("cas: read manifest body: %w", err)
 	}
 	if len(raw) > domain.MaxManifestSize {
 		return domain.Manifest{}, errs.ErrManifestTooLarge
@@ -71,11 +88,21 @@ func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys artifact.KeyPr
 	if err != nil {
 		return domain.Manifest{}, err
 	}
-	// The handle is also carried in the body; set both the physical digest
-	// (the form we read) and the requested handle so callers have both.
 	m.Digest = digest
-	m.ArtifactID = id
 	return m, nil
+}
+
+// OpenHandleByDigest resolves a headless data artifact by its ManifestDigest — the
+// external_payload_ref form (ADR-105) — and returns a ReadHandle over its
+// plaintext bytes. No
+// handle indirection: the digest names the manifest file directly. Used to
+// resolve an external system-artifact payload (e.g. a checkpoint .db).
+func (e *IO) OpenHandleByDigest(ctx context.Context, digest domain.ManifestDigest, keys domain.KeyProvider, hashAlgo string) (domain.ReadHandle, error) {
+	m, err := e.loadManifestByDigest(ctx, digest, keys, hashAlgo)
+	if err != nil {
+		return nil, err
+	}
+	return e.OpenHandle(ctx, m)
 }
 
 // OpenBlob returns a reader over the artifact's plaintext bytes: it opens
@@ -95,7 +122,7 @@ func (e *IO) OpenBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser, er
 	decoded, err := e.runner().BuildGet(m.Pipeline, raw)
 	if err != nil {
 		// BuildGet closed raw on its failure path.
-		return nil, fmt.Errorf("cas.OpenBlob: build pipeline: %w", err)
+		return nil, fmt.Errorf("cas: build pipeline: %w", err)
 	}
 	return decoded, nil
 }
@@ -136,7 +163,7 @@ func (e *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser,
 func (e *IO) VerifyBlob(ctx context.Context, m domain.Manifest) error {
 	want, hasher, err := artifact.ParseContentHash(e.hashes, m.HashAlgo, m.ContentHash)
 	if err != nil {
-		return fmt.Errorf("cas.VerifyBlob: %w", err)
+		return fmt.Errorf("cas: verify blob: %w", err)
 	}
 
 	plaintext, err := e.OpenBlob(ctx, m)
@@ -152,7 +179,7 @@ func (e *IO) VerifyBlob(ctx context.Context, m domain.Manifest) error {
 		return errors.Join(errs.ErrCorruptedBlob, copyErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("cas.VerifyBlob: close blob reader: %w", closeErr)
+		return fmt.Errorf("cas: close blob reader: %w", closeErr)
 	}
 	if !bytes.Equal(hasher.Sum(nil), want) {
 		return errs.ErrCorruptedBlob

@@ -15,6 +15,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/layout"
 )
 
 // OnDisk wraps a localfs root for physical inspection. Construct
@@ -40,7 +41,7 @@ func OnDiskAt(root string) OnDisk {
 // Returns an empty string if blobpath rejects the ID — callers
 // should treat that as a test setup error and fail explicitly.
 func (d OnDisk) ManifestPath(digest domain.ManifestDigest) string {
-	rel, err := artifact.ManifestPath(digest)
+	rel, err := layout.ManifestPath(digest)
 	if err != nil {
 		return ""
 	}

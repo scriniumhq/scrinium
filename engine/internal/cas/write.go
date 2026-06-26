@@ -15,17 +15,18 @@ import (
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 )
 
-// writeIndex is the slice of index.StoreIndex the write path depends on:
+// casIndex is the slice of index.StoreIndex the write path depends on:
 // it resolves a blob to its physical address, checks content existence for
 // dedup, and registers the finished manifest. Declaring the narrow port
 // here — rather than holding the full StoreIndex — keeps cas decoupled from
 // index methods it never calls. The concrete *sqlite.Index, and any full
 // index.StoreIndex value, satisfies it structurally.
-type writeIndex interface {
+type casIndex interface {
 	IndexManifest(ctx context.Context, m domain.Manifest, addr domain.PhysicalAddress) error
 	Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error)
 	ResolveManifestDigest(ctx context.Context, id domain.ArtifactID) (domain.ManifestDigest, bool, error)
@@ -37,7 +38,7 @@ type writeIndex interface {
 // handle over its dependencies and holds no mutable state.
 type IO struct {
 	drv          driver.Driver
-	index        writeIndex
+	index        casIndex
 	hashes       domain.HashRegistry
 	transformers pipeline.TransformerRegistry
 }
@@ -47,7 +48,7 @@ type IO struct {
 // internals.
 func New(
 	drv driver.Driver,
-	index writeIndex,
+	index casIndex,
 	hashes domain.HashRegistry,
 	transformers pipeline.TransformerRegistry,
 ) *IO {
@@ -102,8 +103,10 @@ func (e *IO) Materialize(ctx context.Context, cfg domain.StoreConfig, a domain.A
 }
 
 // materializeInline hashes an already-buffered payload and returns it as
-// an inline blob. No driver entry, no dedup probe; BlobRef equals the
-// ContentHash of the embedded bytes (docs §7.2).
+// an inline blob. No driver entry, no dedup probe, and no blob_ref: the
+// embedded bytes are not a physical blob, so they carry no blob address.
+// Their stored-form integrity rides the manifest digest (InlineBlob is part
+// of the hashed body); their identity is content_hash (ADR-66/92).
 func (e *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
 	h, err := e.hashes.NewHasher(hashAlgo)
 	if err != nil {
@@ -115,9 +118,8 @@ func (e *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
 	ch := domain.ContentHash(hex.EncodeToString(h.Sum(nil)))
 	return Result{
 		ContentHash:  ch,
-		BlobRef:      domain.BlobRef(ch),
 		OriginalSize: int64(len(body)),
-		Stages:       []domain.PipelineStage{},
+		Stages:       nil,
 		InlineBytes:  body,
 	}, nil
 }
@@ -185,7 +187,7 @@ func (e *IO) commitBlob(
 		}
 		return domain.BlobRef(existingRef), addr, nil
 	}
-	finalPath, err := artifact.BlobPath(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
+	finalPath, err := layout.BlobPath(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
 	if err != nil {
 		_ = e.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("cas: resolve blob path: %w", err)
@@ -289,6 +291,53 @@ func (e *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 	return sm, fileBytes, nil
 }
 
+// WriteHeadless writes a headless blob-backed data artifact (ADR-105): input
+// is materialized to a physical blob and wrapped in a CONTAINER manifest —
+// both identity slots empty (no handle, no name, no identity-meta),
+// blob_refs=[blob] — which is persisted and indexed, so orphan scan / GC
+// treat it as live (a headless data artifact is reachable only by its digest,
+// so it must be indexed or it would be reaped). Returns the ManifestDigest:
+// the stable external reference an envelope's external_payload_ref carries.
+//
+// This is the simplest case of the pack container (one blob, no members, no
+// TOC). A data artifact is never inline — it always streams to a Target blob,
+// regardless of the store's inline-blob policy — because its whole purpose is
+// to carry a payload too large for an inline manifest. The manifest body
+// follows the store's ManifestCrypto (dek/keyID supplied by the caller, as for
+// a user Put), so the blob and its manifest encrypt under the same key.
+func (e *IO) WriteHeadless(ctx context.Context, cfg domain.StoreConfig, input io.Reader, dek []byte, keyID string) (domain.ManifestDigest, error) {
+	hashAlgo := string(cfg.ContentHasher)
+	blob, err := e.streamToTarget(ctx, cfg, hashAlgo, keyID, input)
+	if err != nil {
+		return "", fmt.Errorf("cas: headless materialize: %w", err)
+	}
+
+	// Container slot: no handle, no name, no identity-meta; blob_refs holds
+	// the single data blob. validateSlot accepts this as a container.
+	m := domain.Manifest{
+		CreatedAt:    time.Now().UTC(),
+		ContentHash:  blob.ContentHash,
+		OriginalSize: blob.OriginalSize,
+		LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget},
+		Pipeline:     blob.Stages,
+		BlobRefs:     []domain.BlobRef{blob.BlobRef},
+	}
+
+	_, fileBytes, sm, err := artifact.ComputeManifestDigest(
+		m, hashAlgo, e.hashes,
+		cfg.ManifestEncoding, cfg.ManifestCrypto, dek, keyID,
+	)
+	if err != nil {
+		// The blob is already committed; we do not roll it back (an orphan
+		// blob is harmless — ref_count stays 0 and GC reaps it).
+		return "", fmt.Errorf("cas: headless manifest: %w", err)
+	}
+	if err := e.PersistManifest(ctx, sm, fileBytes, blob.Addr); err != nil {
+		return "", err
+	}
+	return sm.Digest, nil
+}
+
 // identityNonce returns a fresh 16-byte nonce for IdentityMode=Unique (the
 // default when unset) and nil for Coalesced, so the handle is unique
 // per-Put or deterministic respectively (ADR-73).
@@ -310,7 +359,7 @@ func identityNonce(mode domain.IdentityMode) ([]byte, error) {
 // IndexManifest skips the blobs-table insert but still indexes the
 // manifest so Walk and GetBySession find it.
 func (e *IO) PersistManifest(ctx context.Context, manifest domain.Manifest, manifestBytes []byte, addr domain.PhysicalAddress) error {
-	manifestPath, err := artifact.ManifestPath(manifest.Digest)
+	manifestPath, err := layout.ManifestPath(manifest.Digest)
 	if err != nil {
 		return fmt.Errorf("cas: manifest path: %w", err)
 	}

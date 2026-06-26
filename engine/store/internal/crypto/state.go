@@ -7,9 +7,7 @@ import (
 	"sync"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/descriptor"
@@ -34,10 +32,10 @@ import (
 // "crypto.mu → stateMu" ordering is satisfied trivially because the two
 // are never held at once.
 //
-// drv and index are held so SetPassphrase and RotateKEK can persist the
-// successor descriptor (both replicas + L2 cache) under mu, which is what
-// keeps a concurrent second SetPassphrase from observing the pre-wrap
-// descriptor and double-wrapping.
+// drv is held so SetPassphrase and RotateKEK can persist the successor
+// descriptor (both replicas) under mu, which is what keeps a concurrent
+// second SetPassphrase from observing the pre-wrap descriptor and
+// double-wrapping.
 type State struct {
 	mu sync.Mutex
 
@@ -46,21 +44,19 @@ type State struct {
 	provider    domain.PassphraseProvider
 	keyResolver pipeline.KeyResolver
 
-	drv   driver.Driver
-	index index.StoreIndex
+	drv driver.Driver
 }
 
 // New builds the crypto State. desc and dek are the bootstrap material
 // (dek nil for an encrypted Store opened Locked); provider and
-// keyResolver come from the store options; drv and index are needed to
-// persist a re-wrapped descriptor.
+// keyResolver come from the store options; drv is needed to persist a
+// re-wrapped descriptor.
 func New(
 	desc *descriptor.Descriptor,
 	dek []byte,
 	provider domain.PassphraseProvider,
 	keyResolver pipeline.KeyResolver,
 	drv driver.Driver,
-	idx index.StoreIndex,
 ) *State {
 	return &State{
 		desc:        desc,
@@ -68,7 +64,6 @@ func New(
 		provider:    provider,
 		keyResolver: keyResolver,
 		drv:         drv,
-		index:       idx,
 	}
 }
 
@@ -99,15 +94,27 @@ func (s *State) Resolver() pipeline.KeyResolver {
 	return s.keyResolver
 }
 
-// KeyProvider returns the resolver adapted to an artifact.KeyProvider for
+// KeyProvider returns the resolver adapted to a domain.KeyProvider for
 // decoding encrypted manifests read directly off the Driver (the rebuild
 // agent's out-of-band path). Returns nil for an unencrypted Store. This
 // is the sanctioned accessor; callers never reach into the resolver field
 // directly.
-func (s *State) KeyProvider() artifact.KeyProvider {
+func (s *State) KeyProvider() domain.KeyProvider {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return asKeyProvider(s.keyResolver)
+}
+
+// WriteKeyID returns the KeyID a new encrypted artifact records — the
+// resolver's write key (ADR-104 §2c). Empty for a Locked or resolver-less
+// Store; the systemstore only consults it for an encrypting ManifestCrypto.
+func (s *State) WriteKeyID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.keyResolver == nil {
+		return ""
+	}
+	return s.keyResolver.ResolveWriteKey(pipeline.KeyContext{})
 }
 
 // PromoteResolverIfDefault installs a default StaticKeyResolver over the
@@ -333,30 +340,23 @@ func (s *State) RecoveryKit() ([]byte, error) {
 	return buildRecoveryKit(s.desc, s.desc.DEK)
 }
 
-// commitDescriptor persists the next descriptor (both replicas), refreshes
-// the L2 cache, and atomically swaps s.desc. Caller must hold mu. On any
-// error s.desc / s.dek are left unchanged so a retry re-derives from the
-// same starting point.
+// commitDescriptor persists the next descriptor (both replicas) and
+// atomically swaps s.desc. Caller must hold mu. On any error s.desc / s.dek
+// are left unchanged so a retry re-derives from the same starting point.
 func (s *State) commitDescriptor(ctx context.Context, next *descriptor.Descriptor) error {
-	if err := descriptor.WriteBoth(ctx, s.drv, next); err != nil {
+	if err := descriptor.WriteBoth(ctx, s.drv, descriptor.CanonicalHashes(), next); err != nil {
 		return fmt.Errorf("persist descriptor: %w", err)
-	}
-	if err := descriptor.SaveCache(ctx, s.index, next); err != nil {
-		// Persisted on disk but cache write failed. The next OpenStore
-		// will rebuild the cache from Location, so this is recoverable;
-		// surface the error so the caller knows it was not fully done.
-		return fmt.Errorf("save L2 cache: %w", err)
 	}
 	s.desc = next
 	return nil
 }
 
-// asKeyProvider adapts a pipeline.KeyResolver to an artifact.KeyProvider,
+// asKeyProvider adapts a pipeline.KeyResolver to a domain.KeyProvider,
 // mapping a nil resolver to a nil provider (the codec turns that into the
 // correct ErrKeyNotFound refusal). pipeline.KeyResolver satisfies
-// artifact.KeyProvider structurally (GetKeys), so this only nil-guards
+// domain.KeyProvider structurally (GetKeys), so this only nil-guards
 // and forwards.
-func asKeyProvider(r pipeline.KeyResolver) artifact.KeyProvider {
+func asKeyProvider(r pipeline.KeyResolver) domain.KeyProvider {
 	if r == nil {
 		return nil
 	}

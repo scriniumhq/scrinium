@@ -3,7 +3,6 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -59,11 +58,7 @@ func (i *Index) applyIndexers(ctx context.Context, tx *sql.Tx, m domain.Manifest
 				}
 			case customindex.PocketUsr:
 				if usrOn == -1 {
-					on, err := usrIndexingEnabled(ctx, tx)
-					if err != nil {
-						return fmt.Errorf("read usr_indexing: %w", err)
-					}
-					if on {
+					if i.usrIndexing.Load() {
 						usrOn = 1
 					} else {
 						usrOn = 0
@@ -163,19 +158,10 @@ func upsertProjUsr(ctx context.Context, tx *sql.Tx, digest, field string, kind c
 	return err
 }
 
-// usrIndexingEnabled reports the global store_meta.usr_indexing switch
-// (default off). Any value other than "on"/"true"/"1" — including absence
-// — is off. It takes a sqlExecutor so the read path (*sql.DB, via
-// QueryByUsrField) and the write path (*sql.Tx, via applyIndexers) share
-// one gate; wrapping the error is left to the caller.
-func usrIndexingEnabled(ctx context.Context, ex sqlExecutor) (bool, error) {
-	var v string
-	err := ex.QueryRowContext(ctx, `SELECT value FROM store_meta WHERE key = 'usr_indexing'`).Scan(&v)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return false, nil
-	case err != nil:
-		return false, err
-	}
-	return v == "on" || v == "true" || v == "1", nil
+// SetUsrIndexing sets the in-memory usr-pocket indexing gate
+// (index.UsrIndexingSwitch). The Store calls it on open from the durable cell
+// and on any change; the hot projection/query paths read this flag rather than
+// store_meta (ADR-104 §6).
+func (i *Index) SetUsrIndexing(on bool) {
+	i.usrIndexing.Store(on)
 }

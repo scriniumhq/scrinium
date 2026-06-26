@@ -5,12 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/google/uuid"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
@@ -109,7 +107,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Probe for existing descriptor; honour WithForceReinit ---
 
-	if err := prepareInitLocation(ctx, drv, o.forceReinit, optsLogger(o, "store"), wrap); err != nil {
+	if err := prepareInitLocation(ctx, drv, o.hashRegistry, o.forceReinit, optsLogger(o, "store"), wrap); err != nil {
 		return nil, nil, err
 	}
 
@@ -182,7 +180,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Persist descriptor, L2 cache, and system.config ---
 
-	if err := persistInitState(ctx, drv, idx, o.hashRegistry, cfg, desc, wrap); err != nil {
+	if err := persistInitState(ctx, drv, o.hashRegistry, cfg, desc, wrap); err != nil {
 		aead.Wipe(dek)
 		return nil, nil, err
 	}
@@ -214,8 +212,8 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 // refuses with errs.ErrStoreCorrupted unless force is set. Under force,
 // the well-known descriptor file is removed — blobs/ are left in place
 // for GC.
-func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit bool, log *slog.Logger, wrap func(string, error) error) error {
-	existing, probeErr := descriptor.Read(ctx, drv)
+func prepareInitLocation(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, forceReinit bool, log *slog.Logger, wrap func(string, error) error) error {
+	existing, probeErr := descriptor.Read(ctx, drv, hashes)
 	switch {
 	case probeErr == nil:
 		// Descriptor present.
@@ -225,12 +223,12 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 		}
 		// Force reinit: clean up structural state. We stay
 		// conservative — only the well-known files are touched.
-		if err := drv.Remove(ctx, descriptor.Path); err != nil {
+		if err := descriptor.RemoveBoth(ctx, drv); err != nil {
 			return wrap("remove old descriptor", err)
 		}
 		log.LogAttrs(ctx, slog.LevelWarn, "force-reinit: removed existing descriptor",
 			slog.String("store_id", existing.StoreID))
-	case errors.Is(probeErr, os.ErrNotExist):
+	case errors.Is(probeErr, errs.ErrArtifactNotFound):
 		// Fresh Location, the normal path.
 	default:
 		// The descriptor exists but is unreadable. Refuse to proceed
@@ -243,7 +241,7 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 		// Best-effort removal of the unreadable descriptor. A failure
 		// here is not fatal (the subsequent Persist overwrites it), but
 		// it is operator-relevant — Warn rather than swallow.
-		if rmErr := drv.Remove(ctx, descriptor.Path); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+		if rmErr := descriptor.RemoveBoth(ctx, drv); rmErr != nil {
 			log.LogAttrs(ctx, slog.LevelWarn,
 				"force-reinit: could not remove unreadable descriptor (will overwrite)",
 				slog.String("error", rmErr.Error()))
@@ -252,18 +250,14 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 	return nil
 }
 
-// persistInitState writes the descriptor (both replicas), refreshes the
-// L2 cache, and persists the active StoreConfig as system.config. A hash
-// registry is required for the config write (system.config
-// must be readable before the Store opens for users). The descriptor and
-// cache are written first so a config-write failure still leaves a
-// readable Store identity behind.
-func persistInitState(ctx context.Context, drv driver.Driver, idx index.StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
-	if err := descriptor.WriteBoth(ctx, drv, desc); err != nil {
+// persistInitState writes the descriptor (both replicas) and persists the
+// active StoreConfig as system.config. A hash registry is required for the
+// config write (system.config must be readable before the Store opens for
+// users). The descriptor is written first so a config-write failure still
+// leaves a readable Store identity behind.
+func persistInitState(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
+	if err := descriptor.WriteBoth(ctx, drv, hashes, desc); err != nil {
 		return wrap("write descriptor", err)
-	}
-	if err := descriptor.SaveCache(ctx, idx, desc); err != nil {
-		return wrap("save L2 cache", err)
 	}
 	if hashes == nil {
 		return fmt.Errorf(

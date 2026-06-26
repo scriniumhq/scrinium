@@ -1,30 +1,13 @@
-package artifact
+package layout
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"scrinium.dev/domain"
 )
 
-// path.go — the driver-side path layout for blobs and manifests.
-//
-// Pure functions, no I/O. The conventions here are part of the on-disk
-// format: changing them requires a migration. Canonical layouts:
-//
-//	Sharded:   blobs/<aa>/<bb>/<ref>   (aa,bb = hex chars 1..4 of the ref)
-//	Flat:      blobs/<full-ref>
-//
-// Chunk and pack blobs use the same topology with roots "chunks/" and
-// "packs/"; the BlobType argument selects the root. Manifests live under
-// "manifests/" and are always Sharded — even on object stores the manifest
-// directory sees enough churn that two-level sharding pays off. A manifest
-// file is named by its ManifestDigest (the hash of the file bytes), NOT by
-// the floating ArtifactID (the handle); the index maps handle → digest.
-
-// rootFor returns the directory prefix for a blob type: "blobs",
-// "chunks", "packs". An empty type means Regular. Unknown types error —
-// callers should validate first, but a defensive check is cheap.
 func rootFor(t domain.BlobType) (string, error) {
 	switch t {
 	case "", domain.BlobTypeRegular:
@@ -58,7 +41,7 @@ func shardOf(ref string) (string, string, error) {
 // empty BlobType as Regular.
 func BlobPath(topology domain.PathTopology, blobType domain.BlobType, ref string) (string, error) {
 	if ref == "" {
-		return "", fmt.Errorf("artifact: empty ref")
+		return "", errors.New("artifact: empty ref")
 	}
 	root, err := rootFor(blobType)
 	if err != nil {
@@ -83,7 +66,7 @@ func BlobPath(topology domain.PathTopology, blobType domain.BlobType, ref string
 // (the current physical form), not by the floating ArtifactID.
 func ManifestPath(digest domain.ManifestDigest) (string, error) {
 	if digest == "" {
-		return "", fmt.Errorf("artifact: empty manifest digest")
+		return "", errors.New("artifact: empty manifest digest")
 	}
 	s1, s2, err := shardOf(string(digest))
 	if err != nil {
@@ -129,7 +112,7 @@ func DigestFromManifestPath(p string) (domain.ManifestDigest, error) {
 // an empty path.
 func lastSegment(p string) (string, error) {
 	if p == "" {
-		return "", fmt.Errorf("artifact: empty path")
+		return "", errors.New("artifact: empty path")
 	}
 	if i := strings.LastIndexByte(p, '/'); i >= 0 {
 		return p[i+1:], nil

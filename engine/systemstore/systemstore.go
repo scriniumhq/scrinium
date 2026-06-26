@@ -8,8 +8,9 @@ import (
 	"sort"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/engine/internal/cas"
 	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/internal/slogx"
 )
@@ -35,6 +36,14 @@ type NamedArtifact struct {
 	// Payload is the artifact body. System payloads are small enough to
 	// buffer in memory.
 	Payload io.Reader
+
+	// ExternalRef, when non-empty, makes this a pointer artifact (ADR-105):
+	// the envelope carries {store_id, external_payload_ref=ExternalRef} and no
+	// inline payload (Payload is ignored). The digest names a headless
+	// blob-backed data artifact (e.g. a checkpoint .db) too large for an inline
+	// manifest; Get resolves it transparently to a stream, Delete cascades to
+	// reap it.
+	ExternalRef domain.ManifestDigest
 
 	// Keep selects the storage form (ADR-100/101). It is optional:
 	//   nil             → the default, keep=1 (atomic versioned "latest",
@@ -92,11 +101,44 @@ type Store interface {
 // never written under manifests/ — they live in their own address space,
 // so they are invisible to the data-plane Walk (handle-IS-NULL) by
 // construction rather than by an index filter.
+// CryptoProvider supplies the crypto material a system-artifact write/read
+// needs per the store's ManifestCrypto policy (ADR-104 §2c). Declared here,
+// not imported from engine/store/internal/crypto (unreachable across the
+// engine root), and structurally satisfied by the store's *crypto.State. A
+// Plain store is never asked for a DEK; KeyProvider returns nil and the read
+// path decodes plaintext.
+type CryptoProvider interface {
+	// DEKForWrite returns a private DEK copy for an encrypting write (the
+	// caller wipes it). Errors if the store is Locked or has no resolver.
+	// Never called for Plain.
+	DEKForWrite(crypto domain.ManifestCrypto) ([]byte, error)
+	// WriteKeyID is the KeyID a new encrypted artifact records. Empty for an
+	// unencrypted store.
+	WriteKeyID() string
+	// KeyProvider adapts the resolver for decoding encrypted manifests on
+	// read. nil for an unencrypted store.
+	KeyProvider() domain.KeyProvider
+}
+
+// ExternalResolver resolves and deletes the external headless data-artifact
+// payload a pointer envelope references via external_payload_ref (ADR-105).
+// Declared here, structurally satisfied by the store's *store (which owns the
+// data plane). A system artifact whose envelope carries an external ref is a
+// thin pointer; its bytes live in a headless blob-backed artifact resolved by
+// digest.
+type ExternalResolver interface {
+	OpenExternal(ctx context.Context, ref domain.ManifestDigest) (domain.ReadHandle, error)
+	DeleteExternal(ctx context.Context, ref domain.ManifestDigest) error
+}
+
 type systemStore struct {
-	drv    driver.Driver
-	hashes domain.HashRegistry
-	cfg    domain.StoreConfig // immutable fields only (ContentHasher); see New
-	log    *slog.Logger
+	drv      driver.Driver
+	hashes   domain.HashRegistry
+	cfg      domain.StoreConfig // immutable fields only (ContentHasher); see New
+	storeID  string             // authoritative store_id (descriptor), stamped on write, checked on read
+	crypto   CryptoProvider     // ADR-104 §2c: policy DEK/keyID on write, KeyProvider on read
+	external ExternalResolver   // ADR-105: resolve/delete external_payload_ref targets
+	log      *slog.Logger
 }
 
 // defaultKeepVersions is the form an NamedArtifact takes when Keep is nil
@@ -110,22 +152,29 @@ const defaultKeepVersions = 1
 // Compile-time check that the concrete type satisfies the contract.
 var _ Store = (*systemStore)(nil)
 
-// New wires the facade. It needs only the driver (the layout is on-disk),
-// the hash registry (verify-on-read and the content hash of each write),
-// the active config (for its immutable ContentHasher), and a logger for
-// best-effort prune failures. No StoreIndex and no write indirection: the
-// inline-manifest write is self-contained in named.
+// New wires the facade. It needs the driver (the layout is on-disk), the hash
+// registry (verify-on-read and the content hash of each write), the active
+// config (for its immutable ContentHasher), the store's authoritative store_id
+// (stamped into every artifact's envelope on write and checked on read,
+// ADR-104), and a logger for best-effort prune failures. No StoreIndex and no
+// write indirection: the inline-manifest write is self-contained in named.
 func New(
 	drv driver.Driver,
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
+	storeID string,
+	crypto CryptoProvider,
+	external ExternalResolver,
 	log *slog.Logger,
 ) Store {
 	return &systemStore{
-		drv:    drv,
-		hashes: hashes,
-		cfg:    cfg,
-		log:    log,
+		drv:      drv,
+		hashes:   hashes,
+		cfg:      cfg,
+		storeID:  storeID,
+		crypto:   crypto,
+		external: external,
+		log:      log,
 	}
 }
 
@@ -142,11 +191,40 @@ func (ss *systemStore) Put(ctx context.Context, a NamedArtifact) error {
 	if err := named.ValidateName(a.Name); err != nil {
 		return err
 	}
-	body, err := io.ReadAll(a.Payload)
-	if err != nil {
-		return fmt.Errorf("system store: read payload for %q: %w", a.Name, err)
+	// Seal into the store-identity envelope (ADR-104), then build the inline
+	// manifest over it. name fills the manifest's identity slot. A pointer
+	// artifact (ExternalRef set, ADR-105) wraps {store_id, external_payload_ref}
+	// with no inline body — its payload lives in a headless data artifact.
+	var envBytes []byte
+	var err error
+	if a.ExternalRef != "" {
+		envBytes, err = wrapExternalEnvelope(ss.storeID, string(a.ExternalRef))
+	} else {
+		body, berr := io.ReadAll(a.Payload)
+		if berr != nil {
+			return fmt.Errorf("system store: read payload for %q: %w", a.Name, berr)
+		}
+		envBytes, err = wrapEnvelope(ss.storeID, body)
 	}
-	fileBytes, _, err := named.BuildInlineManifest(body, string(ss.cfg.ContentHasher), ss.hashes)
+	if err != nil {
+		return fmt.Errorf("system store: %q: %w", a.Name, err)
+	}
+	// Crypto by policy (ADR-104 §2c): the inline payload follows the store's
+	// ManifestCrypto. Plain → as-is; Sealed/Paranoid → sealed under a DEK
+	// borrowed from the crypto provider (wiped once the manifest is built).
+	// The bootstrap chain (descriptor/config/lease) never reaches here.
+	mc := ss.cfg.ManifestCrypto
+	var dek []byte
+	var keyID string
+	if mc != "" && mc != domain.ManifestCryptoPlain {
+		dek, err = ss.crypto.DEKForWrite(mc)
+		if err != nil {
+			return fmt.Errorf("system store: %q: %w", a.Name, err)
+		}
+		defer aead.Wipe(dek)
+		keyID = ss.crypto.WriteKeyID()
+	}
+	fileBytes, _, err := named.BuildInlineManifest(a.Name, envBytes, string(ss.cfg.ContentHasher), ss.hashes, mc, dek, keyID)
 	if err != nil {
 		return fmt.Errorf("system store: build %q: %w", a.Name, err)
 	}
@@ -188,34 +266,65 @@ func (ss *systemStore) Put(ctx context.Context, a NamedArtifact) error {
 // resolves. Returns errs.ErrArtifactNotFound when the name has never
 // been written.
 func (ss *systemStore) Get(ctx context.Context, name string) (domain.ReadHandle, error) {
-	seq, found, err := named.ResolveActiveSeq(ctx, ss.drv, name)
-	if err != nil {
-		return nil, fmt.Errorf("system store: get %q: %w", name, err)
-	}
-	if found {
-		path, err := named.VersionPath(name, seq)
-		if err != nil {
-			return nil, err
-		}
-		m, err := named.Load(ctx, ss.drv, ss.hashes, path)
-		if err != nil {
-			return nil, fmt.Errorf("system store: get %q: %w", name, err)
-		}
-		return artifact.NewInlineHandle(m), nil
-	}
-	// No versions — try the cell. LoadCell maps an absent cell to
-	// errs.ErrArtifactNotFound, so this is also the not-found path.
-	m, err := named.LoadCell(ctx, ss.drv, ss.hashes, name)
+	env, m, err := ss.loadEnvelope(ctx, name)
 	if err != nil {
 		return nil, err
 	}
-	return artifact.NewInlineHandle(m), nil
+	if env.ExternalPayloadRef != "" {
+		// Pointer envelope (ADR-105): the payload is an external headless data
+		// artifact (e.g. a checkpoint .db) too large for an inline manifest.
+		// Resolve it to a streaming handle; identity was already enforced by
+		// openEnvelope inside loadEnvelope.
+		return ss.external.OpenExternal(ctx, domain.ManifestDigest(env.ExternalPayloadRef))
+	}
+	return cas.NewInlinePayloadHandle(m, env.InlinePayload), nil
+}
+
+// loadEnvelope resolves a name to its active manifest (a versioned active or a
+// keep=0 cell) and opens the envelope — verifying store_id against this store's
+// descriptor (foreign rejected, ADR-104). Shared by Get (which then serves the
+// payload) and Delete (which reads external_payload_ref to cascade the GC). An
+// absent name surfaces as errs.ErrArtifactNotFound from the load.
+func (ss *systemStore) loadEnvelope(ctx context.Context, name string) (envelope, domain.Manifest, error) {
+	seq, found, err := named.ResolveActiveSeq(ctx, ss.drv, name)
+	if err != nil {
+		return envelope{}, domain.Manifest{}, fmt.Errorf("system store: get %q: %w", name, err)
+	}
+	var m domain.Manifest
+	if found {
+		path, perr := named.VersionPath(name, seq)
+		if perr != nil {
+			return envelope{}, domain.Manifest{}, perr
+		}
+		m, err = named.LoadWithKeys(ctx, ss.drv, ss.hashes, path, ss.crypto.KeyProvider())
+	} else {
+		// No versions — try the cell. LoadCell maps an absent cell to
+		// errs.ErrArtifactNotFound, so this is also the not-found path.
+		m, err = named.LoadCellWithKeys(ctx, ss.drv, ss.hashes, name, ss.crypto.KeyProvider())
+	}
+	if err != nil {
+		return envelope{}, domain.Manifest{}, err
+	}
+	env, err := openEnvelope(m.InlineBlob, ss.storeID)
+	if err != nil {
+		return envelope{}, domain.Manifest{}, fmt.Errorf("system store: get %q: %w", name, err)
+	}
+	return env, m, nil
 }
 
 // Delete removes every version AND any cell of name. A name is one form,
 // but removing both is form-agnostic and idempotent (each is a no-op
 // when absent).
 func (ss *systemStore) Delete(ctx context.Context, name string) error {
+	// Cascade (ADR-105): a pointer artifact's external headless payload must be
+	// deleted too, or its blob leaks (ref_count never reaches zero, GC never
+	// reaps it). Best-effort read — an absent/foreign/inline/malformed artifact
+	// simply skips the cascade; the removal below proceeds regardless.
+	if env, _, err := ss.loadEnvelope(ctx, name); err == nil && env.ExternalPayloadRef != "" {
+		if derr := ss.external.DeleteExternal(ctx, domain.ManifestDigest(env.ExternalPayloadRef)); derr != nil {
+			return fmt.Errorf("system store: delete %q: external payload: %w", name, derr)
+		}
+	}
 	if err := named.RemoveAll(ctx, ss.drv, name); err != nil {
 		return fmt.Errorf("system store: delete %q: %w", name, err)
 	}
@@ -241,7 +350,7 @@ func (ss *systemStore) Walk(ctx context.Context, prefix string, cb func(name str
 	all := append(versions, cells...)
 	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
 	for _, a := range all {
-		m, err := named.Load(ctx, ss.drv, ss.hashes, a.Path)
+		m, err := named.LoadWithKeys(ctx, ss.drv, ss.hashes, a.Path, ss.crypto.KeyProvider())
 		if err != nil {
 			// A version/cell that vanished or failed verification
 			// mid-walk is skipped rather than aborting the rest.

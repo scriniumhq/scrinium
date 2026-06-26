@@ -59,12 +59,6 @@ type RebuildConfig struct {
 	// Zero means no overlap (tail starts exactly at the checkpoint
 	// instant); a small positive value (minutes) is recommended.
 	RecoveryOverlap time.Duration
-
-	// IgnoreStoreID, when true, skips the store-identity guard that rejects a
-	// checkpoint recorded for a different Store before restoring it. Use only
-	// to force recovery from a checkpoint whose identity is known-good despite
-	// a mismatch (e.g. a deliberately imported checkpoint).
-	IgnoreStoreID bool
 }
 
 const (

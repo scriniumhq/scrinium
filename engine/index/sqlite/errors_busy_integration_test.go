@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"scrinium.dev/errs"
+	"scrinium.dev/testutil/manifestfx"
 )
 
 // TestClassifyError_BusyMaps in errors_test.go covers the unit
@@ -68,7 +69,7 @@ func TestClassifyError_RealBusyContention(t *testing.T) {
 		t.Fatalf("BeginTx on conn 1: %v", err)
 	}
 	if _, err := tx.ExecContext(ctx,
-		"INSERT INTO store_meta (key, value) VALUES ('busy_test_marker', 'present')",
+		"INSERT INTO schema_version (version, applied_at) VALUES (9999, 'busy-test')",
 	); err != nil {
 		t.Fatalf("acquire write lock on conn 1: %v", err)
 	}
@@ -91,15 +92,16 @@ func TestClassifyError_RealBusyContention(t *testing.T) {
 		t.Fatalf("set busy_timeout on conn 2: %v", err)
 	}
 
-	// SetMeta routes through observe → classifyError. With
-	// connection 1 holding the write lock, this Exec on conn 2
-	// must hit SQLITE_BUSY and emerge as errs.ErrLeaseHeld.
-	err = idx2.SetMeta(ctx, "busy_test_writer", "should-fail")
+	// IndexManifest routes through observe → classifyError (the same path
+	// SetMeta used before store_meta was retired). With connection 1 holding
+	// the write lock, this write on conn 2 must hit SQLITE_BUSY and emerge as
+	// errs.ErrLeaseHeld.
+	err = idx2.IndexManifest(ctx, manifestfx.Blob("busy-art", "busy-blob"), manifestfx.PhysAddr("blobs/bb/uy/busy-blob"))
 	if err == nil {
-		t.Fatal("SetMeta on locked db: expected busy error, got nil")
+		t.Fatal("IndexManifest on locked db: expected busy error, got nil")
 	}
 	if !errors.Is(err, errs.ErrLeaseHeld) {
-		t.Errorf("SetMeta busy error: errors.Is(err, errs.ErrLeaseHeld) = false; "+
+		t.Errorf("IndexManifest busy error: errors.Is(err, errs.ErrLeaseHeld) = false; "+
 			"got %v (type %T)", err, err)
 	}
 }

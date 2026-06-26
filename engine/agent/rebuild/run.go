@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -88,7 +88,7 @@ func (a *rebuildAgent) restoreDescriptor(ctx context.Context) error {
 // rebuildIndex selects the strategy. Auto and Checkpoint attempt the
 // checkpoint fast-path first; Auto falls back to a full scan when no
 // checkpoint is available, Checkpoint errors, and FullScan always scans.
-func (a *rebuildAgent) rebuildIndex(ctx context.Context, keys artifact.KeyProvider) error {
+func (a *rebuildAgent) rebuildIndex(ctx context.Context, keys domain.KeyProvider) error {
 	if a.cfg.Source != RebuildSourceFullScan {
 		used, err := a.tryCheckpointFastPath(ctx, keys)
 		if err != nil {

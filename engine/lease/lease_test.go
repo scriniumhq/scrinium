@@ -25,6 +25,8 @@ const (
 	leaseName = "store.agent.maintenance.lease"
 	hostA     = "host-A"
 	hostB     = "host-B"
+	storeX    = "store-X"
+	storeY    = "store-Y"
 )
 
 // leaseTestHashes is a sha256-only HashRegistry mirroring the lease's own
@@ -58,6 +60,14 @@ func cfgA(ttl time.Duration) lease.Config {
 	return lease.Config{Name: leaseName, HostID: hostA, AgentType: "Test", TTL: ttl}
 }
 
+// cfgAStore is cfgA carrying a StoreID, for the ADR-104 store-identity
+// reaction paths (foreign-store reclaim, informative held error, force).
+func cfgAStore(ttl time.Duration, storeID string) lease.Config {
+	c := cfgA(ttl)
+	c.StoreID = storeID
+	return c
+}
+
 // writeRecord stages a fully-formed lease record as the lease cell,
 // bypassing Acquire — used to stage live/expired/foreign states
 // deterministically. The record is wrapped in the same inline-manifest
@@ -68,7 +78,7 @@ func writeRecord(t *testing.T, drv driver.Driver, rec lease.Record) {
 	if err != nil {
 		t.Fatalf("marshal record: %v", err)
 	}
-	fileBytes, _, err := named.BuildInlineManifest(body, "sha256", leaseTestHashes{})
+	fileBytes, _, err := named.BuildInlineManifest(leaseName, body, "sha256", leaseTestHashes{}, domain.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatalf("build manifest: %v", err)
 	}
@@ -412,5 +422,161 @@ func TestHeartbeat_AbortsOnTakeover(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Heartbeat did not abort after takeover")
+	}
+}
+
+// --- ADR-104: store-identity reactions ---
+
+// A live lease that explicitly belongs to a DIFFERENT store leaked through
+// a shared/copied Location. It is not our store's lease, so Acquire
+// reclaims the slot rather than waiting it out, and reports the displaced
+// holder via prev.
+func TestAcquire_ForeignStoreReclaimed(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	now := time.Now()
+	writeRecord(t, drv, lease.Record{
+		HostID:     hostB,
+		AcquiredAt: now,
+		ExpiresAt:  now.Add(time.Hour), // live
+		AgentType:  "Other",
+		Nonce:      "AAAAAAAAAAAAAAAAAAAAAA==",
+		StoreID:    storeY,
+	})
+	l, prev, err := lease.Acquire(context.Background(), drv, cfgAStore(time.Minute, storeX))
+	if err != nil {
+		t.Fatalf("Acquire (foreign-store reclaim): %v", err)
+	}
+	if l == nil {
+		t.Fatal("nil lease after foreign-store reclaim")
+	}
+	if prev == nil || prev.StoreID != storeY {
+		t.Fatalf("prev = %+v, want the displaced foreign-store record (store %q)", prev, storeY)
+	}
+	rec, _ := readRecord(t, drv)
+	if rec.HostID != hostA || rec.StoreID != storeX {
+		t.Errorf("after reclaim = host %q store %q, want %q/%q", rec.HostID, rec.StoreID, hostA, storeX)
+	}
+}
+
+// A live lease held by a different host of the SAME store is refused with
+// an informative *LeaseHeldError that names the holder, the cell is left
+// untouched, and the error still unwraps to errs.ErrLeaseHeld.
+func TestAcquire_LiveSameStoreOtherHostInformative(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	now := time.Now()
+	writeRecord(t, drv, lease.Record{
+		HostID:     hostB,
+		AcquiredAt: now,
+		ExpiresAt:  now.Add(time.Hour), // live
+		AgentType:  "Other",
+		Nonce:      "AAAAAAAAAAAAAAAAAAAAAA==",
+		StoreID:    storeX,
+	})
+	_, _, err := lease.Acquire(context.Background(), drv, cfgAStore(time.Minute, storeX))
+	if !errors.Is(err, errs.ErrLeaseHeld) {
+		t.Fatalf("Acquire err = %v, want it to wrap ErrLeaseHeld", err)
+	}
+	var he *lease.LeaseHeldError
+	if !errors.As(err, &he) {
+		t.Fatalf("Acquire err = %v, want a *lease.LeaseHeldError", err)
+	}
+	if he.HostID != hostB || he.AgentType != "Other" {
+		t.Errorf("LeaseHeldError = host %q agent %q, want %q/%q", he.HostID, he.AgentType, hostB, "Other")
+	}
+	if he.ExpiresAt.IsZero() {
+		t.Error("LeaseHeldError.ExpiresAt is zero, want the holder's expiry")
+	}
+	if rec, _ := readRecord(t, drv); rec.HostID != hostB {
+		t.Errorf("lease overwritten: HostID = %q, want %q (untouched)", rec.HostID, hostB)
+	}
+}
+
+// Force overrides a live lease held by a different host of the same store:
+// Acquire succeeds, the cell is rewritten to us, and prev carries the
+// displaced live holder so the caller can log the forced takeover.
+func TestAcquire_ForceOverridesLiveSameStore(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	now := time.Now()
+	writeRecord(t, drv, lease.Record{
+		HostID:     hostB,
+		AcquiredAt: now,
+		ExpiresAt:  now.Add(time.Hour), // live
+		AgentType:  "Other",
+		Nonce:      "AAAAAAAAAAAAAAAAAAAAAA==",
+		StoreID:    storeX,
+	})
+	c := cfgAStore(time.Minute, storeX)
+	c.Force = true
+	l, prev, err := lease.Acquire(context.Background(), drv, c)
+	if err != nil {
+		t.Fatalf("Acquire (force): %v", err)
+	}
+	if l == nil {
+		t.Fatal("nil lease after forced acquire")
+	}
+	if prev == nil || prev.HostID != hostB {
+		t.Fatalf("prev = %+v, want the displaced live holder (host %q)", prev, hostB)
+	}
+	if rec, _ := readRecord(t, drv); rec.HostID != hostA {
+		t.Errorf("after force HostID = %q, want %q", rec.HostID, hostA)
+	}
+}
+
+// A live lease with NO recorded StoreID (location.lock, or written by
+// pre-store_id code) is "unknown", never foreign: a store-id-aware
+// acquirer must not reclaim it, it keeps the normal live-lease protection.
+func TestAcquire_UnknownStoreNotReclaimed(t *testing.T) {
+	drv := driverfx.LocalFS(t)
+	now := time.Now()
+	writeRecord(t, drv, lease.Record{
+		HostID:     hostB,
+		AcquiredAt: now,
+		ExpiresAt:  now.Add(time.Hour), // live, no StoreID
+		AgentType:  "Other",
+		Nonce:      "AAAAAAAAAAAAAAAAAAAAAA==",
+	})
+	_, _, err := lease.Acquire(context.Background(), drv, cfgAStore(time.Minute, storeX))
+	if !errors.Is(err, errs.ErrLeaseHeld) {
+		t.Fatalf("Acquire err = %v, want ErrLeaseHeld (unknown store is protected, not reclaimed)", err)
+	}
+	if rec, _ := readRecord(t, drv); rec.HostID != hostB {
+		t.Errorf("lease overwritten: HostID = %q, want %q (untouched)", rec.HostID, hostB)
+	}
+}
+
+// Record carries store_id through the on-disk JSON, and an empty StoreID
+// is omitted (so a legacy lease with no store_id reads back as "").
+func TestRecord_StoreIDRoundTrip(t *testing.T) {
+	now := time.Now()
+	withID := lease.Record{HostID: hostA, AcquiredAt: now, ExpiresAt: now.Add(time.Hour), AgentType: "GC", Nonce: "n", StoreID: storeX}
+	b, err := json.Marshal(withID)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(b), `"store_id":"`+storeX+`"`) {
+		t.Errorf("marshaled record missing store_id: %s", b)
+	}
+	var got lease.Record
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got.StoreID != storeX {
+		t.Errorf("StoreID = %q, want %q", got.StoreID, storeX)
+	}
+
+	noID := lease.Record{HostID: hostA, AcquiredAt: now, ExpiresAt: now.Add(time.Hour), Nonce: "n"}
+	nb, err := json.Marshal(noID)
+	if err != nil {
+		t.Fatalf("marshal no-id: %v", err)
+	}
+	if strings.Contains(string(nb), "store_id") {
+		t.Errorf("empty StoreID should be omitted, got: %s", nb)
+	}
+	var gotNo lease.Record
+	if err := json.Unmarshal(nb, &gotNo); err != nil {
+		t.Fatalf("unmarshal no-id: %v", err)
+	}
+	if gotNo.StoreID != "" {
+		t.Errorf("StoreID = %q, want empty", gotNo.StoreID)
 	}
 }

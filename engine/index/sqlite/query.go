@@ -67,11 +67,7 @@ func (i *Index) ListByExtField(ctx context.Context, extName, field, value string
 // integer form when it parses), so text / number / hash fields are all
 // reachable from one signature.
 func (i *Index) QueryByUsrField(ctx context.Context, field, value string, cb func(domain.ArtifactID) error) error {
-	on, err := usrIndexingEnabled(ctx, i.db)
-	if err != nil {
-		return classifyError(err)
-	}
-	if !on {
+	if !i.usrIndexing.Load() {
 		return nil
 	}
 	var num sql.NullInt64

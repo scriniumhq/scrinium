@@ -3,13 +3,15 @@ package descriptor
 import (
 	"context"
 	"errors"
-	"io"
-	"os"
 	"strings"
 	"testing"
 
+	"scrinium.dev/engine/internal/named"
+	"scrinium.dev/errs"
 	"scrinium.dev/testutil/driverfx"
 )
+
+var testHashes = CanonicalHashes()
 
 // validDescriptor returns a descriptor with one of every field set.
 func validDescriptor(t *testing.T) *Descriptor {
@@ -154,10 +156,10 @@ func TestUnmarshal_RejectsMalformedJSON(t *testing.T) {
 func TestWriteBoth_Read_RoundTrip(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	src := validDescriptor(t)
-	if err := WriteBoth(context.Background(), drv, src); err != nil {
+	if err := WriteBoth(context.Background(), drv, testHashes, src); err != nil {
 		t.Fatalf("WriteBoth: %v", err)
 	}
-	got, err := Read(context.Background(), drv)
+	got, err := Read(context.Background(), drv, testHashes)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -172,10 +174,10 @@ func TestWriteBoth_Read_RoundTrip(t *testing.T) {
 func TestWriteReplica_RoundTripL0(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	src := validDescriptor(t)
-	if err := WriteReplica(context.Background(), drv, src, L0); err != nil {
+	if err := WriteReplica(context.Background(), drv, testHashes, src, L0); err != nil {
 		t.Fatalf("WriteReplica(L0): %v", err)
 	}
-	got, err := Read(context.Background(), drv)
+	got, err := Read(context.Background(), drv, testHashes)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -189,19 +191,14 @@ func TestWriteReplica_RoundTripL0(t *testing.T) {
 func TestWriteReplica_RoundTripL1(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	src := validDescriptor(t)
-	if err := WriteReplica(context.Background(), drv, src, L1); err != nil {
+	if err := WriteReplica(context.Background(), drv, testHashes, src, L1); err != nil {
 		t.Fatalf("WriteReplica(L1): %v", err)
 	}
-	rc, err := drv.Get(context.Background(), BackupPath)
+	m, err := named.LoadCell(context.Background(), drv, testHashes, BackupName)
 	if err != nil {
-		t.Fatalf("open L1: %v", err)
+		t.Fatalf("load L1 cell: %v", err)
 	}
-	defer rc.Close()
-	data, err := io.ReadAll(rc)
-	if err != nil {
-		t.Fatalf("read L1: %v", err)
-	}
-	got, err := Unmarshal(data)
+	got, err := Unmarshal(m.InlineBlob)
 	if err != nil {
 		t.Fatalf("unmarshal L1: %v", err)
 	}
@@ -213,15 +210,15 @@ func TestWriteReplica_RoundTripL1(t *testing.T) {
 func TestWriteReplica_RejectsInvalidReplica(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	src := validDescriptor(t)
-	if err := WriteReplica(context.Background(), drv, src, Replica(99)); err == nil {
+	if err := WriteReplica(context.Background(), drv, testHashes, src, Replica(99)); err == nil {
 		t.Fatal("expected error on invalid Replica value")
 	}
 }
 
 func TestRead_NotFound(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	_, err := Read(context.Background(), drv)
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected ErrNotExist, got %v", err)
+	_, err := Read(context.Background(), drv, testHashes)
+	if !errors.Is(err, errs.ErrArtifactNotFound) {
+		t.Fatalf("expected ErrArtifactNotFound, got %v", err)
 	}
 }

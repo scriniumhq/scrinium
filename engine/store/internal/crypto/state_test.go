@@ -22,7 +22,7 @@ func allZero(b []byte) bool {
 // the field. The store test only asserts the observable presence bit; the
 // byte-level scrub is checked here, where the field is reachable.
 func TestCloseSecrets_WipesAndClearsDEK(t *testing.T) {
-	s := New(nil, []byte{1, 2, 3, 4, 5, 6, 7, 8}, nil, nil, nil, nil)
+	s := New(nil, []byte{1, 2, 3, 4, 5, 6, 7, 8}, nil, nil, nil)
 	ref := s.dek // same backing array; observe its bytes after the wipe
 
 	resolver := s.CloseSecrets()
@@ -40,7 +40,7 @@ func TestCloseSecrets_WipesAndClearsDEK(t *testing.T) {
 // TestWipeDEK_WipesAndClearsDEK covers the unlock-failure path's WipeDEK
 // the same way.
 func TestWipeDEK_WipesAndClearsDEK(t *testing.T) {
-	s := New(nil, []byte{9, 8, 7, 6}, nil, nil, nil, nil)
+	s := New(nil, []byte{9, 8, 7, 6}, nil, nil, nil)
 	ref := s.dek
 
 	s.WipeDEK()
@@ -54,7 +54,7 @@ func TestWipeDEK_WipesAndClearsDEK(t *testing.T) {
 
 // TestCloseSecrets_NilDEK_NoPanic guards the empty/locked-Store path.
 func TestCloseSecrets_NilDEK_NoPanic(t *testing.T) {
-	s := New(nil, nil, nil, nil, nil, nil)
+	s := New(nil, nil, nil, nil, nil)
 	if r := s.CloseSecrets(); r != nil {
 		t.Errorf("resolver: want nil, got %v", r)
 	}
@@ -65,13 +65,13 @@ func TestCloseSecrets_NilDEK_NoPanic(t *testing.T) {
 
 // TestHasDEK reports presence, never material.
 func TestHasDEK(t *testing.T) {
-	if got := New(nil, []byte{1}, nil, nil, nil, nil).HasDEK(); !got {
+	if got := New(nil, []byte{1}, nil, nil, nil).HasDEK(); !got {
 		t.Error("HasDEK with a DEK: want true")
 	}
-	if got := New(nil, nil, nil, nil, nil, nil).HasDEK(); got {
+	if got := New(nil, nil, nil, nil, nil).HasDEK(); got {
 		t.Error("HasDEK with nil DEK: want false")
 	}
-	if got := New(nil, []byte{}, nil, nil, nil, nil).HasDEK(); got {
+	if got := New(nil, []byte{}, nil, nil, nil).HasDEK(); got {
 		t.Error("HasDEK with empty DEK: want false")
 	}
 }
@@ -80,7 +80,7 @@ func TestHasDEK(t *testing.T) {
 
 func TestDEKForWrite_LockedReturnsErrLocked(t *testing.T) {
 	// No DEK == Locked: an encrypting write must be refused with ErrLocked.
-	_, err := New(nil, nil, nil, nil, nil, nil).DEKForWrite(domain.ManifestCryptoSealed)
+	_, err := New(nil, nil, nil, nil, nil).DEKForWrite(domain.ManifestCryptoSealed)
 	if !errors.Is(err, errs.ErrLocked) {
 		t.Fatalf("DEKForWrite while locked: got %v, want ErrLocked", err)
 	}
@@ -89,7 +89,7 @@ func TestDEKForWrite_LockedReturnsErrLocked(t *testing.T) {
 func TestDEKForWrite_NoResolverRejected(t *testing.T) {
 	// DEK present but no resolver: an encrypting write still needs one.
 	// Distinct from the locked case — this is NOT an ErrLocked.
-	_, err := New(nil, []byte{1, 2, 3, 4}, nil, nil, nil, nil).DEKForWrite(domain.ManifestCryptoSealed)
+	_, err := New(nil, []byte{1, 2, 3, 4}, nil, nil, nil).DEKForWrite(domain.ManifestCryptoSealed)
 	if err == nil {
 		t.Fatal("DEKForWrite without a resolver should error")
 	}
@@ -100,7 +100,7 @@ func TestDEKForWrite_NoResolverRejected(t *testing.T) {
 
 func TestDEKForWrite_ReturnsPrivateCopy(t *testing.T) {
 	dek := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	s := New(nil, dek, nil, pipeline.NewStaticKeyResolver(dek), nil, nil)
+	s := New(nil, dek, nil, pipeline.NewStaticKeyResolver(dek), nil)
 
 	got, err := s.DEKForWrite(domain.ManifestCryptoSealed)
 	if err != nil {
@@ -127,7 +127,7 @@ func TestAsKeyProvider_NilResolverYieldsNilProvider(t *testing.T) {
 		t.Errorf("asKeyProvider(nil): got %v, want nil", p)
 	}
 	// Same guarantee through the public accessor on a resolver-less State.
-	if p := New(nil, []byte{1}, nil, nil, nil, nil).KeyProvider(); p != nil {
+	if p := New(nil, []byte{1}, nil, nil, nil).KeyProvider(); p != nil {
 		t.Errorf("KeyProvider() with no resolver: got %v, want nil", p)
 	}
 }

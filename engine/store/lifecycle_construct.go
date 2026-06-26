@@ -7,6 +7,8 @@ package store
 import (
 	"context"
 	"fmt"
+	"io"
+	"strings"
 	"time"
 
 	"scrinium.dev/domain"
@@ -42,14 +44,14 @@ func buildStore(
 		state:        domain.StateBootstrapping,
 		hashes:       o.hashRegistry,
 		transformers: o.readRegistry,
-		crypto:       crypto.New(desc, dek, o.passphrase, o.keyResolver, drv, idx),
+		crypto:       crypto.New(desc, dek, o.passphrase, o.keyResolver, drv),
 	}
 	// systemstore.Store facade over the pointer-free layout (ADR-85). It needs
 	// only the driver, the hash registry, the active config (for its
 	// immutable ContentHasher), and a logger — no StoreIndex and no write
 	// indirection, since system artifacts are unindexed and the inline
 	// write is self-contained in system artifact.
-	c.system = systemstore.New(drv, o.hashRegistry, cfg, c.log)
+	c.system = systemstore.New(drv, o.hashRegistry, cfg, desc.StoreID, c.crypto, c, c.log)
 
 	// Reject an illegal pipeline composition at construction time
 	// (InitStore / OpenStore): a crypto (AEAD) stage must be terminal,
@@ -75,17 +77,48 @@ func buildStore(
 // An Orphan Scan error propagates with the *store left in
 // StateBootstrapping; the caller decides whether to retry, fall back to
 // Locked, or surface the failure.
+// orphanScanCursorName is the system-artifact name of the orphan-scan
+// timestamp cursor (ADR-104 §6: advisory state, keep=0 cell, read directly).
+const orphanScanCursorName = "store.agent.orphanscan.last"
+
+// usrIndexingCellName is the system-artifact name of the usr-pocket indexing
+// gate (ADR-104 §6: keep=0 cell; read on open into the index's in-memory flag).
+const usrIndexingCellName = "store.usr_indexing"
+
 func unlockBootstrap(ctx context.Context, c *store, pub event.Publisher) error {
+	// usr-pocket indexing gate (ADR-104 §6): the durable switch is a keep=0
+	// system-artifact cell, read here on open and pushed into the index's
+	// in-memory flag. Role-2 (discardable): any read failure — including an
+	// absent cell on a fresh store — leaves the gate at its safe default (off).
+	// The index then reads the flag on its hot paths; no re-read happens here.
+	if sw, ok := c.index.(index.UsrIndexingSwitch); ok {
+		on := false
+		if rh, gerr := c.system.Get(ctx, usrIndexingCellName); gerr == nil {
+			b, _ := io.ReadAll(rh)
+			_ = rh.Close()
+			v := strings.TrimSpace(string(b))
+			on = v == "on" || v == "true" || v == "1"
+		}
+		sw.SetUsrIndexing(on)
+	}
 	report, err := orphanscan.RecoverOrphans(ctx, c.drv, c.index)
 	if err != nil {
 		return fmt.Errorf("orphan scan: %w", err)
 	}
-	// Record the scan timestamp. Best-effort: a SetMeta failure is
-	// appended to the report for observability but does not block the
-	// transition — the timestamp is a diagnostic aid, not a liveness gate.
-	if setErr := c.index.SetMeta(ctx, "last_orphan_scan_at", time.Now().UTC().Format(time.RFC3339)); setErr != nil {
+	// Record the scan timestamp as a cursor system artifact (ADR-104 §6:
+	// service state lives in artifacts, not the index's store_meta — it must
+	// survive an index rebuild). Cold path (one write per open), so it is read
+	// straight from the artifact when needed — no in-memory cache (S-19).
+	// keep=0 cell: a single current value, overwritten in place. Best-effort:
+	// a failure is appended to the report for observability but does not block
+	// the transition — the timestamp is a diagnostic aid, not a liveness gate.
+	if putErr := c.system.Put(ctx, systemstore.NamedArtifact{
+		Name:    orphanScanCursorName,
+		Payload: strings.NewReader(time.Now().UTC().Format(time.RFC3339)),
+		Keep:    systemstore.KeepCell(),
+	}); putErr != nil {
 		report.Errors = append(report.Errors,
-			fmt.Errorf("unlockBootstrap: persist last_orphan_scan_at: %w", setErr))
+			fmt.Errorf("unlockBootstrap: persist orphan-scan cursor: %w", putErr))
 	}
 	orphanscan.PublishOrphanReport(pub, report)
 
@@ -100,7 +133,7 @@ func unlockBootstrap(ctx context.Context, c *store, pub event.Publisher) error {
 // HealNone is a no-op; the four healing actions reduce to two
 // distinct disk operations (write L0 only, write L1 only) since
 // the canonical content already lives on the surviving side.
-func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.Descriptor, action reconcile.Action) error {
+func healReplicas(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, canonical *descriptor.Descriptor, action reconcile.Action) error {
 	switch action {
 	case reconcile.HealNone:
 		return nil
@@ -109,9 +142,9 @@ func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.
 		// HealBothFromL1: sequence-divergence, L1 won, rewrite L0.
 		// Same disk operation; distinct names preserve diagnostic
 		// detail in logs.
-		return descriptor.WriteReplica(ctx, drv, canonical, descriptor.L0)
+		return descriptor.WriteReplica(ctx, drv, hashes, canonical, descriptor.L0)
 	case reconcile.HealL1FromL0, reconcile.HealBothFromL0:
-		return descriptor.WriteReplica(ctx, drv, canonical, descriptor.L1)
+		return descriptor.WriteReplica(ctx, drv, hashes, canonical, descriptor.L1)
 	default:
 		return fmt.Errorf("core: unknown ReconcileAction %d", int(action))
 	}

@@ -8,7 +8,6 @@
 package storesuite
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -29,6 +28,36 @@ import (
 	"scrinium.dev/testutil/indexfx"
 	"scrinium.dev/testutil/storefx"
 )
+
+// corruptDescriptorReplica writes a valid Plain manifest whose inline payload
+// is not a descriptor: LoadCell succeeds (hash matches) but Unmarshal fails,
+// a deterministic Corrupted classification for reconcile.
+func corruptDescriptorReplica(t *testing.T, drv driver.Driver, r descriptor.Replica) {
+	t.Helper()
+	name, err := r.Name()
+	if err != nil {
+		t.Fatalf("replica name: %v", err)
+	}
+	body, _, err := named.BuildInlineManifest(name, []byte("{not json"), string(domain.HashSHA256), storefx.Hashes(), domain.ManifestCryptoPlain, nil, "")
+	if err != nil {
+		t.Fatalf("build corrupt manifest: %v", err)
+	}
+	if err := named.WriteCell(context.Background(), drv, name, body, false); err != nil {
+		t.Fatalf("write corrupt cell: %v", err)
+	}
+}
+
+// removeDescriptorReplica deletes one replica cell.
+func removeDescriptorReplica(t *testing.T, drv driver.Driver, r descriptor.Replica) {
+	t.Helper()
+	name, err := r.Name()
+	if err != nil {
+		t.Fatalf("replica name: %v", err)
+	}
+	if err := named.RemoveCell(context.Background(), drv, name); err != nil {
+		t.Fatalf("remove replica cell: %v", err)
+	}
+}
 
 // TestOpenStore_SetupRejected: a nil driver fails; a missing StoreIndex
 // fails with a message naming the option (same dependency inversion as
@@ -75,42 +104,32 @@ func TestOpenStore_ReconcileOutcomes(t *testing.T) {
 	removeBoth := func(t *testing.T) driver.Driver {
 		drv := driverfx.LocalFS(t)
 		storefx.InitPlainOn(t, drv)
-		_ = drv.Remove(context.Background(), descriptor.Path)
-		_ = drv.Remove(context.Background(), descriptor.BackupPath)
+		_ = descriptor.RemoveBoth(context.Background(), drv)
 		return drv
 	}
 	corruptL0Only := func(t *testing.T) driver.Driver {
 		drv := driverfx.LocalFS(t)
-		if err := drv.Put(context.Background(), descriptor.Path,
-			strings.NewReader(`{not json`)); err != nil {
-			t.Fatal(err)
-		}
+		corruptDescriptorReplica(t, drv, descriptor.L0)
 		return drv
 	}
 	corruptBoth := func(t *testing.T) driver.Driver {
 		drv := driverfx.LocalFS(t)
 		storefx.InitPlainOn(t, drv)
-		if err := drv.Put(context.Background(), descriptor.Path,
-			bytes.NewReader([]byte("not json"))); err != nil {
-			t.Fatal(err)
-		}
-		if err := drv.Put(context.Background(), descriptor.BackupPath,
-			bytes.NewReader([]byte("not json either"))); err != nil {
-			t.Fatal(err)
-		}
+		corruptDescriptorReplica(t, drv, descriptor.L0)
+		corruptDescriptorReplica(t, drv, descriptor.L1)
 		return drv
 	}
 	splitBrain := func(t *testing.T) driver.Driver {
 		drv := driverfx.LocalFS(t)
 		storefx.InitPlainOn(t, drv)
 		// Fabricate a divergent L1: same Sequence, different StoreID.
-		d0, _, err := reconcile.ReadReplica(context.Background(), drv, descriptor.L0)
+		d0, _, err := reconcile.ReadReplica(context.Background(), drv, storefx.Hashes(), descriptor.L0)
 		if err != nil {
 			t.Fatal(err)
 		}
 		imposter := *d0
 		imposter.StoreID = "99999999-aaaa-bbbb-cccc-dddddddddddd"
-		if err := descriptor.WriteReplica(context.Background(), drv, &imposter, descriptor.L1); err != nil {
+		if err := descriptor.WriteReplica(context.Background(), drv, storefx.Hashes(), &imposter, descriptor.L1); err != nil {
 			t.Fatal(err)
 		}
 		return drv
@@ -142,23 +161,21 @@ func TestOpenStore_ReconcileOutcomes(t *testing.T) {
 func TestOpenStore_HealsAbsentReplica(t *testing.T) {
 	cases := []struct {
 		name   string
-		remove string
+		remove descriptor.Replica
 		check  descriptor.Replica
 	}{
-		{"missing L0 healed from L1", descriptor.Path, descriptor.L0},
-		{"missing L1 healed from L0", descriptor.BackupPath, descriptor.L1},
+		{"missing L0 healed from L1", descriptor.L0, descriptor.L0},
+		{"missing L1 healed from L0", descriptor.L1, descriptor.L1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			drv := driverfx.LocalFS(t)
 			storefx.InitPlainOn(t, drv)
-			if err := drv.Remove(context.Background(), tc.remove); err != nil {
-				t.Fatalf("setup remove: %v", err)
-			}
+			removeDescriptorReplica(t, drv, tc.remove)
 			if _, err := storefx.TryOpenOn(t, drv); err != nil {
 				t.Fatalf("OpenStore: %v", err)
 			}
-			if _, status, err := reconcile.ReadReplica(context.Background(), drv, tc.check); err != nil || status != reconcile.Valid {
+			if _, status, err := reconcile.ReadReplica(context.Background(), drv, storefx.Hashes(), tc.check); err != nil || status != reconcile.Valid {
 				t.Errorf("%s: replica should be healed: status=%v, err=%v", tc.name, status, err)
 			}
 		})
@@ -370,7 +387,8 @@ func TestLifecycle_FullDiskRoundTrip(t *testing.T) {
 	location := t.TempDir()
 	indexPath := filepath.Join(t.TempDir(), "index.db")
 
-	if _, err := os.Stat(filepath.Join(location, descriptor.Path)); !os.IsNotExist(err) {
+	descCellPath, _ := named.CellPath(descriptor.Name)
+	if _, err := os.Stat(filepath.Join(location, descCellPath)); !os.IsNotExist(err) {
 		t.Fatalf("descriptor unexpectedly present before Init: %v", err)
 	}
 	if _, err := os.Stat(indexPath); !os.IsNotExist(err) {
@@ -406,7 +424,8 @@ func TestLifecycle_FullDiskRoundTrip(t *testing.T) {
 		t.Errorf("phase 1 state: got %v, want %v", s1.State(), domain.StateUnlocked)
 	}
 
-	descPath := filepath.Join(location, descriptor.Path)
+	descCellPath2, _ := named.CellPath(descriptor.Name)
+	descPath := filepath.Join(location, descCellPath2)
 	if _, err := os.Stat(descPath); err != nil {
 		t.Fatalf("descriptor not on disk after Init: %v", err)
 	}
@@ -421,7 +440,7 @@ func TestLifecycle_FullDiskRoundTrip(t *testing.T) {
 		t.Fatalf("index not on disk after Init: %v", err)
 	}
 
-	desc1, err := descriptor.Read(context.Background(), drv1)
+	desc1, err := descriptor.Read(context.Background(), drv1, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("read descriptor: %v", err)
 	}
@@ -506,7 +525,7 @@ func TestLifecycle_FullDiskRoundTrip(t *testing.T) {
 		t.Errorf("phase 4 state: got %v, want %v", s2.State(), domain.StateUnlocked)
 	}
 
-	desc2, err := descriptor.Read(context.Background(), drv2)
+	desc2, err := descriptor.Read(context.Background(), drv2, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("read descriptor (phase 4): %v", err)
 	}

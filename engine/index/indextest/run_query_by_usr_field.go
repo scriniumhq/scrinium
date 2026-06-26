@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/testutil/manifestfx"
 )
 
 // --- QueryByUsrField ---
 
-// QueryByUsrField is gated by the store_meta.usr_indexing switch, which is
-// read at index time and defaults to off. The switch must be on BEFORE
+// QueryByUsrField is gated by the in-memory usr_indexing switch
+// (index.UsrIndexingSwitch), which is read at index time and defaults to off. The switch must be on BEFORE
 // IndexManifest for the usr projection to be written; flipping it after the
 // fact does not backfill. With the switch off the query returns an empty
 // result and not an error.
@@ -20,9 +21,11 @@ func runQueryByUsrField(t *testing.T, f Factory) {
 		idx := f.New(t)
 		registerFixture(t, ctx, idx)
 
-		if err := idx.SetMeta(ctx, "usr_indexing", "on"); err != nil {
-			t.Fatalf("SetMeta usr_indexing on: %v", err)
+		sw, ok := idx.(index.UsrIndexingSwitch)
+		if !ok {
+			t.Skip("index does not support usr indexing")
 		}
+		sw.SetUsrIndexing(true)
 		if err := idx.IndexManifest(ctx, manifestfx.Blob("art-1", "blob-1"), manifestfx.PhysAddr("blobs/aa/bb/blob-1")); err != nil {
 			t.Fatalf("IndexManifest: %v", err)
 		}

@@ -258,7 +258,7 @@ func TestSetPassphrase_PlainStoreBecomesEncrypted(t *testing.T) {
 		t.Fatalf("SetPassphrase: %v", err)
 	}
 
-	desc, _ := descriptor.Read(context.Background(), drv)
+	desc, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	if !desc.DEKEncrypted {
 		t.Error("descriptor.DEKEncrypted should be true after SetPassphrase")
 	}
@@ -306,7 +306,7 @@ func TestRotateKEK_RotatesPassphrase(t *testing.T) {
 		t.Fatalf("RotateKEK: %v", err)
 	}
 
-	desc, _ := descriptor.Read(context.Background(), drv)
+	desc, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	if desc.Sequence < 2 {
 		t.Errorf("Sequence after rotation: got %d, want >= 2", desc.Sequence)
 	}
@@ -367,7 +367,7 @@ func TestRotateKEK_NewPassphraseProviderError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	descBefore, err := descriptor.Read(ctx, drv)
+	descBefore, err := descriptor.Read(ctx, drv, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("read descriptor before rotation: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestRotateKEK_NewPassphraseProviderError(t *testing.T) {
 		t.Errorf("RotateKEK: provider error masked as ErrPassphraseRequired: %v", rotErr)
 	}
 
-	descAfter, err := descriptor.Read(ctx, drv)
+	descAfter, err := descriptor.Read(ctx, drv, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("read descriptor after rotation: %v", err)
 	}
@@ -424,7 +424,7 @@ func TestExportRecoveryKit_EncryptedStoreReturnsKit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decode kit: %v", err)
 	}
-	desc, _ := descriptor.Read(context.Background(), drv)
+	desc, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	if !bytes.Equal(parsed.EncryptedDEK, desc.DEK) {
 		t.Error("kit EncryptedDEK should match descriptor.DEK")
 	}
@@ -457,7 +457,7 @@ func TestExportRecoveryKit_RegeneratesAfterRotation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decode kit: %v", err)
 	}
-	desc, _ := descriptor.Read(context.Background(), drv)
+	desc, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	if !bytes.Equal(parsed.EncryptedDEK, desc.DEK) {
 		t.Error("post-rotation kit must reflect new wrapped DEK")
 	}

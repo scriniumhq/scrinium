@@ -68,7 +68,7 @@ func SizedBytes(n int) []byte {
 // any KeyID. Each call returns fresh copies, matching production resolvers
 // (which give defensive copies that the codec wipes after use). With no
 // arguments it defaults to a single DEK().
-func Keys(deks ...[]byte) artifact.KeyProvider {
+func Keys(deks ...[]byte) domain.KeyProvider {
 	if len(deks) == 0 {
 		deks = [][]byte{DEK()}
 	}
@@ -94,6 +94,12 @@ func (f fakeKeys) GetKeys(string) ([][]byte, error) {
 //	m := artifactfx.Manifest(func(m *domain.Manifest) { m.Namespace = "x" })
 func Manifest(mutators ...func(*domain.Manifest)) domain.Manifest {
 	m := manifestfx.Sample()
+	// Sample() is a bare blob body with an empty identity slot; fill the
+	// handle slot together with its identity-meta so this kitchen-sink
+	// round-trip fixture is a structurally valid user artifact and the
+	// encode boundary accepts it (ADR-104 validateSlot).
+	m.ArtifactID = domain.ArtifactID(strings.Repeat("e", 64))
+	m.IdentityMetaHash = "sha256-" + strings.Repeat("c", 64)
 	m.Pipeline = []domain.PipelineStage{}
 	m.Ext = json.RawMessage(`{"k":"ext-value"}`)
 	m.Usr = json.RawMessage(`{"u":"usr-value"}`)

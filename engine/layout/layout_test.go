@@ -1,11 +1,11 @@
-package artifact_test
+package layout_test
 
 import (
 	"strings"
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/layout"
 )
 
 // A well-formed 64-hex-char sha256 ref used across the table.
@@ -20,7 +20,7 @@ func ref(hexHead string) string {
 // --- BlobPath: Sharded ---
 
 func TestBlobPath_ShardedBlob(t *testing.T) {
-	got, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref("aabbccdd"))
+	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref("aabbccdd"))
 	if err != nil {
 		t.Fatalf("BlobPath: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestBlobPath_ShardedBlob(t *testing.T) {
 }
 
 func TestBlobPath_ShardedChunkRoot(t *testing.T) {
-	got, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeChunk, ref("deadbeef"))
+	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeChunk, ref("deadbeef"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestBlobPath_ShardedChunkRoot(t *testing.T) {
 }
 
 func TestBlobPath_ShardedPackRoot(t *testing.T) {
-	got, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypePack, ref("12345678"))
+	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypePack, ref("12345678"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestBlobPath_ShardedPackRoot(t *testing.T) {
 
 func TestBlobPath_Flat(t *testing.T) {
 	r := ref("aabbccdd")
-	got, err := artifact.BlobPath(domain.PathTopologyFlat, domain.BlobTypeRegular, r)
+	got, err := layout.BlobPath(domain.PathTopologyFlat, domain.BlobTypeRegular, r)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestBlobPath_Flat(t *testing.T) {
 // --- Defaults ---
 
 func TestBlobPath_EmptyTopologyDefaultsToSharded(t *testing.T) {
-	got, err := artifact.BlobPath(domain.PathTopology(""), domain.BlobTypeRegular, ref("aabbccdd"))
+	got, err := layout.BlobPath(domain.PathTopology(""), domain.BlobTypeRegular, ref("aabbccdd"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestBlobPath_EmptyTopologyDefaultsToSharded(t *testing.T) {
 }
 
 func TestBlobPath_EmptyBlobTypeMeansRegular(t *testing.T) {
-	got, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobType(""), ref("aabbccdd"))
+	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobType(""), ref("aabbccdd"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestBlobPath_EmptyBlobTypeMeansRegular(t *testing.T) {
 // --- Case folding (part of the on-disk format contract) ---
 
 func TestBlobPath_FoldsCaseInShards(t *testing.T) {
-	got, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "AABBCCDD"+strings.Repeat("0", 56))
+	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "AABBCCDD"+strings.Repeat("0", 56))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,25 +100,25 @@ func TestBlobPath_FoldsCaseInShards(t *testing.T) {
 // --- BlobPath: error paths ---
 
 func TestBlobPath_RejectsEmptyRef(t *testing.T) {
-	if _, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ""); err == nil {
+	if _, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ""); err == nil {
 		t.Fatal("expected error on empty ref")
 	}
 }
 
 func TestBlobPath_RejectsTooShortHex(t *testing.T) {
-	if _, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "ab"); err == nil {
+	if _, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "ab"); err == nil {
 		t.Fatal("expected error on too-short hex")
 	}
 }
 
 func TestBlobPath_RejectsUnknownTopology(t *testing.T) {
-	if _, err := artifact.BlobPath(domain.PathTopology("Quantum"), domain.BlobTypeRegular, ref("aabbccdd")); err == nil {
+	if _, err := layout.BlobPath(domain.PathTopology("Quantum"), domain.BlobTypeRegular, ref("aabbccdd")); err == nil {
 		t.Fatal("expected error on unknown topology")
 	}
 }
 
 func TestBlobPath_RejectsUnknownBlobType(t *testing.T) {
-	if _, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobType("Frob"), ref("aabbccdd")); err == nil {
+	if _, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobType("Frob"), ref("aabbccdd")); err == nil {
 		t.Fatal("expected error on unknown blob type")
 	}
 }
@@ -127,7 +127,7 @@ func TestBlobPath_RejectsUnknownBlobType(t *testing.T) {
 
 func TestManifestPath_Sharded(t *testing.T) {
 	digest := domain.ManifestDigest(ref("cafe1234"))
-	got, err := artifact.ManifestPath(digest)
+	got, err := layout.ManifestPath(digest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,13 +138,13 @@ func TestManifestPath_Sharded(t *testing.T) {
 }
 
 func TestManifestPath_RejectsEmpty(t *testing.T) {
-	if _, err := artifact.ManifestPath(""); err == nil {
+	if _, err := layout.ManifestPath(""); err == nil {
 		t.Fatal("expected error on empty digest")
 	}
 }
 
 func TestManifestPath_RejectsShort(t *testing.T) {
-	if _, err := artifact.ManifestPath(domain.ManifestDigest("ab")); err == nil {
+	if _, err := layout.ManifestPath(domain.ManifestDigest("ab")); err == nil {
 		t.Fatal("expected error on too-short digest")
 	}
 }
@@ -153,8 +153,8 @@ func TestManifestPath_RejectsShort(t *testing.T) {
 
 func TestRefFromBlobPath_ShardedRoundTrip(t *testing.T) {
 	r := ref("aabbccdd")
-	p, _ := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, r)
-	got, err := artifact.RefFromBlobPath(p)
+	p, _ := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, r)
+	got, err := layout.RefFromBlobPath(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,8 +165,8 @@ func TestRefFromBlobPath_ShardedRoundTrip(t *testing.T) {
 
 func TestRefFromBlobPath_FlatRoundTrip(t *testing.T) {
 	r := ref("aabbccdd")
-	p, _ := artifact.BlobPath(domain.PathTopologyFlat, domain.BlobTypeRegular, r)
-	got, err := artifact.RefFromBlobPath(p)
+	p, _ := layout.BlobPath(domain.PathTopologyFlat, domain.BlobTypeRegular, r)
+	got, err := layout.RefFromBlobPath(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,19 +176,19 @@ func TestRefFromBlobPath_FlatRoundTrip(t *testing.T) {
 }
 
 func TestRefFromBlobPath_RejectsEmpty(t *testing.T) {
-	if _, err := artifact.RefFromBlobPath(""); err == nil {
+	if _, err := layout.RefFromBlobPath(""); err == nil {
 		t.Fatal("expected error on empty path")
 	}
 }
 
 func TestRefFromBlobPath_RejectsBadShape(t *testing.T) {
-	if _, err := artifact.RefFromBlobPath("blobs/aa/bb/notaref"); err == nil {
+	if _, err := layout.RefFromBlobPath("blobs/aa/bb/notaref"); err == nil {
 		t.Fatal("expected error on segment missing algo prefix")
 	}
 }
 
 func TestRefFromBlobPath_RejectsNonHex(t *testing.T) {
-	if _, err := artifact.RefFromBlobPath("blobs/aa/bb/sha256-zzzz"); err == nil {
+	if _, err := layout.RefFromBlobPath("blobs/aa/bb/sha256-zzzz"); err == nil {
 		t.Fatal("expected error on non-hex tail")
 	}
 }
@@ -197,8 +197,8 @@ func TestRefFromBlobPath_RejectsNonHex(t *testing.T) {
 
 func TestDigestFromManifestPath_RoundTrip(t *testing.T) {
 	digest := domain.ManifestDigest(ref("cafe1234"))
-	p, _ := artifact.ManifestPath(digest)
-	got, err := artifact.DigestFromManifestPath(p)
+	p, _ := layout.ManifestPath(digest)
+	got, err := layout.DigestFromManifestPath(p)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,14 +208,14 @@ func TestDigestFromManifestPath_RoundTrip(t *testing.T) {
 }
 
 func TestDigestFromManifestPath_RejectsBad(t *testing.T) {
-	if _, err := artifact.DigestFromManifestPath("manifests/aa/bb/garbage"); err == nil {
+	if _, err := layout.DigestFromManifestPath("manifests/aa/bb/garbage"); err == nil {
 		t.Fatal("expected error on bad manifest segment")
 	}
 }
 
 func TestRefFromBlobPath_FlatPathSingleSegment(t *testing.T) {
 	ref := "1234" + strings.Repeat("a", 60)
-	got, err := artifact.RefFromBlobPath(ref)
+	got, err := layout.RefFromBlobPath(ref)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,11 +228,11 @@ func TestRefFromBlobPath_RoundTripsBlobPath(t *testing.T) {
 	ref := "cafebabe" + strings.Repeat("f", 56)
 
 	for _, topo := range []domain.PathTopology{domain.PathTopologySharded, domain.PathTopologyFlat} {
-		path, err := artifact.BlobPath(topo, domain.BlobTypeRegular, ref)
+		path, err := layout.BlobPath(topo, domain.BlobTypeRegular, ref)
 		if err != nil {
 			t.Fatalf("BlobPath(%s): %v", topo, err)
 		}
-		got, err := artifact.RefFromBlobPath(path)
+		got, err := layout.RefFromBlobPath(path)
 		if err != nil {
 			t.Fatalf("RefFromBlobPath(%q): %v", path, err)
 		}
@@ -250,7 +250,7 @@ func TestRefFromBlobPath_RoundTripsBlobPath(t *testing.T) {
 // "sha256-abc", a NON-hex tail, so it duplicated the non-hex case and missed
 // the length guard it claimed to test; corrected to a short hex tail.)
 func TestRefFromBlobPath_RejectsTooShortHex(t *testing.T) {
-	if _, err := artifact.RefFromBlobPath("blobs/aa/bb/abc"); err == nil {
+	if _, err := layout.RefFromBlobPath("blobs/aa/bb/abc"); err == nil {
 		t.Fatal("expected error on too-short hex tail")
 	}
 }
@@ -258,7 +258,7 @@ func TestRefFromBlobPath_RejectsTooShortHex(t *testing.T) {
 // DigestFromManifestPath had a round-trip and a malformed-segment test, but no
 // explicit empty-path case.
 func TestDigestFromManifestPath_RejectsEmpty(t *testing.T) {
-	if _, err := artifact.DigestFromManifestPath(""); err == nil {
+	if _, err := layout.DigestFromManifestPath(""); err == nil {
 		t.Fatal("expected error on empty manifest path")
 	}
 }

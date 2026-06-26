@@ -1,34 +1,30 @@
 // Package reconcile reads the two descriptor replicas and decides
-// which is canonical and what disk-level repair (if any) the caller
-// must perform. It is the recovery-decision machine over the
-// descriptor's on-disk shape; the descriptor package owns the shape,
-// (de)serialisation, and the two-replica write that this package's
-// callers use to execute a heal.
+// which is canonical and what repair (if any) the caller must perform.
+// It is the recovery-decision machine over the descriptor's on-disk
+// shape; the descriptor package owns the shape, (de)serialisation, and
+// the two-replica cell write that this package's callers use to heal.
 package reconcile
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/errs"
 )
-
-// maxDescriptorSize bounds a replica read: a descriptor is a few
-// hundred bytes, so a multi-megabyte read signals corruption.
-const maxDescriptorSize = 64 * 1024
 
 // Status is the outcome of attempting to read one descriptor replica.
 type Status int
 
 const (
-	// Absent — the file does not exist (os.ErrNotExist).
+	// Absent — the cell does not exist (errs.ErrArtifactNotFound).
 	Absent Status = iota
-	// Corrupted — the file exists but failed Unmarshal or Validate.
+	// Corrupted — the cell exists but failed verify, Unmarshal, or Validate.
 	Corrupted
 	// Valid — the descriptor parsed and validated.
 	Valid
@@ -48,8 +44,8 @@ func (s Status) String() string {
 	}
 }
 
-// Action tells the caller what disk-level repair to perform after
-// Reconcile picks the canonical descriptor.
+// Action tells the caller what repair to perform after Reconcile picks
+// the canonical descriptor.
 type Action int
 
 const (
@@ -92,30 +88,28 @@ type Result struct {
 	L1Status  Status
 }
 
-// ReadReplica reads one descriptor replica through the Driver.
-// Returns (d, Valid, nil) on a clean read; (nil, Absent, nil) when
-// the file is missing; (nil, Corrupted, err) when it exists but
-// parses badly (err is diagnostic; Corrupted is reconcilable); and
-// (nil, Absent, err) on a non-ErrNotExist I/O failure (propagate).
-func ReadReplica(ctx context.Context, drv driver.Driver, r descriptor.Replica) (*descriptor.Descriptor, Status, error) {
-	path, err := r.Path()
+// ReadReplica reads one descriptor replica cell through the named layer
+// (verify-on-read). Returns (d, Valid, nil) on a clean read;
+// (nil, Absent, nil) when the cell is missing; (nil, Corrupted, err)
+// when it exists but fails verify/parse (err is diagnostic; Corrupted is
+// reconcilable); and (nil, Absent, err) on any other I/O failure (propagate).
+func ReadReplica(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, r descriptor.Replica) (*descriptor.Descriptor, Status, error) {
+	name, err := r.Name()
 	if err != nil {
 		return nil, Absent, fmt.Errorf("reconcile.ReadReplica: %w", err)
 	}
-	rc, err := drv.Get(ctx, path)
+	m, err := named.LoadCell(ctx, drv, hashes, name)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		switch {
+		case errors.Is(err, errs.ErrArtifactNotFound):
 			return nil, Absent, nil
+		case errors.Is(err, errs.ErrCorruptedContent):
+			return nil, Corrupted, fmt.Errorf("reconcile.ReadReplica %s: verify: %w", r, err)
+		default:
+			return nil, Absent, err
 		}
-		return nil, Absent, err
 	}
-	defer rc.Close()
-
-	data, err := readAll(rc)
-	if err != nil {
-		return nil, Corrupted, fmt.Errorf("reconcile.ReadReplica %s: read: %w", r, err)
-	}
-	d, err := descriptor.Unmarshal(data)
+	d, err := descriptor.Unmarshal(m.InlineBlob)
 	if err != nil {
 		return nil, Corrupted, fmt.Errorf("reconcile.ReadReplica %s: parse: %w", r, err)
 	}
@@ -123,11 +117,11 @@ func ReadReplica(ctx context.Context, drv driver.Driver, r descriptor.Replica) (
 }
 
 // ReadBoth reads both replicas. Per-replica corruption is reported
-// through the status; only a non-ErrNotExist I/O failure is returned
+// through the status; only a hard (non-not-found) I/O failure is returned
 // as err (with the matching descriptor nil and status Absent).
-func ReadBoth(ctx context.Context, drv driver.Driver) (l0, l1 *descriptor.Descriptor, l0s, l1s Status, err error) {
-	l0, l0s, err0 := ReadReplica(ctx, drv, descriptor.L0)
-	l1, l1s, err1 := ReadReplica(ctx, drv, descriptor.L1)
+func ReadBoth(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry) (l0, l1 *descriptor.Descriptor, l0s, l1s Status, err error) {
+	l0, l0s, err0 := ReadReplica(ctx, drv, hashes, descriptor.L0)
+	l1, l1s, err1 := ReadReplica(ctx, drv, hashes, descriptor.L1)
 
 	if l0s == Absent && err0 != nil {
 		return nil, nil, l0s, l1s, err0
@@ -139,8 +133,7 @@ func ReadBoth(ctx context.Context, drv driver.Driver) (l0, l1 *descriptor.Descri
 }
 
 // Reconcile picks the canonical descriptor from a replica pair and
-// decides the repair. Location is the source of truth; L2 is not
-// consulted.
+// decides the repair. Location is the source of truth.
 //
 //   - both absent              → os.ErrNotExist (caller distinguishes
 //     fresh Location from corrupted Store).
@@ -176,16 +169,4 @@ func Reconcile(l0 *descriptor.Descriptor, l0s Status, l1 *descriptor.Descriptor,
 			return Result{L0Status: l0s, L1Status: l1s}, errs.ErrDescriptorSplitBrain
 		}
 	}
-}
-
-func readAll(rc io.Reader) ([]byte, error) {
-	lr := io.LimitReader(rc, maxDescriptorSize+1)
-	data, err := io.ReadAll(lr)
-	if err != nil {
-		return nil, err
-	}
-	if len(data) > maxDescriptorSize {
-		return nil, fmt.Errorf("descriptor too large (>%d bytes)", maxDescriptorSize)
-	}
-	return data, nil
 }

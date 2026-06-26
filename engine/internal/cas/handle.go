@@ -1,8 +1,8 @@
 package cas
 
-// handle.go — the blob-backed domain.ReadHandle implementations returned
-// to store's Get. Moved out of package store and decoupled from *store:
+// handle.go — the domain.ReadHandle implementations returned to store's Get:
 //
+//   - inlineReadHandle    — in-memory reader over an inline manifest's payload.
 //   - targetReadHandle    — lazily opens the physical blob, composes the
 //                           inverse Pipeline; holds a *pipeline.Runner
 //                           rather than a *store.
@@ -30,6 +30,44 @@ import (
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 )
+
+// --- inlineReadHandle: payload is embedded in the manifest ---
+
+type inlineReadHandle struct {
+	manifest domain.Manifest
+	reader   *bytes.Reader
+}
+
+// NewInlineHandle builds a read handle over an inline manifest's payload.
+// Used for content-addressed inline blobs and for name-addressed system
+// artifacts.
+func NewInlineHandle(m domain.Manifest) domain.ReadHandle {
+	return &inlineReadHandle{manifest: m, reader: bytes.NewReader(m.InlineBlob)}
+}
+
+// NewInlinePayloadHandle builds a read handle that streams payload while
+// carrying m as its manifest. It is for the systemstore envelope (ADR-104):
+// m.InlineBlob is the envelope JSON (already verify-on-read'd), and payload is
+// the unwrapped inline_payload the caller actually wants — so the manifest
+// stays the honest on-disk record while the reader exposes the unwrapped
+// content.
+func NewInlinePayloadHandle(m domain.Manifest, payload []byte) domain.ReadHandle {
+	return &inlineReadHandle{manifest: m, reader: bytes.NewReader(payload)}
+}
+
+func (h *inlineReadHandle) Read(p []byte) (int, error) { return h.reader.Read(p) }
+func (h *inlineReadHandle) ReadAt(p []byte, off int64) (int, error) {
+	return h.reader.ReadAt(p, off)
+}
+func (h *inlineReadHandle) ReadAtCtx(ctx context.Context, p []byte, off int64) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	return h.reader.ReadAt(p, off)
+}
+func (h *inlineReadHandle) SupportsRandomAccess() bool { return true }
+func (h *inlineReadHandle) Close() error               { return nil } // in-memory; idempotent
+func (h *inlineReadHandle) Manifest() domain.Manifest  { return h.manifest }
 
 // --- targetReadHandle: blob is a separate file under /blobs/ ---
 //
@@ -154,12 +192,12 @@ func (h *targetReadHandle) Manifest() domain.Manifest { return h.manifest }
 func (e *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHandle, error) {
 	switch m.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
-		return artifact.NewInlineHandle(m), nil
+		return NewInlineHandle(m), nil
 
 	case domain.LayoutTarget:
 		addr, err := e.index.Resolve(ctx, string(m.PrimaryBlobRef()))
 		if err != nil {
-			return nil, fmt.Errorf("cas.OpenHandle: resolve blob path: %w", err)
+			return nil, fmt.Errorf("cas: resolve blob path: %w", err)
 		}
 		return &targetReadHandle{
 			manifest: m,
@@ -170,7 +208,7 @@ func (e *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHand
 		}, nil
 
 	default:
-		return nil, fmt.Errorf("cas.OpenHandle: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
+		return nil, fmt.Errorf("cas: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
 	}
 }
 
@@ -223,7 +261,7 @@ func (e *IO) WrapVerifying(inner domain.ReadHandle, onMismatch func(domain.Artif
 	want, hasher, err := artifact.ParseContentHash(e.hashes, algo, m.ContentHash)
 	if err != nil {
 		_ = inner.Close()
-		return nil, fmt.Errorf("cas.WrapVerifying: %w", err)
+		return nil, fmt.Errorf("cas: wrap verifying: %w", err)
 	}
 	limit := int64(-1)
 	if m.OriginalSize > 0 {
@@ -314,6 +352,7 @@ func (h *verifyingReadHandle) Close() error {
 
 // Compile-time interface conformance.
 var (
+	_ domain.ReadHandle = (*inlineReadHandle)(nil)
 	_ domain.ReadHandle = (*targetReadHandle)(nil)
 	_ domain.ReadHandle = (*verifyingReadHandle)(nil)
 )

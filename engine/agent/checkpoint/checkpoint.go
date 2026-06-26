@@ -229,8 +229,24 @@ func (a *checkpointAgent) checkpointOnce(ctx context.Context) (CheckpointStats, 
 	defer f.Close()
 
 	name := checkpointfmt.Prefix + id
+
+	// Publish the .db as an external headless data artifact (ADR-105): a
+	// checkpoint is far larger than an inline manifest's cap, so it cannot ride
+	// inside the envelope. WriteHeadless stores it as a blob-backed, indexed
+	// (orphan-safe) data artifact and returns its digest; the system artifact
+	// under the checkpoint name is then a thin pointer envelope carrying only
+	// {store_id, external_payload_ref}. Get resolves the pointer back to the
+	// .db stream; Delete (prune) cascades to reap the blob.
+	hw, ok := store.HeadlessOf(a.store)
+	if !ok {
+		return CheckpointStats{}, fmt.Errorf("checkpoint: store %T has no headless data plane", a.store)
+	}
+	digest, err := hw.WriteHeadless(ctx, f)
+	if err != nil {
+		return CheckpointStats{}, fmt.Errorf("write checkpoint blob %q: %w", name, err)
+	}
 	if err := a.store.System().Put(ctx,
-		systemstore.NamedArtifact{Name: name, Payload: f},
+		systemstore.NamedArtifact{Name: name, ExternalRef: digest},
 	); err != nil {
 		return CheckpointStats{}, fmt.Errorf("publish checkpoint %q: %w", name, err)
 	}

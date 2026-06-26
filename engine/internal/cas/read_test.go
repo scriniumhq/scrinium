@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/cas"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/artifactfx"
@@ -92,7 +92,7 @@ func TestLoad_TamperedManifestCorrupted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("precondition Load: %v", err)
 	}
-	mp, err := artifact.ManifestPath(m.Digest)
+	mp, err := layout.ManifestPath(m.Digest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestOpenHandle_TargetStreamsAndVerifies(t *testing.T) {
 
 func TestWrapVerifying_NoContentHashReturnsInner(t *testing.T) {
 	_, r, _, _, _ := rwHarness(t)
-	inner := artifact.NewInlineHandle(domain.Manifest{InlineBlob: []byte("x")}) // no ContentHash
+	inner := cas.NewInlineHandle(domain.Manifest{InlineBlob: []byte("x")}) // no ContentHash
 	wrapped, err := r.WrapVerifying(inner, nil)
 	if err != nil {
 		t.Fatal(err)

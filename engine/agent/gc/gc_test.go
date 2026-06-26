@@ -11,9 +11,9 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/gc"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/eventfx"
@@ -67,7 +67,7 @@ func (f gcFixture) putAndOrphan(t *testing.T, data string) (domain.ArtifactID, s
 
 func (f gcFixture) blobPath(t *testing.T, ref string) string {
 	t.Helper()
-	rel, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
+	rel, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
 	if err != nil {
 		t.Fatalf("BlobPath: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestGC_RunStopsOnContextCancel(t *testing.T) {
 // expects), as opposed to blobPath which is absolute for os checks.
 func relPath(t *testing.T, f gcFixture, ref string) string {
 	t.Helper()
-	rel, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
+	rel, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
 	if err != nil {
 		t.Fatalf("BlobPath: %v", err)
 	}

@@ -3,27 +3,47 @@ package descriptor
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"hash"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/hashing"
+	"scrinium.dev/engine/internal/named"
 )
+
+// canonicalHashes is the descriptor's fixed sha256 registry. The
+// descriptor's hash algorithm is not configurable (unlike store content),
+// so it carries its own registry rather than depending on the wired store
+// registry, which pre-config and recovery paths do not have in scope.
+var canonicalHashes = hashing.NewHashRegistry().
+	Register(string(domain.HashSHA256), func() hash.Hash { return sha256.New() })
+
+// CanonicalHashes returns the descriptor's fixed sha256 hash registry, for
+// callers that must write or read a descriptor cell without a wired store
+// registry (crypto rekey, recovery-kit restore).
+func CanonicalHashes() domain.HashRegistry { return canonicalHashes }
 
 // CurrentSchemaVersion is the schema version this build writes. A
 // descriptor with a higher schema_version must be refused.
 const CurrentSchemaVersion = 1
 
-// Path is the L0 descriptor location relative to the driver root.
-const Path = "store.json"
+// Name is the primary descriptor's system-artifact name (ADR-103): a
+// keep=0 named cell, NOT a bare file. Read first at bootstrap via the
+// named layer (bare driver + hash registry, Plain), envelope-EXEMPT —
+// the descriptor carries the store identity the envelope would check,
+// so it cannot itself be wrapped in an identity envelope.
+const Name = "store.descriptor"
 
-// BackupPath is the L1 shadow-copy descriptor location relative to
-// the driver root, written synchronously with L0 on every mutation.
-const BackupPath = ".store.backup.json"
+// BackupName is the shadow replica's cell name, written synchronously
+// with Name on every mutation and used by reconcile to self-heal.
+const BackupName = "store.descriptor.backup"
 
-// Descriptor is the on-disk shape of store.json: Store identity and
-// the crypto material. Projection parameters live in system.config,
+// Descriptor is the on-disk shape of the descriptor cell: Store identity
+// and the crypto material. Projection parameters live in system.config,
 // not here.
 type Descriptor struct {
 	StoreID       string     `json:"store_id"`
@@ -101,63 +121,85 @@ func Unmarshal(data []byte) (*Descriptor, error) {
 	return &d, nil
 }
 
-// Read pulls the L0 descriptor through a Driver. Returns
-// os.ErrNotExist (via the driver) when none is present.
-func Read(ctx context.Context, drv driver.Driver) (*Descriptor, error) {
-	rc, err := drv.Get(ctx, Path)
+// writeReplicaCell serialises an already-validated descriptor into a
+// Plain inline manifest and writes it to one replica cell, last-write-wins
+// (exclusive=false; the descriptor is a keep=0 cell, not a lock). The
+// manifest is named after the cell, hashed with the canonical sha256, and
+// carries no crypto (Plain) — it is read pre-DEK at bootstrap.
+func writeReplicaCell(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, name string, data []byte) error {
+	body, _, err := named.BuildInlineManifest(name, data, string(domain.HashSHA256), hashes, domain.ManifestCryptoPlain, nil, "")
+	if err != nil {
+		return fmt.Errorf("descriptor: build manifest %q: %w", name, err)
+	}
+	return named.WriteCell(ctx, drv, name, body, false)
+}
+
+// Read pulls the primary descriptor (Name) through the named layer,
+// verifying its content hash on read. Returns errs.ErrArtifactNotFound
+// (via named.LoadCell) when no descriptor cell is present.
+func Read(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry) (*Descriptor, error) {
+	m, err := named.LoadCell(ctx, drv, hashes, Name)
 	if err != nil {
 		return nil, err
 	}
-	defer rc.Close()
-	data, err := io.ReadAll(rc)
-	if err != nil {
-		return nil, fmt.Errorf("descriptor: read: %w", err)
-	}
-	return Unmarshal(data)
+	return Unmarshal(m.InlineBlob)
 }
 
-// WriteBoth writes d to both replicas (L0 and L1), serialised once and
-// Put twice. This is the canonical descriptor write; every mutation
-// path (InitStore, Unlock, SetPassphrase, RotateKEK) goes through it.
+// WriteBoth writes d to both replica cells (Name and BackupName),
+// serialised once and written twice. This is the canonical descriptor
+// write; every mutation path (InitStore, Unlock, SetPassphrase,
+// RotateKEK) goes through it.
 //
-// Each Put is atomic; the pair is not. A crash between the two leaves
-// L1 stale, which reconcile heals on the next OpenStore.
-func WriteBoth(ctx context.Context, drv driver.Driver, d *Descriptor) error {
+// Each cell write is atomic; the pair is not. A crash between the two
+// leaves the backup stale, which reconcile heals on the next OpenStore.
+func WriteBoth(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, d *Descriptor) error {
 	data, err := Marshal(d)
 	if err != nil {
 		return err
 	}
-	if err := drv.Put(ctx, Path, bytes.NewReader(data)); err != nil {
+	if err := writeReplicaCell(ctx, drv, hashes, Name, data); err != nil {
 		return fmt.Errorf("descriptor.WriteBoth: L0: %w", err)
 	}
-	if err := drv.Put(ctx, BackupPath, bytes.NewReader(data)); err != nil {
+	if err := writeReplicaCell(ctx, drv, hashes, BackupName, data); err != nil {
 		return fmt.Errorf("descriptor.WriteBoth: L1: %w", err)
 	}
 	return nil
 }
 
-// WriteReplica writes d to one specific replica. Used by reconcile
+// WriteReplica writes d to one specific replica cell. Used by reconcile
 // self-heal (to overwrite the damaged side without touching the good
-// one) and by tests fabricating divergence. Driver.Put is atomic.
-func WriteReplica(ctx context.Context, drv driver.Driver, d *Descriptor, r Replica) error {
+// one) and by tests fabricating divergence.
+func WriteReplica(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, d *Descriptor, r Replica) error {
 	data, err := Marshal(d)
 	if err != nil {
 		return err
 	}
-	path, err := r.Path()
+	name, err := r.Name()
 	if err != nil {
 		return fmt.Errorf("descriptor.WriteReplica: %w", err)
 	}
-	return drv.Put(ctx, path, bytes.NewReader(data))
+	return writeReplicaCell(ctx, drv, hashes, name, data)
 }
 
-// Replica identifies one of the two on-disk descriptor copies.
+// RemoveBoth deletes both replica cells. Idempotent (an absent cell is
+// not an error). Used by force-reinit to clear a prior store identity.
+func RemoveBoth(ctx context.Context, drv driver.Driver) error {
+	if err := named.RemoveCell(ctx, drv, Name); err != nil {
+		return fmt.Errorf("descriptor.RemoveBoth: %s: %w", Name, err)
+	}
+	if err := named.RemoveCell(ctx, drv, BackupName); err != nil {
+		return fmt.Errorf("descriptor.RemoveBoth: %s: %w", BackupName, err)
+	}
+	return nil
+}
+
+// Replica identifies one of the two descriptor cell copies.
 type Replica int
 
 const (
-	// L0 is the primary descriptor (store.json).
+	// L0 is the primary descriptor (Name).
 	L0 Replica = iota
-	// L1 is the shadow descriptor (.store.backup.json).
+	// L1 is the shadow descriptor (BackupName).
 	L1
 )
 
@@ -173,14 +215,14 @@ func (r Replica) String() string {
 	}
 }
 
-// Path returns the replica's path relative to the driver root, or an
-// error for an out-of-range value (so a typo'd cast is loud).
-func (r Replica) Path() (string, error) {
+// Name returns the replica's cell name, or an error for an out-of-range
+// value (so a typo'd cast is loud).
+func (r Replica) Name() (string, error) {
 	switch r {
 	case L0:
-		return Path, nil
+		return Name, nil
 	case L1:
-		return BackupPath, nil
+		return BackupName, nil
 	default:
 		return "", fmt.Errorf("descriptor: unknown Replica %d", int(r))
 	}

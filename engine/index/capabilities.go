@@ -35,12 +35,12 @@ type CheckpointRestorer interface {
 	RestoreCheckpoint(ctx context.Context, srcPath string) error
 }
 
-// CheckpointInspector is the optional capability of reading a single
-// store_meta value from a checkpoint file WITHOUT restoring it. It lets the
-// Store layer verify a checkpoint's recorded identity (the descriptor blob)
-// before deciding to restore. The value is returned raw; interpreting it is
-// the caller's concern. An absent key yields ("", nil), distinguishing
-// "the checkpoint records no such metadata" from a read failure.
-type CheckpointInspector interface {
-	CheckpointMeta(ctx context.Context, srcPath, key string) (string, error)
+// UsrIndexingSwitch is the optional capability of toggling the global
+// usr-pocket indexing gate the index holds in memory. The Store owns the
+// durable switch (a keep=0 system-artifact cell, ADR-104 §6) and pushes its
+// value here on open and on change; the index then reads the flag on its hot
+// projection/query paths instead of touching store_meta. Indexes that do not
+// project the usr pocket need not implement it.
+type UsrIndexingSwitch interface {
+	SetUsrIndexing(on bool)
 }

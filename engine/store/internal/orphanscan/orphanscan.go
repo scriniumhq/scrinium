@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
@@ -88,7 +88,7 @@ func RecoverOrphans(ctx context.Context, drv driver.Driver, idx recoverIndex) (O
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			ref, err := artifact.RefFromBlobPath(om.Path)
+			ref, err := layout.RefFromBlobPath(om.Path)
 			if err != nil {
 				report.Errors = append(report.Errors,
 					fmt.Errorf("recoverOrphans: blobs parse: %w", err))
@@ -120,7 +120,7 @@ func RecoverOrphans(ctx context.Context, drv driver.Driver, idx recoverIndex) (O
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			digest, err := artifact.DigestFromManifestPath(om.Path)
+			digest, err := layout.DigestFromManifestPath(om.Path)
 			if err != nil {
 				report.Errors = append(report.Errors,
 					fmt.Errorf("recoverOrphans: manifests parse: %w", err))

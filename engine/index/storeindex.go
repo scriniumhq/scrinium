@@ -175,13 +175,6 @@ type StoreIndex interface {
 	// every referenced blob is fresh.
 	MarkManifestVerified(ctx context.Context, artifactID domain.ArtifactID, timestamp time.Time) error
 
-	// store_meta service table. A singleton key/value store for
-	// Store metadata: schema_version, descriptor cache,
-	// last_orphan_scan_at, etc.
-
-	GetMeta(ctx context.Context, key string) (string, error)
-	SetMeta(ctx context.Context, key, value string) error
-
 	// Lifecycle.
 
 	// Close releases resources held by the index — database

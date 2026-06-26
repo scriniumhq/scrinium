@@ -30,7 +30,7 @@ func TestMigrate_BaselineTables(t *testing.T) {
 	idx := newMemoryIndex(t)
 	want := []string{
 		"blobs", "manifests", "manifest_blobs",
-		"ext_meta", "ext_data", "proj_ext", "proj_usr", "store_meta", "schema_version",
+		"ext_meta", "ext_data", "proj_ext", "proj_usr", "schema_version",
 	}
 	for _, tbl := range want {
 		if !objectExists(t, idx, "table", tbl) {
