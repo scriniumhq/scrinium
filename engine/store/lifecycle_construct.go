@@ -49,7 +49,7 @@ func buildStore(
 	// immutable ContentHasher), and a logger — no StoreIndex and no write
 	// indirection, since system artifacts are unindexed and the inline
 	// write is self-contained in system artifact.
-	c.system = systemstore.New(drv, o.hashRegistry, cfg, c.log)
+	c.system = systemstore.New(drv, o.hashRegistry, cfg, desc.StoreID, c.log)
 
 	// Reject an illegal pipeline composition at construction time
 	// (InitStore / OpenStore): a crypto (AEAD) stage must be terminal,

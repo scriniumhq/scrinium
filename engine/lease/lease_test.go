@@ -78,7 +78,7 @@ func writeRecord(t *testing.T, drv driver.Driver, rec lease.Record) {
 	if err != nil {
 		t.Fatalf("marshal record: %v", err)
 	}
-	fileBytes, _, err := named.BuildInlineManifest(body, "sha256", leaseTestHashes{})
+	fileBytes, _, err := named.BuildInlineManifest(leaseName, body, "sha256", leaseTestHashes{})
 	if err != nil {
 		t.Fatalf("build manifest: %v", err)
 	}

@@ -30,13 +30,16 @@ const sessionID = domain.SessionID("init")
 // BuildInlineManifest constructs the encoded inline manifest for a system
 // payload: an Inline blob manifest with an empty Pipeline (ContentHash ==
 // BlobRef == hash(payload)), serialised to the bytes that ClaimVersion writes.
-// It returns the encoded file bytes and the in-memory manifest. No disk write
-// and no indexing happen here — the caller writes the bytes through
-// ClaimVersion.
+// name fills the identity slot (Manifest.Name) — this is what makes the
+// manifest IsSystem() and lets validateSlot recognise it (ADR-104); the path
+// (named/<name>.<seq>) remains the seq authority, so name is the only slot
+// component carried in the manifest. It returns the encoded file bytes and the
+// in-memory manifest. No disk write and no indexing happen here — the caller
+// writes the bytes through ClaimVersion (or WriteCell).
 //
 // The serialised manifest's own digest is not the address (the address is
 // name+seq), so it is computed only as a byproduct of encoding and discarded.
-func BuildInlineManifest(payload []byte, hashAlgo string, hashes domain.HashRegistry) ([]byte, domain.Manifest, error) {
+func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes domain.HashRegistry) ([]byte, domain.Manifest, error) {
 	hasher, err := hashes.NewHasher(hashAlgo)
 	if err != nil {
 		return nil, domain.Manifest{}, fmt.Errorf("system artifact: content hasher: %w", err)
@@ -47,6 +50,7 @@ func BuildInlineManifest(payload []byte, hashAlgo string, hashes domain.HashRegi
 	contentHash := domain.ContentHash(hex.EncodeToString(hasher.Sum(nil)))
 
 	m := domain.Manifest{
+		Name:         name,
 		SessionID:    sessionID,
 		ContentHash:  contentHash,
 		BlobRefs:     []domain.BlobRef{domain.BlobRef(contentHash)},

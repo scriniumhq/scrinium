@@ -23,7 +23,7 @@ func TestClaimVersion_Concurrent(t *testing.T) {
 	const name = "scrub/cursor"
 	const writers = 16
 
-	body, _, err := BuildInlineManifest([]byte("claim"), "sha256", testHashes{})
+	body, _, err := BuildInlineManifest(name, []byte("claim"), "sha256", testHashes{})
 	if err != nil {
 		t.Fatalf("BuildInlineManifest: %v", err)
 	}

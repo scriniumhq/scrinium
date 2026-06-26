@@ -93,10 +93,11 @@ type Store interface {
 // so they are invisible to the data-plane Walk (handle-IS-NULL) by
 // construction rather than by an index filter.
 type systemStore struct {
-	drv    driver.Driver
-	hashes domain.HashRegistry
-	cfg    domain.StoreConfig // immutable fields only (ContentHasher); see New
-	log    *slog.Logger
+	drv     driver.Driver
+	hashes  domain.HashRegistry
+	cfg     domain.StoreConfig // immutable fields only (ContentHasher); see New
+	storeID string             // authoritative store_id (descriptor), stamped on write, checked on read
+	log     *slog.Logger
 }
 
 // defaultKeepVersions is the form an NamedArtifact takes when Keep is nil
@@ -110,22 +111,25 @@ const defaultKeepVersions = 1
 // Compile-time check that the concrete type satisfies the contract.
 var _ Store = (*systemStore)(nil)
 
-// New wires the facade. It needs only the driver (the layout is on-disk),
-// the hash registry (verify-on-read and the content hash of each write),
-// the active config (for its immutable ContentHasher), and a logger for
-// best-effort prune failures. No StoreIndex and no write indirection: the
-// inline-manifest write is self-contained in named.
+// New wires the facade. It needs the driver (the layout is on-disk), the hash
+// registry (verify-on-read and the content hash of each write), the active
+// config (for its immutable ContentHasher), the store's authoritative store_id
+// (stamped into every artifact's envelope on write and checked on read,
+// ADR-104), and a logger for best-effort prune failures. No StoreIndex and no
+// write indirection: the inline-manifest write is self-contained in named.
 func New(
 	drv driver.Driver,
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
+	storeID string,
 	log *slog.Logger,
 ) Store {
 	return &systemStore{
-		drv:    drv,
-		hashes: hashes,
-		cfg:    cfg,
-		log:    log,
+		drv:     drv,
+		hashes:  hashes,
+		cfg:     cfg,
+		storeID: storeID,
+		log:     log,
 	}
 }
 
@@ -146,7 +150,13 @@ func (ss *systemStore) Put(ctx context.Context, a NamedArtifact) error {
 	if err != nil {
 		return fmt.Errorf("system store: read payload for %q: %w", a.Name, err)
 	}
-	fileBytes, _, err := named.BuildInlineManifest(body, string(ss.cfg.ContentHasher), ss.hashes)
+	// Seal the payload in the store-identity envelope (ADR-104), then build
+	// the inline manifest over it. name fills the manifest's identity slot.
+	envBytes, err := wrapEnvelope(ss.storeID, body)
+	if err != nil {
+		return fmt.Errorf("system store: %q: %w", a.Name, err)
+	}
+	fileBytes, _, err := named.BuildInlineManifest(a.Name, envBytes, string(ss.cfg.ContentHasher), ss.hashes)
 	if err != nil {
 		return fmt.Errorf("system store: build %q: %w", a.Name, err)
 	}
@@ -192,24 +202,33 @@ func (ss *systemStore) Get(ctx context.Context, name string) (domain.ReadHandle,
 	if err != nil {
 		return nil, fmt.Errorf("system store: get %q: %w", name, err)
 	}
+	var m domain.Manifest
 	if found {
-		path, err := named.VersionPath(name, seq)
-		if err != nil {
-			return nil, err
+		path, perr := named.VersionPath(name, seq)
+		if perr != nil {
+			return nil, perr
 		}
-		m, err := named.Load(ctx, ss.drv, ss.hashes, path)
+		m, err = named.Load(ctx, ss.drv, ss.hashes, path)
 		if err != nil {
 			return nil, fmt.Errorf("system store: get %q: %w", name, err)
 		}
-		return artifact.NewInlineHandle(m), nil
+	} else {
+		// No versions — try the cell. LoadCell maps an absent cell to
+		// errs.ErrArtifactNotFound, so this is also the not-found path.
+		m, err = named.LoadCell(ctx, ss.drv, ss.hashes, name)
+		if err != nil {
+			return nil, err
+		}
 	}
-	// No versions — try the cell. LoadCell maps an absent cell to
-	// errs.ErrArtifactNotFound, so this is also the not-found path.
-	m, err := named.LoadCell(ctx, ss.drv, ss.hashes, name)
+	// Open the envelope: verify store_id against the descriptor (foreign
+	// rejected, ADR-104) and hand back the unwrapped inline_payload. The
+	// integrity (verify-on-read) and absent categories already surfaced from
+	// the load above; this adds identity and malformed.
+	env, err := openEnvelope(m.InlineBlob, ss.storeID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("system store: get %q: %w", name, err)
 	}
-	return artifact.NewInlineHandle(m), nil
+	return artifact.NewInlinePayloadHandle(m, env.InlinePayload), nil
 }
 
 // Delete removes every version AND any cell of name. A name is one form,

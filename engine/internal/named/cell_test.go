@@ -13,7 +13,7 @@ import (
 // bytes a cell stores (same shape ClaimVersion writes for versions).
 func buildCellBody(t *testing.T, payload []byte) []byte {
 	t.Helper()
-	body, _, err := BuildInlineManifest(payload, "sha256", testHashes{})
+	body, _, err := BuildInlineManifest("test/cell", payload, "sha256", testHashes{})
 	if err != nil {
 		t.Fatalf("BuildInlineManifest: %v", err)
 	}

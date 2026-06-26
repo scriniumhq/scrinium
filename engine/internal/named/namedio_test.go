@@ -115,7 +115,7 @@ func TestClaimResolveRoundTrip(t *testing.T) {
 
 	payloads := []string{"v1", "v2", "v3"}
 	for i, p := range payloads {
-		body, _, err := BuildInlineManifest([]byte(p), "sha256", testHashes{})
+		body, _, err := BuildInlineManifest(name, []byte(p), "sha256", testHashes{})
 		if err != nil {
 			t.Fatalf("BuildInlineManifest %s: %v", p, err)
 		}
@@ -192,7 +192,7 @@ func TestLoad_RejectsTamperedPayload(t *testing.T) {
 	ctx := context.Background()
 	drv := newDriver(t)
 
-	_, m, err := BuildInlineManifest([]byte("real-payload"), "sha256", testHashes{})
+	_, m, err := BuildInlineManifest("test/artifact", []byte("real-payload"), "sha256", testHashes{})
 	if err != nil {
 		t.Fatalf("BuildInlineManifest: %v", err)
 	}
