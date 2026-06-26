@@ -187,7 +187,7 @@ const (
 	// PocketExt — the ext pocket (always JSON); projected into proj_ext.
 	PocketExt Pocket = iota
 	// PocketUsr — the usr pocket; projected into proj_usr, gated by the
-	// global store_meta.usr_indexing switch (default off).
+	// in-memory usr_indexing switch (ADR-104 §6; default off).
 	PocketUsr
 )
 

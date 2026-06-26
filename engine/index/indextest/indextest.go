@@ -52,7 +52,6 @@ func Run(t *testing.T, f Factory) {
 	t.Run(f.Name+"/ListOrphanBlobs", func(t *testing.T) { runListOrphanBlobs(t, f) })
 	t.Run(f.Name+"/DeleteOrphanBlob", func(t *testing.T) { runDeleteOrphanBlob(t, f) })
 	t.Run(f.Name+"/ListUnverifiedBlobs", func(t *testing.T) { runListUnverifiedBlobs(t, f) })
-	t.Run(f.Name+"/Meta", func(t *testing.T) { runMeta(t, f) })
 }
 
 // collectAll turns a streaming IterateManifests into a slice for

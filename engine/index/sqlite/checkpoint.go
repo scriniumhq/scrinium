@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"scrinium.dev/errs"
 )
 
 // WriteCheckpoint creates a checkpoint copy of the database at destPath.
@@ -88,8 +86,6 @@ func escapeSQLString(s string) string {
 // irrelevant). It deliberately excludes:
 //   - schema_version: owned by the target's own migration state, set when the
 //     target index was opened; copying the checkpoint's rows would corrupt it.
-//   - store_meta: the descriptor L2 cache and scan timestamps are store-session
-//     projection the Store re-establishes on open, not index content.
 //
 // This list must track the data tables in schemaBaseline (engine/index/
 // sqlite/schema.go); a new content table added there must be added here too.
@@ -113,8 +109,8 @@ var checkpointContentTables = []string{
 // NewStore rejects a schema newer than it understands. The source is then
 // closed (flushing its WAL) and ATTACHed; its content tables are copied in one
 // transaction on a single pinned connection (ATTACH is connection-local, so
-// the copy must not be scattered across the pool). store_meta and
-// schema_version are intentionally not copied (see checkpointContentTables).
+// the copy must not be scattered across the pool). schema_version is
+// intentionally not copied (see checkpointContentTables).
 //
 // :memory: and a missing source are rejected with an explicit error.
 func (i *Index) RestoreCheckpoint(ctx context.Context, srcPath string) error {
@@ -176,32 +172,4 @@ func (i *Index) RestoreCheckpoint(ctx context.Context, srcPath string) error {
 		}
 		return tx.Commit()
 	})
-}
-
-// CheckpointMeta reads one store_meta value from a checkpoint file without
-// restoring it — used by the Store layer to verify a checkpoint's identity
-// before a restore. The source is opened (migrating its schema forward, and
-// refusing one newer than the code) and closed; an absent key returns
-// ("", nil) so the caller can tell "no such metadata" from a read error.
-func (i *Index) CheckpointMeta(ctx context.Context, srcPath, key string) (string, error) {
-	if srcPath == "" || srcPath == ":memory:" {
-		return "", fmt.Errorf("sqlite: CheckpointMeta: invalid srcPath %q", srcPath)
-	}
-	if _, err := os.Stat(srcPath); err != nil {
-		return "", fmt.Errorf("sqlite: CheckpointMeta: stat source: %w", err)
-	}
-	src, err := NewStore(ctx, srcPath)
-	if err != nil {
-		return "", fmt.Errorf("sqlite: CheckpointMeta: open source: %w", err)
-	}
-	defer func() { _ = src.Close() }()
-
-	v, err := src.GetMeta(ctx, key)
-	if errors.Is(err, errs.ErrMetaKeyNotFound) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("sqlite: CheckpointMeta: read %q: %w", key, err)
-	}
-	return v, nil
 }
