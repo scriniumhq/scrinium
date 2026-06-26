@@ -13,6 +13,7 @@ import (
 	"scrinium.dev/engine/agent/rebuild"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"
@@ -341,8 +342,12 @@ func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
 
 	// Simulate catastrophic descriptor loss.
 	root := drv.Root()
-	for _, name := range []string{"store.json", ".store.backup.json"} {
-		if err := os.Remove(filepath.Join(root, name)); err != nil {
+	for _, name := range []string{"store.descriptor", "store.descriptor.backup"} {
+		cp, err := named.CellPath(name)
+		if err != nil {
+			t.Fatalf("CellPath %s: %v", name, err)
+		}
+		if err := os.Remove(filepath.Join(root, cp)); err != nil {
 			t.Fatalf("remove %s: %v", name, err)
 		}
 	}
@@ -365,8 +370,12 @@ func TestRebuild_RecoveryKit_RestoresDescriptor(t *testing.T) {
 		t.Error("DescriptorRewrote = false, want true")
 	}
 
-	// store.json is back on the Location.
-	rc, err := drv.Get(ctx, "store.json")
+	// The descriptor cell is back on the Location.
+	descCellPath, err := named.CellPath("store.descriptor")
+	if err != nil {
+		t.Fatalf("CellPath: %v", err)
+	}
+	rc, err := drv.Get(ctx, descCellPath)
 	if err != nil {
 		t.Fatalf("descriptor not restored on disk: %v", err)
 	}

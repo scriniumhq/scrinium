@@ -13,8 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -22,6 +20,7 @@ import (
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/faulty"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/engine/layout"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
@@ -571,19 +570,16 @@ func TestRestoreDescriptorFromRecoveryKit_RoundTrip(t *testing.T) {
 		t.Fatal("InitStore returned an empty recovery kit for an encrypted store")
 	}
 
-	orig, err := descriptor.Read(ctx, drv)
+	orig, err := descriptor.Read(ctx, drv, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("read original descriptor: %v", err)
 	}
 
 	// Simulate catastrophic descriptor loss: remove both replicas.
-	root := drv.Root()
-	for _, name := range []string{descriptor.Path, descriptor.BackupPath} {
-		if err := os.Remove(filepath.Join(root, name)); err != nil {
-			t.Fatalf("remove %s: %v", name, err)
-		}
+	if err := descriptor.RemoveBoth(ctx, drv); err != nil {
+		t.Fatalf("remove descriptor replicas: %v", err)
 	}
-	if _, err := descriptor.Read(ctx, drv); err == nil {
+	if _, err := descriptor.Read(ctx, drv, storefx.Hashes()); err == nil {
 		t.Fatal("descriptor still readable after removing both replicas")
 	}
 
@@ -598,7 +594,7 @@ func TestRestoreDescriptorFromRecoveryKit_RoundTrip(t *testing.T) {
 		t.Errorf("info.StoreID = %q, want %q", info.StoreID, orig.StoreID)
 	}
 
-	restored, err := descriptor.Read(ctx, drv)
+	restored, err := descriptor.Read(ctx, drv, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("read restored descriptor (L0): %v", err)
 	}
@@ -626,11 +622,9 @@ func TestRestoreDescriptorFromRecoveryKit_RoundTrip(t *testing.T) {
 		t.Error("restored KDF cost parameters differ from the original")
 	}
 
-	rc, err := drv.Get(ctx, descriptor.BackupPath)
-	if err != nil {
+	if _, err := named.LoadCell(ctx, drv, storefx.Hashes(), descriptor.BackupName); err != nil {
 		t.Fatalf("L1 shadow descriptor not restored: %v", err)
 	}
-	_ = rc.Close()
 }
 
 // TestRestoreDescriptorFromRecoveryKit_Rejects: corrupted kit bytes yield the

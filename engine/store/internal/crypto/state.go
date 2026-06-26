@@ -344,7 +344,7 @@ func (s *State) RecoveryKit() ([]byte, error) {
 // atomically swaps s.desc. Caller must hold mu. On any error s.desc / s.dek
 // are left unchanged so a retry re-derives from the same starting point.
 func (s *State) commitDescriptor(ctx context.Context, next *descriptor.Descriptor) error {
-	if err := descriptor.WriteBoth(ctx, s.drv, next); err != nil {
+	if err := descriptor.WriteBoth(ctx, s.drv, descriptor.CanonicalHashes(), next); err != nil {
 		return fmt.Errorf("persist descriptor: %w", err)
 	}
 	s.desc = next

@@ -133,7 +133,7 @@ func unlockBootstrap(ctx context.Context, c *store, pub event.Publisher) error {
 // HealNone is a no-op; the four healing actions reduce to two
 // distinct disk operations (write L0 only, write L1 only) since
 // the canonical content already lives on the surviving side.
-func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.Descriptor, action reconcile.Action) error {
+func healReplicas(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, canonical *descriptor.Descriptor, action reconcile.Action) error {
 	switch action {
 	case reconcile.HealNone:
 		return nil
@@ -142,9 +142,9 @@ func healReplicas(ctx context.Context, drv driver.Driver, canonical *descriptor.
 		// HealBothFromL1: sequence-divergence, L1 won, rewrite L0.
 		// Same disk operation; distinct names preserve diagnostic
 		// detail in logs.
-		return descriptor.WriteReplica(ctx, drv, canonical, descriptor.L0)
+		return descriptor.WriteReplica(ctx, drv, hashes, canonical, descriptor.L0)
 	case reconcile.HealL1FromL0, reconcile.HealBothFromL0:
-		return descriptor.WriteReplica(ctx, drv, canonical, descriptor.L1)
+		return descriptor.WriteReplica(ctx, drv, hashes, canonical, descriptor.L1)
 	default:
 		return fmt.Errorf("core: unknown ReconcileAction %d", int(action))
 	}

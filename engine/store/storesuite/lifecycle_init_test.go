@@ -52,7 +52,7 @@ func TestInitStore_FreshLocation_Succeeds(t *testing.T) {
 		t.Errorf("state: got %v, want %v", s.State(), domain.StateUnlocked)
 	}
 
-	desc, err := descriptor.Read(context.Background(), drv)
+	desc, err := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("read descriptor: %v", err)
 	}
@@ -130,10 +130,7 @@ func TestInitStore_ExistingOrCorrupt(t *testing.T) {
 	}
 	corruptL0 := func(t *testing.T) driver.Driver {
 		drv := driverfx.LocalFS(t)
-		if err := drv.Put(context.Background(), descriptor.Path,
-			strings.NewReader(`{not json`)); err != nil {
-			t.Fatalf("seed corrupt descriptor: %v", err)
-		}
+		corruptDescriptorReplica(t, drv, descriptor.L0)
 		return drv
 	}
 	cases := []struct {
@@ -176,7 +173,7 @@ func TestInitStore_ExistingOrCorrupt(t *testing.T) {
 func TestInitStore_ForceReinitRegeneratesStoreID(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	storefx.InitPlainOn(t, drv)
-	desc1, _ := descriptor.Read(context.Background(), drv)
+	desc1, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	id1 := desc1.StoreID
 
 	s2, _, err := store.InitStore(context.Background(), drv,
@@ -190,7 +187,7 @@ func TestInitStore_ForceReinitRegeneratesStoreID(t *testing.T) {
 	if s2.State() != domain.StateUnlocked {
 		t.Errorf("state after force reinit: got %v, want %v", s2.State(), domain.StateUnlocked)
 	}
-	desc2, _ := descriptor.Read(context.Background(), drv)
+	desc2, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	if desc2.StoreID == id1 {
 		t.Errorf("force reinit kept the same StoreID %q — should have generated a new one", id1)
 	}
@@ -311,7 +308,7 @@ func TestInitStore_GeneratesUniqueStoreIDs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		desc, _ := descriptor.Read(context.Background(), drv)
+		desc, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 		if ids[desc.StoreID] {
 			t.Fatalf("duplicate StoreID %q", desc.StoreID)
 		}
@@ -348,7 +345,7 @@ func TestInitStore_WithPassphrase_DescriptorIsEncrypted(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	storefx.InitEncryptedOn(t, drv, "hunter2")
 
-	desc, err := descriptor.Read(context.Background(), drv)
+	desc, err := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("read descriptor: %v", err)
 	}
@@ -411,7 +408,7 @@ func TestInitStore_WithPassphrase_KitMatchesDescriptor(t *testing.T) {
 		t.Fatal(err)
 	}
 	parsed, _ := recoverykit.Decode(kit)
-	desc, _ := descriptor.Read(context.Background(), drv)
+	desc, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 
 	if parsed.StoreID != desc.StoreID {
 		t.Errorf("kit StoreID %q vs descriptor %q", parsed.StoreID, desc.StoreID)
@@ -437,7 +434,7 @@ func TestInitStore_PlainGeneratesPlaintextDEK(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	storefx.InitPlainOn(t, drv)
 
-	desc, _ := descriptor.Read(context.Background(), drv)
+	desc, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	if desc.DEKEncrypted {
 		t.Error("DEKEncrypted should be false for Plain Store")
 	}
@@ -529,7 +526,7 @@ func TestInitStore_KDFParamsOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	desc, _ := descriptor.Read(context.Background(), drv)
+	desc, _ := descriptor.Read(context.Background(), drv, storefx.Hashes())
 	if desc.KDFParams.Time != 2 {
 		t.Errorf("Time: got %d, want 2", desc.KDFParams.Time)
 	}
@@ -547,7 +544,7 @@ func TestInitStore_WritesL1Replica(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	storefx.InitEncryptedOn(t, drv, "pw")
 
-	d, status, err := reconcile.ReadReplica(context.Background(), drv, descriptor.L1)
+	d, status, err := reconcile.ReadReplica(context.Background(), drv, storefx.Hashes(), descriptor.L1)
 	if err != nil {
 		t.Fatalf("ReadReplica L1: %v", err)
 	}

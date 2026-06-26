@@ -1,17 +1,20 @@
 package reconcile
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os"
 	"testing"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/driverfx"
 )
+
+var testHashes = descriptor.CanonicalHashes()
 
 func d(t *testing.T, seq uint64) *descriptor.Descriptor {
 	t.Helper()
@@ -168,22 +171,36 @@ func TestReconcile_SplitBrain_SameSequenceDifferentContent(t *testing.T) {
 // part that decides Valid / Absent / Corrupted from raw bytes — which the
 // pure-decision tests never touch.
 
-func writeReplica(t *testing.T, drv driver.Driver, path string, desc *descriptor.Descriptor) {
+func writeReplica(t *testing.T, drv driver.Driver, r descriptor.Replica, desc *descriptor.Descriptor) {
 	t.Helper()
-	data, err := descriptor.Marshal(desc)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
+	if err := descriptor.WriteReplica(context.Background(), drv, testHashes, desc, r); err != nil {
+		t.Fatalf("WriteReplica(%v): %v", r, err)
 	}
-	if err := drv.Put(context.Background(), path, bytes.NewReader(data)); err != nil {
-		t.Fatalf("Put %q: %v", path, err)
+}
+
+// corruptCell writes a valid Plain manifest whose inline payload is not a
+// descriptor, so LoadCell succeeds (hash matches) but Unmarshal fails —
+// a deterministic Corrupted classification via the parse branch.
+func corruptCell(t *testing.T, drv driver.Driver, r descriptor.Replica) {
+	t.Helper()
+	name, err := r.Name()
+	if err != nil {
+		t.Fatalf("Name: %v", err)
+	}
+	body, _, err := named.BuildInlineManifest(name, []byte("}{ not a descriptor"), string(domain.HashSHA256), testHashes, domain.ManifestCryptoPlain, nil, "")
+	if err != nil {
+		t.Fatalf("build corrupt manifest: %v", err)
+	}
+	if err := named.WriteCell(context.Background(), drv, name, body, false); err != nil {
+		t.Fatalf("write corrupt cell: %v", err)
 	}
 }
 
 func TestReadReplica_Valid(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	writeReplica(t, drv, descriptor.Path, d(t, 5))
+	writeReplica(t, drv, descriptor.L0, d(t, 5))
 
-	got, status, err := ReadReplica(context.Background(), drv, descriptor.L0)
+	got, status, err := ReadReplica(context.Background(), drv, testHashes, descriptor.L0)
 	if err != nil {
 		t.Fatalf("ReadReplica: %v", err)
 	}
@@ -197,7 +214,7 @@ func TestReadReplica_Valid(t *testing.T) {
 
 func TestReadReplica_Absent(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	got, status, err := ReadReplica(context.Background(), drv, descriptor.L0)
+	got, status, err := ReadReplica(context.Background(), drv, testHashes, descriptor.L0)
 	if err != nil {
 		t.Fatalf("ReadReplica on a missing file must not error: %v", err)
 	}
@@ -211,10 +228,8 @@ func TestReadReplica_Absent(t *testing.T) {
 
 func TestReadReplica_Corrupted(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if err := drv.Put(context.Background(), descriptor.Path, bytes.NewReader([]byte("}{ not a descriptor"))); err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-	got, status, err := ReadReplica(context.Background(), drv, descriptor.L0)
+	corruptCell(t, drv, descriptor.L0)
+	got, status, err := ReadReplica(context.Background(), drv, testHashes, descriptor.L0)
 	if status != Corrupted {
 		t.Errorf("status: got %v, want Corrupted", status)
 	}
@@ -228,10 +243,10 @@ func TestReadReplica_Corrupted(t *testing.T) {
 
 func TestReadBoth_BothValid(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	writeReplica(t, drv, descriptor.Path, d(t, 5))
-	writeReplica(t, drv, descriptor.BackupPath, d(t, 5))
+	writeReplica(t, drv, descriptor.L0, d(t, 5))
+	writeReplica(t, drv, descriptor.L1, d(t, 5))
 
-	l0, l1, l0s, l1s, err := ReadBoth(context.Background(), drv)
+	l0, l1, l0s, l1s, err := ReadBoth(context.Background(), drv, testHashes)
 	if err != nil {
 		t.Fatalf("ReadBoth: %v", err)
 	}
@@ -245,9 +260,9 @@ func TestReadBoth_BothValid(t *testing.T) {
 
 func TestReadBoth_L0Valid_L1Absent(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	writeReplica(t, drv, descriptor.Path, d(t, 5)) // BackupPath (L1) left missing
+	writeReplica(t, drv, descriptor.L0, d(t, 5)) // L1 (backup replica) left missing
 
-	l0, l1, l0s, l1s, err := ReadBoth(context.Background(), drv)
+	l0, l1, l0s, l1s, err := ReadBoth(context.Background(), drv, testHashes)
 	if err != nil {
 		t.Fatalf("ReadBoth: %v", err)
 	}
@@ -270,12 +285,10 @@ func TestReadBoth_L0Valid_L1Absent(t *testing.T) {
 // non-ErrNotExist I/O failure is a returned error).
 func TestReadBoth_L0Corrupted_L1Valid(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	if err := drv.Put(context.Background(), descriptor.Path, bytes.NewReader([]byte("garbage"))); err != nil {
-		t.Fatalf("Put: %v", err)
-	}
-	writeReplica(t, drv, descriptor.BackupPath, d(t, 9))
+	corruptCell(t, drv, descriptor.L0)
+	writeReplica(t, drv, descriptor.L1, d(t, 9))
 
-	_, l1, l0s, l1s, err := ReadBoth(context.Background(), drv)
+	_, l1, l0s, l1s, err := ReadBoth(context.Background(), drv, testHashes)
 	if err != nil {
 		t.Fatalf("ReadBoth must not return per-replica corruption as an error: %v", err)
 	}

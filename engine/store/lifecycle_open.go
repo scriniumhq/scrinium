@@ -97,7 +97,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Read, reconcile, and heal the descriptor ---
 
-	desc, err := loadCanonicalDescriptor(ctx, drv, optsLogger(o, "store"), wrap)
+	desc, err := loadCanonicalDescriptor(ctx, drv, o.hashRegistry, optsLogger(o, "store"), wrap)
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +194,8 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 // is the source of truth. Both absent → errs.ErrStoreNotFound;
 // unrecoverable → errs.ErrStoreCorrupted; split-brain and malformed-replica
 // errors pass through so callers can branch with errors.Is.
-func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, log *slog.Logger, wrap func(string, error) error) (*descriptor.Descriptor, error) {
-	l0, l1, l0s, l1s, err := reconcile.ReadBoth(ctx, drv)
+func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, log *slog.Logger, wrap func(string, error) error) (*descriptor.Descriptor, error) {
+	l0, l1, l0s, l1s, err := reconcile.ReadBoth(ctx, drv, hashes)
 	if err != nil {
 		// Non-recoverable I/O error from the Driver — propagate.
 		return nil, wrap("read descriptor", err)
@@ -229,7 +229,7 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, log *slog.L
 			slog.Uint64("sequence", desc.Sequence),
 			slog.String("heal_action", rec.Action.String()))
 	}
-	if err := healReplicas(ctx, drv, desc, rec.Action); err != nil {
+	if err := healReplicas(ctx, drv, hashes, desc, rec.Action); err != nil {
 		return nil, wrap("", err)
 	}
 
