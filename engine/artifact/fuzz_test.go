@@ -2,6 +2,7 @@ package artifact_test
 
 import (
 	"bytes"
+	"slices"
 	"testing"
 
 	"scrinium.dev/domain"
@@ -25,7 +26,7 @@ func FuzzDecode(f *testing.F) {
 	f.Add([]byte{0x00, 'S', 'C', '1', 0x00, '{', '}'})
 	f.Add([]byte{0x00, 'S', 'C', '1', 0x01})
 
-	flipped := append([]byte(nil), valid...)
+	flipped := slices.Clone(valid)
 	flipped[4] = 0xFF
 	f.Add(flipped)
 

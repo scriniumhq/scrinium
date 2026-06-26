@@ -7,6 +7,7 @@ package artifact
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"unicode/utf8"
 
@@ -64,7 +65,7 @@ func writeHeader(h fileHeader) ([]byte, error) {
 
 	if flag == cryptoPlain {
 		if h.KeyID != "" {
-			return nil, fmt.Errorf("artifact: KeyID set under Plain crypto")
+			return nil, errors.New("artifact: KeyID set under Plain crypto")
 		}
 		out := make([]byte, 0, 5)
 		out = append(out, magic...)
@@ -128,7 +129,7 @@ func readHeader(data []byte) (fileHeader, int, error) {
 
 	keyID := string(data[6:headerEnd])
 	if !utf8.ValidString(keyID) {
-		return fileHeader{}, 0, fmt.Errorf("artifact: KeyID is not valid UTF-8")
+		return fileHeader{}, 0, errors.New("artifact: KeyID is not valid UTF-8")
 	}
 
 	return fileHeader{Encoding: enc, Crypto: crypto, KeyID: keyID}, headerEnd, nil

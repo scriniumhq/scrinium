@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"errors"
+	"slices"
 	"testing"
 
 	"scrinium.dev/engine/internal/aead"
@@ -124,7 +125,7 @@ func TestOpen_TamperedCiphertext(t *testing.T) {
 	dek := freshDEK(t)
 	ciphertext, _ := sealBody([]byte("plaintext"), dek, nil)
 
-	tampered := append([]byte{}, ciphertext...)
+	tampered := slices.Clone(ciphertext)
 	tampered[aead.NonceLen+1] ^= 0x01
 
 	_, err := openBody(tampered, dek, nil)
@@ -137,7 +138,7 @@ func TestOpen_TamperedNonce(t *testing.T) {
 	dek := freshDEK(t)
 	ciphertext, _ := sealBody([]byte("plaintext"), dek, nil)
 
-	tampered := append([]byte{}, ciphertext...)
+	tampered := slices.Clone(ciphertext)
 	tampered[3] ^= 0x01
 
 	_, err := openBody(tampered, dek, nil)

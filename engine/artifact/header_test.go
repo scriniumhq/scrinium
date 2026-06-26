@@ -3,6 +3,7 @@ package artifact
 import (
 	"bytes"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -166,7 +167,7 @@ func TestReadHeader_RejectsUnknownMagic(t *testing.T) {
 }
 
 func TestReadHeader_BinaryMagicSurfacesUnsupportedEncoding(t *testing.T) {
-	data := append(append([]byte{}, magicBinary...), cryptoPlain)
+	data := append(slices.Clone(magicBinary), cryptoPlain)
 	_, _, err := readHeader(data)
 	if !errors.Is(err, errs.ErrUnsupportedEncoding) {
 		t.Fatalf("want ErrUnsupportedEncoding, got %v", err)
@@ -174,7 +175,7 @@ func TestReadHeader_BinaryMagicSurfacesUnsupportedEncoding(t *testing.T) {
 }
 
 func TestReadHeader_RejectsUnknownCryptoFlag(t *testing.T) {
-	data := append(append([]byte{}, magicJSON...), 0x09)
+	data := append(slices.Clone(magicJSON), 0x09)
 	_, _, err := readHeader(data)
 	if !errors.Is(err, errs.ErrUnsupportedCrypto) {
 		t.Fatalf("want ErrUnsupportedCrypto, got %v", err)
@@ -183,7 +184,7 @@ func TestReadHeader_RejectsUnknownCryptoFlag(t *testing.T) {
 
 func TestReadHeader_RejectsTruncatedBeforeKeyIDLength(t *testing.T) {
 	// magic + sealed flag, but no KeyID-length byte.
-	data := append(append([]byte{}, magicJSON...), cryptoSealed)
+	data := append(slices.Clone(magicJSON), cryptoSealed)
 	if _, _, err := readHeader(data); err == nil {
 		t.Fatal("expected truncation error before KeyID length")
 	}
@@ -191,14 +192,14 @@ func TestReadHeader_RejectsTruncatedBeforeKeyIDLength(t *testing.T) {
 
 func TestReadHeader_RejectsTruncatedInsideKeyID(t *testing.T) {
 	// claims 5-byte KeyID but provides 2.
-	data := append(append([]byte{}, magicJSON...), cryptoSealed, 0x05, 'a', 'b')
+	data := append(slices.Clone(magicJSON), cryptoSealed, 0x05, 'a', 'b')
 	if _, _, err := readHeader(data); err == nil {
 		t.Fatal("expected truncation error inside KeyID")
 	}
 }
 
 func TestReadHeader_RejectsInvalidUTF8KeyID(t *testing.T) {
-	data := append(append([]byte{}, magicJSON...), cryptoSealed, 0x02, 0xff, 0xfe)
+	data := append(slices.Clone(magicJSON), cryptoSealed, 0x02, 0xff, 0xfe)
 	if _, _, err := readHeader(data); err == nil {
 		t.Fatal("expected error on invalid UTF-8 KeyID")
 	}

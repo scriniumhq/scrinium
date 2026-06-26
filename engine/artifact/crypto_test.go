@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 
 	"scrinium.dev/domain"
@@ -33,10 +34,10 @@ func TestSealed_CrossBlockSwapFails(t *testing.T) {
 	extCTEnd := extCTStart + bytes.IndexByte(bs[extCTStart:], '"')
 	usrCTEnd := usrCTStart + bytes.IndexByte(bs[usrCTStart:], '"')
 
-	extCT := append([]byte{}, bs[extCTStart:extCTEnd]...)
-	usrCT := append([]byte{}, bs[usrCTStart:usrCTEnd]...)
+	extCT := slices.Clone(bs[extCTStart:extCTEnd])
+	usrCT := slices.Clone(bs[usrCTStart:usrCTEnd])
 
-	tampered := append([]byte{}, bs...)
+	tampered := slices.Clone(bs)
 	copy(tampered[extCTStart:extCTEnd], usrCT)
 	copy(tampered[usrCTStart:usrCTEnd], extCT)
 
@@ -54,7 +55,7 @@ func TestSealed_TamperedHeaderFailsDecryption(t *testing.T) {
 	if idx < 0 {
 		t.Fatal("test setup: KeyID 'k1' not found in header")
 	}
-	tampered := append([]byte{}, bs...)
+	tampered := slices.Clone(bs)
 	tampered[idx] = 'x' // k1 -> x1
 
 	// KeyID changed; pass a provider that knows "x1"
@@ -69,7 +70,7 @@ func TestSealed_TamperedCiphertext(t *testing.T) {
 
 	idx := bytes.Index(bs, []byte(`"usr":"`))
 	pos := idx + len(`"usr":"`)
-	tampered := append([]byte{}, bs...)
+	tampered := slices.Clone(bs)
 	if tampered[pos] == 'A' {
 		tampered[pos] = 'B'
 	} else {

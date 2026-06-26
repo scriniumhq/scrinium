@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"scrinium.dev/domain"
@@ -98,7 +99,7 @@ func encodeEncrypted(
 		return nil, fmt.Errorf("artifact.encodeEncrypted: crypto=%q; use Encode for Plain", crypto)
 	}
 	if len(dek) == 0 {
-		return nil, fmt.Errorf("artifact.encodeEncrypted: empty dek")
+		return nil, errors.New("artifact.encodeEncrypted: empty dek")
 	}
 	if err := checkRefLimits(m); err != nil {
 		return nil, err
@@ -266,8 +267,12 @@ func blockAAD(header, tag []byte) []byte {
 // base64 form, ready to embed as an ext/usr field value.
 func wrapBase64AsJSONString(raw []byte) json.RawMessage {
 	encoded := base64.StdEncoding.EncodeToString(raw)
-	wrapped, _ := json.Marshal(encoded) // marshalling a string only fails on OOM
-	return json.RawMessage(wrapped)
+	// Base64 doesn't require escaping
+	wrapped := make([]byte, len(encoded)+2)
+	wrapped[0] = '"'
+	copy(wrapped[1:], encoded)
+	wrapped[len(wrapped)-1] = '"'
+	return wrapped
 }
 
 // --- Paranoid ---

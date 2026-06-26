@@ -1,6 +1,7 @@
 package artifact
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -58,7 +59,7 @@ func shardOf(ref string) (string, string, error) {
 // empty BlobType as Regular.
 func BlobPath(topology domain.PathTopology, blobType domain.BlobType, ref string) (string, error) {
 	if ref == "" {
-		return "", fmt.Errorf("artifact: empty ref")
+		return "", errors.New("artifact: empty ref")
 	}
 	root, err := rootFor(blobType)
 	if err != nil {
@@ -83,7 +84,7 @@ func BlobPath(topology domain.PathTopology, blobType domain.BlobType, ref string
 // (the current physical form), not by the floating ArtifactID.
 func ManifestPath(digest domain.ManifestDigest) (string, error) {
 	if digest == "" {
-		return "", fmt.Errorf("artifact: empty manifest digest")
+		return "", errors.New("artifact: empty manifest digest")
 	}
 	s1, s2, err := shardOf(string(digest))
 	if err != nil {
@@ -129,7 +130,7 @@ func DigestFromManifestPath(p string) (domain.ManifestDigest, error) {
 // an empty path.
 func lastSegment(p string) (string, error) {
 	if p == "" {
-		return "", fmt.Errorf("artifact: empty path")
+		return "", errors.New("artifact: empty path")
 	}
 	if i := strings.LastIndexByte(p, '/'); i >= 0 {
 		return p[i+1:], nil
