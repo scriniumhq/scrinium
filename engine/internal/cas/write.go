@@ -20,13 +20,13 @@ import (
 	"scrinium.dev/errs"
 )
 
-// writeIndex is the slice of index.StoreIndex the write path depends on:
+// casIndex is the slice of index.StoreIndex the write path depends on:
 // it resolves a blob to its physical address, checks content existence for
 // dedup, and registers the finished manifest. Declaring the narrow port
 // here — rather than holding the full StoreIndex — keeps cas decoupled from
 // index methods it never calls. The concrete *sqlite.Index, and any full
 // index.StoreIndex value, satisfies it structurally.
-type writeIndex interface {
+type casIndex interface {
 	IndexManifest(ctx context.Context, m domain.Manifest, addr domain.PhysicalAddress) error
 	Resolve(ctx context.Context, blobRef string) (domain.PhysicalAddress, error)
 	ResolveManifestDigest(ctx context.Context, id domain.ArtifactID) (domain.ManifestDigest, bool, error)
@@ -38,7 +38,7 @@ type writeIndex interface {
 // handle over its dependencies and holds no mutable state.
 type IO struct {
 	drv          driver.Driver
-	index        writeIndex
+	index        casIndex
 	hashes       domain.HashRegistry
 	transformers pipeline.TransformerRegistry
 }
@@ -48,7 +48,7 @@ type IO struct {
 // internals.
 func New(
 	drv driver.Driver,
-	index writeIndex,
+	index casIndex,
 	hashes domain.HashRegistry,
 	transformers pipeline.TransformerRegistry,
 ) *IO {
