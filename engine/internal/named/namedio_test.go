@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"slices"
 	"strings"
 	"testing"
 
@@ -196,7 +197,7 @@ func TestLoad_RejectsTamperedPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildInlineManifest: %v", err)
 	}
-	m.InlineBlob = append([]byte(nil), m.InlineBlob...)
+	m.InlineBlob = slices.Clone(m.InlineBlob)
 	m.InlineBlob[0] ^= 0xff // ContentHash left untouched → now inconsistent
 
 	_, fileBytes, _, err := artifact.ComputeManifestDigest(

@@ -85,17 +85,15 @@ func parseSeq(leaf string) (uint64, bool) {
 // small (a handful of system artifacts), so the full walk is cheap. An absent
 // root yields no seqs (not an error).
 func scanSeqs(ctx context.Context, drv driver.Driver, name string) ([]uint64, error) {
-	rootSlash := root + "/"
-	pfx := name + "."
+	fullPfx := rootSlash + name + "."
 	var seqs []uint64
 	err := drv.ListObjectsWithModTime(ctx, root, time.Time{}, func(o driver.ObjectMeta) error {
-		rel := strings.TrimPrefix(o.Path, rootSlash)
-		if rel == o.Path || !strings.HasPrefix(rel, pfx) {
+		if !strings.HasPrefix(o.Path, fullPfx) {
 			return nil
 		}
 		// The remainder after "<name>." must be exactly a seq leaf; a
 		// cell ("cell") or a longer-named artifact's suffix fails parseSeq.
-		if n, ok := parseSeq(rel[len(pfx):]); ok {
+		if n, ok := parseSeq(o.Path[len(fullPfx):]); ok {
 			seqs = append(seqs, n)
 		}
 		return nil
@@ -147,6 +145,9 @@ func ListVersions(ctx context.Context, drv driver.Driver, name string) ([]uint64
 // pointer — so concurrent writers to the same name serialise on the substrate.
 func ClaimVersion(ctx context.Context, drv driver.Driver, name string, body []byte) (uint64, string, error) {
 	for attempt := 0; attempt < maxClaimAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return 0, "", fmt.Errorf("system artifact %q: claim aborted: %w", name, err)
+		}
 		active, found, err := ResolveActiveSeq(ctx, drv, name)
 		if err != nil {
 			return 0, "", err
@@ -181,14 +182,9 @@ func ClaimVersion(ctx context.Context, drv driver.Driver, name string, body []by
 // matched as flat keys), driven by ListObjectsWithModTime, which reports files
 // only and treats a missing prefix as an empty walk.
 func ListActive(ctx context.Context, drv driver.Driver, prefix string) ([]Active, error) {
-	rootSlash := root + "/"
-
 	best := map[string]Active{}
-	// Versions are flat files "named/<name>.<seq>". Split each entry at its
-	// last '.': the trailing leaf is the seq, the rest is the name.
-	// prefix is matched as a string over the name. The root is small, so the
-	// full walk is cheap.
-	//
+	fullPfx := rootSlash + prefix
+
 	// TODO(s3): push prefix into the driver list instead of filtering in
 	// memory. This passes the bare root and matches prefix here, so cost is
 	// O(whole named root) per call (same in scanSeqs and ListCells). On an
@@ -198,9 +194,12 @@ func ListActive(ctx context.Context, drv driver.Driver, prefix string) ([]Active
 	// drivertest case for a partial-key prefix. Marginal on localfs (one
 	// readdir either way); the win is the S3 backend.
 	err := drv.ListObjectsWithModTime(ctx, root, time.Time{}, func(o driver.ObjectMeta) error {
-		rel := strings.TrimPrefix(o.Path, rootSlash)
-		if rel == o.Path || rel == "" {
-			return nil // path was not under the named root
+		if !strings.HasPrefix(o.Path, fullPfx) {
+			return nil // outside the requested name prefix
+		}
+		rel := o.Path[len(rootSlash):]
+		if len(rel) == 0 {
+			return nil
 		}
 		name, leaf, ok := splitLeaf(rel)
 		if !ok {
@@ -209,9 +208,6 @@ func ListActive(ctx context.Context, drv driver.Driver, prefix string) ([]Active
 		seq, ok := parseSeq(leaf)
 		if !ok {
 			return nil // a cell, or a stray object
-		}
-		if !strings.HasPrefix(name, prefix) {
-			return nil // outside the requested name prefix
 		}
 		if cur, seen := best[name]; !seen || seq > cur.Seq {
 			best[name] = Active{Name: name, Seq: seq, Path: o.Path}

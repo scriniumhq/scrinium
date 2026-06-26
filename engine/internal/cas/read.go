@@ -41,7 +41,7 @@ func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys domain.KeyProv
 	}
 	digest, ok, err := e.index.ResolveManifestDigest(ctx, id)
 	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("cas.Load: resolve digest: %w", err)
+		return domain.Manifest{}, fmt.Errorf("cas: resolve digest: %w", err)
 	}
 	if !ok {
 		return domain.Manifest{}, errs.ErrArtifactNotFound
@@ -64,19 +64,19 @@ func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys domain.KeyProv
 func (e *IO) loadManifestByDigest(ctx context.Context, digest domain.ManifestDigest, keys domain.KeyProvider, hashAlgo string) (domain.Manifest, error) {
 	manifestPath, err := layout.ManifestPath(digest)
 	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("cas.Load: path: %w", err)
+		return domain.Manifest{}, fmt.Errorf("cas: manifest path: %w", err)
 	}
 	rc, err := e.drv.Get(ctx, manifestPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return domain.Manifest{}, errs.ErrArtifactNotFound
 		}
-		return domain.Manifest{}, fmt.Errorf("cas.Load: read: %w", err)
+		return domain.Manifest{}, fmt.Errorf("cas: read manifest: %w", err)
 	}
 	raw, err := io.ReadAll(io.LimitReader(rc, domain.MaxManifestSize+1))
 	_ = rc.Close()
 	if err != nil {
-		return domain.Manifest{}, fmt.Errorf("cas.Load: read body: %w", err)
+		return domain.Manifest{}, fmt.Errorf("cas: read manifest body: %w", err)
 	}
 	if len(raw) > domain.MaxManifestSize {
 		return domain.Manifest{}, errs.ErrManifestTooLarge
@@ -121,7 +121,7 @@ func (e *IO) OpenBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser, er
 	decoded, err := e.runner().BuildGet(m.Pipeline, raw)
 	if err != nil {
 		// BuildGet closed raw on its failure path.
-		return nil, fmt.Errorf("cas.OpenBlob: build pipeline: %w", err)
+		return nil, fmt.Errorf("cas: build pipeline: %w", err)
 	}
 	return decoded, nil
 }
@@ -162,7 +162,7 @@ func (e *IO) openRawBlob(ctx context.Context, m domain.Manifest) (io.ReadCloser,
 func (e *IO) VerifyBlob(ctx context.Context, m domain.Manifest) error {
 	want, hasher, err := artifact.ParseContentHash(e.hashes, m.HashAlgo, m.ContentHash)
 	if err != nil {
-		return fmt.Errorf("cas.VerifyBlob: %w", err)
+		return fmt.Errorf("cas: verify blob: %w", err)
 	}
 
 	plaintext, err := e.OpenBlob(ctx, m)
@@ -178,7 +178,7 @@ func (e *IO) VerifyBlob(ctx context.Context, m domain.Manifest) error {
 		return errors.Join(errs.ErrCorruptedBlob, copyErr)
 	}
 	if closeErr != nil {
-		return fmt.Errorf("cas.VerifyBlob: close blob reader: %w", closeErr)
+		return fmt.Errorf("cas: close blob reader: %w", closeErr)
 	}
 	if !bytes.Equal(hasher.Sum(nil), want) {
 		return errs.ErrCorruptedBlob

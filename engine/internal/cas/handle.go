@@ -159,7 +159,7 @@ func (e *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHand
 	case domain.LayoutTarget:
 		addr, err := e.index.Resolve(ctx, string(m.PrimaryBlobRef()))
 		if err != nil {
-			return nil, fmt.Errorf("cas.OpenHandle: resolve blob path: %w", err)
+			return nil, fmt.Errorf("cas: resolve blob path: %w", err)
 		}
 		return &targetReadHandle{
 			manifest: m,
@@ -170,7 +170,7 @@ func (e *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHand
 		}, nil
 
 	default:
-		return nil, fmt.Errorf("cas.OpenHandle: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
+		return nil, fmt.Errorf("cas: unknown BlobStorage %q", m.LayoutHeader.BlobStorage)
 	}
 }
 
@@ -223,7 +223,7 @@ func (e *IO) WrapVerifying(inner domain.ReadHandle, onMismatch func(domain.Artif
 	want, hasher, err := artifact.ParseContentHash(e.hashes, algo, m.ContentHash)
 	if err != nil {
 		_ = inner.Close()
-		return nil, fmt.Errorf("cas.WrapVerifying: %w", err)
+		return nil, fmt.Errorf("cas: wrap verifying: %w", err)
 	}
 	limit := int64(-1)
 	if m.OriginalSize > 0 {

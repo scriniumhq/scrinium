@@ -7,6 +7,7 @@ package named
 // the inline payload against the manifest's embedded ContentHash.
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -121,17 +122,15 @@ func LoadWithKeys(ctx context.Context, drv driver.Driver, hashes domain.HashRegi
 // system artifact the Pipeline is empty, so the content hash is just
 // hash(InlineBlob).
 func verifyInlinePayload(m domain.Manifest, hashes domain.HashRegistry) error {
-	// ADR-93: ContentHash is bare hex; the algorithm is the manifest's
-	// recorded hash_algo (populated on decode, which precedes this check).
-	h, err := hashes.NewHasher(m.HashAlgo)
+	want, hasher, err := artifact.ParseContentHash(hashes, m.HashAlgo, m.ContentHash)
 	if err != nil {
-		return fmt.Errorf("%w: content hasher: %v", errs.ErrCorruptedContent, err)
+		return fmt.Errorf("%w: parse content hash: %v", errs.ErrCorruptedContent, err)
 	}
-	if _, err := h.Write(m.InlineBlob); err != nil {
+	if _, err := hasher.Write(m.InlineBlob); err != nil {
 		return fmt.Errorf("%w: hash payload: %v", errs.ErrCorruptedContent, err)
 	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != string(m.ContentHash) {
-		return fmt.Errorf("%w: payload hash %s != declared %s", errs.ErrCorruptedContent, got, m.ContentHash)
+	if !bytes.Equal(hasher.Sum(nil), want) {
+		return fmt.Errorf("%w: payload hash mismatch", errs.ErrCorruptedContent)
 	}
 	return nil
 }

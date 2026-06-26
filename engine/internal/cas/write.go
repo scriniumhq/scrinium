@@ -119,7 +119,7 @@ func (e *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
 	return Result{
 		ContentHash:  ch,
 		OriginalSize: int64(len(body)),
-		Stages:       []domain.PipelineStage{},
+		Stages:       nil,
 		InlineBytes:  body,
 	}, nil
 }
