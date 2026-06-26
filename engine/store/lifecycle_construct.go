@@ -42,7 +42,7 @@ func buildStore(
 		state:        domain.StateBootstrapping,
 		hashes:       o.hashRegistry,
 		transformers: o.readRegistry,
-		crypto:       crypto.New(desc, dek, o.passphrase, o.keyResolver, drv, idx),
+		crypto:       crypto.New(desc, dek, o.passphrase, o.keyResolver, drv),
 	}
 	// systemstore.Store facade over the pointer-free layout (ADR-85). It needs
 	// only the driver, the hash registry, the active config (for its

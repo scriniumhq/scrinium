@@ -8,7 +8,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store/internal/descriptor"
@@ -33,10 +32,10 @@ import (
 // "crypto.mu → stateMu" ordering is satisfied trivially because the two
 // are never held at once.
 //
-// drv and index are held so SetPassphrase and RotateKEK can persist the
-// successor descriptor (both replicas + L2 cache) under mu, which is what
-// keeps a concurrent second SetPassphrase from observing the pre-wrap
-// descriptor and double-wrapping.
+// drv is held so SetPassphrase and RotateKEK can persist the successor
+// descriptor (both replicas) under mu, which is what keeps a concurrent
+// second SetPassphrase from observing the pre-wrap descriptor and
+// double-wrapping.
 type State struct {
 	mu sync.Mutex
 
@@ -45,21 +44,19 @@ type State struct {
 	provider    domain.PassphraseProvider
 	keyResolver pipeline.KeyResolver
 
-	drv   driver.Driver
-	index index.StoreIndex
+	drv driver.Driver
 }
 
 // New builds the crypto State. desc and dek are the bootstrap material
 // (dek nil for an encrypted Store opened Locked); provider and
-// keyResolver come from the store options; drv and index are needed to
-// persist a re-wrapped descriptor.
+// keyResolver come from the store options; drv is needed to persist a
+// re-wrapped descriptor.
 func New(
 	desc *descriptor.Descriptor,
 	dek []byte,
 	provider domain.PassphraseProvider,
 	keyResolver pipeline.KeyResolver,
 	drv driver.Driver,
-	idx index.StoreIndex,
 ) *State {
 	return &State{
 		desc:        desc,
@@ -67,7 +64,6 @@ func New(
 		provider:    provider,
 		keyResolver: keyResolver,
 		drv:         drv,
-		index:       idx,
 	}
 }
 
@@ -344,19 +340,12 @@ func (s *State) RecoveryKit() ([]byte, error) {
 	return buildRecoveryKit(s.desc, s.desc.DEK)
 }
 
-// commitDescriptor persists the next descriptor (both replicas), refreshes
-// the L2 cache, and atomically swaps s.desc. Caller must hold mu. On any
-// error s.desc / s.dek are left unchanged so a retry re-derives from the
-// same starting point.
+// commitDescriptor persists the next descriptor (both replicas) and
+// atomically swaps s.desc. Caller must hold mu. On any error s.desc / s.dek
+// are left unchanged so a retry re-derives from the same starting point.
 func (s *State) commitDescriptor(ctx context.Context, next *descriptor.Descriptor) error {
 	if err := descriptor.WriteBoth(ctx, s.drv, next); err != nil {
 		return fmt.Errorf("persist descriptor: %w", err)
-	}
-	if err := descriptor.SaveCache(ctx, s.index, next); err != nil {
-		// Persisted on disk but cache write failed. The next OpenStore
-		// will rebuild the cache from Location, so this is recoverable;
-		// surface the error so the caller knows it was not fully done.
-		return fmt.Errorf("save L2 cache: %w", err)
 	}
 	s.desc = next
 	return nil

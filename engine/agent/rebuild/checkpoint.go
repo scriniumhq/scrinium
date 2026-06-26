@@ -10,7 +10,6 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent/internal/checkpointfmt"
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/store"
 )
 
 // tryCheckpointFastPath restores the newest checkpoint into the index and
@@ -38,15 +37,10 @@ func (a *rebuildAgent) tryCheckpointFastPath(ctx context.Context, keys domain.Ke
 	}
 	defer cleanup()
 
-	// Guard against restoring a checkpoint recorded for a different Store
-	// (an import, a crossed mount). Skipped when IgnoreStoreID is set. The
-	// check happens before the restore so a foreign checkpoint never touches
-	// the index.
-	if !a.cfg.IgnoreStoreID {
-		if err := store.VerifyCheckpointIdentity(ctx, a.idx, tmpPath, a.storeID); err != nil {
-			return false, fmt.Errorf("checkpoint %q: %w", name, err)
-		}
-	}
+	// Identity is enforced upstream: fetchCheckpoint's System().Get opens the
+	// checkpoint pointer envelope, which rejects a foreign store_id
+	// (ADR-104/105). A foreign checkpoint never reaches the restore below. The
+	// former descriptor_blob check (L2 cache) is retired with ADR-103.
 
 	if err := restorer.RestoreCheckpoint(ctx, tmpPath); err != nil {
 		return false, fmt.Errorf("restore checkpoint %q: %w", name, err)

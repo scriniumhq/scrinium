@@ -10,7 +10,6 @@ import (
 	"github.com/google/uuid"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
@@ -182,7 +181,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Persist descriptor, L2 cache, and system.config ---
 
-	if err := persistInitState(ctx, drv, idx, o.hashRegistry, cfg, desc, wrap); err != nil {
+	if err := persistInitState(ctx, drv, o.hashRegistry, cfg, desc, wrap); err != nil {
 		aead.Wipe(dek)
 		return nil, nil, err
 	}
@@ -252,18 +251,14 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, forceReinit boo
 	return nil
 }
 
-// persistInitState writes the descriptor (both replicas), refreshes the
-// L2 cache, and persists the active StoreConfig as system.config. A hash
-// registry is required for the config write (system.config
-// must be readable before the Store opens for users). The descriptor and
-// cache are written first so a config-write failure still leaves a
-// readable Store identity behind.
-func persistInitState(ctx context.Context, drv driver.Driver, idx index.StoreIndex, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
+// persistInitState writes the descriptor (both replicas) and persists the
+// active StoreConfig as system.config. A hash registry is required for the
+// config write (system.config must be readable before the Store opens for
+// users). The descriptor is written first so a config-write failure still
+// leaves a readable Store identity behind.
+func persistInitState(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
 	if err := descriptor.WriteBoth(ctx, drv, desc); err != nil {
 		return wrap("write descriptor", err)
-	}
-	if err := descriptor.SaveCache(ctx, idx, desc); err != nil {
-		return wrap("save L2 cache", err)
 	}
 	if hashes == nil {
 		return fmt.Errorf(

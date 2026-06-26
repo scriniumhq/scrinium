@@ -60,10 +60,12 @@ type RebuildConfig struct {
 	// instant); a small positive value (minutes) is recommended.
 	RecoveryOverlap time.Duration
 
-	// IgnoreStoreID, when true, skips the store-identity guard that rejects a
-	// checkpoint recorded for a different Store before restoring it. Use only
-	// to force recovery from a checkpoint whose identity is known-good despite
-	// a mismatch (e.g. a deliberately imported checkpoint).
+	// IgnoreStoreID is currently inert. Checkpoint identity is enforced
+	// unconditionally by the systemstore: System().Get opens the checkpoint
+	// pointer envelope and rejects a foreign store_id (ADR-103/104/105), so the
+	// former rebuild-side guard this flag gated no longer exists. The field is
+	// retained pending the cross-store rebuild story (S-18), which will define
+	// its replacement or remove it.
 	IgnoreStoreID bool
 }
 

@@ -9,7 +9,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
-	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
@@ -32,11 +31,7 @@ import (
 //     replica is selected (sequence-wins; equal-content
 //     short-circuit) and any heal action is performed against
 //     the Driver before proceeding.
-//  2. Reconcile the L2 cache (store_meta) with the canonical
-//     descriptor. The cache is rewritten when absent, when its
-//     checksum diverges, or when its load fails — Location is
-//     the source of truth, the cache is a fast-start aid.
-//  3. Validate that a StoreIndex was provided via WithStoreIndex.
+//  2. Validate that a StoreIndex was provided via WithStoreIndex.
 //     core never opens an index itself; the caller is responsible
 //     for the dependency. Missing → error.
 //  4. Load the active StoreConfig (the max system/config version).
@@ -100,9 +95,9 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 			"store.OpenStore: WithHashRegistry is required to read system.config")
 	}
 
-	// --- Read, reconcile, heal, and cache the descriptor ---
+	// --- Read, reconcile, and heal the descriptor ---
 
-	desc, err := loadCanonicalDescriptor(ctx, drv, idx, optsLogger(o, "store"), wrap)
+	desc, err := loadCanonicalDescriptor(ctx, drv, optsLogger(o, "store"), wrap)
 	if err != nil {
 		return nil, err
 	}
@@ -195,12 +190,11 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 }
 
 // loadCanonicalDescriptor reads both descriptor replicas, reconciles
-// them into the canonical one, heals any on-disk divergence, and
-// refreshes the L2 cache. Location is the source of truth; the cache is
-// a fast-start aid. Both absent → errs.ErrStoreNotFound; unrecoverable →
-// errs.ErrStoreCorrupted; split-brain and malformed-replica errors pass
-// through so callers can branch with errors.Is.
-func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx index.StoreIndex, log *slog.Logger, wrap func(string, error) error) (*descriptor.Descriptor, error) {
+// them into the canonical one, and heals any on-disk divergence. Location
+// is the source of truth. Both absent → errs.ErrStoreNotFound;
+// unrecoverable → errs.ErrStoreCorrupted; split-brain and malformed-replica
+// errors pass through so callers can branch with errors.Is.
+func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, log *slog.Logger, wrap func(string, error) error) (*descriptor.Descriptor, error) {
 	l0, l1, l0s, l1s, err := reconcile.ReadBoth(ctx, drv)
 	if err != nil {
 		// Non-recoverable I/O error from the Driver — propagate.
@@ -239,11 +233,6 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, idx index.S
 		return nil, wrap("", err)
 	}
 
-	// Save the L2 cache when absent, corrupted, or checksum-divergent.
-	// Read errors are non-fatal — the canonical is always the fallback.
-	if err := descriptor.RefreshCache(ctx, idx, desc); err != nil {
-		return nil, wrap("refresh L2 cache", err)
-	}
 	return desc, nil
 }
 

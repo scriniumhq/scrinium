@@ -32,7 +32,7 @@ func (r *fakeKeyResolver) close()                                     { r.closed
 func newTestStore() *store {
 	return &store{
 		state:  domain.StateUnlocked,
-		crypto: crypto.New(nil, []byte{1, 2, 3, 4, 5, 6, 7, 8}, nil, nil, nil, nil),
+		crypto: crypto.New(nil, []byte{1, 2, 3, 4, 5, 6, 7, 8}, nil, nil, nil),
 	}
 }
 
@@ -77,7 +77,7 @@ func TestClose_WipesDEK(t *testing.T) {
 func TestClose_NilDEK_NoPanic(t *testing.T) {
 	s := &store{
 		state:  domain.StateLocked,
-		crypto: crypto.New(nil, nil, nil, nil, nil, nil),
+		crypto: crypto.New(nil, nil, nil, nil, nil),
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on nil dek: %v", err)
@@ -87,7 +87,7 @@ func TestClose_NilDEK_NoPanic(t *testing.T) {
 func TestClose_EmptyDEK_NoPanic(t *testing.T) {
 	s := &store{
 		state:  domain.StateUnlocked,
-		crypto: crypto.New(nil, []byte{}, nil, nil, nil, nil),
+		crypto: crypto.New(nil, []byte{}, nil, nil, nil),
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on empty dek: %v", err)
@@ -97,7 +97,7 @@ func TestClose_EmptyDEK_NoPanic(t *testing.T) {
 func TestClose_NoCapabilityToken_NoPanic(t *testing.T) {
 	s := &store{
 		state:  domain.StateUnlocked,
-		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, nil, nil, nil),
+		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, nil, nil),
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close on nil token: %v", err)
@@ -178,7 +178,7 @@ func TestClose_DefaultStaticKeyResolver_GetsClosed(t *testing.T) {
 
 	s := &store{
 		state:  domain.StateUnlocked,
-		crypto: crypto.New(nil, append([]byte(nil), dek...), nil, resolver, nil, nil),
+		crypto: crypto.New(nil, append([]byte(nil), dek...), nil, resolver, nil),
 	}
 
 	if err := s.Close(); err != nil {
@@ -201,7 +201,7 @@ func TestClose_CustomKeyResolver_NotTouched(t *testing.T) {
 	resolver := &fakeKeyResolver{}
 	s := &store{
 		state:  domain.StateUnlocked,
-		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, resolver, nil, nil),
+		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, resolver, nil),
 	}
 
 	if err := s.Close(); err != nil {
@@ -216,7 +216,7 @@ func TestClose_CustomKeyResolver_NotTouched(t *testing.T) {
 func TestClose_NilKeyResolver_NoPanic(t *testing.T) {
 	s := &store{
 		state:  domain.StateUnlocked,
-		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, nil, nil, nil),
+		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, nil, nil),
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -234,7 +234,7 @@ func TestClose_RaceWithGetKeys(t *testing.T) {
 
 	s := &store{
 		state:  domain.StateUnlocked,
-		crypto: crypto.New(nil, append([]byte(nil), dek...), nil, resolver, nil, nil),
+		crypto: crypto.New(nil, append([]byte(nil), dek...), nil, resolver, nil),
 	}
 
 	const N = 100
