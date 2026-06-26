@@ -11,6 +11,13 @@ import "errors"
 // match its digest (the on-disk file name; ADR-73).
 var ErrCorruptedManifest = errors.New("scrinium: corrupted manifest")
 
+// ErrInvalidManifestSlot — the manifest violates the slot invariant
+// (ADR-92/104): both identity slots filled, or a kind missing the
+// structure it requires (a user artifact without identity-meta, a system
+// artifact without its inline envelope, a container without blobs).
+// Enforced at the encode boundary, beside the reference-count caps.
+var ErrInvalidManifestSlot = errors.New("scrinium: invalid manifest slot")
+
 // ErrCorruptedBlob — the hash of the physical blob does not match
 // its BlobRef.
 var ErrCorruptedBlob = errors.New("scrinium: corrupted blob")

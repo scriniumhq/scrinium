@@ -28,6 +28,10 @@ func syntheticDigest(id string) domain.ManifestDigest {
 var (
 	contentHashAaa = strings.Repeat("a", 64)
 	blobRefBbb     = strings.Repeat("b", 64)
+	// identityMetaCcc is a fixture-stable md (= H(canon(identity-meta)),
+	// "sha256-"+hex). A user manifest's handle is PRF(NK, cd‖md), so a
+	// valid user fixture must carry identity-meta (ADR-104 validateSlot).
+	identityMetaCcc = "sha256-" + strings.Repeat("c", 64)
 )
 
 // Sample returns a minimal valid blob manifest with a fixed
@@ -59,12 +63,13 @@ func Sample() domain.Manifest {
 // byte stability.
 func Blob(id, blobRef string) domain.Manifest {
 	return domain.Manifest{
-		ArtifactID:   domain.ArtifactID(id),
-		Digest:       syntheticDigest(id),
-		ContentHash:  domain.ContentHash(contentHashAaa),
-		BlobRefs:     []domain.BlobRef{domain.BlobRef(blobRef)},
-		OriginalSize: 1024,
-		CreatedAt:    time.Now(),
+		ArtifactID:       domain.ArtifactID(id),
+		IdentityMetaHash: identityMetaCcc,
+		Digest:           syntheticDigest(id),
+		ContentHash:      domain.ContentHash(contentHashAaa),
+		BlobRefs:         []domain.BlobRef{domain.BlobRef(blobRef)},
+		OriginalSize:     1024,
+		CreatedAt:        time.Now(),
 	}
 }
 
@@ -77,12 +82,13 @@ func Blob(id, blobRef string) domain.Manifest {
 // canonical 64-char "a"-padded sha256-prefixed string.
 func BlobWithHash(id, blobRef string, contentHash domain.ContentHash, originalSize int64) domain.Manifest {
 	return domain.Manifest{
-		ArtifactID:   domain.ArtifactID(id),
-		Digest:       syntheticDigest(id),
-		ContentHash:  contentHash,
-		BlobRefs:     []domain.BlobRef{domain.BlobRef(blobRef)},
-		OriginalSize: originalSize,
-		CreatedAt:    time.Now(),
+		ArtifactID:       domain.ArtifactID(id),
+		IdentityMetaHash: identityMetaCcc,
+		Digest:           syntheticDigest(id),
+		ContentHash:      contentHash,
+		BlobRefs:         []domain.BlobRef{domain.BlobRef(blobRef)},
+		OriginalSize:     originalSize,
+		CreatedAt:        time.Now(),
 	}
 }
 

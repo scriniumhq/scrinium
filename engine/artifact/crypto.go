@@ -103,6 +103,9 @@ func encodeEncrypted(
 	if err := checkRefLimits(m); err != nil {
 		return nil, err
 	}
+	if err := validateSlot(m); err != nil {
+		return nil, err
+	}
 
 	header, err := writeHeader(fileHeader{Encoding: encoding, Crypto: crypto, KeyID: keyID})
 	if err != nil {

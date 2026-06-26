@@ -55,6 +55,9 @@ func Encode(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.M
 	if err := checkRefLimits(m); err != nil {
 		return nil, err
 	}
+	if err := validateSlot(m); err != nil {
+		return nil, err
+	}
 
 	header, err := writeHeader(fileHeader{Encoding: encoding, Crypto: crypto})
 	if err != nil {
@@ -79,6 +82,61 @@ func Encode(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.M
 func checkRefLimits(m domain.Manifest) error {
 	if len(m.BlobRefs) > domain.MaxBlobRefs || len(m.HandleRefs) > domain.MaxHandleRefs {
 		return errs.ErrTooManyRefs
+	}
+	return nil
+}
+
+// validateSlot enforces the manifest slot invariant (ADR-92/104): a manifest
+// is exactly one kind, decided by which identity slot is filled, and each kind
+// carries the structure its kind requires. It runs at the encode boundary
+// (Encode and encodeEncrypted), beside checkRefLimits, so a structurally
+// invalid manifest is never serialised. The kinds:
+//
+//   - user (handle filled): the handle is PRF(NK, cd‖md), so it cannot exist
+//     without its identity-meta (md = IdentityMetaHash).
+//   - system (name filled): an inline artifact whose InlineBlob carries the
+//     systemstore envelope (ADR-104); no handle machinery.
+//   - container (both slots empty): a blob-backed pack / headless anchor — it
+//     owns blobs, not an inline body, and has no handle machinery.
+func validateSlot(m domain.Manifest) error {
+	hasHandle := m.ArtifactID != ""
+	hasName := m.Name != ""
+	hasIdentityMeta := m.IdentityMetaHash != "" || len(m.IdentityNonce) != 0
+
+	switch {
+	case hasHandle && hasName:
+		return fmt.Errorf("%w: both handle (%s) and name (%q) are set",
+			errs.ErrInvalidManifestSlot, m.ArtifactID, m.Name)
+
+	case hasHandle: // user
+		if !hasIdentityMeta {
+			return fmt.Errorf("%w: user artifact carries no identity-meta",
+				errs.ErrInvalidManifestSlot)
+		}
+
+	case hasName: // system
+		if len(m.InlineBlob) == 0 {
+			return fmt.Errorf("%w: system artifact %q has no inline payload",
+				errs.ErrInvalidManifestSlot, m.Name)
+		}
+		if hasIdentityMeta {
+			return fmt.Errorf("%w: system artifact %q carries identity-meta",
+				errs.ErrInvalidManifestSlot, m.Name)
+		}
+
+	default: // container — both slots empty
+		if len(m.BlobRefs) == 0 {
+			return fmt.Errorf("%w: container has no blob_refs",
+				errs.ErrInvalidManifestSlot)
+		}
+		if len(m.InlineBlob) != 0 {
+			return fmt.Errorf("%w: container carries an inline blob",
+				errs.ErrInvalidManifestSlot)
+		}
+		if hasIdentityMeta {
+			return fmt.Errorf("%w: container carries identity-meta",
+				errs.ErrInvalidManifestSlot)
+		}
 	}
 	return nil
 }

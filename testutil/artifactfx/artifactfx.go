@@ -94,6 +94,12 @@ func (f fakeKeys) GetKeys(string) ([][]byte, error) {
 //	m := artifactfx.Manifest(func(m *domain.Manifest) { m.Namespace = "x" })
 func Manifest(mutators ...func(*domain.Manifest)) domain.Manifest {
 	m := manifestfx.Sample()
+	// Sample() is a bare blob body with an empty identity slot; fill the
+	// handle slot together with its identity-meta so this kitchen-sink
+	// round-trip fixture is a structurally valid user artifact and the
+	// encode boundary accepts it (ADR-104 validateSlot).
+	m.ArtifactID = domain.ArtifactID(strings.Repeat("e", 64))
+	m.IdentityMetaHash = "sha256-" + strings.Repeat("c", 64)
 	m.Pipeline = []domain.PipelineStage{}
 	m.Ext = json.RawMessage(`{"k":"ext-value"}`)
 	m.Usr = json.RawMessage(`{"u":"usr-value"}`)
