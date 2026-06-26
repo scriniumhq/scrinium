@@ -8,9 +8,9 @@ import (
 	"sort"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/aead"
+	"scrinium.dev/engine/internal/cas"
 	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/internal/slogx"
 )
@@ -266,7 +266,7 @@ func (ss *systemStore) Get(ctx context.Context, name string) (domain.ReadHandle,
 	if err != nil {
 		return nil, fmt.Errorf("system store: get %q: %w", name, err)
 	}
-	return artifact.NewInlinePayloadHandle(m, env.InlinePayload), nil
+	return cas.NewInlinePayloadHandle(m, env.InlinePayload), nil
 }
 
 // Delete removes every version AND any cell of name. A name is one form,

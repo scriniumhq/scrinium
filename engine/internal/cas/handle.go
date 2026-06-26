@@ -154,7 +154,7 @@ func (h *targetReadHandle) Manifest() domain.Manifest { return h.manifest }
 func (e *IO) OpenHandle(ctx context.Context, m domain.Manifest) (domain.ReadHandle, error) {
 	switch m.LayoutHeader.BlobStorage {
 	case domain.LayoutInline:
-		return artifact.NewInlineHandle(m), nil
+		return NewInlineHandle(m), nil
 
 	case domain.LayoutTarget:
 		addr, err := e.index.Resolve(ctx, string(m.PrimaryBlobRef()))

@@ -1,4 +1,4 @@
-package artifact
+package cas
 
 // readhandle.go — the in-memory ReadHandle over an inline manifest's
 // payload. It is addressing-agnostic (it only needs the manifest's
