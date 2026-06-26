@@ -10,6 +10,7 @@ import (
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
@@ -59,7 +60,7 @@ func (a *rebuildAgent) scanManifests(ctx context.Context, keys domain.KeyProvide
 // reindexManifestFile fetches one manifest file, decodes it, and writes
 // the reconstructed index rows.
 func (a *rebuildAgent) reindexManifestFile(ctx context.Context, path string, keys domain.KeyProvider) error {
-	digest, err := artifact.DigestFromManifestPath(path)
+	digest, err := layout.DigestFromManifestPath(path)
 	if err != nil {
 		return fmt.Errorf("parse manifest id from %q: %w", path, err)
 	}
@@ -124,7 +125,7 @@ func (a *rebuildAgent) indexBlob(ctx context.Context, m domain.Manifest) error {
 	var addr domain.PhysicalAddress
 	if m.LayoutHeader.BlobStorage == domain.LayoutTarget {
 		topology := a.store.Config().PathTopology
-		p, err := artifact.BlobPath(topology, domain.BlobTypeRegular, string(m.BlobRefs[0]))
+		p, err := layout.BlobPath(topology, domain.BlobTypeRegular, string(m.BlobRefs[0]))
 		if err != nil {
 			return fmt.Errorf("blob path for %q: %w", m.BlobRefs[0], err)
 		}

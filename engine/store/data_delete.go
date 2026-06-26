@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
@@ -75,7 +75,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 		return s.traceErr(ctx, "Delete", fmt.Errorf("store.Delete: index: %w", err), artifactIDAttr(id), slog.String("stage", "index"))
 	}
 
-	manifestPath, err := artifact.ManifestPath(manifest.Digest)
+	manifestPath, err := layout.ManifestPath(manifest.Digest)
 	if err != nil {
 		return fmt.Errorf("store.Delete: manifest path: %w", err)
 	}

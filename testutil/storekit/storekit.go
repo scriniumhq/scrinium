@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/systemstore"
 )
@@ -99,7 +99,7 @@ func WalkNames(t *testing.T, ss systemstore.Store, prefix string) []string {
 // the sharded topology — the layout tests assert against.
 func BlobPathForRef(t *testing.T, ref string) string {
 	t.Helper()
-	p, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
+	p, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
 	if err != nil {
 		t.Fatalf("BlobPathForRef: artifact.BlobPath(%q): %v", ref, err)
 	}

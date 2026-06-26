@@ -19,10 +19,10 @@ import (
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/faulty"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/orphanscan"
@@ -125,7 +125,7 @@ func reportCount(rec *eventfx.Recorder) int {
 // are named by their digest).
 func manifestPathForID(t *testing.T, digest domain.ManifestDigest) string {
 	t.Helper()
-	p, err := artifact.ManifestPath(digest)
+	p, err := layout.ManifestPath(digest)
 	if err != nil {
 		t.Fatalf("artifact.ManifestPath(%q): %v", digest, err)
 	}

@@ -15,6 +15,7 @@ import (
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 )
@@ -186,7 +187,7 @@ func (e *IO) commitBlob(
 		}
 		return domain.BlobRef(existingRef), addr, nil
 	}
-	finalPath, err := artifact.BlobPath(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
+	finalPath, err := layout.BlobPath(cfg.PathTopology, domain.BlobTypeRegular, string(blobRef))
 	if err != nil {
 		_ = e.drv.Remove(ctx, stagingPath)
 		return "", domain.PhysicalAddress{}, fmt.Errorf("cas: resolve blob path: %w", err)
@@ -358,7 +359,7 @@ func identityNonce(mode domain.IdentityMode) ([]byte, error) {
 // IndexManifest skips the blobs-table insert but still indexes the
 // manifest so Walk and GetBySession find it.
 func (e *IO) PersistManifest(ctx context.Context, manifest domain.Manifest, manifestBytes []byte, addr domain.PhysicalAddress) error {
-	manifestPath, err := artifact.ManifestPath(manifest.Digest)
+	manifestPath, err := layout.ManifestPath(manifest.Digest)
 	if err != nil {
 		return fmt.Errorf("cas: manifest path: %w", err)
 	}

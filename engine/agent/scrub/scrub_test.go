@@ -11,9 +11,9 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/scrub"
-	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/index"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/testutil/artifactfx"
 	"scrinium.dev/testutil/eventfx"
@@ -84,7 +84,7 @@ func (f scrubFixture) blobRefOf(t *testing.T, id domain.ArtifactID) string {
 // tamperBlob flips a byte in the on-disk blob file for blobRef.
 func (f scrubFixture) tamperBlob(t *testing.T, blobRef string) {
 	t.Helper()
-	rel, err := artifact.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, blobRef)
+	rel, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, blobRef)
 	if err != nil {
 		t.Fatalf("BlobPath: %v", err)
 	}

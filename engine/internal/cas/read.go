@@ -17,6 +17,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/layout"
 	"scrinium.dev/errs"
 )
 
@@ -61,7 +62,7 @@ func (e *IO) Load(ctx context.Context, id domain.ArtifactID, keys domain.KeyProv
 // directly, since a headless data artifact's external reference IS its
 // ManifestDigest. Plain bypasses the resolver; Sealed/Paranoid consult keys.
 func (e *IO) loadManifestByDigest(ctx context.Context, digest domain.ManifestDigest, keys domain.KeyProvider, hashAlgo string) (domain.Manifest, error) {
-	manifestPath, err := artifact.ManifestPath(digest)
+	manifestPath, err := layout.ManifestPath(digest)
 	if err != nil {
 		return domain.Manifest{}, fmt.Errorf("cas.Load: path: %w", err)
 	}

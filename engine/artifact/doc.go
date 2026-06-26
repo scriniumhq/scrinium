@@ -1,11 +1,11 @@
 // Package artifact is the binary-format library for Scrinium artifacts.
 //
-// It owns exactly one thing: how an artifact is represented on disk —
-// the manifest file layout (header, body, crypto blocks), the artifact
-// ID computation, the content-hash string form, and the driver-side
-// path layout for blobs and manifests. It is a pure library: functions
-// over bytes, paths, and domain values, with no I/O and no knowledge of
-// the Driver, the StoreIndex, or the Pipeline runner.
+// It owns exactly one thing: the manifest file layout (header, body, crypto blocks),
+// the artifact ID computation, and the content-hash string form.
+//
+// It is a pure codec library: functions over bytes and domain values,
+// with no I/O, no knowledge of the Driver, the StoreIndex or the Pipeline
+// runner and no awareness of physical storage topologies or paths.
 //
 // # Layering
 //

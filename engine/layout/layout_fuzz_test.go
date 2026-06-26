@@ -1,11 +1,11 @@
-package artifact_test
+package layout_test
 
 import (
 	"strings"
 	"testing"
 
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/artifact"
+	"scrinium.dev/engine/layout"
 )
 
 // FuzzPathParsers hardens the on-disk path parsers against arbitrary
@@ -17,7 +17,7 @@ import (
 // Seeds include real ManifestPath output so the fuzzer explores
 // near-valid shapes around the shard/segment structure.
 func FuzzPathParsers(f *testing.F) {
-	if p, err := artifact.ManifestPath(domain.ManifestDigest("sha256-" + strings.Repeat("a", 64))); err == nil {
+	if p, err := layout.ManifestPath(domain.ManifestDigest("sha256-" + strings.Repeat("a", 64))); err == nil {
 		f.Add(p)
 	}
 	f.Add("")
@@ -28,7 +28,7 @@ func FuzzPathParsers(f *testing.F) {
 	f.Add(strings.Repeat("../", 32))
 
 	f.Fuzz(func(t *testing.T, p string) {
-		_, _ = artifact.RefFromBlobPath(p)
-		_, _ = artifact.DigestFromManifestPath(p)
+		_, _ = layout.RefFromBlobPath(p)
+		_, _ = layout.DigestFromManifestPath(p)
 	})
 }
