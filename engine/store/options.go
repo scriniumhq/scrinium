@@ -90,8 +90,8 @@ func WithReadRegistry(r pipeline.TransformerRegistry) StoreOption {
 }
 
 // WithKeyResolver provides the key-resolver plugin. By default the
-// engine uses StaticKeyResolver populated with the DEK from
-// store.json.
+// engine uses StaticKeyResolver populated with the DEK from the
+// descriptor.
 func WithKeyResolver(r pipeline.KeyResolver) StoreOption {
 	return func(o *storeOptions) { o.keyResolver = r }
 }

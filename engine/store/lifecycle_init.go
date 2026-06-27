@@ -44,7 +44,7 @@ import (
 //     Otherwise the DEK is stored in the descriptor in
 //     plaintext — semantically honest: no passphrase, no
 //     protection.
-//  7. Write store.json (both replicas) and the L2 cache.
+//  7. Write both descriptor replicas.
 //  8. Construct the *store object in StateUnlocked and return.
 //     For encrypted Stores, also return the Recovery Kit
 //     bytes — the host MUST persist them before reporting
@@ -63,7 +63,7 @@ import (
 //   - ManifestCrypto != Plain without WithPassphrase →
 //     errs.ErrPassphraseRequired. An unprotected DEK plus
 //     encrypted manifests is the worst-of-both-worlds shape:
-//     anyone who reads store.json gets the keys to all the
+//     anyone who reads the descriptor gets the keys to all the
 //     manifests for free.
 func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Store, []byte, error) {
 	if drv == nil {
@@ -128,7 +128,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	//
 	// Sealed and Paranoid only make sense alongside a
 	// wrapped DEK: encrypting manifests against a plaintext key
-	// stored in store.json provides no protection, just
+	// stored in the descriptor provides no protection, just
 	// operational pain. Caught here at InitStore so the user
 	// sees the conflict before any disk I/O.
 	if cfg.ManifestCrypto != domain.ManifestCryptoPlain && o.passphrase == nil {
@@ -178,7 +178,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		desc.DEKEncrypted = false
 	}
 
-	// --- Persist descriptor, L2 cache, and system.config ---
+	// --- Persist descriptor and system.config ---
 
 	if err := persistInitState(ctx, drv, o.hashRegistry, cfg, desc, wrap); err != nil {
 		aead.Wipe(dek)

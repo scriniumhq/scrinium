@@ -21,8 +21,8 @@ import (
 func (a *rebuildAgent) rebuildCore(ctx context.Context) (map[string]int64, error) {
 	start := time.Now()
 
-	// Catastrophic recovery: rewrite store.json from the Recovery Kit
-	// before the scan, under the maintenance lease, when every
+	// Catastrophic recovery: rewrite the descriptor replicas from the Recovery
+	// Kit before the scan, under the maintenance lease, when every
 	// descriptor replica was lost. The scan then repopulates the index
 	// from the manifests that survived alongside the blobs.
 	if a.cfg.RecoveryKit != nil {
@@ -33,7 +33,7 @@ func (a *rebuildAgent) rebuildCore(ctx context.Context) (map[string]int64, error
 
 	// Key material for decoding encrypted manifests read straight off the
 	// Location. nil for an unencrypted Store — the scan then handles Plain
-	// manifests only (encrypted ones are skipped, as before).
+	// manifests only (encrypted ones are skipped).
 	keys := store.ManifestKeyProvider(a.store)
 	if err := a.rebuildIndex(ctx, keys); err != nil {
 		return nil, fmt.Errorf("rebuild.Rebuild.Run: %w", err)
@@ -67,13 +67,14 @@ func (a *rebuildAgent) maintenanceSpec() agent.MaintenanceSpec {
 	}
 }
 
-// restoreDescriptor rewrites store.json (and its L1 shadow) from the
-// Recovery Kit in the config, for the catastrophic case where every
-// on-disk descriptor replica was lost. It records the outcome in stats
-// (DescriptorRewrote). The kit-to-descriptor mapping and the two-replica
-// write live in the store package (RestoreDescriptorFromRecoveryKit),
-// which owns the descriptor and kit formats; the agent only sequences it
-// under the maintenance lease ahead of the scan.
+// restoreDescriptor rewrites both descriptor replicas (store.descriptor and
+// store.descriptor.backup) from the Recovery Kit in the config, for the
+// catastrophic case where every on-disk descriptor replica was lost. It
+// records the outcome in stats (DescriptorRewrote). The kit-to-descriptor
+// mapping and the two-replica write live in the store package
+// (RestoreDescriptorFromRecoveryKit), which owns the descriptor and kit
+// formats; the agent only sequences it under the maintenance lease ahead of
+// the scan.
 func (a *rebuildAgent) restoreDescriptor(ctx context.Context) error {
 	info, err := store.RestoreDescriptorFromRecoveryKit(ctx, a.drv, a.cfg.RecoveryKit)
 	if err != nil {

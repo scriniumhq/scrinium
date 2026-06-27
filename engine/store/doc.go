@@ -105,7 +105,8 @@
 //   - cas    — the artifact I/O mechanics over the engine/artifact
 //     format: blob materialization, manifest assembly/persistence (write)
 //     and manifest load, blob open, and verification (read).
-//   - descriptor   — the on-disk descriptor and its L2 cache.
+//   - descriptor   — the descriptor: two keep=0 named-cell replicas
+//     (store.descriptor + backup) with reconcile.
 //   - keyring      — the KDF (Argon2id) and KEK/DEK wrap/unwrap kernels.
 //   - named — the named/<name>.<seq> flat address-space mechanics
 //     (name validation, seq claim via atomic create, inline-manifest

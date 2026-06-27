@@ -39,8 +39,7 @@ func (a *rebuildAgent) tryCheckpointFastPath(ctx context.Context, keys domain.Ke
 
 	// Identity is enforced upstream: fetchCheckpoint's System().Get opens the
 	// checkpoint pointer envelope, which rejects a foreign store_id
-	// (ADR-104/105). A foreign checkpoint never reaches the restore below. The
-	// former descriptor_blob check (L2 cache) is retired with ADR-103.
+	// (ADR-104/105). A foreign checkpoint never reaches the restore below.
 
 	if err := restorer.RestoreCheckpoint(ctx, tmpPath); err != nil {
 		return false, fmt.Errorf("restore checkpoint %q: %w", name, err)

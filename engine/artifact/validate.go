@@ -23,7 +23,8 @@ func checkRefLimits(m domain.Manifest) error {
 
 // validateSlot enforces the manifest slot invariant (ADR-92/104): a manifest
 // is exactly one kind, decided by which identity slot is filled, and each kind
-// carries the structure its kind requires. It runs at the encode boundary
+// carries the structure its kind requires (a system artifact, in particular,
+// is always inline with no blob_ref). It runs at the encode boundary
 // (Encode and encodeEncrypted), beside checkRefLimits, so a structurally
 // invalid manifest is never serialised.
 func validateSlot(m domain.Manifest) error {
@@ -46,6 +47,10 @@ func validateSlot(m domain.Manifest) error {
 		if len(m.InlineBlob) == 0 {
 			return fmt.Errorf("%w: system artifact %q has no inline payload",
 				errs.ErrInvalidManifestSlot, m.Name)
+		}
+		if m.LayoutHeader.BlobStorage != domain.LayoutInline {
+			return fmt.Errorf("%w: system artifact %q is not inline (%q)",
+				errs.ErrInvalidManifestSlot, m.Name, m.LayoutHeader.BlobStorage)
 		}
 		if hasIdentityMeta {
 			return fmt.Errorf("%w: system artifact %q carries identity-meta",

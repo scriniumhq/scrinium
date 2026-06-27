@@ -235,7 +235,7 @@ func TestOpenStore_EncryptedState(t *testing.T) {
 // TestOpenStore_NonPlainManifestCryptoOpens: OpenStore accepts Sealed and
 // Paranoid configurations (with auto-unlock) and reaches Unlocked. The
 // body-encryption path itself is covered by the Put/Get tests; this only
-// pins that such configs are no longer refused at open.
+// pins that such configs are accepted at open.
 func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
 	for _, crypto := range []domain.ManifestCrypto{
 		domain.ManifestCryptoSealed,
@@ -363,20 +363,19 @@ func TestOpenStore_RestoresImmutableConfig(t *testing.T) {
 	}
 }
 
-// TestOpenStore_RefreshesL2CacheOnFirstOpen: the first open on a fresh
-// in-memory index (no L2 cache) must build the cache from Location
-// without crashing. The cache is package-private, so this is a smoke on
-// the refresh path.
-func TestOpenStore_RefreshesL2CacheOnFirstOpen(t *testing.T) {
+// TestOpenStore_FirstOpenOnFreshIndex: the first open on a fresh
+// in-memory index must succeed without crashing — a smoke on the open
+// path (descriptor reconcile + system config read).
+func TestOpenStore_FirstOpenOnFreshIndex(t *testing.T) {
 	drv := driverfx.LocalFS(t)
 	storefx.InitPlainOn(t, drv)
 	if _, err := storefx.TryOpenOn(t, drv); err != nil {
-		t.Fatalf("OpenStore (no cache): %v", err)
+		t.Fatalf("OpenStore: %v", err)
 	}
 }
 
 // TestLifecycle_FullDiskRoundTrip is the end-to-end lifecycle over real
-// on-disk artifacts (localfs + sqlite): init writes store.json, the first
+// on-disk artifacts (localfs + sqlite): init writes the descriptor, the first
 // system/config version, and the index; the open store serves
 // Capacity/Walk/SetMaintenanceMode; after closing the index a fresh
 // session reopens the same Location with the same StoreID and active

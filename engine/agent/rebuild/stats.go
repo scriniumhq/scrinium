@@ -29,7 +29,7 @@ type RebuildStats struct {
 	// PacksIndexed — pack volume TOCs read and parsed.
 	PacksIndexed int64
 
-	// DescriptorRewrote — was store.json rewritten from the
+	// DescriptorRewrote — was the descriptor rewritten from the
 	// Recovery Kit?
 	DescriptorRewrote bool
 

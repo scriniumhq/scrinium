@@ -21,9 +21,9 @@ type RecoveryKitRestoreInfo struct {
 	DescriptorWritten bool
 }
 
-// RestoreDescriptorFromRecoveryKit rebuilds store.json (and its L1
-// shadow .store.backup.json) from Recovery Kit bytes — the
-// disaster-recovery path for when every on-disk descriptor replica is
+// RestoreDescriptorFromRecoveryKit rebuilds both descriptor replicas
+// (store.descriptor and store.descriptor.backup) from Recovery Kit bytes —
+// the disaster-recovery path for when every on-disk descriptor replica is
 // gone but the operator still holds the kit, the passphrase, and the
 // encrypted blobs.
 //
