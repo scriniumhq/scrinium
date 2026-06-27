@@ -39,7 +39,7 @@ func TestIndex_SkipsWithoutNSID(t *testing.T) {
 	cases := map[string]json.RawMessage{
 		"nil ext":      nil,
 		"empty object": json.RawMessage(`{}`),
-		"foreign ext":  json.RawMessage(`{"kind":"scrinium.fs/v1","path":"/a"}`),
+		"foreign ext":  json.RawMessage(`{"vfsmeta":{"version":1,"path":"a"}}`),
 		"empty nsid":   json.RawMessage(`{"nsid":""}`),
 	}
 	for name, ext := range cases {
@@ -57,11 +57,12 @@ func TestIndex_SkipsWithoutNSID(t *testing.T) {
 
 func TestIndex_CoexistsWithOtherExtKeys(t *testing.T) {
 	e := NewIndex(nil)
-	// A vfsmeta payload that also carries the namespace stamp: the index
-	// reads only its own "nsid" key and ignores the rest.
+	// A manifest carrying both the vfsmeta schema (under its own "vfsmeta"
+	// key) and the namespace stamp: the index reads only its own "nsid"
+	// key and ignores the rest.
 	m := domain.Manifest{
 		ArtifactID: "art-2",
-		Ext:        json.RawMessage(`{"kind":"scrinium.fs/v1","path":"/docs/a.txt","nsid":"ns-uuid-2"}`),
+		Ext:        json.RawMessage(`{"vfsmeta":{"version":1,"path":"docs/a.txt"},"nsid":"ns-uuid-2"}`),
 	}
 	projs, err := e.Index(context.Background(), nil, m)
 	if err != nil {

@@ -1,6 +1,6 @@
-// Package fspath is an index custom index that persists the vfsmeta
-// payload of every artifact whose Manifest.Ext uses the
-// filesystem schema. It hangs off StoreIndex via the index
+// Package fspath is an index custom index that persists the Ext block
+// of every artifact that carries a vfsmeta payload (Manifest.Ext
+// under the "vfsmeta" key). It hangs off StoreIndex via the index
 // custom indexes infrastructure (see 3. Reference/09 CustomIndex and Search.md).
 //
 // The custom index serves two roles:
@@ -18,9 +18,9 @@
 //     specific resource) call LookupByPath. The custom index
 //     keeps a reverse index for O(log N) lookups.
 //
-// fspathindex stores the vfsmeta JSON as-is rather than pre-decoded
-// columns. The marker schema is versioned (`scrinium.fs/v1`,
-// future v2…); keeping the bytes verbatim lets newer schemas
-// flow through without an fspathindex migration whenever vfsmeta
-// adds a field.
+// fspathindex stores the Ext JSON as-is rather than pre-decoded
+// columns. The schema is versioned (a "version" field in the vfsmeta
+// payload; future versions…); keeping the bytes verbatim lets newer
+// schemas flow through without an fspathindex migration whenever
+// vfsmeta adds a field.
 package fspath

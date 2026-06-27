@@ -101,19 +101,23 @@ func TestScopedStore_PutStampsNSID(t *testing.T) {
 func TestScopedStore_PutMergesExistingExt(t *testing.T) {
 	inner := &fakeDataStore{}
 	s := wrap(t, "ns-1", inner)
-	a := domain.Artifact{Ext: json.RawMessage(`{"kind":"scrinium.fs/v1","path":"/a"}`)}
+	a := domain.Artifact{Ext: json.RawMessage(`{"vfsmeta":{"version":1,"path":"a"}}`)}
 	if _, err := s.Put(context.Background(), a); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	var got map[string]string
+	var got map[string]json.RawMessage
 	if err := json.Unmarshal(inner.lastExt, &got); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got["nsid"] != "ns-1" {
-		t.Errorf("nsid = %q, want ns-1", got["nsid"])
+	var nsid string
+	if err := json.Unmarshal(got["nsid"], &nsid); err != nil {
+		t.Fatalf("decode nsid: %v", err)
 	}
-	if got["kind"] != "scrinium.fs/v1" || got["path"] != "/a" {
-		t.Errorf("foreign keys lost: %v", got)
+	if nsid != "ns-1" {
+		t.Errorf("nsid = %q, want ns-1", nsid)
+	}
+	if _, ok := got["vfsmeta"]; !ok {
+		t.Errorf("foreign vfsmeta key lost: %s", inner.lastExt)
 	}
 }
 

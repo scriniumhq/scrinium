@@ -134,13 +134,14 @@ func ManifestWithVfsmetaPath(id, path string) domain.Manifest {
 	return m
 }
 
-// AddVfsmetaPath sets the manifest's Ext block to an fsmeta record
-// carrying path. Overwrites any existing Ext.
+// AddVfsmetaPath merges an fsmeta record carrying path into the
+// manifest's Ext map under the "vfsmeta" key, preserving any other
+// schemas already present.
 func AddVfsmetaPath(m *domain.Manifest, path string) error {
-	raw, err := vfsmeta.Encode(vfsmeta.FileSystem{Path: path})
+	ext, err := vfsmeta.Embed(m.Ext, vfsmeta.FileSystem{Path: path})
 	if err != nil {
 		return err
 	}
-	m.Ext = raw
+	m.Ext = ext
 	return nil
 }

@@ -124,8 +124,8 @@ func (e *CustomIndex) Close() error {
 //
 // Manifests that carry no vfsmeta payload (foreign schema, system
 // artifacts, nil Ext) are silently skipped — the index only stores what
-// it understands. A payload that claims the vfsmeta marker but is
-// structurally broken returns an error, which rolls the whole write back
+// it understands. A vfsmeta payload that is present but structurally
+// broken returns an error, which rolls the whole write back
 // (strict consistency, ADR-49).
 func (e *CustomIndex) Index(ctx context.Context, sub customindex.Substrate, m domain.Manifest) ([]customindex.Projection, error) {
 	fs, ok, err := vfsmeta.Decode(m.Ext)

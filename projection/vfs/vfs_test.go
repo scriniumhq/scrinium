@@ -248,8 +248,7 @@ func TestVFS_NameFilter_OmitsFromListing(t *testing.T) {
 // vfsmeta.
 func mkManifest(path, namespace, payload string) domain.Manifest {
 	id := domain.ArtifactID(strings.ReplaceAll(path, "/", "_") + "_id")
-	extMeta, _ := vfsmeta.Encode(vfsmeta.FileSystem{
-		Kind: vfsmeta.Marker,
+	extMeta, _ := vfsmeta.Embed(nil, vfsmeta.FileSystem{
 		Path: path,
 		Mode: 0o644,
 	})

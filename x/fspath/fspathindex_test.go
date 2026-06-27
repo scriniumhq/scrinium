@@ -44,12 +44,12 @@ func newRegisteredFSPathIndex(t *testing.T) (*sqlite.Index, *fsExt.CustomIndex) 
 // ingester writes vfsmeta into Ext, see examples/ingest).
 func makeFSManifest(t *testing.T, id domain.ArtifactID, path string) domain.Manifest {
 	t.Helper()
-	raw, err := vfsmeta.Encode(vfsmeta.FileSystem{
+	raw, err := vfsmeta.Embed(nil, vfsmeta.FileSystem{
 		Path: path,
 		Mode: 0o644,
 	})
 	if err != nil {
-		t.Fatalf("vfsmeta.Encode: %v", err)
+		t.Fatalf("vfsmeta.Embed: %v", err)
 	}
 	return domain.Manifest{
 		ArtifactID:   id,
@@ -66,7 +66,7 @@ func makeFSManifest(t *testing.T, id domain.ArtifactID, path string) domain.Mani
 // vfsmeta schema. fspathindex must skip it.
 func makeForeignManifest(t *testing.T, id domain.ArtifactID) domain.Manifest {
 	t.Helper()
-	raw, _ := json.Marshal(map[string]string{"kind": "email/v1", "subject": "hi"})
+	raw, _ := json.Marshal(map[string]any{"email": map[string]string{"subject": "hi"}})
 	return domain.Manifest{
 		ArtifactID:   id,
 		BlobRefs:     []domain.BlobRef{"sha256-" + domain.BlobRef(id)},
@@ -190,8 +190,8 @@ func TestIndex_BrokenVFSMeta_RollsBackMainWrite(t *testing.T) {
 	ctx := t.Context()
 	idx, _ := newRegisteredFSPathIndex(t)
 
-	// Right marker, wrong type for Path: Decode returns an error.
-	bad := json.RawMessage(`{"kind":"scrinium.fs/v1","path":12345}`)
+	// Right key, wrong type for Path: Decode returns an error.
+	bad := json.RawMessage(`{"vfsmeta":{"version":1,"path":12345}}`)
 	m := domain.Manifest{
 		ArtifactID:   "art-bad",
 		BlobRefs:     []domain.BlobRef{"sha256-bad"},
