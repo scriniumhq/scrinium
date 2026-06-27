@@ -30,7 +30,7 @@ type RebuildConfig struct {
 
 	// RecoveryKit holds the Recovery Kit content as bytes. Required
 	// when the Store is in StateCorrupted because every descriptor
-	// replica was lost (store.json missing or invalid). Otherwise
+	// replica was lost (descriptor missing or invalid). Otherwise
 	// nil.
 	RecoveryKit []byte
 

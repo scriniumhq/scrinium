@@ -12,7 +12,7 @@ import (
 // is blocked until initialisation completes.
 var ErrStoreNotReady = errors.New("scrinium: store not ready")
 
-// ErrStoreNotFound — OpenStore: no store.json in the Location.
+// ErrStoreNotFound — OpenStore: no store descriptor in the Location.
 // Bridges to fs.ErrNotExist so a host can errors.Is(err,
 // fs.ErrNotExist) when probing for an existing store. Distinct
 // from ErrArtifactNotFound (an artifact inside an open Store).

@@ -5,9 +5,8 @@ package pipeline
 // per-stage output hashes via TeeReader. It is the single place that
 // translates docs §2.3 (Data Flows) and §7.1 (Plugins) into Go.
 //
-// Extracted from store (was store/store_pipeline.go): store keeps
-// policy and orchestration, pipeline owns the engine. A Runner is
-// constructed per operation by store via NewRunner(hashes,
+// store keeps policy and orchestration, pipeline owns the engine. A
+// Runner is constructed per operation by store via NewRunner(hashes,
 // transformers); it is a cheap struct wrapper over those two
 // registries.
 //

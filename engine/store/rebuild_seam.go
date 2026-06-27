@@ -21,7 +21,7 @@ import (
 // It returns nil for an unencrypted Store (no resolver) or a non-*store
 // implementation; the caller then falls back to the Plain-only decoder.
 // The crypto.State accessor takes the crypto mutex and adapts the resolver,
-// so this no longer reaches into crypto internals.
+// so this does not reach into crypto internals.
 func ManifestKeyProvider(s Store) domain.KeyProvider {
 	concrete, ok := s.(*store)
 	if !ok {

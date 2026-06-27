@@ -490,7 +490,7 @@ func openOrInitStore(
 // unencrypted store InitStore returns no kit (empty slice); for an
 // encrypted one it returns the kit the host must persist out of band —
 // the assembler hands it up through the Assembly (Info.Created +
-// RecoveryKit), no longer refusing encrypted initialisation.
+// RecoveryKit).
 func initStore(ctx context.Context, drv driver.Driver, opts []store.StoreOption) (store.Store, bool, []byte, error) {
 	st, kit, err := store.InitStore(ctx, drv, opts...)
 	if err != nil {

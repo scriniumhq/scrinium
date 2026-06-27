@@ -44,6 +44,7 @@ func TestValidateSlot(t *testing.T) {
 		{"system without inline", domain.Manifest{Name: "config.1", BlobRefs: blob}, true},
 		{"system with identity-meta", domain.Manifest{Name: "config.1", LayoutHeader: inlineHdr, InlineBlob: inline, IdentityMetaHash: md}, true},
 		{"system with identity nonce", domain.Manifest{Name: "config.1", LayoutHeader: inlineHdr, InlineBlob: inline, IdentityNonce: nonce}, true},
+		{"system not inline (Target layout)", domain.Manifest{Name: "config.1", LayoutHeader: domain.LayoutHeader{BlobStorage: domain.LayoutTarget}, InlineBlob: inline}, true},
 
 		// Invalid: inline content is embedded, not a physical blob — it
 		// carries no blob_ref (ADR-66/92, Option A).

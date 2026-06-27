@@ -21,8 +21,8 @@ import (
 // OpenStore opens an existing Store at the Location served by drv.
 //
 // Behaviour:
-//  1. Read both descriptor replicas (L0 store.json, L1
-//     .store.backup.json) and reconcile them. If
+//  1. Read both descriptor replicas (store.descriptor,
+//     store.descriptor.backup) and reconcile them. If
 //     both are absent → errs.ErrStoreNotFound. If both are
 //     unrecoverable (corrupted, or one corrupted + one absent)
 //     → errs.ErrStoreCorrupted. If both are valid but content
@@ -82,8 +82,8 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- StoreIndex dependency ---
 	//
-	// Required up-front: readSystemConfig and the L2 cache need
-	// it; refusing here gives a clearer error than failing later.
+	// Required up-front: readSystemConfig needs it; refusing here
+	// gives a clearer error than failing later.
 
 	idx := o.storeIndex
 	if idx == nil {

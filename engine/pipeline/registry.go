@@ -1,8 +1,7 @@
 package pipeline
 
-// registry.go — the default TransformerRegistry implementation,
-// moved in from the former plugins grab-bag. It lives next to the
-// TransformerFactory/TransformerRegistry contracts it implements.
+// registry.go — the default TransformerRegistry implementation, beside
+// the TransformerFactory/TransformerRegistry contracts it implements.
 //
 // The concurrency-safe map mechanics are the shared internal/registry
 // primitive; this type only adds the contract's shape (chainable

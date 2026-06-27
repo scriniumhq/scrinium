@@ -156,8 +156,11 @@ var _ Store = (*systemStore)(nil)
 // registry (verify-on-read and the content hash of each write), the active
 // config (for its immutable ContentHasher), the store's authoritative store_id
 // (stamped into every artifact's envelope on write and checked on read,
-// ADR-104), and a logger for best-effort prune failures. No StoreIndex and no
-// write indirection: the inline-manifest write is self-contained in named.
+// ADR-104), a CryptoProvider (policy DEK/keyID on write, KeyProvider on read —
+// ADR-104 §2c; a Plain store supplies a nil-DEK provider), an ExternalResolver
+// (resolve/delete external_payload_ref targets — ADR-105), and a logger for
+// best-effort prune failures. No StoreIndex and no write indirection: the
+// inline-manifest write is self-contained in named.
 func New(
 	drv driver.Driver,
 	hashes domain.HashRegistry,

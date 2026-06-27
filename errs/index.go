@@ -19,9 +19,6 @@ var ErrIndexSchemaMismatch = errors.New("scrinium: index schema mismatch")
 // lease.
 var ErrMaintenanceInProgress = errors.New("scrinium: maintenance in progress")
 
-// ErrMetaKeyNotFound — the requested key is missing in store_meta.
-var ErrMetaKeyNotFound = errors.New("scrinium: meta key not found")
-
 // ErrNoCheckpoint — RebuildIndexAgent.Validate with
 // Source: Checkpoint when no valid checkpoints are available.
 var ErrNoCheckpoint = errors.New("scrinium: no valid checkpoint for Source=Checkpoint")

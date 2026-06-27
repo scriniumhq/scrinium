@@ -101,7 +101,7 @@ func DialDriver(rawURI string) (Driver, error) {
 // and dispatches through the registry. Centralising this
 // rather than calling localfs.New directly keeps the dial
 // path uniform — every Driver creation goes through the
-// registered file dialer, even on the legacy code path.
+// registered file dialer.
 func dialBarePath(absPath string) (Driver, error) {
 	d, ok := dialers.Get("file")
 	if !ok {

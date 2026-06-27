@@ -46,7 +46,7 @@ func (i *Index) Resolve(ctx context.Context, blobRef string) (domain.PhysicalAdd
 // crypto-identity guards against collapsing two physically distinct
 // encrypted blobs (different key, or Plain vs encrypted) that happen
 // to share a plaintext ContentHash. For Plain blobs crypto is empty
-// and the key degrades to the historical pair.
+// and the key degrades to the (ContentHash, OriginalSize) pair.
 //
 // Returns (blobRef, true, nil) when found; ("", false, nil) when
 // absent; and ("", false, err) for unexpected failures.

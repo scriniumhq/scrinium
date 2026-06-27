@@ -9,10 +9,9 @@ import (
 // errors (resolution, type mismatches) and build-tag gates for the
 // optional FUSE / WebDAV mounts.
 //
-// Note on closed-view operations: ErrViewClosed used to live here;
-// it was removed in P1.11 in favour of the standard-library
-// os.ErrClosed. Callers that need to detect a closed View should
-// errors.Is against os.ErrClosed (which is what View now returns).
+// Closed-view operations surface the standard-library os.ErrClosed;
+// callers that need to detect a closed View should errors.Is against
+// os.ErrClosed (which is what View returns).
 
 // ErrPathNotFound — Get/Open at a non-existent virtual path.
 // Bridges to fs.ErrNotExist so host code can errors.Is against
@@ -22,7 +21,7 @@ var ErrPathNotFound = newBridgedSentinel(
 )
 
 // ErrNotADirectory — List on a path that points to a file.
-// Bridges to fs.ErrInvalid (mirrors the historical vfs.WrapErr
+// Bridges to fs.ErrInvalid (mirrors the vfs.WrapErr
 // translation; surfaces map fs.ErrInvalid to ENOTDIR themselves).
 var ErrNotADirectory = newBridgedSentinel(
 	"scrinium: projection not a directory", fs.ErrInvalid,

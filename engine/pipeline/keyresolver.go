@@ -2,7 +2,7 @@ package pipeline
 
 // keyresolver.go — encryption-key resolution contract: KeyResolver,
 // its write-time KeyContext, and the default static resolver
-// constructor. Split out of the former plugins.go grab-bag.
+// constructor.
 
 // KeyResolver is the plugin that resolves a DEK by its string
 // KeyID. It allows a Store to support several DEKs simultaneously:

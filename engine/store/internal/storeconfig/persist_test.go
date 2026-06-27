@@ -22,10 +22,10 @@ import (
 
 // White-box unit tests of the system/config persistence path. Under the
 // seq model (ADR-85) the active config is the highest system/config
-// version and there is no pointer file, so the historical
-// corrupted-pointer / dangling-pointer cases are gone. Write is now
-// self-contained (driver + hash registry, no ArtifactWriter), so the
-// round-trip lives here rather than on the core side.
+// version and there is no pointer file, so there are no
+// corrupted-pointer / dangling-pointer cases. Write is self-contained
+// (driver + hash registry, no ArtifactWriter), so the round-trip lives
+// here rather than on the core side.
 
 // testHashes is a minimal sha256-only domain.HashRegistry. Defined
 // locally rather than reusing storefx.Hashes() because storefx imports

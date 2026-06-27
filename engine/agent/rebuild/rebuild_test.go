@@ -315,7 +315,7 @@ func TestRebuild_RecoveryKit_CorruptedFails(t *testing.T) {
 
 // TestRebuild_RecoveryKit_RestoresDescriptor drives the catastrophic
 // recovery path: an encrypted Store's descriptor replicas are deleted,
-// then the agent rewrites store.json from the kit before scanning. The
+// then the agent rewrites the descriptor replicas from the kit before scanning. The
 // scan itself reindexes nothing here (a Sealed Store's manifests are not
 // decodable without a KeyProvider on M3) — the assertion is on the
 // descriptor restore.

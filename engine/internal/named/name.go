@@ -14,8 +14,8 @@ import (
 
 // root is the single driver-side root for all system artifacts. The name's
 // first segment ("config", "scrub", "index_checkpoint", ...) categorises the
-// artifact (ADR-85: category is a name prefix, not a separate namespace), so
-// the old system.config/system.state split is gone — everything is a flat
+// artifact (ADR-85: category is a name prefix, not a separate namespace):
+// everything is a flat
 // file directly under this one root: "named/<name>.<seq>" for a version,
 // "named/<name>.cell" for a keep=0 cell. No per-artifact subdirectory; the
 // layout is planar.

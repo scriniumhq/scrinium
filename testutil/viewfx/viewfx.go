@@ -59,8 +59,8 @@ func Stack(t testing.TB, manifests ...domain.Manifest) (*projection.Projection, 
 
 // RoutingAll returns a RoutingConfig with every service tree enabled
 // under the conventional "_scrinium" prefix (the root view is set on the
-// projection, not here) — the literal fuse, webdav, and the projection
-// routing tests previously each declared inline.
+// projection, not here), for the fuse, webdav, and projection routing
+// tests.
 //
 // ShowRaw stays false: the raw tree is opt-in per surface (webview
 // turns it on, fuse/webdav do not), so a test that needs it flips the

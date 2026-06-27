@@ -25,9 +25,9 @@ type envelope struct {
 	// is its mere presence.
 	InlinePayload []byte `json:"inline_payload,omitempty"`
 	// ExternalPayloadRef is a single ManifestDigest of an external, headless
-	// data artifact for large payloads (ADR-105). Optional. Resolution is a
-	// later iteration's concern; the field is carried now so the envelope
-	// shape is stable.
+	// data artifact for large payloads (ADR-105). Optional. When set, Get
+	// resolves it through the ExternalResolver (OpenExternal) and Delete
+	// cascades to reap it (DeleteExternal); an inline payload is then absent.
 	ExternalPayloadRef string `json:"external_payload_ref,omitempty"`
 }
 

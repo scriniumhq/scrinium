@@ -65,7 +65,7 @@ type StoreIndex interface {
 	// ExistsByContent is an exact check by the composite dedup key
 	// (ContentHash, OriginalSize, CryptoIdentity) for regular blobs.
 	// CryptoIdentity is empty for Plain blobs, in which case the key
-	// degrades to the historical (ContentHash, OriginalSize) — see
+	// degrades to (ContentHash, OriginalSize) — see
 	// ADR-58. A hit means a byte-reproducible duplicate exists; the
 	// caller may drop its staging blob and reference the survivor.
 	ExistsByContent(ctx context.Context, hash domain.ContentHash, originalSize int64, crypto domain.CryptoIdentity) (blobRef string, exists bool, err error)

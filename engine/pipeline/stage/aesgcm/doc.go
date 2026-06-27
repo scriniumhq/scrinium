@@ -3,7 +3,7 @@
 //
 // Wiring (typical host setup):
 //
-//	reg := plugins.NewTransformerRegistry().
+//	reg := pipeline.NewTransformerRegistry().
 //	    Register("aes-gcm", aesgcm.New(dek))
 //	store, _, _ := store.InitStore(ctx, drv,
 //	    store.WithReadRegistry(reg), /* ... */)

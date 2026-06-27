@@ -136,11 +136,10 @@ func TestClose_MarksClosed(t *testing.T) {
 	}
 }
 
-// TestClose_OperationsReturnErrClosed verifies the new
-// post-Close behaviour: any operation gated on checkOperational
-// returns os.ErrClosed, not ErrLocked. Plain (unencrypted) stores
-// previously returned ErrLocked here, which sent users hunting
-// for a passphrase that did not exist.
+// TestClose_OperationsReturnErrClosed verifies that after Close any
+// operation gated on checkOperational returns os.ErrClosed, not
+// ErrLocked — including Plain (unencrypted) stores, so a closed store
+// never sends users hunting for a passphrase that does not exist.
 func TestClose_OperationsReturnErrClosed(t *testing.T) {
 	cases := []struct {
 		name string

@@ -276,13 +276,11 @@ func TestDecode_RejectsEmptyInput(t *testing.T) {
 	}
 }
 
-// TestDecode_RejectsMalformedWithoutPanic guards against the
-// shadowed-checksumIdx footgun in the previous Decode: a malformed
-// input without a "\n[CHECKSUM]\n" sentinel must surface as
+// TestDecode_RejectsMalformedWithoutPanic locks the contract that a
+// malformed input without a "\n[CHECKSUM]\n" sentinel surfaces as
 // ErrRecoveryKitCorrupted rather than panicking on a body slice
-// computed from a -1 index. The current Decode is linear; this
-// test locks the contract so a future "simplification" cannot
-// reintroduce the old shadow-based recovery branch by accident.
+// computed from a -1 index. Decode is linear; this test keeps a future
+// "simplification" from reintroducing a shadowed-index footgun.
 func TestDecode_RejectsMalformedWithoutPanic(t *testing.T) {
 	cases := []struct {
 		name string
