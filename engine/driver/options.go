@@ -3,7 +3,7 @@ package driver
 // PutOption configures a single Driver.Put call. Functional options
 // keep the Driver.Put signature stable as the option set grows and
 // let existing callers pass no options at all (the zero PutConfig is
-// the historical unconditional-overwrite behaviour). See ADR-26.
+// unconditional overwrite). See ADR-26.
 type PutOption func(*PutConfig)
 
 // PutConfig is the resolved set of per-call Put options. A Driver
@@ -19,8 +19,7 @@ type PutConfig struct {
 	// O_EXCL link; S3 with an If-None-Match: * precondition. Used
 	// by the engine for concurrent writes into a shared Location
 	// to avoid clobbering another writer's blob or resurrecting a
-	// tombstone. The default (false) is the historical
-	// unconditional overwrite.
+	// tombstone. The default (false) is unconditional overwrite.
 	Exclusive bool
 }
 

@@ -166,9 +166,9 @@ func (e *customIndex) DeletePack(ctx context.Context, packBlobRef string) error 
 }
 
 // PackedEntry describes one member of a sealed .pack volume — the
-// bundler's write-API input to RecordPack (ADR-86). Relocated from
-// domain: the core no longer knows pack types (the placement map is
-// owned here, not in the core index).
+// bundler's write-API input to RecordPack (ADR-86). The core does not
+// know pack types: the placement map is owned here, not in the core
+// index.
 type PackedEntry struct {
 	ArtifactID     domain.ArtifactID
 	BlobRef        string

@@ -15,8 +15,7 @@ import (
 // StoreConfig and its history live: store.config.<seq> (ADR-85). The
 // active config is max(seq); a new config is published by claiming the
 // next seq. There is no pointer file — the config path uses the same
-// name→seq mechanism as every other system artifact (named),
-// which is what removed the bespoke pointer this package used to carry.
+// name→seq mechanism as every other system artifact (named).
 const configName = "store.config"
 
 // Write persists cfg as a new store.config version and returns once the

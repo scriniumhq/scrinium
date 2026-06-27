@@ -242,8 +242,6 @@ func TestRefFromBlobPath_RoundTripsBlobPath(t *testing.T) {
 	}
 }
 
-// --- relocated from the old blobpath suite (was past_recovery_test.go) ---
-
 // RefFromBlobPath's other error tests cover an empty path, a no-algo-prefix
 // tail, and a non-hex tail; this is the remaining gap — a tail that is valid
 // hex but shorter than the four-char minimum. (The original input was

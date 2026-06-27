@@ -58,7 +58,7 @@ func newDriver(t *testing.T) *localfs.Driver {
 	return drv
 }
 
-// --- ValidateName (relocated from package store's validateSystemName) ---
+// --- ValidateName ---
 
 func TestValidateName_Accepts(t *testing.T) {
 	valid := []string{

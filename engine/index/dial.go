@@ -54,9 +54,8 @@ func RegisteredSchemes() []string {
 // is forwarded to the dialer.
 //
 // Unlike DialDriver, there is no bare-path fallback: index
-// URIs are new from day one (no legacy "indexPath" config to
-// honour), and a bare path is ambiguous between sqlite, file
-// store, etc. The scheme is mandatory.
+// URIs always carry a scheme, and a bare path is ambiguous
+// between sqlite, file store, etc. The scheme is mandatory.
 func DialIndex(ctx context.Context, uri string, opts ...IndexOption) (StoreIndex, error) {
 	if uri == "" {
 		return nil, fmt.Errorf("index: empty URI")

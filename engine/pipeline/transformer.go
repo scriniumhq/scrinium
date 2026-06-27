@@ -8,8 +8,7 @@ import (
 
 // transformer.go — Pipeline transformation contracts: the
 // Encoder/Decoder pair, their factory, the per-write EncodeContext,
-// the AEAD capability marker, and the algorithm registry. Split out
-// of the former plugins.go grab-bag.
+// the AEAD capability marker, and the algorithm registry.
 
 // Encoder is the per-write transformation plugin (used by Put).
 // Created via TransformerFactory.NewEncoder(); lives for one

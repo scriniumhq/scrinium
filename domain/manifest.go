@@ -50,7 +50,7 @@ const (
 // EncodeContext; on Get the Decoder looks up candidate keys for
 // the recorded KeyID. The field is empty for non-crypto stages
 // and for crypto plugins that pin the DEK at factory construction
-// time (legacy single-key wiring).
+// time (single-key factory wiring).
 type PipelineStage struct {
 	Algorithm string
 	Hash      string
@@ -67,8 +67,7 @@ type PipelineStage struct {
 // slot: a filled slot consumes its members (top-down, +ref_count); an
 // empty slot (pack container) places them (bottom-up, no ref_count).
 //
-// The legacy single BlobRef has been removed (ADR-92) — the plain
-// blob is BlobRefs[0].
+// The plain blob is BlobRefs[0] (ADR-92).
 type Manifest struct {
 	// ArtifactID is the floating external identity (handle):
 	// PRF(NK, cd‖md). It is what the outside world holds and what

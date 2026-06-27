@@ -3,7 +3,7 @@
 //
 // Wiring (typical host setup):
 //
-//	reg := store.NewTransformerRegistry().
+//	reg := pipeline.NewTransformerRegistry().
 //	    Register("zstd", zstd.New(zstd.Options{}))
 //	store, _, _ := store.InitStore(ctx, drv,
 //	    store.WithReadRegistry(reg), /* ... */)

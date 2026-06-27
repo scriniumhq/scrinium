@@ -62,8 +62,8 @@ var errPipelineWithInline = errors.New(
 // withWriteDEK borrows a DEK copy for an encrypting write and guarantees
 // it is wiped before returning. For a Plain config it calls fn with a
 // nil DEK. The DEK never escapes fn, so no write path can leak it by
-// forgetting to wipe. The write KeyID is resolved by the caller (Put)
-// and no longer threaded here — withWriteDEK is now purely DEK custody.
+// forgetting to wipe. The write KeyID is resolved by the caller (Put);
+// withWriteDEK is purely DEK custody.
 func (s *store) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) error {
 	if cfg.ManifestCrypto == "" || cfg.ManifestCrypto == domain.ManifestCryptoPlain {
 		return fn(nil)

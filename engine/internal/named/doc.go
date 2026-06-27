@@ -3,11 +3,9 @@
 // content hash, the name-addressed counterpart of the content-addressed
 // engine/internal/cas. It is the single source of truth for where
 // a system artifact lives and how its active version is chosen, shared by
-// the callers that previously each carried their own copy of the rule:
-// the systemstore facade (engine/systemstore), the bootstrap config path
-// (engine/store/internal/storeconfig), and the lease primitive
-// (engine/lease). Putting the layout here is what collapses that
-// duplication into one mechanism.
+// its callers: the systemstore facade (engine/systemstore), the bootstrap
+// config path (engine/store/internal/storeconfig), and the lease primitive
+// (engine/lease). One layout, one mechanism for all three.
 //
 // A system artifact is identified by a NAME — a flat, dot-separated
 // key: "store.config", "store.agent.checkpoint.<ts>", "store.agent.gc.lease".

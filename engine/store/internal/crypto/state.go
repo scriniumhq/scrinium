@@ -23,13 +23,12 @@ import (
 // The state-machine orchestration around these operations — the
 // enterAdmin/enterWrite gates, the Locked↔Unlocked transitions, the
 // bootstrap Orphan Scan — stays in package store, which calls the methods
-// here. The split changes the lock discipline from the previous design:
-// State.mu and the store's stateMu are no longer nested. Each method
+// here. State.mu and the store's stateMu are never nested. Each method
 // below takes State.mu, does its key-material work (and, for the
 // descriptor-mutating ones, the persist) entirely under it, and releases
 // it before the store touches stateMu. The store therefore never holds
-// stateMu while reaching for State.mu, and vice-versa — the old
-// "crypto.mu → stateMu" ordering is satisfied trivially because the two
+// stateMu while reaching for State.mu, and vice-versa, so the
+// "crypto.mu → stateMu" ordering holds trivially because the two
 // are never held at once.
 //
 // drv is held so SetPassphrase and RotateKEK can persist the successor

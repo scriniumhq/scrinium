@@ -40,7 +40,7 @@ func TestAESGCM_RoundTrip(t *testing.T) {
 	payload := []byte("Scrinium is a content-addressable store.")
 
 	ct, res := encode(t, factory, pipeline.EncodeContext{}, payload)
-	// Segmented format: per-blob IV is gone — Result.IV must be nil.
+	// Segmented format carries no per-blob IV — Result.IV must be nil.
 	if res.IV != nil {
 		t.Fatalf("Result.IV must be nil for segmented format, got %d bytes", len(res.IV))
 	}

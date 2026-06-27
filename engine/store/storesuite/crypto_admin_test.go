@@ -3,8 +3,7 @@
 // already-encrypted, plain-store, locked-store) collapse into one table;
 // the passphrase-provider hint Reason per operation is a second table; the
 // state-changing happy paths and the no-lockout RotateKEK regression are
-// kept as focused tests. Now in package storesuite (was the lone external
-// storesuite_test).
+// kept as focused tests.
 
 package storesuite
 

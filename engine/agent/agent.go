@@ -197,8 +197,7 @@ func Build(kind string, st store.Store, cfg any, deps AgentDeps) (Agent, error) 
 // BaseState is the shared lifecycle-state helper an agent embeds to get
 // Status, SetState, and Logger for free. It is exported so agents in
 // subpackages (engine/agent/gc, .../scrub, ...) and host-defined custom
-// agents can embed it, not only the built-ins that used to share this
-// package.
+// agents can embed it, not only the built-in agents in this package.
 type BaseState = baseState
 
 // NewBaseState builds a BaseState with the given logger. A constructor is

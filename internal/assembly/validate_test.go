@@ -84,7 +84,7 @@ func TestValidateProjectionEnums(t *testing.T) {
 		Store:      &StoreSpec{Driver: "file:///d"},
 		Projection: &Projection{Editing: "maybe"},
 	}, "projection.editing")
-	// RootView is no longer validated here: the View validates at build
+	// RootView is not validated here: the View validates at build
 	// that the name matches an active root (intrinsic or extension-
 	// provided) and errors otherwise. Assembly does not enumerate roots.
 	wantErr(t, &Config{
