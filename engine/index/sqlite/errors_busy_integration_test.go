@@ -92,10 +92,9 @@ func TestClassifyError_RealBusyContention(t *testing.T) {
 		t.Fatalf("set busy_timeout on conn 2: %v", err)
 	}
 
-	// IndexManifest routes through observe → classifyError (the same path
-	// SetMeta used before store_meta was retired). With connection 1 holding
-	// the write lock, this write on conn 2 must hit SQLITE_BUSY and emerge as
-	// errs.ErrLeaseHeld.
+	// IndexManifest routes every write through observe → classifyError. With
+	// connection 1 holding the write lock, this write on conn 2 must hit
+	// SQLITE_BUSY and emerge as errs.ErrLeaseHeld.
 	err = idx2.IndexManifest(ctx, manifestfx.Blob("busy-art", "busy-blob"), manifestfx.PhysAddr("blobs/bb/uy/busy-blob"))
 	if err == nil {
 		t.Fatal("IndexManifest on locked db: expected busy error, got nil")

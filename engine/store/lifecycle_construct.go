@@ -46,11 +46,14 @@ func buildStore(
 		transformers: o.readRegistry,
 		crypto:       crypto.New(desc, dek, o.passphrase, o.keyResolver, drv),
 	}
-	// systemstore.Store facade over the pointer-free layout (ADR-85). It needs
-	// only the driver, the hash registry, the active config (for its
-	// immutable ContentHasher), and a logger — no StoreIndex and no write
-	// indirection, since system artifacts are unindexed and the inline
-	// write is self-contained in system artifact.
+	// systemstore.Store facade over the pointer-free layout (ADR-85). Besides
+	// the driver, the hash registry, the active config (for its immutable
+	// ContentHasher), and a logger, it takes the authoritative store_id
+	// (stamped into every envelope on write, checked on read — ADR-104), the
+	// CryptoProvider (policy DEK/keyID on write, KeyProvider on read — ADR-104
+	// §2c), and the ExternalResolver (resolve/delete external_payload_ref
+	// targets — ADR-105; the store itself satisfies it). No StoreIndex and no
+	// write indirection: the inline-manifest write is self-contained in named.
 	c.system = systemstore.New(drv, o.hashRegistry, cfg, desc.StoreID, c.crypto, c, c.log)
 
 	// Reject an illegal pipeline composition at construction time
@@ -105,9 +108,8 @@ func unlockBootstrap(ctx context.Context, c *store, pub event.Publisher) error {
 	if err != nil {
 		return fmt.Errorf("orphan scan: %w", err)
 	}
-	// Record the scan timestamp as a cursor system artifact (ADR-104 §6:
-	// service state lives in artifacts, not the index's store_meta — it must
-	// survive an index rebuild). Cold path (one write per open), so it is read
+	// Record the scan timestamp as a cursor system artifact (ADR-104 §6) so it
+	// survives an index rebuild. Cold path (one write per open), so it is read
 	// straight from the artifact when needed — no in-memory cache (S-19).
 	// keep=0 cell: a single current value, overwritten in place. Best-effort:
 	// a failure is appended to the report for observability but does not block

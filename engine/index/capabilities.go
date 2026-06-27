@@ -38,9 +38,9 @@ type CheckpointRestorer interface {
 // UsrIndexingSwitch is the optional capability of toggling the global
 // usr-pocket indexing gate the index holds in memory. The Store owns the
 // durable switch (a keep=0 system-artifact cell, ADR-104 §6) and pushes its
-// value here on open and on change; the index then reads the flag on its hot
-// projection/query paths instead of touching store_meta. Indexes that do not
-// project the usr pocket need not implement it.
+// value here on open and on change; the index then reads the in-memory flag
+// on its hot projection/query paths. Indexes that do not project the usr
+// pocket need not implement it.
 type UsrIndexingSwitch interface {
 	SetUsrIndexing(on bool)
 }

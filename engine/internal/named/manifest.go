@@ -1,10 +1,14 @@
 package named
 
 // manifest.go — building and loading the inline manifest that backs a system
-// artifact. System payloads are always Inline + Plain (ContentHash == BlobRef
-// == hash(payload)); the address is name+seq, so the manifest's own digest is
-// only a byproduct of encoding, and integrity on read comes from re-hashing
-// the inline payload against the manifest's embedded ContentHash.
+// artifact. System payloads are always Inline and carry no blob_ref — the
+// bytes live in the body, not a physical blob, so ContentHash == hash(payload)
+// is the only content anchor (Option A, ADR-66/92). Crypto follows the store's
+// ManifestCrypto policy (Plain / Sealed / Paranoid, ADR-104 §2c) — the
+// bootstrap chain (descriptor/config/lease) passes Plain explicitly. The
+// address is name+seq, so the manifest's own digest is only a byproduct of
+// encoding, and integrity on read comes from re-hashing the inline payload
+// against the manifest's embedded ContentHash.
 
 import (
 	"bytes"

@@ -160,8 +160,8 @@ func upsertProjUsr(ctx context.Context, tx *sql.Tx, digest, field string, kind c
 
 // SetUsrIndexing sets the in-memory usr-pocket indexing gate
 // (index.UsrIndexingSwitch). The Store calls it on open from the durable cell
-// and on any change; the hot projection/query paths read this flag rather than
-// store_meta (ADR-104 §6).
+// and on any change; the hot projection/query paths read this in-memory flag
+// (ADR-104 §6).
 func (i *Index) SetUsrIndexing(on bool) {
 	i.usrIndexing.Store(on)
 }
