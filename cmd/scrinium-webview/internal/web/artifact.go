@@ -30,20 +30,21 @@ import (
 // (FUSE, WebDAV, future ones) can install whatever they care
 // about.
 //
-// Marker is the schema's "kind" field as it appears in
-// Manifest.Usr (e.g. "scrinium.fs/v1"). Render produces an
-// HTML fragment for the specific schema; the web pkg slots it
-// into the artifact page's "Schema" section.
+// Key is the schema's key in Manifest.Ext (e.g. "vfsmeta",
+// "email", "acme.archive"). Render receives the full Ext object
+// and pulls its own key from it, producing an HTML fragment for
+// the schema; the web pkg slots it into the artifact page's
+// "Schema" section.
 //
 // Decoder errors don't break the page — the handler falls back
 // to the generic JSON view and notes the error inline.
 type SchemaDecoder interface {
-	Marker() string
-	Render(raw json.RawMessage) (template.HTML, error)
+	Key() string
+	Render(ext json.RawMessage) (template.HTML, error)
 }
 
 // RegisterDecoder installs a schema decoder. Subsequent calls
-// with the same Marker overwrite the previous registration —
+// with the same Key overwrite the previous registration —
 // the daemon sets up its decoders at boot, in a fixed order;
 // later, last-write-wins is the simplest contract.
 //
@@ -53,15 +54,26 @@ func (h *Handler) RegisterDecoder(d SchemaDecoder) {
 	if h.decoders == nil {
 		h.decoders = map[string]SchemaDecoder{}
 	}
-	h.decoders[d.Marker()] = d
+	h.decoders[d.Key()] = d
 }
 
-// schemaPeek is the minimal shape we read from
-// Manifest.Usr to dispatch on schema kind. Both
-// scrinium.fs/v1 and any future schema must include a "kind"
-// field; decoders without one fall through to the JSON view.
-type schemaPeek struct {
-	Kind string `json:"kind"`
+// extKeys reads the top-level keys of a Manifest.Ext object so the
+// handler can dispatch each schema block to its registered decoder.
+// Manifest.Ext is a JSON object keyed by schema name ("vfsmeta",
+// "namespace", "email", ...); a non-object or empty Ext yields no keys.
+func extKeys(ext json.RawMessage) []string {
+	if len(ext) == 0 {
+		return nil
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(ext, &obj); err != nil {
+		return nil
+	}
+	keys := make([]string, 0, len(obj))
+	for k := range obj {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // serveArtifact renders the details page for one artifact.
@@ -517,8 +529,8 @@ type artifactPageData struct {
 	Related []relatedView
 
 	// Schema renders one of:
-	//   - SchemaHTML — when a registered decoder claimed the
-	//     metadata's "kind". Trusted HTML, the decoder owns it.
+	//   - SchemaHTML — when a registered decoder claimed one of
+	//     the Ext schema keys. Trusted HTML, the decoder owns it.
 	//   - SchemaJSON — pretty-printed fallback when no decoder
 	//     applied or the decoder errored.
 	//   - SchemaError — note shown above the JSON when a
@@ -671,19 +683,23 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 	}
 
 	// Schema rendering targets the engine-custom index block (Ext
-	// per ADR-54) where vfsmeta and similar schemas live. Three
-	// branches:
+	// per ADR-54), a JSON object keyed by schema name where vfsmeta
+	// and similar schemas live. Three branches:
 	//
 	//   1. Ext is empty → no Schema section.
-	//   2. Ext has a "kind" matching a registered decoder →
-	//      render through the decoder; on error, fall back to
-	//      JSON with the error noted.
-	//   3. Otherwise → pretty JSON view, no kind highlighted.
+	//   2. A key in Ext matches a registered decoder → render
+	//      through the decoder (it pulls its own key from Ext); on
+	//      error, fall back to JSON with the error noted.
+	//   3. Otherwise → pretty JSON view, no schema highlighted.
 	if len(m.Ext) > 0 {
-		var peek schemaPeek
-		_ = json.Unmarshal(m.Ext, &peek) // best-effort
-		data.SchemaKind = peek.Kind
-		if dec, ok := h.decoders[peek.Kind]; ok && peek.Kind != "" {
+		var dec SchemaDecoder
+		for _, k := range extKeys(m.Ext) {
+			if d, ok := h.decoders[k]; ok {
+				dec, data.SchemaKind = d, k
+				break
+			}
+		}
+		if dec != nil {
 			rendered, err := dec.Render(m.Ext)
 			if err != nil {
 				data.SchemaError = err.Error()

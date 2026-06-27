@@ -198,7 +198,7 @@ func (f *writeFile) Close() error {
 		vfsm.ModTime = time.Now().UTC()
 	}
 
-	metadata, err := vfsmeta.Encode(vfsm)
+	metadata, err := vfsmeta.Embed(nil, vfsm)
 	if err != nil {
 		return err
 	}

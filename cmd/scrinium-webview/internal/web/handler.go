@@ -125,8 +125,8 @@ type Handler struct {
 	// builder so navigation stays inside the browser surface.
 	prefix string
 
-	// decoders maps a Manifest.Usr "kind" marker to the
-	// SchemaDecoder that knows how to render it. nil until the
+	// decoders maps a Manifest.Ext schema key (e.g. "vfsmeta") to
+	// the SchemaDecoder that knows how to render it. nil until the
 	// host calls RegisterDecoder. Lookup on the request hot
 	// path is cheap (small map, no contention).
 	decoders map[string]SchemaDecoder
