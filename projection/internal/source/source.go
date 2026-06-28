@@ -75,3 +75,27 @@ type TokenSource interface {
 type Waiter interface {
 	Wait(ctx context.Context, after Token) (Token, error)
 }
+
+// Delta is a batch of resolved manifest changes for incremental convergence
+// (ADR-107). Changes are the manifests added or updated since the cursor,
+// already resolved to full domain.Manifest values (the composition root pairs
+// the index's digest-level Since with its manifest resolver). Deletions are
+// NOT enumerated — a hard delete prunes history, so Gapped is set and the View
+// falls back to a full re-walk. Next is the cursor to store after applying.
+type Delta struct {
+	Changes []domain.Manifest
+	Next    Token
+	Gapped  bool
+}
+
+// DeltaSource is the incremental half of the pull seam (ADR-107): a
+// TokenSource that can also enumerate the manifests changed since a cursor, so
+// the View converges by upserting just those instead of re-walking the whole
+// source. Structural, like TokenSource. by-assertion — the View uses it when
+// the wired source implements it and falls back to a full re-derive
+// (TokenSource alone) otherwise, so a backend that exposes only Token still
+// works, just less cheaply.
+type DeltaSource interface {
+	TokenSource
+	Since(ctx context.Context, cursor Token) (Delta, error)
+}

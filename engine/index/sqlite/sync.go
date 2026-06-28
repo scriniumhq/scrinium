@@ -113,3 +113,37 @@ var (
 	_ index.SyncSource = (*Index)(nil)
 	_ index.SyncWaiter = (*Index)(nil)
 )
+
+// ManifestByDigest reconstructs the full manifest carrying digest, reusing the
+// exact projection and row scan IterateManifests walks with — so a resolved
+// manifest is byte-identical to a walked one (ADR-107 ManifestResolver). ok is
+// false when no user manifest carries the digest: pruned between a Since read
+// and this resolve, which the caller treats as nothing to apply.
+func (i *Index) ManifestByDigest(ctx context.Context, digest domain.ManifestDigest) (domain.Manifest, bool, error) {
+	const query = `
+			SELECT ` + manifestProjection + `
+			FROM manifests m
+			LEFT JOIN blobs b ON b.blob_ref = m.blob_ref
+			WHERE m.manifest_digest = ? AND m.artifact_id IS NOT NULL
+			LIMIT 1`
+
+	rows, err := i.db.QueryContext(ctx, query, string(digest))
+	if err != nil {
+		return domain.Manifest{}, false, classifyError(err)
+	}
+	defer rows.Close()
+
+	var (
+		found domain.Manifest
+		ok    bool
+	)
+	if err := iterateManifestRows(ctx, rows, func(m domain.Manifest) error {
+		found, ok = m, true
+		return nil
+	}); err != nil {
+		return domain.Manifest{}, false, err
+	}
+	return found, ok, nil
+}
+
+var _ index.ManifestResolver = (*Index)(nil)

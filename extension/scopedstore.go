@@ -1,8 +1,10 @@
 package extension
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"scrinium.dev/domain"
@@ -31,6 +33,7 @@ type ScopedSystemStore struct {
 	name   string
 	prefix string
 	sys    systemstore.Store
+	veto   SystemArtifactValidator
 }
 
 var _ systemstore.Store = (*ScopedSystemStore)(nil)
@@ -39,25 +42,63 @@ var _ systemstore.Store = (*ScopedSystemStore)(nil)
 // must be a single clean token — non-empty and free of '.', '/', and
 // whitespace — so one extension's scope can neither overlap nor escape
 // another's.
-func NewScopedSystemStore(name string, sys systemstore.Store) (*ScopedSystemStore, error) {
+func NewScopedSystemStore(name string, sys systemstore.Store, opts ...ScopedOption) (*ScopedSystemStore, error) {
 	if err := validateScopeName(name); err != nil {
 		return nil, err
 	}
 	if sys == nil {
 		return nil, fmt.Errorf("extension: scoped system store %q: nil backing store", name)
 	}
-	return &ScopedSystemStore{name: name, prefix: scopeRoot + name + ".", sys: sys}, nil
+	s := &ScopedSystemStore{name: name, prefix: scopeRoot + name + ".", sys: sys}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
+}
+
+// ScopedOption configures a ScopedSystemStore at construction.
+type ScopedOption func(*ScopedSystemStore)
+
+// WithValidator installs a pre-write veto (ADR-108): before any Put delegates
+// to the backing store, the validator inspects the proposed write and may
+// reject it, in which case nothing is written. The assembler installs it only
+// on the owning extension's scope, so another extension's store has no veto.
+func WithValidator(v SystemArtifactValidator) ScopedOption {
+	return func(s *ScopedSystemStore) { s.veto = v }
 }
 
 // Name reports the extension scope this handle is bound to.
 func (s *ScopedSystemStore) Name() string { return s.name }
 
-// Put writes a with its Name scoped to this extension.
+// Put writes a with its Name scoped to this extension. When a pre-write
+// validator is installed (ADR-108), it runs first and may veto the write —
+// a rejection aborts the Put atomically, before anything reaches the backing
+// store.
 func (s *ScopedSystemStore) Put(ctx context.Context, a systemstore.NamedArtifact) error {
 	scoped, err := s.scopeName(a.Name)
 	if err != nil {
 		return err
 	}
+
+	if s.veto != nil {
+		// Buffer the inline payload so the validator can inspect it, then hand
+		// Put a fresh reader (ReadAll drained the original). External-ref
+		// artifacts carry no inline body, so proposed stays nil. The validator
+		// sees the LOCAL name and reads its own committed state through s.
+		var proposed []byte
+		if a.ExternalRef == "" && a.Payload != nil {
+			body, rerr := io.ReadAll(a.Payload)
+			if rerr != nil {
+				return fmt.Errorf("extension %q: buffer system payload for validation: %w", s.name, rerr)
+			}
+			proposed = body
+			a.Payload = bytes.NewReader(body)
+		}
+		if verr := s.veto.ValidateSystemWrite(ctx, a.Name, proposed, s); verr != nil {
+			return verr
+		}
+	}
+
 	a.Name = scoped
 	return s.sys.Put(ctx, a)
 }

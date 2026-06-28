@@ -104,3 +104,18 @@ type SyncSource interface {
 type SyncWaiter interface {
 	Wait(ctx context.Context, after Token) (Token, error)
 }
+
+// ManifestResolver is the optional capability the projection's incremental
+// convergence needs alongside SyncSource (ADR-107): it reconstructs a full
+// manifest from a digest reported by Since, so a consumer can apply just the
+// changed artifacts instead of re-walking the whole index. Discovered by
+// assertion — idx.(ManifestResolver) — and reconstructs exactly what
+// IterateManifests yields, so a resolved manifest is indistinguishable from a
+// walked one.
+//
+// ok is false when no manifest carries the digest (e.g. it was pruned between
+// the Since read and this resolve); the caller treats that as "nothing to
+// apply", since a hard delete is already covered by Delta.Gapped.
+type ManifestResolver interface {
+	ManifestByDigest(ctx context.Context, digest domain.ManifestDigest) (domain.Manifest, bool, error)
+}

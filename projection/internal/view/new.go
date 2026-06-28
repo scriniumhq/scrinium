@@ -47,6 +47,12 @@ func New(ctx context.Context, src source.Provider, opts ...Option) (*View, error
 		waiter:   o.waiter,
 	}
 
+	// Incremental convergence (ADR-107): if the wired token source can also
+	// enumerate changes, a stale read upserts just those instead of re-walking.
+	if ds, ok := o.tokenSrc.(source.DeltaSource); ok {
+		v.delta = ds
+	}
+
 	// Build the active view set (intrinsic core + extension-provided) and
 	// initialise the per-tree state (trees, records, collision/count books).
 	v.defs = v.buildViewDefs()

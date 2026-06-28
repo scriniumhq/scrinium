@@ -237,7 +237,14 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		if !ok {
 			continue
 		}
-		scoped, serr := extension.NewScopedSystemStore(e.Descriptor().Name, st.System())
+		// Pre-write veto (ADR-108): if the extension validates its own scoped
+		// system artifacts, install it on the scope the assembler hands back.
+		// by-assertion — extensions without a veto are unaffected.
+		var scopedOpts []extension.ScopedOption
+		if val, ok := e.(extension.SystemArtifactValidator); ok {
+			scopedOpts = append(scopedOpts, extension.WithValidator(val))
+		}
+		scoped, serr := extension.NewScopedSystemStore(e.Descriptor().Name, st.System(), scopedOpts...)
 		if serr != nil {
 			return nil, fmt.Errorf("scrinium: extension %q scoped system store: %w", e.Descriptor().Name, serr)
 		}
@@ -389,9 +396,15 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		// Synchronization seam (ADR-107): when the index backs the
 		// SyncSource/SyncWaiter capability, hand it to the projection so the
 		// view converges on other clients' writes. by-assertion — a
-		// single-client index leaves the projection a snapshot.
+		// single-client index leaves the projection a snapshot. When the index
+		// can also resolve manifests by digest, the delta-capable adapter lets
+		// the view upsert just the changes instead of re-walking.
 		if ss, ok := idx.(index.SyncSource); ok {
-			pcfg.SyncSource = syncTokenSource{ss}
+			if res, ok := idx.(index.ManifestResolver); ok {
+				pcfg.SyncSource = syncDeltaSource{ss: ss, res: res}
+			} else {
+				pcfg.SyncSource = syncTokenSource{ss}
+			}
 		}
 		if sw, ok := idx.(index.SyncWaiter); ok {
 			pcfg.SyncWaiter = syncWaiter{sw}

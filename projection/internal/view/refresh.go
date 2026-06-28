@@ -4,7 +4,9 @@ import (
 	"context"
 	"time"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/event"
+	"scrinium.dev/projection/internal/source"
 )
 
 // refreshIfStale brings the View up to date with the backend before a read
@@ -27,29 +29,88 @@ func (v *View) refreshIfStale(ctx context.Context) {
 	if cur == v.lastToken.Load() {
 		return
 	}
-	v.rebuild(ctx)
+	v.converge(ctx)
 }
 
-// rebuild re-derives every tree from the source and swaps the fresh state in.
-// refreshMu serialises rebuilds so concurrent stale reads collapse onto one
-// walk. The expensive walk runs without the data lock; only the swap takes
-// it, so readers block for the swap alone (INV-107-2: re-derive before
-// returning). A walk failure leaves the current view in place — a later read
-// retries.
-func (v *View) rebuild(ctx context.Context) {
+// converge brings the View up to the backend's current token under refreshMu,
+// which serialises refreshes so concurrent stale reads collapse onto one. It
+// prefers the incremental path — upsert just the changed manifests a
+// DeltaSource reports — and falls back to a full re-derive when no DeltaSource
+// is wired, the delta is gapped (history pruned past the cursor, which any
+// hard delete forces), or the delta pull errors. The full re-derive is the
+// correctness backstop; the delta path is the optimisation over it.
+func (v *View) converge(ctx context.Context) {
 	v.refreshMu.Lock()
 	defer v.refreshMu.Unlock()
 
-	// Re-read inside the lock and target the latest token: a goroutine that
-	// won the race may have already refreshed past the value our caller saw.
+	// Re-read inside the lock: a goroutine that won the race may already have
+	// converged past the value our caller saw.
+	from := v.lastToken.Load()
 	target, err := v.tokenSrc.Token(ctx)
 	if err != nil {
 		return
 	}
-	if target == v.lastToken.Load() {
+	if target == from {
 		return
 	}
 
+	if v.delta != nil {
+		if d, derr := v.delta.Since(ctx, from); derr == nil && !d.Gapped {
+			started := time.Now()
+			nodes := v.applyDelta(ctx, d.Changes)
+			v.lastToken.Store(d.Next)
+			v.publish(event.EventViewRebuilt, event.RebuiltPayload{
+				Duration:  time.Since(started),
+				NodeCount: nodes,
+			})
+			return
+		}
+		// derr != nil or Gapped → fall through to the full re-derive.
+	}
+
+	v.rebuildLocked(ctx, target)
+}
+
+// applyDelta upserts each changed manifest into the live trees, reusing the
+// same insert/remove primitives as Add/Move so by-path collision re-election
+// stays correct. Ext is resolved outside the data lock (it is I/O); the whole
+// batch is then applied under one write lock, so a read sees the delta whole,
+// not half-applied. An update whose manifest now fails the filter is dropped.
+// Deletions never reach here — they arrive as Gapped and route to a full
+// re-derive. Returns the post-apply node count for the rebuilt event.
+func (v *View) applyDelta(ctx context.Context, changes []domain.Manifest) int64 {
+	type prepared struct {
+		m    domain.Manifest
+		keep bool
+	}
+	prep := make([]prepared, 0, len(changes))
+	for _, m := range changes {
+		keep := v.passesFilter(m)
+		if keep {
+			v.populateExt(ctx, &m)
+		}
+		prep = append(prep, prepared{m: m, keep: keep})
+	}
+
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	for _, p := range prep {
+		if rec, exists := v.artifacts[p.m.ArtifactID]; exists {
+			v.removeArtifactFromTrees(p.m.ArtifactID, rec)
+		}
+		if p.keep {
+			v.indexArtifact(p.m, false)
+		}
+	}
+	return v.Stats.TotalNodes
+}
+
+// rebuildLocked re-derives every tree from the source and swaps the fresh
+// state in. The caller holds refreshMu and has resolved target. The expensive
+// walk runs without the data lock; only the swap takes it, so readers block
+// for the swap alone (INV-107-2). A walk failure leaves the current view in
+// place — a later read retries.
+func (v *View) rebuildLocked(ctx context.Context, target source.Token) {
 	started := time.Now()
 	shadow, err := v.buildShadow(ctx)
 	if err != nil {

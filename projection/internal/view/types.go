@@ -73,6 +73,12 @@ type View struct {
 	waiter    source.Waiter
 	lastToken atomic.Uint64
 
+	// delta is the optional incremental capability (ADR-107): when the wired
+	// tokenSrc also implements DeltaSource, a stale read upserts just the
+	// changed manifests instead of re-walking the whole source. nil ⇒ every
+	// refresh is a full re-derive.
+	delta source.DeltaSource
+
 	// refreshMu serialises lazy rebuilds (ADR-107): a stale read triggers at
 	// most one re-backfill at a time; concurrent triggers collapse onto it.
 	refreshMu sync.Mutex
