@@ -1,0 +1,119 @@
+{{define "title"}}stats — Scrinium{{end}}
+
+{{define "content"}}
+<section>
+<h2>Daemon</h2>
+<table>
+  <tbody>
+    <tr><th scope="row" class="label">Source</th><td>{{.Daemon.Source}}</td></tr>
+    {{if not .Daemon.StartedAt.IsZero}}
+    <tr><th scope="row" class="label">Started</th><td class="mono">{{.Daemon.StartedAt.UTC.Format "2006-01-02T15:04:05Z"}}</td></tr>
+    <tr><th scope="row" class="label">Uptime</th><td>{{.Daemon.Uptime}}</td></tr>
+    {{end}}
+    {{if .Daemon.MountSession}}
+    <tr><th scope="row" class="label">MountSession</th><td class="mono">{{.Daemon.MountSession}}</td></tr>
+    {{end}}
+    {{if .Daemon.StorePath}}
+    <tr><th scope="row" class="label">StorePath</th><td class="mono">{{.Daemon.StorePath}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+</section>
+
+{{if .HasDrivers}}
+<section>
+<h2>Drivers</h2>
+<table>
+  <tbody>
+    {{if .Drivers.Store}}<tr><th scope="row" class="label">Store</th><td>{{.Drivers.Store}}</td></tr>{{end}}
+    {{if .Drivers.Index}}<tr><th scope="row" class="label">Index</th><td>{{.Drivers.Index}}</td></tr>{{end}}
+  </tbody>
+</table>
+</section>
+{{end}}
+
+<section>
+<h2>View</h2>
+<table>
+  <tbody>
+    <tr><th scope="row" class="label">TotalNodes</th><td>{{.View.TotalNodes}}</td></tr>
+    <tr><th scope="row" class="label">TotalBytes</th><td>{{.View.TotalBytesText}}</td></tr>
+    <tr><th scope="row" class="label">SessionCount</th><td>{{.View.SessionCount}}</td></tr>
+    {{range $k := sortedKeys .View.ViewCounts}}
+    <tr><th scope="row" class="label">ViewCount[{{$k}}]</th><td>{{index $.View.ViewCounts $k}}</td></tr>
+    {{end}}
+    <tr><th scope="row" class="label">OrphanedCount</th><td>{{.View.OrphanedCount}}</td></tr>
+    <tr><th scope="row" class="label">CollisionCount</th><td>{{.View.CollisionCount}}</td></tr>
+    <tr><th scope="row" class="label">TransitCount</th><td>{{.View.TransitCount}}</td></tr>
+    {{range $k := sortedKeys .View.ByStore}}
+    <tr><th scope="row" class="label">ByStore[{{$k}}]</th><td>{{index $.View.ByStore $k}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+</section>
+
+{{if .HasStorage}}
+<section>
+<h2>Storage</h2>
+<table>
+  <tbody>
+    <tr><th scope="row" class="label">ArtifactCount</th><td>{{.Storage.ArtifactCount}}</td></tr>
+    <tr><th scope="row" class="label">BlobCount</th><td>{{.Storage.BlobCount}}</td></tr>
+    {{if .Storage.DedupRatio}}
+    <tr><th scope="row" class="label">DedupRatio</th><td>{{.Storage.DedupRatio}}</td></tr>
+    {{end}}
+    <tr><th scope="row" class="label">TotalBytes</th><td>{{.Storage.TotalBytes}}</td></tr>
+    <tr><th scope="row" class="label">UsedBytes</th><td>{{.Storage.UsedBytes}}</td></tr>
+    <tr><th scope="row" class="label">AvailableBytes</th><td>{{.Storage.AvailableBytes}}</td></tr>
+  </tbody>
+</table>
+</section>
+{{end}}
+
+{{if .Extensions}}
+<section>
+<h2>Extensions</h2>
+<table>
+  <tbody>
+    {{range .Extensions}}
+    <tr><td class="mono">{{.Name}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+</section>
+{{end}}
+
+{{if .SystemArtifacts}}
+<section>
+<h2>System Artifacts</h2>
+<table class="striped">
+  <thead>
+    <tr><th>name</th><th>size</th><th>created</th></tr>
+  </thead>
+  <tbody>
+    {{range .SystemArtifacts}}
+    <tr>
+      <td class="mono"><a href="{{$.BrowsePrefix}}/_system/{{.Name}}">{{.Name}}</a></td>
+      <td>{{.Size}}</td>
+      <td>{{.Created}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</section>
+{{end}}
+
+{{if .HasConfig}}
+<section>
+<h2>Config</h2>
+<table>
+  <tbody>
+    <tr><th scope="row" class="label">ReadOnly</th><td>{{.Config.ReadOnly}}</td></tr>
+    {{if .Config.Editing}}
+    <tr><th scope="row" class="label">Editing</th><td>{{.Config.Editing}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+</section>
+{{end}}
+{{end}}

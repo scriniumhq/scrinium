@@ -1,162 +1,117 @@
 package web
 
-import "html/template"
+import (
+	"bytes"
+	"embed"
+	"fmt"
+	"html/template"
+	"io/fs"
+	"net/http"
+	"sort"
+	"time"
+)
 
-// listingTemplate is the embedded HTML template for directory
-// pages. Plain HTML + minimal CSS (legibility-only, no
-// JavaScript). System fonts so we don't depend on a network-
-// loaded font.
-//
-// Phases 2 and 3 will introduce sibling templates
-// (artifactTemplate, statsTemplate); they share the same
-// header/footer aesthetic but live as separate templates so
-// edits to one don't risk breaking the others.
-var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.Path}} — Scrinium</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-         background: #fafafa; color: #222; margin: 0; padding: 1.5em 2em; }
-  header { display: flex; align-items: baseline; gap: 1em; flex-wrap: wrap;
-           border-bottom: 1px solid #e0e0e0; padding-bottom: 0.7em; margin-bottom: 1em; }
-  header .brand { font-weight: 600; color: #06f; font-size: 1.1em; letter-spacing: 0.02em; }
-  header .store { color: #888; font-size: 0.9em;
-                  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  header .switcher { display: flex; gap: 0.1em; }
-  header .switcher a { color: #888; text-decoration: none; font-size: 0.85em;
-                       padding: 0.25em 0.7em; border-radius: 4px;
-                       border: 1px solid transparent; }
-  header .switcher a:hover { color: #06f; background: #ececec; }
-  header .header-search { margin-left: auto; }
-  header .header-search input { padding: 0.3em 0.6em; font-size: 0.9em;
-                                  border: 1px solid #ddd; border-radius: 4px;
-                                  font-family: inherit; min-width: 220px; }
-  header .header-search input:focus { outline: none; border-color: #06f;
-                                        box-shadow: 0 0 0 2px rgba(0,102,255,0.15); }
-  .crumbs { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-            font-size: 0.95em; margin-bottom: 1.2em; }
-  .crumbs a { color: #06f; text-decoration: none; }
-  .crumbs a:hover { text-decoration: underline; }
-  .crumbs .sep { color: #aaa; margin: 0 0.3em; }
-  table { border-collapse: collapse; width: 100%; max-width: 1100px;
-          table-layout: fixed; }
-  th, td { padding: 0.4em 1em; text-align: left; }
-  th { font-weight: 500; color: #888; font-size: 0.9em;
-       border-bottom: 1px solid #ddd; }
-  th a { color: inherit; text-decoration: none; }
-  th a:hover { color: #06f; }
-  th.size, th.time { text-align: left; }
-  th.size { width: 9em; }
-  th.time { width: 11em; }
-  th.actions { width: 6em; }
-  tr:nth-child(even) td { background: #f3f3f3; }
-  td.name { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            max-width: 0; /* makes table-layout:fixed honour the cell width */ }
-  td.name a { color: #06f; text-decoration: none; }
-  td.name a:hover { text-decoration: underline; }
-  td.size, td.time { color: #666; font-variant-numeric: tabular-nums;
-                     font-family: ui-monospace, monospace; font-size: 0.92em;
-                     white-space: nowrap; }
-  td.size { text-align: right; }
-  td.actions { width: 6em; text-align: right; white-space: nowrap; }
-  td.actions a { color: #888; text-decoration: none; font-size: 0.85em;
-                 padding: 0.1em 0.5em; border-radius: 3px;
-                 margin-left: 0.2em; }
-  td.actions a:hover { color: #06f; background: #ececec; }
-  .icon-dir  { color: #999; margin-right: 0.5em; }
-  .icon-file { color: #ccc; margin-right: 0.5em; }
-  /* System entries (paths beginning with "_") are dimmed and
-     tagged so they're visually subordinate to user content
-     while still discoverable. */
-  tr.system td.name a { color: #888; }
-  tr.system td.name a:hover { color: #06f; }
-  tr.system .icon-dir, tr.system .icon-file { color: #c0c0c0; }
-  tr.system .badge { display: inline-block; margin-left: 0.6em; padding: 0 0.4em;
-                     font-size: 0.72em; line-height: 1.4; border-radius: 3px;
-                     background: #ececec; color: #999; vertical-align: 0.05em;
-                     letter-spacing: 0.03em; text-transform: lowercase; }
-  footer { margin-top: 3em; padding-top: 0.8em; border-top: 1px solid #e0e0e0;
-           color: #888; font-size: 0.85em; }
-  footer a { color: #06f; text-decoration: none; }
-  footer a:hover { text-decoration: underline; }
-  .summary { margin-top: 0.6em; color: #888; font-size: 0.85em;
-             font-variant-numeric: tabular-nums; }
-  .pagination { margin-top: 0.6em; font-size: 0.9em; display: flex;
-                gap: 1em; align-items: baseline; }
-  .pagination .pages { color: #888; }
-  .pagination a { color: #06f; text-decoration: none; }
-  .pagination a:hover { text-decoration: underline; }
-  .pagination .disabled { color: #ccc; }
-</style>
-</head>
-<body>
+// Templates live as plain .html files under templates/ and are composed
+// at parse time: base.html is the shared chrome (head, header nav,
+// footer) styled by Pico, and each page file supplies the {{define
+// "title"}} / {{define "content"}} blocks the base pulls in. The
+// stylesheets live under static/ (pico.min.css plus a thin app.css) and
+// are served at "<prefix>/_static/..." — see serveStatic.
 
-<header>
-  <span class="brand">Scrinium</span>
-  <span class="store">{{.StorePath}}</span>
-  <nav class="switcher">
-    {{range .Roots}}<a href="{{$.BrowsePrefix}}/{{.}}/">{{.}}</a>
-    {{end}}
-  </nav>
-  <form class="header-search" method="get" action="{{.BrowsePrefix}}/_search">
-    <input type="text" name="q" placeholder="search…">
-  </form>
-</header>
+//go:embed templates/*.html
+var templateFS embed.FS
 
-<div class="crumbs">
-  {{range $i, $c := .Crumbs}}{{if $i}}<span class="sep">/</span>{{end}}<a href="{{$c.URL}}">{{$c.Name}}</a>{{end}}
-</div>
+//go:embed static
+var staticEmbed embed.FS
 
-<table>
-  <thead>
-    <tr>
-      <th><a href="{{.SortNameURL}}">Name{{.SortNameArrow}}</a></th>
-      <th class="size"><a href="{{.SortSizeURL}}">Size{{.SortSizeArrow}}</a></th>
-      <th class="time"><a href="{{.SortTimeURL}}">Modified{{.SortTimeArrow}}</a></th>
-      <th class="actions"></th>
-    </tr>
-  </thead>
-  <tbody>
-{{- if .HasParent}}
-    <tr>
-      <td class="name"><span class="icon-dir">↑</span><a href="{{.Parent}}">..</a></td>
-      <td class="size">—</td>
-      <td class="time"></td>
-      <td class="actions"></td>
-    </tr>
-{{- end}}
-{{- range .Entries}}
-    <tr{{if .IsSystem}} class="system"{{end}}>
-      <td class="name">{{if .IsDir}}<span class="icon-dir">▸</span>{{else}}<span class="icon-file">·</span>{{end}}{{if .URL}}<a href="{{.URL}}" title="{{.Name}}">{{.Name}}{{if .IsDir}}/{{end}}</a>{{else}}<span title="{{.Name}}">{{.Name}}</span>{{end}}{{if .IsSystem}}<span class="badge">system</span>{{end}}</td>
-      <td class="size">{{.SizeText}}</td>
-      <td class="time">{{.TimeText}}</td>
-      <td class="actions">{{if .ViewURL}}<a href="{{.ViewURL}}" target="_blank" rel="noopener">view</a>{{end}}{{if .DownloadURL}}<a href="{{.DownloadURL}}">dl</a>{{end}}</td>
-    </tr>
-{{- end}}
-  </tbody>
-</table>
+// staticFS is the static/ subtree, so a request for "_static/app.css"
+// resolves to "app.css" within it.
+var staticFS = mustSub(staticEmbed, "static")
 
-<div class="summary">
-  {{.TotalDirs}} {{if eq .TotalDirs 1}}directory{{else}}directories{{end}},
-  {{.TotalFiles}} {{if eq .TotalFiles 1}}file{{else}}files{{end}}{{if gt .TotalFiles 0}}, {{.TotalBytesFmt}}{{end}}
-</div>
+func mustSub(f fs.FS, dir string) fs.FS {
+	sub, err := fs.Sub(f, dir)
+	if err != nil {
+		panic("web: embed static subtree: " + err.Error())
+	}
+	return sub
+}
 
-{{if gt .TotalPages 1}}
-<div class="pagination">
-  <span class="pages">page {{.Page}} of {{.TotalPages}}</span>
-  {{if .PrevURL}}<a href="{{.PrevURL}}">← prev</a>{{else}}<span class="disabled">← prev</span>{{end}}
-  {{if .NextURL}}<a href="{{.NextURL}}">next →</a>{{else}}<span class="disabled">next →</span>{{end}}
-</div>
-{{end}}
+// tmplFuncs are available to every page template. sortedKeys renders Go
+// maps (ByStore, ViewCounts) deterministically across reloads, since map
+// iteration order is randomised.
+var tmplFuncs = template.FuncMap{
+	"sortedKeys": func(m map[string]int64) []string {
+		out := make([]string, 0, len(m))
+		for k := range m {
+			out = append(out, k)
+		}
+		sort.Strings(out)
+		return out
+	},
+}
 
-<footer>
-  {{.NowFormatted}} · <a href="{{.BrowsePrefix}}/_stats">stats</a>
-</footer>
+// pages maps each page name to its template: the shared base layout
+// composed with that page's blocks. Parsed once at init; rendering goes
+// through ExecuteTemplate(w, "base", data) so every page wears the chrome.
+var pages = map[string]*template.Template{
+	"listing":  parsePage("listing"),
+	"artifact": parsePage("artifact"),
+	"stats":    parsePage("stats"),
+	"search":   parsePage("search"),
+	"system":   parsePage("system"),
+}
 
-</body>
-</html>
-`))
+func parsePage(name string) *template.Template {
+	t := template.New(name).Funcs(tmplFuncs)
+	return template.Must(t.ParseFS(templateFS,
+		"templates/base.html", "templates/"+name+".html"))
+}
+
+// Layout holds the chrome fields every page shares — the header store
+// path / nav roots / mount prefix and the footer timestamp. Page data
+// structs embed it so base.html can render the header and footer
+// uniformly; the per-page payload sits alongside.
+type Layout struct {
+	StorePath    string
+	Roots        []string
+	BrowsePrefix string
+	NowFormatted string
+}
+
+// layout builds the shared chrome snapshot for the current request.
+func (h *Handler) layout() Layout {
+	return Layout{
+		StorePath:    h.cfg.StorePath,
+		Roots:        h.cfg.Roots,
+		BrowsePrefix: h.prefix,
+		NowFormatted: time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// render writes the named page to w through the shared base layout. It
+// renders into a buffer first so a template error never yields a
+// half-written response.
+func render(w http.ResponseWriter, name string, data any) error {
+	t, ok := pages[name]
+	if !ok {
+		return fmt.Errorf("web: unknown page %q", name)
+	}
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, "base", data); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+// serveStatic serves an embedded asset (the stylesheets) requested under
+// "_static/". The content type is inferred from the extension; the
+// embedded FS supplies a modtime so conditional requests work.
+func serveStatic(w http.ResponseWriter, r *http.Request, asset string) {
+	if asset == "" {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFileFS(w, r, staticFS, asset)
+}

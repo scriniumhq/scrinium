@@ -1,0 +1,236 @@
+/* app.css — thin custom layer over Pico.
+
+   Pico (pico.min.css) supplies the chrome: layout container, nav,
+   tables, forms, buttons, cards, code/pre, light & dark themes. This
+   file (1) tightens Pico's default scale — it grows the root font up to
+   131% on wide screens, which reads too large here — and (2) adds the
+   few Scrinium-specific bits Pico has no opinion on. Everything pulls
+   Pico's own CSS variables so both themes carry automatically. */
+
+/* --- density: pin a compact scale, drop Pico's wide-screen growth --- */
+
+:root {
+  --pico-font-size: 87.5%; /* ~14px, fixed; Pico ramps 100%→131.25% by width */
+  --pico-line-height: 1.45;
+  --pico-spacing: 0.6rem;
+  --pico-block-spacing-vertical: 0.8rem;
+  --pico-block-spacing-horizontal: 1rem;
+  --pico-form-element-spacing-vertical: 0.4rem;
+  --pico-form-element-spacing-horizontal: 0.7rem;
+  --pico-typography-spacing-vertical: 0.8rem;
+  --pico-nav-element-spacing-vertical: 0.35rem;
+  --mono: var(--pico-font-family-monospace);
+}
+
+main.container {
+  padding-block: 1rem;
+}
+h1 {
+  font-size: 1.4rem;
+}
+
+/* section headings revert to the old compact label look — scoped to
+   <section> so the system-artifact page's <hgroup> title stays a heading */
+main section > h2 {
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pico-muted-color);
+  margin: 1.3rem 0 0.4rem;
+}
+main section:first-of-type > h2 {
+  margin-top: 0.3rem;
+}
+
+/* --- header ----------------------------------------------------- */
+
+header nav .brand {
+  text-decoration: none;
+}
+.store {
+  font-family: var(--mono);
+  color: var(--pico-muted-color);
+}
+header nav form[role="search"] {
+  margin-bottom: 0;
+}
+header nav form[role="search"] input {
+  min-width: 14rem;
+}
+#theme-toggle {
+  margin: 0;
+  padding: 0.3rem 0.5rem;
+  line-height: 0;
+}
+#theme-toggle .ti {
+  display: none;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+#theme-toggle[data-mode="auto"] .ti-auto,
+#theme-toggle[data-mode="light"] .ti-sun,
+#theme-toggle[data-mode="dark"] .ti-moon {
+  display: block;
+}
+
+/* --- monospace cells (names, paths, hashes, ids) ---------------- */
+
+td.name,
+td.path,
+.mono {
+  font-family: var(--mono);
+}
+td.name,
+td.path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 0; /* let table-layout honour the cell width */
+}
+.value.mono,
+td.hash,
+td.iv {
+  word-break: break-all;
+}
+
+/* --- listing: numeric columns + icons --------------------------- */
+
+td.size {
+  text-align: right;
+}
+td.size,
+td.time {
+  color: var(--pico-muted-color);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+td.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+td.actions a {
+  display: inline-flex;
+  align-items: center;
+}
+td.actions a + a {
+  margin-left: 0.7em;
+}
+.ai {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+/* listing column widths: Name takes the remainder, the rest stay tight.
+   table-layout:fixed is what makes the td.name ellipsis actually clip. */
+table.listing {
+  table-layout: fixed;
+}
+table.listing .c-size {
+  width: 7rem;
+}
+table.listing .c-time {
+  width: 11rem;
+}
+table.listing .c-act {
+  width: 5rem;
+}
+.icon-dir,
+.icon-file {
+  color: var(--pico-muted-color);
+  margin-right: 0.4em;
+}
+
+/* --- listing: system entries dimmed + tagged -------------------- */
+
+tr.system td.name a {
+  color: var(--pico-muted-color);
+}
+tr.system .badge {
+  display: inline-block;
+  margin-left: 0.6em;
+  padding: 0 0.4em;
+  font-size: 0.72em;
+  line-height: 1.5;
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-code-background-color);
+  color: var(--pico-muted-color);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+
+/* --- search: match chips + orphan marker ------------------------ */
+
+.chip {
+  display: inline-block;
+  padding: 0.1em 0.5em;
+  border-radius: var(--pico-border-radius);
+  font-size: 0.78em;
+  background: var(--pico-code-background-color);
+  color: var(--pico-muted-color);
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+}
+.chip.path-match {
+  background: var(--pico-primary-background);
+  color: var(--pico-primary-inverse);
+}
+.chip.id-match {
+  background: var(--pico-ins-color);
+}
+.orphan {
+  color: var(--pico-muted-color);
+  font-style: italic;
+}
+
+/* --- small callout (search truncation / schema error) ----------- */
+
+.note {
+  border-left: 3px solid var(--pico-primary);
+  padding: 0.5em 0.9em;
+  background: var(--pico-card-background-color);
+  border-radius: var(--pico-border-radius);
+}
+.note.error {
+  border-left-color: var(--pico-del-color);
+}
+
+/* --- artifact: schema kind chip + related count + image cap ----- */
+
+.schema-kind {
+  display: inline-block;
+  margin-left: 0.5em;
+  padding: 0.1em 0.5em;
+  font-size: 0.72em;
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-primary);
+  color: var(--pico-primary-inverse);
+  vertical-align: 0.15em;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.related-count {
+  margin-left: 0.6em;
+  font-size: 0.8em;
+  font-weight: normal;
+  color: var(--pico-muted-color);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.img-preview {
+  max-width: 600px;
+  max-height: 600px;
+  border: 1px solid var(--pico-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+  display: block;
+}
+
+/* --- stats / artifact: label column ----------------------------- */
+
+th[scope="row"].label,
+td.label {
+  width: 14em;
+  color: var(--pico-muted-color);
+  font-weight: 500;
+}

@@ -118,10 +118,9 @@ func (h *Handler) serveArtifact(w http.ResponseWriter, r *http.Request, id domai
 		data.Preview = body
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	if execErr := artifactTemplate.Execute(w, data); execErr != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-web: artifact template: %v\n", execErr)
+	if execErr := render(w, "artifact", data); execErr != nil {
+		fmt.Fprintf(os.Stderr, "scrinium-web: artifact render: %v\n", execErr)
 	}
 }
 
@@ -498,12 +497,9 @@ func tryFormatCSV(data []byte) (string, bool) {
 	return b.String(), true
 }
 
-// artifactPageData is what artifactTemplate consumes.
+// artifactPageData is the artifact page's render payload.
 type artifactPageData struct {
-	StorePath    string
-	NowFormatted string
-	StatsURL     string
-	BrowsePrefix string
+	Layout
 
 	// Identity & storage are flat tables of label/value rows.
 	// We render them as ordered slices instead of maps so the
@@ -615,10 +611,7 @@ type relatedView struct {
 // renderable, errors signal partial degradation.
 func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (artifactPageData, error) {
 	data := artifactPageData{
-		StorePath:    h.cfg.StorePath,
-		NowFormatted: time.Now().UTC().Format(time.RFC3339),
-		StatsURL:     "/" + h.cfg.ServicePrefix + "/stats",
-		BrowsePrefix: h.prefix,
+		Layout: h.layout(),
 	}
 
 	data.Identity = []labelValue{
@@ -826,202 +819,3 @@ func extractMIME(fi os.FileInfo) string {
 	}
 	return ""
 }
-
-// --- artifact template ---
-
-// artifactTemplate renders the per-artifact details page.
-// Same brand and footer aesthetic as the listing template,
-// but the body is structured around the four sections
-// (Identity, Storage, Pipeline, Schema, Raw).
-var artifactTemplate = template.Must(template.New("artifact").Parse(artifactPageHTML))
-
-const artifactPageHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>artifact — Scrinium</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-         background: #fafafa; color: #222; margin: 0; padding: 1.5em 2em; }
-  header { display: flex; align-items: baseline; gap: 1em;
-           border-bottom: 1px solid #e0e0e0; padding-bottom: 0.7em; margin-bottom: 1em; }
-  header .brand { font-weight: 600; color: #06f; font-size: 1.1em; letter-spacing: 0.02em; }
-  header .store { color: #888; font-size: 0.9em;
-                  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  header .back  { font-size: 0.9em; }
-  header .back a { color: #06f; text-decoration: none; }
-  header .back a:hover { text-decoration: underline; }
-  header .header-search { margin-left: auto; }
-  header .header-search input { padding: 0.3em 0.6em; font-size: 0.9em;
-                                  border: 1px solid #ddd; border-radius: 4px;
-                                  font-family: inherit; min-width: 220px; }
-  header .header-search input:focus { outline: none; border-color: #06f;
-                                        box-shadow: 0 0 0 2px rgba(0,102,255,0.15); }
-  h2   { font-size: 0.9em; font-weight: 500; color: #888; margin: 1.8em 0 0.6em;
-         text-transform: uppercase; letter-spacing: 0.06em; }
-  table { border-collapse: collapse; width: 100%; max-width: 1100px;
-          margin-bottom: 1.5em; }
-  th { display: none; }
-  td { padding: 0.4em 1em; vertical-align: top; }
-  td.label { color: #888; font-size: 0.92em; width: 12em;
-             font-weight: 500; }
-  td.value { color: #222; }
-  td.value.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-                  font-size: 0.92em; word-break: break-all; }
-  tr:nth-child(even) td { background: #f3f3f3; }
-  table.pipeline td.idx { width: 3em; color: #888; font-variant-numeric: tabular-nums; }
-  table.pipeline td.algo { font-weight: 500; }
-  table.pipeline td.hash, table.pipeline td.iv { font-family: ui-monospace, monospace;
-                                                  font-size: 0.85em; color: #555;
-                                                  word-break: break-all; }
-  .schema-kind { display: inline-block; padding: 0.1em 0.5em; background: #06f;
-                 color: white; border-radius: 3px; font-size: 0.78em;
-                 letter-spacing: 0.04em; vertical-align: 0.1em; margin-left: 0.5em; }
-  .schema-error { background: #fdf3f3; color: #b22; padding: 0.6em 1em;
-                  border-left: 3px solid #c33; margin-bottom: 1em;
-                  font-size: 0.9em; }
-  pre { background: #f0f0f0; padding: 1em; overflow-x: auto;
-        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-        font-size: 0.85em; line-height: 1.5; border-radius: 4px;
-        border: 1px solid #e0e0e0; }
-  pre.hexdump { font-size: 0.78em; line-height: 1.4; letter-spacing: 0.02em; }
-  table.csv { border-collapse: collapse; max-width: 1100px;
-              font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-              font-size: 0.85em; margin: 0; }
-  table.csv th, table.csv td { padding: 0.3em 0.8em; border: 1px solid #ddd;
-                                text-align: left; vertical-align: top; }
-  table.csv th { background: #ececec; color: #555; font-weight: 500; }
-  table.csv tbody tr:nth-child(even) td { background: #f7f7f7; }
-  .related-count { font-weight: normal; color: #888; font-size: 0.85em;
-                   text-transform: none; letter-spacing: normal;
-                   margin-left: 0.6em; }
-  table.related td.path { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-                          font-size: 0.92em; }
-  table.related td.path a { color: #06f; text-decoration: none; }
-  table.related td.path a:hover { text-decoration: underline; }
-  table.related td.path .orphan { color: #aaa; font-style: italic; }
-  table.related td.ns,
-  table.related td.created { color: #666; font-size: 0.9em; }
-  table.related td.session.mono { font-family: ui-monospace, monospace;
-                                   font-size: 0.85em; color: #888;
-                                   word-break: break-all; }
-  table.locations td.value.mono a { color: #06f; text-decoration: none; }
-  table.locations td.value.mono a:hover { text-decoration: underline; }
-  details summary { cursor: pointer; color: #888; font-size: 0.9em;
-                    margin: 1.5em 0 0.5em; }
-  details summary:hover { color: #06f; }
-  .img-preview { max-width: 600px; max-height: 600px;
-                 border: 1px solid #e0e0e0; border-radius: 4px;
-                 background: #fff; display: block; }
-  footer { margin-top: 3em; padding-top: 0.8em; border-top: 1px solid #e0e0e0;
-           color: #888; font-size: 0.85em; }
-  footer a { color: #06f; text-decoration: none; }
-  footer a:hover { text-decoration: underline; }
-</style>
-</head>
-<body>
-
-<header>
-  <span class="brand">Scrinium</span>
-  <span class="store">{{.StorePath}}</span>
-  <form class="header-search" method="get" action="{{.BrowsePrefix}}/_search">
-    <input type="text" name="q" placeholder="search…">
-  </form>
-  <span class="back"><a href="{{.BrowsePrefix}}/">← browse</a></span>
-</header>
-
-<h2>Identity</h2>
-<table>
-  <tbody>
-{{- range .Identity}}
-    <tr>
-      <td class="label">{{.Label}}</td>
-      <td class="value{{if .Mono}} mono{{end}}">{{.Value}}</td>
-    </tr>
-{{- end}}
-  </tbody>
-</table>
-
-{{if .Locations}}
-<h2>Locations</h2>
-<table class="locations">
-  <tbody>
-{{- range .Locations}}
-    <tr>
-      <td class="label">{{.Tree}}</td>
-      <td class="value mono"><a href="{{.URL}}">{{.Path}}</a></td>
-    </tr>
-{{- end}}
-  </tbody>
-</table>
-{{end}}
-
-<h2>Storage</h2>
-<table>
-  <tbody>
-{{- range .Storage}}
-    <tr>
-      <td class="label">{{.Label}}</td>
-      <td class="value{{if .Mono}} mono{{end}}">{{.Value}}</td>
-    </tr>
-{{- end}}
-  </tbody>
-</table>
-
-{{if .Pipeline}}
-<h2>Pipeline</h2>
-<table class="pipeline">
-  <tbody>
-{{- range .Pipeline}}
-    <tr>
-      <td class="idx">#{{.Index}}</td>
-      <td class="algo">{{.Algorithm}}</td>
-      <td class="hash">{{.Hash}}</td>
-      <td class="iv">{{if .IVHex}}IV: {{.IVHex}}{{end}}</td>
-    </tr>
-{{- end}}
-  </tbody>
-</table>
-{{end}}
-
-{{if .Related}}
-<h2>Related <span class="related-count">{{len .Related}} {{if eq (len .Related) 1}}artifact shares{{else}}artifacts share{{end}} this blob</span></h2>
-<table class="related">
-  <tbody>
-{{- range .Related}}
-    <tr>
-      <td class="path"><a href="{{.URL}}">{{if .IsOrphan}}<span class="orphan">(orphaned)</span>{{else}}{{.Path}}{{end}}</a></td>
-      <td class="session mono">{{if .SessionID}}{{.SessionID}}{{else}}—{{end}}</td>
-      <td class="created">{{.CreatedAt}}</td>
-    </tr>
-{{- end}}
-  </tbody>
-</table>
-{{end}}
-
-{{if or .SchemaHTML .SchemaJSON}}
-<h2>Schema {{if .SchemaKind}}<span class="schema-kind">{{.SchemaKind}}</span>{{end}}</h2>
-{{if .SchemaError}}<div class="schema-error">decoder error: {{.SchemaError}}</div>{{end}}
-{{if .SchemaHTML}}{{.SchemaHTML}}{{else}}<pre>{{.SchemaJSON}}</pre>{{end}}
-{{end}}
-
-{{if .PreviewKind}}
-<details{{if .PreviewOpen}} open{{end}}>
-  <summary>Preview · {{.PreviewKind}}{{if .PreviewNote}} · {{.PreviewNote}}{{end}}</summary>
-  {{if .PreviewIsTable}}{{.PreviewHTML}}{{else}}<pre{{if eq .PreviewKind "Hex (first 256 bytes)"}} class="hexdump"{{end}}>{{.Preview}}</pre>{{end}}
-</details>
-{{end}}
-
-<details>
-  <summary>Raw manifest JSON</summary>
-  <pre>{{.RawJSON}}</pre>
-</details>
-
-<footer>
-  {{.NowFormatted}} · <a href="{{.BrowsePrefix}}/_stats">stats</a> · <a href="{{.BrowsePrefix}}/">browse</a>
-</footer>
-
-</body>
-</html>
-`

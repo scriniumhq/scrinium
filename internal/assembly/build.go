@@ -445,6 +445,15 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	}
 
 	info := Info{StoreURI: spec.Driver, Created: created}
+	// Backend names for diagnostics, via the optional namer capabilities.
+	// Both drv and idx are the raw constructed instances here, before any
+	// store-internal wrapping, so the assertions reach the concrete backends.
+	if n, ok := drv.(driver.DriverNamer); ok {
+		info.StoreDriver = n.DriverName()
+	}
+	if n, ok := idx.(index.DriverNamer); ok {
+		info.IndexDriver = n.DriverName()
+	}
 	if effProj != nil {
 		info.Editing = effProj.Editing
 		info.ReadOnly = effProj.ReadOnly

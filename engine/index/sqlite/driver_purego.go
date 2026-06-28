@@ -14,6 +14,9 @@ import (
 // so the cgo and pure-Go variants stay in sync.
 const driverName = "sqlite"
 
+// driverLabel is the human-facing backend name surfaced by Index.DriverName.
+const driverLabel = "sqlite (modernc)"
+
 // openSQL opens a database/sql connection for the given DSN. It
 // exists as a thin wrapper so the tag-selected file is the only
 // place that names the driver string; everything else in the

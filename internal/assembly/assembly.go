@@ -86,8 +86,14 @@ type Assembly interface {
 // stats page). The assembly itself does not act on it.
 type Info struct {
 	StoreURI string
-	Editing  string
-	ReadOnly bool
+	// StoreDriver and IndexDriver are the backend names reported by the store
+	// driver and the index when each implements the optional namer capability
+	// (driver.DriverNamer / index.DriverNamer); "" when it does not. Display-
+	// only diagnostics, surfaced e.g. on a stats page.
+	StoreDriver string
+	IndexDriver string
+	Editing     string
+	ReadOnly    bool
 	// Created is true when this assembly freshly initialised the store
 	// (Init, or OpenOrInit that fell through to Init) rather than
 	// opening an existing one.

@@ -30,6 +30,8 @@ func buildWebStatsData(
 	startedAt time.Time,
 	mountSession domain.SessionID,
 	storePath string,
+	storeDriver string,
+	indexDriver string,
 	readOnly bool,
 	editing string,
 ) web.StatsData {
@@ -69,6 +71,11 @@ func buildWebStatsData(
 			AvailableBytes: humanize.BytesOrNA(cap.AvailableBytes),
 		}
 		d.HasStorage = true
+	}
+
+	if storeDriver != "" || indexDriver != "" {
+		d.Drivers = web.StatsDrivers{Store: storeDriver, Index: indexDriver}
+		d.HasDrivers = true
 	}
 
 	if readOnly || editing != "" {

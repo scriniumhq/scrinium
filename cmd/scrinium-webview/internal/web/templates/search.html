@@ -1,0 +1,43 @@
+{{define "title"}}search — Scrinium{{end}}
+
+{{define "content"}}
+<form role="search" method="get" action="{{.BrowsePrefix}}/_search">
+  <input type="search" name="q" value="{{.Query}}" placeholder="search by path, namespace, or artifact id…" autofocus aria-label="Search">
+</form>
+
+{{if not .HasQuery}}
+<article>
+  <p>Enter a substring to find matching artifacts. Searches:</p>
+  <ul>
+    <li>artifact paths (case-insensitive substring) — e.g. <code>sunset</code> finds <code>/photos/2024/sunset.jpg</code>;</li>
+    <li>namespaces (case-insensitive substring) — e.g. <code>mail</code> finds <code>mail-archive</code>;</li>
+    <li>artifact ids (exact match) — paste a full id to jump straight to it.</li>
+  </ul>
+</article>
+{{else if not .Results}}
+<p><em>No artifacts match <strong>{{.Query}}</strong>.</em></p>
+{{else}}
+{{if .Truncated}}
+<p class="note">Showing the first {{.Limit}} matches. Refine the query to see more.</p>
+{{end}}
+<table class="striped">
+  <thead>
+    <tr>
+      <th>Path</th>
+      <th class="match">Match</th>
+      <th class="time">Created</th>
+    </tr>
+  </thead>
+  <tbody>
+{{- range .Results}}
+    <tr>
+      <td class="path"><a href="{{.URL}}" title="{{if .IsOrphan}}(orphaned){{else}}{{.Path}}{{end}}">{{if .IsOrphan}}<span class="orphan">(orphaned)</span>{{else}}{{.Path}}{{end}}</a></td>
+      <td class="match"><span class="chip {{.MatchReason}}-match">{{.MatchReason}}</span></td>
+      <td class="time">{{.CreatedAt}}</td>
+    </tr>
+{{- end}}
+  </tbody>
+</table>
+<p><small>{{len .Results}} {{if eq (len .Results) 1}}result{{else}}results{{end}}{{if .Truncated}} (capped){{end}}</small></p>
+{{end}}
+{{end}}

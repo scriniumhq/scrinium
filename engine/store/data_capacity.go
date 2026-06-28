@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
 )
 
@@ -15,9 +16,12 @@ import (
 //     reports what users see through Walk, not the raw manifest count.
 //   - BlobCount: physical count of files under "blobs/" via the Driver.
 //     Inline manifests carry no separate blob file and do not appear.
-//   - TotalBytes / UsedBytes / AvailableBytes are -1 ("unavailable"):
-//     the Driver does not expose disk-free, and precise byte accounting
-//     would need a full scan we do not want to run on Capacity.
+//   - TotalBytes / AvailableBytes / UsedBytes come from the Driver's
+//     optional CapacityReporter (statfs on a local volume): total and
+//     available are the backing volume's, used is their difference. Drivers
+//     that cannot report (object stores) leave them at the -1 "unavailable"
+//     sentinel. This is volume capacity, not a byte-exact account of stored
+//     data, which would need a full scan.
 //
 // Goes through enterRead, so Capacity refuses on closed, corrupted,
 // offline, bootstrapping, or locked stores with the appropriate
@@ -69,6 +73,17 @@ func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 		return domain.StorageInfo{}, fmt.Errorf("store.Capacity: count blobs: %w", err)
 	}
 	out.BlobCount = blobs
+
+	// Disk capacity: best-effort through the Driver's optional
+	// CapacityReporter. Local-filesystem drivers answer via statfs; object
+	// stores do not implement it, leaving the -1 sentinels untouched.
+	if cr, ok := s.drv.(driver.CapacityReporter); ok {
+		if total, avail, derr := cr.DiskUsage(ctx); derr == nil && total >= 0 && avail >= 0 {
+			out.TotalBytes = total
+			out.AvailableBytes = avail
+			out.UsedBytes = total - avail
+		}
+	}
 
 	return out, nil
 }

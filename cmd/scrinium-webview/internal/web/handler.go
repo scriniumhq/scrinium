@@ -197,6 +197,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveByID(w, r, id, dispositionAttachment)
 		return
 	}
+	if asset, ok := strings.CutPrefix(rel, "_static/"); ok {
+		serveStatic(w, r, asset)
+		return
+	}
 	if rel == "_stats" || rel == "_stats/" {
 		h.serveStats(w, r)
 		return
