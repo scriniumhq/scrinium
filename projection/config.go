@@ -58,6 +58,17 @@ type Config struct {
 
 	// MountSession tags writes from this projection instance.
 	MountSession domain.SessionID
+
+	// SyncSource is the pull half of the synchronization seam (ADR-107): the
+	// backend's change-sequence source, adapted by the composition root from
+	// the index's SyncSource capability. nil ⇒ the View is a snapshot as of
+	// Build and does not observe other writers (INV-107-6).
+	SyncSource TokenSource
+
+	// SyncWaiter is the optional push half (ADR-107): when set, the View can
+	// block for changes instead of polling. nil ⇒ the View refreshes lazily
+	// on read.
+	SyncWaiter Waiter
 }
 
 // ProvidedView is the projection-layer description of one view an

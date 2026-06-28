@@ -1,6 +1,7 @@
 package view
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -62,6 +63,25 @@ type View struct {
 	bus    event.EventBus // nil = events not published
 	opts   viewOptions
 	closed atomic.Bool
+
+	// Synchronization seam (ADR-107). tokenSrc is the backend change-sequence
+	// source; nil ⇒ snapshot (the View does not track other writers). waiter
+	// is the optional push source for eager refresh. lastToken is the Token
+	// observed at the last (re)build — a lower bound on what the trees
+	// reflect, compared on read to decide staleness.
+	tokenSrc  source.TokenSource
+	waiter    source.Waiter
+	lastToken atomic.Uint64
+
+	// refreshMu serialises lazy rebuilds (ADR-107): a stale read triggers at
+	// most one re-backfill at a time; concurrent triggers collapse onto it.
+	refreshMu sync.Mutex
+
+	// Eager-refresh watcher (ADR-107), present only when a Waiter is wired.
+	// watchCancel stops the Wait loop; watchDone closes when it has exited, so
+	// Close blocks until the goroutine is gone.
+	watchCancel context.CancelFunc
+	watchDone   chan struct{}
 }
 
 // viewDef describes one logical tree. Intrinsic defs (by-artifact,

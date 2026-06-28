@@ -48,3 +48,30 @@ const (
 	// StorageFacet is populated.
 	KindMultistore Kind = "multistore"
 )
+
+// Token is the opaque, monotonic change marker a TokenSource reports
+// (ADR-106/107). The projection treats it as an opaque comparable value;
+// the engine index issues it and the composition root adapts the backend's
+// typed token onto this alias.
+type Token = uint64
+
+// TokenSource is the pull half of the synchronization seam (ADR-107): the
+// View reads it to learn the backend's current change-sequence and, in later
+// stages, to decide whether its cached trees are stale. It is a structural
+// interface so the projection takes no dependency on engine/index — the
+// composition root adapts index.SyncSource onto it.
+//
+// A nil TokenSource means snapshot semantics: the View reflects the backend
+// as of New and does not observe other writers (INV-107-6).
+type TokenSource interface {
+	Token(ctx context.Context) (Token, error)
+}
+
+// Waiter is the optional push half (ADR-107): it blocks until the backend
+// moves past `after` (or ctx is cancelled), letting the View refresh eagerly
+// instead of polling. Structural, for the same reason as TokenSource; the
+// composition root adapts index.SyncWaiter onto it. A View may hold a
+// TokenSource without a Waiter — it then refreshes lazily on read.
+type Waiter interface {
+	Wait(ctx context.Context, after Token) (Token, error)
+}

@@ -11,7 +11,10 @@ import (
 // Close marks the View closed. Idempotent. Subsequent reads
 // return os.ErrClosed.
 func (v *View) Close() error {
-	v.closed.Store(true)
+	if v.closed.Swap(true) {
+		return nil // already closed
+	}
+	v.stopWatcher()
 	return nil
 }
 

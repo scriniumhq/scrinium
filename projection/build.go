@@ -70,6 +70,12 @@ func buildView(ctx context.Context, backend Backend, fsidx MetadataIndex, cfg Co
 	if cfg.ByPathFallback != "" {
 		opts = append(opts, view.WithFallback(view.Fallback(cfg.ByPathFallback)))
 	}
+	if cfg.SyncSource != nil {
+		opts = append(opts, view.WithSyncSource(cfg.SyncSource))
+	}
+	if cfg.SyncWaiter != nil {
+		opts = append(opts, view.WithSyncWaiter(cfg.SyncWaiter))
+	}
 	v, err := view.New(ctx, backend, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("build view: %w", err)

@@ -1,9 +1,11 @@
 package assembly
 
 import (
+	"context"
 	"path/filepath"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/internal/uri"
 	"scrinium.dev/projection"
 )
@@ -55,4 +57,24 @@ func resolveScratchDir(configured, storeURI string) (string, error) {
 		return "", nil
 	}
 	return filepath.Join(p, ".scratch"), nil
+}
+
+// syncTokenSource adapts the index's SyncSource capability onto the
+// projection's TokenSource (ADR-107). The projection takes no dependency on
+// engine/index; the conversion between the index's typed Token and the
+// projection's uint64 alias lives here, at the composition root.
+type syncTokenSource struct{ ss index.SyncSource }
+
+func (a syncTokenSource) Token(ctx context.Context) (uint64, error) {
+	t, err := a.ss.Token(ctx)
+	return uint64(t), err
+}
+
+// syncWaiter adapts the index's SyncWaiter capability onto the projection's
+// Waiter, so the view's eager watcher can block on backend changes.
+type syncWaiter struct{ sw index.SyncWaiter }
+
+func (a syncWaiter) Wait(ctx context.Context, after uint64) (uint64, error) {
+	t, err := a.sw.Wait(ctx, index.Token(after))
+	return uint64(t), err
 }

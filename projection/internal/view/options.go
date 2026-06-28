@@ -51,6 +51,15 @@ type viewOptions struct {
 	// namespace extension) arrive here like any other. The View builds
 	// one tree per provided root with no knowledge of its domain.
 	provided []ProvidedView
+
+	// tokenSrc is the backend change-sequence source (ADR-107). nil ⇒
+	// snapshot: the View reflects the backend as of New and does not track
+	// other writers. Set via WithSyncSource.
+	tokenSrc source.TokenSource
+
+	// waiter is the optional push source (ADR-107). nil ⇒ the View refreshes
+	// lazily on read rather than blocking for changes. Set via WithSyncWaiter.
+	waiter source.Waiter
 }
 
 // ProvidedView is an extension-contributed view definition (ADR-98). The
@@ -136,4 +145,18 @@ func WithFilter(f Filter) Option {
 // silently drops events.
 func WithEventBus(bus event.EventBus) Option {
 	return func(o *viewOptions) { o.bus = bus }
+}
+
+// WithSyncSource installs the backend change-sequence source (ADR-107). The
+// View records the current Token at build time; later it compares against it
+// to decide whether its cached trees are stale. Without this option the View
+// is a snapshot as of New and does not observe other writers (INV-107-6).
+func WithSyncSource(ts source.TokenSource) Option {
+	return func(o *viewOptions) { o.tokenSrc = ts }
+}
+
+// WithSyncWaiter installs the optional push source (ADR-107) layered over
+// WithSyncSource, letting the View block for changes instead of polling.
+func WithSyncWaiter(w source.Waiter) Option {
+	return func(o *viewOptions) { o.waiter = w }
 }

@@ -17,6 +17,7 @@ import (
 	"scrinium.dev/engine/customindex"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/engine/wrapper"
 	"scrinium.dev/errs"
@@ -384,6 +385,16 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 			if pv.Metadata != nil && metaSrc == nil {
 				metaSrc = pv.Metadata
 			}
+		}
+		// Synchronization seam (ADR-107): when the index backs the
+		// SyncSource/SyncWaiter capability, hand it to the projection so the
+		// view converges on other clients' writes. by-assertion — a
+		// single-client index leaves the projection a snapshot.
+		if ss, ok := idx.(index.SyncSource); ok {
+			pcfg.SyncSource = syncTokenSource{ss}
+		}
+		if sw, ok := idx.(index.SyncWaiter); ok {
+			pcfg.SyncWaiter = syncWaiter{sw}
 		}
 		p, buildErr := projection.Build(ctx, st, metaSrc, pcfg)
 		if buildErr != nil {

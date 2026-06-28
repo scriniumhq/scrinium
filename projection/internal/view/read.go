@@ -58,6 +58,7 @@ func (v *View) LookupLocations(id domain.ArtifactID) (Locations, bool) {
 	if v.closed.Load() {
 		return Locations{}, false
 	}
+	v.refreshIfStale(context.Background())
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 	rec, ok := v.artifacts[id]
@@ -96,6 +97,7 @@ func (v *View) Search(query string, limit int) []SearchResult {
 		return nil
 	}
 
+	v.refreshIfStale(context.Background())
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
@@ -162,6 +164,7 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 	if v.closed.Load() {
 		return nil
 	}
+	v.refreshIfStale(context.Background())
 	v.mu.RLock()
 	defer v.mu.RUnlock()
 
@@ -197,31 +200,20 @@ func (v *View) RelatedByBlobRef(blobRef domain.BlobRef, exclude domain.ArtifactI
 
 // GetIn returns the node at path within the rv tree.
 func (v *View) GetIn(rv RootView, path string) (Node, error) {
-	tree := v.treeFor(rv)
-	if tree == nil {
-		return Node{}, errs.ErrPathNotFound
-	}
-	return v.getInTree(tree, path)
+	v.refreshIfStale(context.Background())
+	return v.getInTree(rv, path)
 }
 
 // ListIn lists the immediate children at path within the rv tree.
 func (v *View) ListIn(rv RootView, path string) Seq {
-	tree := v.treeFor(rv)
-	if tree == nil {
-		return func(yield func(Node, error) bool) {
-			yield(Node{}, errs.ErrPathNotFound)
-		}
-	}
-	return v.listInTree(tree, path)
+	v.refreshIfStale(context.Background())
+	return v.listInTree(rv, path)
 }
 
 // OpenIn opens an artifact at path within the rv tree.
 func (v *View) OpenIn(ctx context.Context, rv RootView, path string, opts ...domain.GetOption) (domain.ReadHandle, error) {
-	tree := v.treeFor(rv)
-	if tree == nil {
-		return nil, errs.ErrPathNotFound
-	}
-	return v.openInTree(ctx, tree, path, opts...)
+	v.refreshIfStale(ctx)
+	return v.openInTree(ctx, rv, path, opts...)
 }
 
 // Open fetches an artifact's read handle by id, bypassing the tree
@@ -237,30 +229,22 @@ func (v *View) Open(ctx context.Context, id domain.ArtifactID) (domain.ReadHandl
 // tree. An unknown RootView yields a single-shot error sequence,
 // matching ListIn.
 func (v *View) WalkIn(rv RootView, prefix string) Seq {
-	tree := v.treeFor(rv)
-	if tree == nil {
-		return func(yield func(Node, error) bool) {
-			yield(Node{}, errs.ErrPathNotFound)
-		}
-	}
-	return v.walkInTree(tree, prefix)
-}
-
-// treeFor returns the internal tree for the given RootView, or
-// nil for a root no active view populates. Private — outside callers
-// go through GetIn/ListIn/OpenIn, which absorb the nil check.
-func (v *View) treeFor(rv RootView) map[string]*viewNode {
-	return v.trees[rv]
+	v.refreshIfStale(context.Background())
+	return v.walkInTree(rv, prefix)
 }
 
 // --- Per-tree implementations ---
 
-func (v *View) getInTree(tree map[string]*viewNode, path string) (Node, error) {
+func (v *View) getInTree(rv RootView, path string) (Node, error) {
 	if v.closed.Load() {
 		return Node{}, os.ErrClosed
 	}
 	v.mu.RLock()
 	defer v.mu.RUnlock()
+	tree := v.trees[rv]
+	if tree == nil {
+		return Node{}, errs.ErrPathNotFound
+	}
 	n, ok := tree[path]
 	if !ok {
 		return Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, path)
@@ -268,7 +252,7 @@ func (v *View) getInTree(tree map[string]*viewNode, path string) (Node, error) {
 	return v.exportNode(n), nil
 }
 
-func (v *View) listInTree(tree map[string]*viewNode, path string) Seq {
+func (v *View) listInTree(rv RootView, path string) Seq {
 	return func(yield func(Node, error) bool) {
 		if v.closed.Load() {
 			yield(Node{}, os.ErrClosed)
@@ -277,6 +261,11 @@ func (v *View) listInTree(tree map[string]*viewNode, path string) Seq {
 		v.mu.RLock()
 		defer v.mu.RUnlock()
 
+		tree := v.trees[rv]
+		if tree == nil {
+			yield(Node{}, errs.ErrPathNotFound)
+			return
+		}
 		n, ok := tree[path]
 		if !ok {
 			yield(Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, path))
@@ -303,7 +292,7 @@ func (v *View) listInTree(tree map[string]*viewNode, path string) Seq {
 	}
 }
 
-func (v *View) walkInTree(tree map[string]*viewNode, prefix string) Seq {
+func (v *View) walkInTree(rv RootView, prefix string) Seq {
 	return func(yield func(Node, error) bool) {
 		if v.closed.Load() {
 			yield(Node{}, os.ErrClosed)
@@ -312,6 +301,11 @@ func (v *View) walkInTree(tree map[string]*viewNode, prefix string) Seq {
 		v.mu.RLock()
 		defer v.mu.RUnlock()
 
+		tree := v.trees[rv]
+		if tree == nil {
+			yield(Node{}, errs.ErrPathNotFound)
+			return
+		}
 		root, ok := tree[prefix]
 		if !ok {
 			yield(Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, prefix))
@@ -343,7 +337,7 @@ func (v *View) walkInTree(tree map[string]*viewNode, prefix string) Seq {
 
 func (v *View) openInTree(
 	ctx context.Context,
-	tree map[string]*viewNode,
+	rv RootView,
 	path string,
 	opts ...domain.GetOption,
 ) (domain.ReadHandle, error) {
@@ -351,7 +345,14 @@ func (v *View) openInTree(
 		return nil, os.ErrClosed
 	}
 	v.mu.RLock()
-	n, ok := tree[path]
+	tree := v.trees[rv]
+	var (
+		n  *viewNode
+		ok bool
+	)
+	if tree != nil {
+		n, ok = tree[path]
+	}
 	v.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("%w: %q", errs.ErrPathNotFound, path)
