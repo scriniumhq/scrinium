@@ -1,0 +1,110 @@
+{{define "base" -}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{block "title" .}}Scrinium{{end}}</title>
+<script>
+  // Apply the saved theme before first paint to avoid a flash. "auto"
+  // (or nothing stored) leaves <html> without data-theme, so Pico's
+  // prefers-color-scheme rules govern.
+  (function () {
+    try {
+      var t = localStorage.getItem("scrinium-theme");
+      if (t === "light" || t === "dark") {
+        document.documentElement.setAttribute("data-theme", t);
+      }
+    } catch (e) {}
+  })();
+</script>
+<link rel="stylesheet" href="{{.BrowsePrefix}}/_static/pico.min.css">
+<link rel="stylesheet" href="{{.BrowsePrefix}}/_static/app.css">
+</head>
+<body>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="i-view" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+  </symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+  </symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+  </symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/>
+  </symbol>
+</svg>
+
+<header class="container">
+  <nav>
+    <ul>
+      <li><a href="{{.BrowsePrefix}}/" class="brand"><strong>Scrinium</strong></a></li>
+      <li><small class="store">{{.StorePath}}</small></li>
+    </ul>
+    <ul>
+      {{range .Roots}}<li><a href="{{$.BrowsePrefix}}/{{.}}/">{{.}}</a></li>
+      {{end}}
+    </ul>
+    <ul>
+      <li>
+        <form role="search" method="get" action="{{.BrowsePrefix}}/_search">
+          <input type="search" name="q" placeholder="search…" aria-label="Search">
+        </form>
+      </li>
+      <li>
+        <button type="button" id="theme-toggle" class="outline secondary" data-mode="auto" aria-label="Toggle theme" title="Theme">
+          <svg class="ti ti-auto"><use href="#i-auto"/></svg>
+          <svg class="ti ti-sun"><use href="#i-sun"/></svg>
+          <svg class="ti ti-moon"><use href="#i-moon"/></svg>
+        </button>
+      </li>
+    </ul>
+  </nav>
+</header>
+
+<main class="container">
+{{block "content" .}}{{end}}
+</main>
+
+<footer class="container">
+  <small>{{.NowFormatted}} · <a href="{{.BrowsePrefix}}/_stats">stats</a> · <a href="{{.BrowsePrefix}}/">browse</a></small>
+</footer>
+
+<script>
+  // Theme toggle: cycles auto → light → dark, persisted in localStorage.
+  // "auto" removes data-theme so Pico falls back to prefers-color-scheme.
+  // The button's data-mode drives which icon shows (see app.css).
+  (function () {
+    var KEY = "scrinium-theme";
+    var ORDER = ["auto", "light", "dark"];
+    var btn = document.getElementById("theme-toggle");
+    if (!btn) return;
+    function current() {
+      try { return localStorage.getItem(KEY) || "auto"; } catch (e) { return "auto"; }
+    }
+    function show(mode) {
+      btn.dataset.mode = mode;
+      btn.setAttribute("aria-label", "Theme: " + mode);
+    }
+    function apply(mode) {
+      if (mode === "auto") document.documentElement.removeAttribute("data-theme");
+      else document.documentElement.setAttribute("data-theme", mode);
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+      show(mode);
+    }
+    show(current());
+    btn.addEventListener("click", function () {
+      apply(ORDER[(ORDER.indexOf(current()) + 1) % ORDER.length]);
+    });
+  })();
+</script>
+
+</body>
+</html>
+{{- end}}

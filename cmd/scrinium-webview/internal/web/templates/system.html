@@ -1,0 +1,10 @@
+{{define "title"}}{{.Name}} · system artifact{{end}}
+
+{{define "content"}}
+<hgroup>
+  <h2>{{.Name}}</h2>
+  <p>{{if .Content}}{{if .IsJSON}}JSON{{else}}raw payload{{end}}{{else}}empty payload{{end}}</p>
+</hgroup>
+
+{{if .Content}}<pre>{{.Content}}</pre>{{end}}
+{{end}}

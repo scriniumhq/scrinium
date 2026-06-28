@@ -106,16 +106,12 @@ func sortDirEntries(entries []dirEntry, column, order string) {
 // listingData binds the HTML template. Field names match
 // template variables; rename means template edit.
 type listingData struct {
-	Path         string
-	Crumbs       []crumb
-	Parent       string
-	HasParent    bool
-	Entries      []listingRow
-	StorePath    string
-	NowFormatted string
-	StatsURL     string
-	BrowsePrefix string
-	Roots        []string // nav tabs: active browsable tree roots
+	Path      string
+	Crumbs    []crumb
+	Parent    string
+	HasParent bool
+	Entries   []listingRow
+	Layout
 
 	// Totals summarise the directory's contents under the
 	// table. Counts cover the entire directory; pagination
@@ -240,11 +236,7 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 	data := listingData{
 		Path:          "/" + dir,
 		Crumbs:        h.buildCrumbs(dir),
-		StorePath:     h.cfg.StorePath,
-		NowFormatted:  time.Now().UTC().Format(time.RFC3339),
-		StatsURL:      "/" + h.cfg.ServicePrefix + "/stats",
-		BrowsePrefix:  h.prefix,
-		Roots:         h.cfg.Roots,
+		Layout:        h.layout(),
 		TotalDirs:     totalDirs,
 		TotalFiles:    totalFiles,
 		TotalBytes:    totalBytes,
@@ -341,7 +333,7 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	if err := listingTemplate.Execute(w, data); err != nil {
+	if err := render(w, "listing", data); err != nil {
 		fmt.Fprintf(os.Stderr, "scrinium-web: render listing: %v\n", err)
 	}
 }

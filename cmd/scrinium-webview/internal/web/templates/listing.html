@@ -1,0 +1,62 @@
+{{define "title"}}{{.Path}} — Scrinium{{end}}
+
+{{define "content"}}
+<nav aria-label="breadcrumb">
+  <ul>
+    {{range .Crumbs}}<li><a href="{{.URL}}">{{.Name}}</a></li>
+    {{end}}
+  </ul>
+</nav>
+
+<table class="striped listing">
+  <colgroup>
+    <col>
+    <col class="c-size">
+    <col class="c-time">
+    <col class="c-act">
+  </colgroup>
+  <thead>
+    <tr>
+      <th><a href="{{.SortNameURL}}">Name{{.SortNameArrow}}</a></th>
+      <th class="size"><a href="{{.SortSizeURL}}">Size{{.SortSizeArrow}}</a></th>
+      <th class="time"><a href="{{.SortTimeURL}}">Modified{{.SortTimeArrow}}</a></th>
+      <th class="actions"></th>
+    </tr>
+  </thead>
+  <tbody>
+{{- if .HasParent}}
+    <tr>
+      <td class="name"><span class="icon-dir">↑</span><a href="{{.Parent}}">..</a></td>
+      <td class="size">—</td>
+      <td class="time"></td>
+      <td class="actions"></td>
+    </tr>
+{{- end}}
+{{- range .Entries}}
+    <tr{{if .IsSystem}} class="system"{{end}}>
+      <td class="name">{{if .IsDir}}<span class="icon-dir">▸</span>{{else}}<span class="icon-file">·</span>{{end}}{{if .URL}}<a href="{{.URL}}" title="{{.Name}}">{{.Name}}{{if .IsDir}}/{{end}}</a>{{else}}<span title="{{.Name}}">{{.Name}}</span>{{end}}{{if .IsSystem}}<span class="badge">system</span>{{end}}</td>
+      <td class="size">{{.SizeText}}</td>
+      <td class="time">{{.TimeText}}</td>
+      <td class="actions">{{if .ViewURL}}<a href="{{.ViewURL}}" target="_blank" rel="noopener" aria-label="view" title="view"><svg class="ai"><use href="#i-view"/></svg></a>{{end}}{{if .DownloadURL}}<a href="{{.DownloadURL}}" aria-label="download" title="download"><svg class="ai"><use href="#i-dl"/></svg></a>{{end}}</td>
+    </tr>
+{{- end}}
+  </tbody>
+</table>
+
+<p>
+  <small>
+    {{.TotalDirs}} {{if eq .TotalDirs 1}}directory{{else}}directories{{end}},
+    {{.TotalFiles}} {{if eq .TotalFiles 1}}file{{else}}files{{end}}{{if gt .TotalFiles 0}}, {{.TotalBytesFmt}}{{end}}
+  </small>
+</p>
+
+{{if gt .TotalPages 1}}
+<div class="grid">
+  <small>page {{.Page}} of {{.TotalPages}}</small>
+  <div role="group">
+    {{if .PrevURL}}<a href="{{.PrevURL}}" role="button" class="outline secondary">← prev</a>{{else}}<button class="outline secondary" disabled>← prev</button>{{end}}
+    {{if .NextURL}}<a href="{{.NextURL}}" role="button" class="outline secondary">next →</a>{{else}}<button class="outline secondary" disabled>next →</button>{{end}}
+  </div>
+</div>
+{{end}}
+{{end}}

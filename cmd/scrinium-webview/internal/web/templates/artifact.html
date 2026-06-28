@@ -1,0 +1,108 @@
+{{define "title"}}artifact — Scrinium{{end}}
+
+{{define "content"}}
+<section>
+<h2>Identity</h2>
+<table>
+  <tbody>
+{{- range .Identity}}
+    <tr>
+      <th scope="row" class="label">{{.Label}}</th>
+      <td class="value{{if .Mono}} mono{{end}}">{{.Value}}</td>
+    </tr>
+{{- end}}
+  </tbody>
+</table>
+</section>
+
+{{if .Locations}}
+<section>
+<h2>Locations</h2>
+<table>
+  <tbody>
+{{- range .Locations}}
+    <tr>
+      <th scope="row" class="label">{{.Tree}}</th>
+      <td class="value mono"><a href="{{.URL}}">{{.Path}}</a></td>
+    </tr>
+{{- end}}
+  </tbody>
+</table>
+</section>
+{{end}}
+
+<section>
+<h2>Storage</h2>
+<table>
+  <tbody>
+{{- range .Storage}}
+    <tr>
+      <th scope="row" class="label">{{.Label}}</th>
+      <td class="value{{if .Mono}} mono{{end}}">{{.Value}}</td>
+    </tr>
+{{- end}}
+  </tbody>
+</table>
+</section>
+
+{{if .Pipeline}}
+<section>
+<h2>Pipeline</h2>
+<table class="striped">
+  <thead>
+    <tr><th>#</th><th>algorithm</th><th>hash</th><th>iv</th></tr>
+  </thead>
+  <tbody>
+{{- range .Pipeline}}
+    <tr>
+      <td>#{{.Index}}</td>
+      <td>{{.Algorithm}}</td>
+      <td class="hash mono">{{.Hash}}</td>
+      <td class="iv mono">{{if .IVHex}}IV: {{.IVHex}}{{end}}</td>
+    </tr>
+{{- end}}
+  </tbody>
+</table>
+</section>
+{{end}}
+
+{{if .Related}}
+<section>
+<h2>Related <span class="related-count">{{len .Related}} {{if eq (len .Related) 1}}artifact shares{{else}}artifacts share{{end}} this blob</span></h2>
+<table class="striped">
+  <thead>
+    <tr><th>path</th><th>session</th><th>created</th></tr>
+  </thead>
+  <tbody>
+{{- range .Related}}
+    <tr>
+      <td class="path"><a href="{{.URL}}">{{if .IsOrphan}}<span class="orphan">(orphaned)</span>{{else}}{{.Path}}{{end}}</a></td>
+      <td class="mono">{{if .SessionID}}{{.SessionID}}{{else}}—{{end}}</td>
+      <td>{{.CreatedAt}}</td>
+    </tr>
+{{- end}}
+  </tbody>
+</table>
+</section>
+{{end}}
+
+{{if or .SchemaHTML .SchemaJSON}}
+<section>
+<h2>Schema {{if .SchemaKind}}<span class="schema-kind">{{.SchemaKind}}</span>{{end}}</h2>
+{{if .SchemaError}}<p class="note error">decoder error: {{.SchemaError}}</p>{{end}}
+{{if .SchemaHTML}}{{.SchemaHTML}}{{else}}<pre>{{.SchemaJSON}}</pre>{{end}}
+</section>
+{{end}}
+
+{{if .PreviewKind}}
+<details{{if .PreviewOpen}} open{{end}}>
+  <summary>Preview · {{.PreviewKind}}{{if .PreviewNote}} · {{.PreviewNote}}{{end}}</summary>
+  {{if .PreviewIsTable}}{{.PreviewHTML}}{{else}}<pre>{{.Preview}}</pre>{{end}}
+</details>
+{{end}}
+
+<details>
+  <summary>Raw manifest JSON</summary>
+  <pre>{{.RawJSON}}</pre>
+</details>
+{{end}}
