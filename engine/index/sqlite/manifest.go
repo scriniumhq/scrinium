@@ -95,6 +95,20 @@ func (i *Index) indexManifestTx(
 				return err
 			}
 		}
+
+		// Stamp the change-sequence on the row in this transaction (ADR-106):
+		// Token advances and Since(cursor) will surface this digest. Applies to
+		// every kind, container included — the manifests row exists either way.
+		c, err := nextCSN(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE manifests SET csn = ? WHERE manifest_digest = ?`,
+			c, string(m.Digest),
+		); err != nil {
+			return fmt.Errorf("sqlite: stamp csn: %w", err)
+		}
 		return nil
 	})
 }
@@ -452,6 +466,19 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 			}); err != nil {
 				return err
 			}
+		}
+
+		// Advance the change-sequence and record the prune watermark in this
+		// transaction (ADR-106): the row is gone, so Since cannot surface the
+		// deleted digest by csn — prune_csn drives Gapped (a consumer behind it
+		// does a full Walk). Token still moves, so a convergent consumer
+		// (projection, system-artifact cache) re-derives.
+		c, err := nextCSN(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := markPrune(ctx, tx, c); err != nil {
+			return err
 		}
 
 		// Dispatch to custom indexes before commit. EventArgs carries the
