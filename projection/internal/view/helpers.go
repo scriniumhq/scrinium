@@ -94,12 +94,7 @@ func byArtifactPath(id domain.ArtifactID) string {
 // Time resolution is 1 second; same-second artifacts get a dash-id
 // suffix appended via the basename which is always unique.
 func byDatePath(m domain.Manifest) string {
-	t := m.CreatedAt.UTC()
-	name := byDateLabel(m)
-	return fmt.Sprintf("%04d/%02d/%02d/%02d-%02d-%02d-%s",
-		t.Year(), t.Month(), t.Day(),
-		t.Hour(), t.Minute(), t.Second(),
-		name)
+	return m.CreatedAt.UTC().Format("2006/01/02/15-04-05-") + byDateLabel(m)
 }
 
 // byDateLabel picks the human-friendly suffix for a by-date path.
@@ -171,10 +166,7 @@ func insertSorted(s []string, name string) []string {
 	if found {
 		return s
 	}
-	s = append(s, "")
-	copy(s[idx+1:], s[idx:])
-	s[idx] = name
-	return s
+	return slices.Insert(s, idx, name)
 }
 
 // removeSorted removes name from a sorted slice.
@@ -183,5 +175,5 @@ func removeSorted(s []string, name string) []string {
 	if !found {
 		return s
 	}
-	return append(s[:idx], s[idx+1:]...)
+	return slices.Delete(s, idx, idx+1)
 }

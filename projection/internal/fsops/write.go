@@ -11,7 +11,7 @@ import (
 
 // --- Write side ---
 
-// Create makes a new file at path and returns a writable File
+// Create makes a new file at path and returns a writable Handle
 // handle. The handle buffers writes in a scratch file; on Close
 // the scratch is consumed by Store.Put and the resulting
 // manifest is added to the View.
@@ -25,7 +25,7 @@ import (
 //
 // Stage 4b only supports Create for new paths; opening an
 // existing path for write lands in 4c.
-func (o *Ops) Create(ctx context.Context, path string, mode uint32) (File, error) {
+func (o *Ops) Create(ctx context.Context, path string, mode uint32) (Handle, error) {
 	if o.readOnly {
 		return nil, fmt.Errorf("%w: Create on read-only Ops", errs.ErrEditingDisabled)
 	}

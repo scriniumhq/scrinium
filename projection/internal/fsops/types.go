@@ -58,14 +58,15 @@ type FileInfo struct {
 // position; mirrors NodeSeq.
 type FileInfoSeq = iter.Seq2[FileInfo, error]
 
-// File is the handle returned by Open/Create. It bundles random
+// Handle is the file handle returned by Open/Create. It bundles random
 // I/O, sync, in-place truncate, and Close — together they cover
-// what FUSE write paths need.
+// what FUSE write paths need. (Named Handle, not File, to keep it
+// distinct from vfs.File, the dir-aware transport facade that wraps it.)
 //
 // Stage 4a: only read-only handles are produced (via Open with
 // OpenReadOnly). Write methods (WriteAt, Truncate, Sync) on a
 // read-only handle return ErrEditingDisabled.
-type File interface {
+type Handle interface {
 	io.ReaderAt
 	io.WriterAt
 	io.Closer
