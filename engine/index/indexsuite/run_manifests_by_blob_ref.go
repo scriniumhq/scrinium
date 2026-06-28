@@ -1,4 +1,4 @@
-package indextest
+package indexsuite
 
 import (
 	"sort"

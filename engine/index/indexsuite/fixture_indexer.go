@@ -1,4 +1,4 @@
-package indextest
+package indexsuite
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 // a query is the index Name (the ext_name column), independent of the
 // projected field.
 const (
-	fixtureName     = "indextest.fixture"
+	fixtureName     = "indexsuite.fixture"
 	fixtureExtField = "color"
 	fixtureExtValue = "red"
 	fixtureUsrField = "rating"

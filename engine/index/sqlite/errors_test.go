@@ -9,7 +9,7 @@ import (
 
 // IndexManifest / DeleteManifest / ManifestExists
 // behaviour lives in the conformance suite at
-// internal/testutil/indextest. This file is for sqlite-specific
+// internal/testutil/indexsuite. This file is for sqlite-specific
 // behaviour only — currently the classifyError mapping from
 // SQLite-driver error strings into errs.* sentinels.
 

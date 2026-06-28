@@ -55,8 +55,8 @@ round-trip). Fuzz only if the function also parses bytes.
 
 When an interface has, or will have, more than one implementation, the
 contract is tested once and run against each implementation through a
-shared suite. `internal/testutil/indextest` is the model:
-`indextest.Run(t, Factory)` exercises the `StoreIndex` contract
+shared suite. `internal/testutil/indexsuite` is the model:
+`indexsuite.Run(t, Factory)` exercises the `StoreIndex` contract
 black-box and is invoked from the sqlite package (and will be from a
 future postgres backend).
 
@@ -158,7 +158,7 @@ register their own `t.Cleanup`, and `t.Fatalf` on setup failure.
 - `viewfx` — the consumer layer that wires `FakeSource` into a real
   `View` + `FSOps` (`Stack`, `RoutingAll`). Imports `projection`; that
   is why it is separate from `projectionfx`.
-- `indextest` — the `StoreIndex` conformance suite (category 3).
+- `indexsuite` — the `StoreIndex` conformance suite (category 3).
 
 When the setup for a category-4 test is elaborate and reused (e.g. a
 store with a blob-encrypting pipeline: `StoreConfig.Pipeline =

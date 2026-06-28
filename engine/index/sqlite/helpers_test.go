@@ -13,7 +13,7 @@ import (
 
 // Glass-box helpers shared between the per-package tests of the
 // sqlite implementation. The conformance suite at
-// internal/testutil/indextest does not use these — it asserts
+// internal/testutil/indexsuite does not use these — it asserts
 // through the public StoreIndex API only. These helpers exist
 // because the remaining sqlite-only tests (vacuum content checks,
 // blob row with packed metadata) need direct SQL access that the

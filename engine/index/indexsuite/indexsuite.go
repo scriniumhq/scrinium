@@ -1,4 +1,4 @@
-package indextest
+package indexsuite
 
 import (
 	"context"
@@ -25,7 +25,7 @@ type Factory struct {
 func Run(t *testing.T, f Factory) {
 	t.Helper()
 	if f.New == nil {
-		t.Fatal("indextest.Run: Factory.New is nil")
+		t.Fatal("indexsuite.Run: Factory.New is nil")
 	}
 	if f.Name == "" {
 		f.Name = "anon"

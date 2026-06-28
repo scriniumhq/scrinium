@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"scrinium.dev/engine/index"
-	"scrinium.dev/engine/index/indextest"
+	"scrinium.dev/engine/index/indexsuite"
 )
 
 // TestConformance runs the shared StoreIndex conformance suite
@@ -18,7 +18,7 @@ import (
 // that any future StoreIndex implementation (postgres, in-memory)
 // must also satisfy.
 func TestConformance(t *testing.T) {
-	indextest.Run(t, indextest.Factory{
+	indexsuite.Run(t, indexsuite.Factory{
 		Name: "sqlite-memory",
 		New: func(t *testing.T) index.StoreIndex {
 			t.Helper()
