@@ -113,87 +113,6 @@ func (i *Index) indexManifestTx(
 	})
 }
 
-// upsertBlob inserts the blob row if missing. ref_count is bumped
-// in a separate step so the insert/conflict semantics stay simple.
-//
-// We use ON CONFLICT(blob_ref) DO NOTHING to keep the call
-// idempotent: re-running IndexManifest after a partial crash
-// (where the blob row already exists but the manifest row does
-// not) leaves the blob untouched and proceeds with the manifest.
-func upsertBlob(
-	ctx context.Context,
-	tx *sql.Tx,
-	blobRef string,
-	contentHash domain.ContentHash,
-	originalSize int64,
-	crypto domain.CryptoIdentity,
-	addr domain.PhysicalAddress,
-) error {
-	// last_verified_at is NULL on insert — the blob has never been
-	// scrubbed yet. Scrub Agent (M3) updates it via MarkVerified.
-	// crypto_identity is the ADR-58 third component of the dedup
-	// key: empty for Plain blobs, "<algorithm>/<KeyID>" for
-	// encrypted ones.
-	const stmt = `
-		INSERT INTO blobs (
-			blob_ref, content_hash, original_size,
-			crypto_identity, physical_path,
-			ref_count, last_verified_at, created_at
-		) VALUES (?, ?, ?, ?, ?, 0, NULL, ?)
-		ON CONFLICT(blob_ref) DO NOTHING`
-	_, err := tx.ExecContext(ctx, stmt,
-		blobRef,
-		string(contentHash),
-		originalSize,
-		string(crypto),
-		addr.Path,
-		timefmt.Format(time.Now()),
-	)
-	return err
-}
-
-// bumpRefCount increments the ref_count of an existing blob.
-// Returns an error if the blob row is missing — this would mean a
-// caller-side bug (linking a manifest to a blob that was not
-// upserted in the same transaction).
-func bumpRefCount(ctx context.Context, tx *sql.Tx, blobRef string) error {
-	res, err := tx.ExecContext(ctx,
-		`UPDATE blobs SET ref_count = ref_count + 1 WHERE blob_ref = ?`,
-		blobRef,
-	)
-	if err != nil {
-		return err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return fmt.Errorf("sqlite: bumpRefCount: blob %q not present", blobRef)
-	}
-	return nil
-}
-
-// registerBlob is the upsert+bump pair every blob-bearing manifest
-// path (plain blob, composite chunks, headless container body) needs
-// at index time. The two SQL operations are idempotent individually
-// and idempotent as a pair: re-running on a partially-applied
-// transaction is safe.
-func registerBlob(
-	ctx context.Context,
-	tx *sql.Tx,
-	blobRef string,
-	contentHash domain.ContentHash,
-	originalSize int64,
-	crypto domain.CryptoIdentity,
-	addr domain.PhysicalAddress,
-) error {
-	if err := upsertBlob(ctx, tx, blobRef, contentHash, originalSize, crypto, addr); err != nil {
-		return err
-	}
-	return bumpRefCount(ctx, tx, blobRef)
-}
-
 // insertManifestRow writes a row into the manifests table.
 // Idempotency: ON CONFLICT(manifest_digest) DO NOTHING. The same
 // manifest file registered twice (after a crash, for instance) is a
@@ -263,27 +182,6 @@ func insertManifestRow(ctx context.Context, tx *sql.Tx, m domain.Manifest) error
 	return err
 }
 
-// linkManifestToBlob inserts an edge row into manifest_blobs, keyed by
-// the manifest digest. Position is the chunk index for TOC manifests
-// and 0 for blob manifests. Idempotency is provided by the PRIMARY KEY
-// (manifest_digest, position) and ON CONFLICT DO NOTHING.
-func linkManifestToBlob(
-	ctx context.Context,
-	tx *sql.Tx,
-	digest domain.ManifestDigest,
-	blobRef string,
-	position int,
-) error {
-	const stmt = `
-		INSERT INTO manifest_blobs (manifest_digest, blob_ref, position)
-		VALUES (?, ?, ?)
-		ON CONFLICT(manifest_digest, position) DO NOTHING`
-	_, err := tx.ExecContext(ctx, stmt,
-		string(digest), blobRef, position,
-	)
-	return err
-}
-
 // linkManifestToHandle inserts an edge row into manifest_handles, keyed
 // by the manifest digest (ADR-92). Position preserves array order.
 // Idempotency is provided by the PRIMARY KEY (manifest_digest, position)
@@ -337,19 +235,68 @@ func indexBlobManifest(
 	}
 	// Every blob in blob_refs is registered + ref-counted (ADR-87/92):
 	// a loose blob has one, a composite the ordered chunk list, a pack
-	// container [toc_blob, pack_blob]. registerBlob is upsert+bump, so a
-	// blob the chunker or bundler already wrote keeps its own metadata
-	// (ON CONFLICT DO NOTHING) and only gains a ref.
+	// container [toc_blob, pack_blob]. The upsert (ON CONFLICT DO NOTHING)
+	// keeps a blob the chunker/bundler already wrote and only adds a ref.
+	//
+	// Each statement runs once per BlobRef, so for a composite with many
+	// chunks prepare each once and reuse it across the loop instead of
+	// recompiling per ref.
+	insBlob, err := tx.PrepareContext(ctx, `
+		INSERT INTO blobs (
+			blob_ref, content_hash, original_size,
+			crypto_identity, physical_path,
+			ref_count, last_verified_at, created_at
+		) VALUES (?, ?, ?, ?, ?, 0, NULL, ?)
+		ON CONFLICT(blob_ref) DO NOTHING`)
+	if err != nil {
+		return err
+	}
+	defer insBlob.Close()
+	bumpRC, err := tx.PrepareContext(ctx,
+		`UPDATE blobs SET ref_count = ref_count + 1 WHERE blob_ref = ?`)
+	if err != nil {
+		return err
+	}
+	defer bumpRC.Close()
+
+	now := timefmt.Format(time.Now())
+	crypto := string(domain.CryptoIdentityOf(m.Pipeline))
 	for _, ref := range m.BlobRefs {
-		if err := registerBlob(ctx, tx, string(ref), m.ContentHash, m.OriginalSize, domain.CryptoIdentityOf(m.Pipeline), addr); err != nil {
+		blobRef := string(ref)
+		if _, err := insBlob.ExecContext(ctx,
+			blobRef, string(m.ContentHash), m.OriginalSize,
+			crypto, addr.Path, now,
+		); err != nil {
 			return err
 		}
+		res, err := bumpRC.ExecContext(ctx, blobRef)
+		if err != nil {
+			return err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("sqlite: register blob %q: not present after upsert", blobRef)
+		}
 	}
+
 	if err := insertManifestRow(ctx, tx, m); err != nil {
 		return err
 	}
+
+	linkBlob, err := tx.PrepareContext(ctx, `
+		INSERT INTO manifest_blobs (manifest_digest, blob_ref, position)
+		VALUES (?, ?, ?)
+		ON CONFLICT(manifest_digest, position) DO NOTHING`)
+	if err != nil {
+		return err
+	}
+	defer linkBlob.Close()
+	dg := string(m.Digest)
 	for pos, ref := range m.BlobRefs {
-		if err := linkManifestToBlob(ctx, tx, m.Digest, string(ref), pos); err != nil {
+		if _, err := linkBlob.ExecContext(ctx, dg, string(ref), pos); err != nil {
 			return err
 		}
 	}
@@ -419,11 +366,14 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 			return err
 		}
 
+		decRC, err := tx.PrepareContext(ctx,
+			`UPDATE blobs SET ref_count = ref_count - 1 WHERE blob_ref = ? AND ref_count > 0`)
+		if err != nil {
+			return err
+		}
+		defer decRC.Close()
 		for _, ref := range actual {
-			if _, err := tx.ExecContext(ctx,
-				`UPDATE blobs SET ref_count = ref_count - 1 WHERE blob_ref = ? AND ref_count > 0`,
-				ref,
-			); err != nil {
+			if _, err := decRC.ExecContext(ctx, ref); err != nil {
 				return err
 			}
 		}
