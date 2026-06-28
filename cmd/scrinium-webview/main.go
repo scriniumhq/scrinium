@@ -82,7 +82,7 @@ func runServe(args []string) int {
 		sysArts := gatherSystemArtifacts(capCtx, asm.Store.System())
 		// webview is always read-only; reflect that on the page.
 		return buildWebStatsData(asm.Projection.Queries(), capPtr, exts, sysArts, startedAt, asm.MountSession,
-			meta.StoreURI, true, "off")
+			meta.StoreURI, meta.StoreDriver, meta.IndexDriver, true, "off")
 	}
 
 	v := vfs.New(asm.Projection, routingCfg, vfs.WithStatsProvider(textStats))

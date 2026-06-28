@@ -22,10 +22,20 @@ type StatsData struct {
 	View            StatsView
 	Storage         StatsStorage
 	HasStorage      bool
+	Drivers         StatsDrivers
+	HasDrivers      bool
 	Extensions      []StatsExtension
 	SystemArtifacts []StatsSystemArtifact
 	Config          StatsConfig
 	HasConfig       bool
+}
+
+// StatsDrivers names the storage and index backends behind the store, as
+// reported by their optional namer capabilities. Either field may be empty
+// when that backend does not report a name.
+type StatsDrivers struct {
+	Store string
+	Index string
 }
 
 // StatsDaemon mirrors projection.DaemonInfo's daemon-level

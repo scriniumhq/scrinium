@@ -11,6 +11,9 @@ import (
 
 const driverName = "sqlite3"
 
+// driverLabel is the human-facing backend name surfaced by Index.DriverName.
+const driverLabel = "sqlite (mattn)"
+
 func openSQL(dsn string) (*sql.DB, error) {
 	return sql.Open(driverName, dsn)
 }

@@ -20,6 +20,18 @@
 </table>
 </section>
 
+{{if .HasDrivers}}
+<section>
+<h2>Drivers</h2>
+<table>
+  <tbody>
+    {{if .Drivers.Store}}<tr><th scope="row" class="label">Store</th><td>{{.Drivers.Store}}</td></tr>{{end}}
+    {{if .Drivers.Index}}<tr><th scope="row" class="label">Index</th><td>{{.Drivers.Index}}</td></tr>{{end}}
+  </tbody>
+</table>
+</section>
+{{end}}
+
 <section>
 <h2>View</h2>
 <table>

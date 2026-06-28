@@ -111,9 +111,20 @@ func TestStore_Capacity_FreshStoreIsEmpty(t *testing.T) {
 	if info.BlobCount != 0 {
 		t.Errorf("BlobCount: got %d, want 0", info.BlobCount)
 	}
-	// Byte sentinels: -1 means "unavailable" — see StorageInfo doc.
-	if info.TotalBytes != -1 || info.AvailableBytes != -1 || info.UsedBytes != -1 {
-		t.Errorf("expected -1 sentinels for byte fields, got %+v", info)
+	// Byte fields come from the driver's optional CapacityReporter. The
+	// localfs fixture reports volume capacity via statfs where the build
+	// supports it (tag unix); elsewhere the driver cannot report and the
+	// fields stay at the -1 "unavailable" sentinel. Either is valid — the
+	// "empty" part is the zero counts above; bytes describe the backing
+	// volume, not store contents.
+	switch {
+	case info.TotalBytes == -1 && info.AvailableBytes == -1 && info.UsedBytes == -1:
+		// driver does not report capacity — fine
+	case info.TotalBytes > 0 && info.AvailableBytes >= 0 && info.UsedBytes >= 0 &&
+		info.UsedBytes == info.TotalBytes-info.AvailableBytes:
+		// reported a consistent volume capacity — fine
+	default:
+		t.Errorf("byte fields inconsistent: got %+v", info)
 	}
 }
 
