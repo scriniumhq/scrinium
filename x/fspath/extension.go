@@ -15,12 +15,12 @@ func NewExtension() extension.Extension { return ExtensionFor(NewIndex()) }
 // projection (which consults it as a metadata source).
 func ExtensionFor(ci *CustomIndex) extension.Extension { return fsExtension{ci: ci} }
 
-// fsExtension is the fs extension. It occupies only the index axis: fs
-// adds no data-plane behavior and brings no paired agent.
+// fsExtension is the fspath extension. It occupies only the index axis:
+// fspath adds no data-plane behavior and brings no paired agent.
 type fsExtension struct{ ci *CustomIndex }
 
 func (e fsExtension) Descriptor() extension.Descriptor {
-	return extension.Descriptor{Name: "fs"}
+	return extension.Descriptor{Name: "fspath"}
 }
 
 func (e fsExtension) CustomIndex() (customindex.CustomIndex, bool) {

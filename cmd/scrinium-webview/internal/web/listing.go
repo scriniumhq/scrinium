@@ -115,6 +115,7 @@ type listingData struct {
 	NowFormatted string
 	StatsURL     string
 	BrowsePrefix string
+	Roots        []string // nav tabs: active browsable tree roots
 
 	// Totals summarise the directory's contents under the
 	// table. Counts cover the entire directory; pagination
@@ -243,6 +244,7 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 		NowFormatted:  time.Now().UTC().Format(time.RFC3339),
 		StatsURL:      "/" + h.cfg.ServicePrefix + "/stats",
 		BrowsePrefix:  h.prefix,
+		Roots:         h.cfg.Roots,
 		TotalDirs:     totalDirs,
 		TotalFiles:    totalFiles,
 		TotalBytes:    totalBytes,
@@ -271,7 +273,7 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 		data.NextURL = pageLinkURL(r.URL, page+1)
 	}
 
-	if dir != "" && !isServiceTreeRoot(dir) {
+	if dir != "" && !h.isServiceTreeRoot(dir) {
 		parent := pathpkg.Dir(dir)
 		if parent == "." {
 			parent = ""
@@ -439,21 +441,31 @@ func pageLinkURL(orig *url.URL, page int) string {
 	return out.RequestURI()
 }
 
-// isServiceTreeRoot reports whether dir is exactly one of
-// the service tree names (by-date, by-session,
-// by-namespace, by-artifact, orphaned) — and not a sub-path
-// inside one. Used to suppress the ".." entry on tree roots:
-// climbing up from /by-date/ would land on the redirect-only
-// "/" handler, which is confusing UX.
+// isServiceTreeRoot reports whether dir is exactly one of the
+// mounted tree roots — and not a sub-path inside one. Used to
+// suppress the ".." entry on tree roots: climbing up from
+// /by-date/ would land on the redirect-only "/" handler, which
+// is confusing UX.
+//
+// The browsable roots are whatever is actually mounted (cfg.Roots:
+// the intrinsic trees plus the roots connected extensions provide,
+// e.g. by-path from fspath, by-namespace from namespace) — derived,
+// not hardcoded, so a tree no extension backs is not treated as a
+// root. "orphaned" is intrinsic (always exposed when ShowOrphaned)
+// and is not an extension-provided root, so it is recognised
+// directly rather than through cfg.Roots.
 //
 // Stays in web pkg rather than in projection because it's a
-// presentation concern: the projection's Route function
-// happily resolves these paths regardless.
-func isServiceTreeRoot(dir string) bool {
-	switch dir {
-	case "by-path", "by-date", "by-session", "by-namespace",
-		"by-artifact", "orphaned":
+// presentation concern: the projection's Route function happily
+// resolves these paths regardless.
+func (h *Handler) isServiceTreeRoot(dir string) bool {
+	if dir == "orphaned" {
 		return true
+	}
+	for _, r := range h.cfg.Roots {
+		if dir == r {
+			return true
+		}
 	}
 	return false
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -85,10 +86,33 @@ func runServe(args []string) int {
 
 	v := vfs.New(asm.Projection, routingCfg, vfs.WithStatsProvider(textStats))
 	backing := newWebBackingFS(v, asm.Projection.Queries())
+
+	// Nav tabs reflect what is actually mounted: the intrinsic browsable trees
+	// the routing config exposes, plus whatever roots the connected extensions
+	// provide (by-path from fspath, by-namespace from namespace, …). A tab for
+	// a root no extension backs would 404, so the list is derived, not fixed.
+	browseRoots := make([]string, 0, 5)
+	if routingCfg.ShowByDate {
+		browseRoots = append(browseRoots, "by-date")
+	}
+	if routingCfg.ShowBySession {
+		browseRoots = append(browseRoots, "by-session")
+	}
+	if routingCfg.ShowByArtifact {
+		browseRoots = append(browseRoots, "by-artifact")
+	}
+	if routingCfg.ShowProvidedViews {
+		for _, r := range asm.Projection.View.ProvidedRoots() {
+			browseRoots = append(browseRoots, string(r))
+		}
+	}
+	sort.Strings(browseRoots)
+
 	webHandler := web.NewHandler(backing, vfs.CleanPath, web.Config{
 		StorePath:     meta.StoreURI,
 		ServicePrefix: "",
 		BrowsePrefix:  *browsePrefix,
+		Roots:         browseRoots,
 	})
 	webHandler.RegisterDecoder(vfsmetaDecoder{})
 	webHandler.SetStatsProvider(htmlStats)

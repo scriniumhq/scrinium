@@ -107,9 +107,10 @@ type PathCleaner func(string) string
 // import the cmd) so web stays a clean library that any
 // daemon can reuse.
 type Config struct {
-	StorePath     string // displayed in the page header
-	ServicePrefix string // for the "stats" footer link, e.g. "_scrinium"
-	BrowsePrefix  string // the URL prefix this handler is mounted under
+	StorePath     string   // displayed in the page header
+	ServicePrefix string   // for the "stats" footer link, e.g. "_scrinium"
+	BrowsePrefix  string   // the URL prefix this handler is mounted under
+	Roots         []string // active browsable tree roots, in display order (nav tabs)
 }
 
 // Handler is the http.Handler that renders web pages. Construct
