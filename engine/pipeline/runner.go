@@ -218,10 +218,8 @@ func (r *Runner) ValidateAlgos(algoIDs []string) error {
 		if err != nil {
 			return fmt.Errorf("pipeline: %q: %w", algo, err)
 		}
-		if _, isAEAD := factory.(AEADCapable); isAEAD && i != len(algoIDs)-1 {
-			return fmt.Errorf(
-				"pipeline: crypto stage %q must be last, found %q after it: %w",
-				algo, algoIDs[i+1], errs.ErrInvalidPipeline)
+		if err := aeadTerminalErr(algo, factory, i, algoIDs); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -243,11 +241,24 @@ func (r *Runner) ValidateComposition(algoIDs []string) error {
 		if err != nil {
 			continue // presence is a write-path concern; cannot classify an unknown stage
 		}
-		if _, isAEAD := factory.(AEADCapable); isAEAD && i != len(algoIDs)-1 {
-			return fmt.Errorf(
-				"pipeline: crypto stage %q must be last, found %q after it: %w",
-				algo, algoIDs[i+1], errs.ErrInvalidPipeline)
+		if err := aeadTerminalErr(algo, factory, i, algoIDs); err != nil {
+			return err
 		}
+	}
+	return nil
+}
+
+// aeadTerminalErr enforces the one structural rule shared by ValidateAlgos and
+// ValidateComposition: an AEAD (crypto) stage must be the terminal stage of the
+// pipeline. It returns a non-nil error naming the offending stage and its
+// successor when factory is AEAD-capable but not last; nil otherwise. The two
+// validators differ only in how they treat an unknown stage (reject vs. skip),
+// not in this check.
+func aeadTerminalErr(algo string, factory TransformerFactory, i int, algoIDs []string) error {
+	if _, isAEAD := factory.(AEADCapable); isAEAD && i != len(algoIDs)-1 {
+		return fmt.Errorf(
+			"pipeline: crypto stage %q must be last, found %q after it: %w",
+			algo, algoIDs[i+1], errs.ErrInvalidPipeline)
 	}
 	return nil
 }

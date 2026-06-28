@@ -3,7 +3,6 @@ package zstd
 import (
 	"errors"
 	"io"
-	"sync/atomic"
 
 	"github.com/klauspost/compress/zstd"
 	"scrinium.dev/engine/pipeline"
@@ -23,7 +22,7 @@ import (
 type encoder struct {
 	opts Options
 
-	outputSize atomic.Int64
+	outputSize int64
 	started    bool
 }
 
@@ -79,21 +78,24 @@ func (e *encoder) Transform(r io.Reader) io.Reader {
 // heuristics deferred — see type comment).
 func (e *encoder) Result() pipeline.TransformResult {
 	return pipeline.TransformResult{
-		OutputSize: e.outputSize.Load(),
+		OutputSize: e.outputSize,
 	}
 }
 
 // countingReader counts bytes read out of an io.Reader and stores
-// the running total in an atomic int64 owned by the encoder.
+// the running total in an int64 owned by the encoder. Read is driven
+// sequentially by the single pipeline consumer, and Result reads the
+// total only after EOF, so no synchronisation is needed (matching the
+// counter in pipeline/runner.go).
 type countingReader struct {
 	r io.Reader
-	n *atomic.Int64
+	n *int64
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	if n > 0 {
-		c.n.Add(int64(n))
+		*c.n += int64(n)
 	}
 	return n, err
 }
