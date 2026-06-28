@@ -341,13 +341,20 @@ func (s *sqliteSubstrate) Inc(table, key string, delta int64) (int64, error) {
 	if ex == nil {
 		return 0, errSubstrateClosed
 	}
+	// Inc is a transactional aggregate accumulator: being atomic and
+	// consistent with the main index write is its whole purpose, and that
+	// holds only inside the shared transaction — Apply (or Setup). On the
+	// read-side path the executor is a *sql.DB, where the SELECT and the
+	// UPDATE would land on possibly different pooled connections with no
+	// shared transaction: two concurrent Inc on one key lose an update, and a
+	// counter bumped on a read path serialises the whole database on the
+	// writer lock. Refuse outside a transaction rather than silently degrade.
+	if _, inTx := ex.(*sql.Tx); !inTx {
+		return 0, customindex.ErrIncOutsideApply
+	}
 
-	// RMW under the surrounding transaction. Inside Apply this is
-	// the active *sql.Tx; under the index write-lock there is no
-	// concurrent writer to this row. Outside of Apply (read-side
-	// "after Setup" path) Inc still works but loses transactional
-	// guarantees with main-table writes — Inc-from-read-side is a
-	// rare operation, typically counters are bumped from Apply.
+	// RMW under the shared transaction: one writer holds the lock, so the
+	// read-modify-write is atomic and cannot drift from the main write.
 	const selectStmt = `
 		SELECT value FROM ext_data
 		WHERE extension = ? AND table_name = ? AND key = ?`

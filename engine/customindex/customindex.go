@@ -7,27 +7,6 @@ import (
 	"scrinium.dev/domain"
 )
 
-// CustomIndex is the contract host-side index custom indexes
-// satisfy. A custom index lives inside a StoreIndex backend,
-// shares its transactions, and exposes its own read API to the
-// host.
-//
-// Two-paragraph mental model:
-//
-// (1) Subscriptions. CustomIndexes declare which mutations they
-// care about via Subscribe. The backend dispatches matching
-// events into Apply WITHIN the same transaction as the main
-// index write — so a custom index cannot drift from the main
-// index state. A failure in Apply rolls the whole transaction
-// back, including the main write.
-//
-// (2) Storage. CustomIndexes own no SQL, no DB handles, no
-// migration code: they put bytes into a backend-agnostic
-// Substrate keyed by (table, key). The backend translates
-// to its own substrate. Tables are namespace-prefixed by
-// custom index Name to prevent collisions between custom indexes.
-//
-// Contract spec: 3. Reference/09 CustomIndex and Search.md.
 type CustomIndex interface {
 	// Name is the stable identifier for this custom index. Used
 	// as the namespace prefix in Substrate. Must be
@@ -309,9 +288,17 @@ type Substrate interface {
 	// the walk without an error; any other error is propagated.
 	Scan(table, prefix string, cb func(key string, value []byte) error) error
 
-	// Inc atomically adds delta to the int64 value (encoded as
-	// big-endian 8 bytes). Creates the key with delta if absent.
-	// Returns the new value.
+	// Inc adds delta to the int64 counter at key, creating it at delta
+	// if absent, and returns the new value. It is an aggregate accumulator
+	// for custom indexes maintaining incremental counts (e.g. artifacts per
+	// tag, per-namespace totals) as part of their derived state.
+	//
+	// Atomicity is guaranteed only WITHIN the backend transaction — that is,
+	// from Setup or Apply. Called from the read-side substrate it returns
+	// ErrIncOutsideApply: outside the shared transaction the read-modify-write
+	// cannot be atomic, and a counter bumped on a read path would serialise
+	// the backend on its writer lock. Bump counters from Apply, where the
+	// update is transactional and cannot drift from the main index write.
 	Inc(table, key string, delta int64) (int64, error)
 }
 
@@ -356,6 +343,14 @@ var (
 	// with an empty prefix. "Delete all rows of a table" is an
 	// explicit operation; callers must Scan and Delete to get it.
 	ErrEmptyPrefix = errors.New("scrinium/index: empty prefix in DeletePrefix")
+
+	// ErrIncOutsideApply is returned by Inc when it is called outside a
+	// backend transaction — i.e. from the read-side substrate rather than
+	// from within Setup or Apply. Inc is an aggregate accumulator whose
+	// atomicity and consistency with the main index write depend on the
+	// shared transaction; bumping a counter on a read path cannot be atomic
+	// and would serialise the backend. Maintain counters from Apply.
+	ErrIncOutsideApply = errors.New("scrinium/index: Inc called outside a transaction (Apply/Setup)")
 )
 
 // Info is the public, backend-agnostic descriptor of a
