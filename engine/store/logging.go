@@ -56,6 +56,12 @@ func (s *store) logger() *slog.Logger {
 // applied exactly once (at construction) and the component attribute once
 // here — a Handler formats a With attribute a single time.
 func (s *store) componentLogger(component string) *slog.Logger {
+	// "store" is the hot component (every traced operation); return the
+	// logger derived once at construction. Other components are cold and
+	// derived on demand. The nil guard covers stores not built via buildStore.
+	if component == "store" && s.logStore != nil {
+		return s.logStore
+	}
 	return s.logger().With(slog.String("component", component))
 }
 

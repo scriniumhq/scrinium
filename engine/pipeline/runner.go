@@ -63,6 +63,12 @@ type PutPipeline struct {
 	hashAlgo    string
 	inCounter   *countingReader
 	formatHash  func(string, []byte) string // captured from hashes.Format in BuildPut
+
+	// closers holds the stage Transform outputs that own a background
+	// goroutine over an io.Pipe (the zstd stages). They are closed by Close
+	// so an abandoned put — the consumer stops reading before EOF — does not
+	// leave those goroutines blocked forever on a full pipe.
+	closers []io.Closer
 }
 
 type putPipelineStage struct {
@@ -111,6 +117,11 @@ func (r *Runner) BuildPut(
 		}
 		enc := factory.NewEncoder(ec)
 		stageOut := enc.Transform(current)
+		// Pipe-backed stages (zstd) return a Closer; track it so Close can
+		// unblock the writer goroutine if the put is abandoned mid-stream.
+		if c, ok := stageOut.(io.Closer); ok {
+			pp.closers = append(pp.closers, c)
+		}
 
 		// Each stage gets its own hasher: per-stage hashes are
 		// recorded in the manifest for diagnostic purposes (and will
@@ -165,6 +176,22 @@ func (pp *PutPipeline) Finalize() (
 // input (the pre-Pipeline payload).
 func (pp *PutPipeline) ContentBytesRead() int64 {
 	return pp.inCounter.n
+}
+
+// Close releases stage resources that hold a background goroutine over an
+// io.Pipe (the zstd stages). After a normal drain to EOF those goroutines
+// have already exited and Close is a no-op; when the put is abandoned early
+// (the consumer errors before draining the reader), Close is what unblocks
+// them — without it they block forever on a full pipe. Safe and intended to
+// be deferred once per operation right after BuildPut.
+func (pp *PutPipeline) Close() error {
+	var firstErr error
+	for _, c := range pp.closers {
+		if err := c.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 // --- Read path ---

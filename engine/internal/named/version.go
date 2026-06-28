@@ -55,7 +55,7 @@ func VersionPath(name string, seq uint64) (string, error) {
 	if err := ValidateName(name); err != nil {
 		return "", err
 	}
-	return root + "/" + name + "." + formatSeq(seq), nil
+	return rootSlash + name + "." + formatSeq(seq), nil
 }
 
 // formatSeq renders a seq as a fixed-width, zero-padded decimal so

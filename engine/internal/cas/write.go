@@ -138,6 +138,11 @@ func (e *IO) streamToTarget(ctx context.Context, cfg domain.StoreConfig, hashAlg
 	if err != nil {
 		return Result{}, fmt.Errorf("cas: build put pipeline: %w", err)
 	}
+	// Release stage goroutines on every exit: if drv.Put below abandons the
+	// stream before EOF (staging error, ctx cancel), the zstd stages would
+	// otherwise block forever on a full pipe. Harmless no-op after a clean
+	// drain.
+	defer pp.Close()
 
 	if err := e.drv.Put(ctx, stagingPath, stream); err != nil {
 		return Result{}, fmt.Errorf("cas: stage payload: %w", err)

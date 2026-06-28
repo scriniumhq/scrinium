@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"io/fs"
 	"log/slog"
 
 	"scrinium.dev/domain"
@@ -95,28 +94,44 @@ func (s *store) VerifyBlobRef(ctx context.Context, blobRef string) error {
 		return errs.ErrArtifactNotFound
 	}
 
-	// First consuming manifest wins. ManifestsByBlobRef yields the
-	// index-resident shape; we only need its ArtifactID to load the
-	// full file manifest (with Pipeline) below. fs.SkipAll stops the
-	// scan after the first row (iterateManifestRows treats it as a
-	// clean stop, returning nil).
-	var consumerID domain.ArtifactID
-	found := false
-	err := s.index.ManifestsByBlobRef(ctx, blobRef, func(m domain.Manifest) error {
-		consumerID = m.ArtifactID
-		found = true
-		return fs.SkipAll
-	})
-	if err != nil {
+	// Resolve the manifests consuming this blob. VerifyBlob needs the full
+	// file manifest (with Pipeline), so collect the index-resident ArtifactIDs
+	// and load the first that still resolves on disk. A stale index row
+	// (manifest deleted, row lingering) must NOT shadow the blob: other live
+	// manifests still reference it, so fall through to them rather than
+	// reporting the blob absent and silently skipping its integrity check.
+	var consumerIDs []domain.ArtifactID
+	if err := s.index.ManifestsByBlobRef(ctx, blobRef, func(m domain.Manifest) error {
+		consumerIDs = append(consumerIDs, m.ArtifactID)
+		return nil
+	}); err != nil {
 		return err
 	}
-	if !found {
+	if len(consumerIDs) == 0 {
 		return errs.ErrArtifactNotFound
 	}
 
-	manifest, err := s.loadManifest(ctx, consumerID)
-	if err != nil {
-		return err
+	var (
+		manifest   domain.Manifest
+		consumerID domain.ArtifactID
+		loaded     bool
+		lastErr    error
+	)
+	for _, id := range consumerIDs {
+		m, lerr := s.loadManifest(ctx, id)
+		if lerr != nil {
+			if errors.Is(lerr, errs.ErrArtifactNotFound) {
+				lastErr = lerr
+				continue
+			}
+			return lerr
+		}
+		manifest, consumerID, loaded = m, id, true
+		break
+	}
+	if !loaded {
+		// Every consumer is index-stale; nothing on disk references the blob.
+		return lastErr
 	}
 	if err := guardHandleless(manifest); err != nil {
 		return err

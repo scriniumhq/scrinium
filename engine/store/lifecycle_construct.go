@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -46,6 +47,9 @@ func buildStore(
 		transformers: o.readRegistry,
 		crypto:       crypto.New(desc, dek, o.passphrase, o.keyResolver, drv),
 	}
+	// Derive the hot "store"-component logger once; componentLogger("store")
+	// returns this rather than allocating a With wrapper on every call.
+	c.logStore = c.logger().With(slog.String("component", "store"))
 	// systemstore.Store facade over the pointer-free layout (ADR-85). Besides
 	// the driver, the hash registry, the active config (for its immutable
 	// ContentHasher), and a logger, it takes the authoritative store_id
