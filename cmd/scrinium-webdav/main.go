@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	iofs "io/fs"
 	"net/http"
 	"os"
 	"time"
@@ -57,6 +59,9 @@ func runServe(args []string) int {
 		Logger: func(r *http.Request, err error) {
 			if err == nil {
 				return
+			}
+			if errors.Is(err, iofs.ErrNotExist) {
+				return // a 404 is normal WebDAV traffic, not a fault
 			}
 			if !*allowOSJunk && isOSJunk(vfs.CleanPath(r.URL.Path)) {
 				return
