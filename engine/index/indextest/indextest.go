@@ -52,6 +52,10 @@ func Run(t *testing.T, f Factory) {
 	t.Run(f.Name+"/ListOrphanBlobs", func(t *testing.T) { runListOrphanBlobs(t, f) })
 	t.Run(f.Name+"/DeleteOrphanBlob", func(t *testing.T) { runDeleteOrphanBlob(t, f) })
 	t.Run(f.Name+"/ListUnverifiedBlobs", func(t *testing.T) { runListUnverifiedBlobs(t, f) })
+
+	// Optional synchronization capability (ADR-106): runSyncSource skips
+	// inside when the backend does not implement index.SyncSource.
+	t.Run(f.Name+"/SyncSource", func(t *testing.T) { runSyncSource(t, f) })
 }
 
 // collectAll turns a streaming IterateManifests into a slice for

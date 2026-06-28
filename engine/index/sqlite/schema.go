@@ -16,9 +16,9 @@ const CurrentSchemaVersion = 1
 var migrations = []migration{
 	{
 		Version: 1,
-		Description: "baseline: blobs, manifests (digest-PK + identity slots), " +
+		Description: "baseline: blobs, manifests (digest-PK + identity slots + csn), " +
 			"manifest_blobs, manifest_handles, ext_meta, " +
-			"ext_data, proj_ext, proj_usr",
+			"ext_data, proj_ext, proj_usr, index_seq",
 		Statements: []string{schemaBaseline},
 	},
 }
@@ -65,6 +65,10 @@ type migration struct {
 //     WITHOUT ROWID keeps entries in PK order for prefix range scans
 //   - schema_version:  the running schema version, one row per applied
 //     migration
+//   - index_seq:       single-row (id=0) change-sequence counter for the
+//     synchronization capability (ADR-106): csn is the last issued
+//     change-sequence (Token), prune_csn the watermark below which Since
+//     reports Gapped
 //
 // Notes on types:
 //   - All hashes and refs are TEXT (the project format is
@@ -119,12 +123,17 @@ CREATE TABLE manifests (
     blob_ref         TEXT,
     created_at       TEXT    NOT NULL,
     retention_until  TEXT,
-    last_verified_at TEXT
+    last_verified_at TEXT,
+    csn              INTEGER NOT NULL DEFAULT 0
 ) WITHOUT ROWID;
 
 CREATE INDEX manifests_artifact  ON manifests(artifact_id);
 CREATE INDEX manifests_session   ON manifests(session_id);
 CREATE INDEX manifests_scrub     ON manifests(last_verified_at);
+
+-- Synchronization (ADR-106): Since(cursor) range-scans the change-sequence
+-- stamped on each manifest row; Token() reads index_seq.csn.
+CREATE INDEX manifests_csn       ON manifests(csn);
 
 CREATE TABLE manifest_blobs (
     manifest_digest TEXT    NOT NULL,
@@ -195,4 +204,18 @@ CREATE TABLE schema_version (
     version    INTEGER PRIMARY KEY,
     applied_at TEXT    NOT NULL
 );
+
+-- index_seq: single-row change-sequence counter for the synchronization
+-- capability (ADR-106). csn is the last issued change-sequence — Token()
+-- returns it and every IndexManifest/DeleteManifest transaction advances it
+-- by one (one monotonic counter, NOT max(manifests.csn): a delete drops the
+-- highest-csn row, so a max over rows would go backwards). prune_csn is the
+-- csn at the most recent hard manifest deletion — Since(cursor) reports
+-- Gapped when cursor < prune_csn, so a consumer behind it does a full Walk.
+CREATE TABLE index_seq (
+    id        INTEGER PRIMARY KEY CHECK (id = 0),
+    csn       INTEGER NOT NULL DEFAULT 0,
+    prune_csn INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO index_seq (id, csn, prune_csn) VALUES (0, 0, 0);
 `

@@ -99,11 +99,8 @@ var listingTemplate = template.Must(template.New("listing").Parse(`<!DOCTYPE htm
   <span class="brand">Scrinium</span>
   <span class="store">{{.StorePath}}</span>
   <nav class="switcher">
-    <a href="{{.BrowsePrefix}}/by-path/">by-path</a>
-    <a href="{{.BrowsePrefix}}/by-date/">by-date</a>
-    <a href="{{.BrowsePrefix}}/by-session/">by-session</a>
-    <a href="{{.BrowsePrefix}}/by-namespace/">by-namespace</a>
-    <a href="{{.BrowsePrefix}}/by-artifact/">by-artifact</a>
+    {{range .Roots}}<a href="{{$.BrowsePrefix}}/{{.}}/">{{.}}</a>
+    {{end}}
   </nav>
   <form class="header-search" method="get" action="{{.BrowsePrefix}}/_search">
     <input type="text" name="q" placeholder="search…">
