@@ -1,7 +1,7 @@
 // Package drivertest provides a reusable conformance suite that any
 // driver.Driver implementation must pass.
 //
-// It mirrors engine/index/indextest: a Factory supplies fresh Driver
+// It mirrors engine/index/indexsuite: a Factory supplies fresh Driver
 // instances and Run exercises the full black-box contract — Put/Get
 // round-trips and atomicity, ReadAt ranges, Remove/Rename/Clone,
 // Stat/List/ListObjectsWithModTime/CountObjects, PruneEmptyDirs, and

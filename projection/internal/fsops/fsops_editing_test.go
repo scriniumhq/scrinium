@@ -26,7 +26,7 @@ func newEditingFSOps(t *testing.T, opts ...fso.Option) (*fso.Ops, *projectionfx.
 }
 
 // readAllVia reads the whole file through repeated ReadAt calls.
-func readAllVia(t *testing.T, f fso.File) string {
+func readAllVia(t *testing.T, f fso.Handle) string {
 	t.Helper()
 	buf := make([]byte, 4096)
 	n, err := f.ReadAt(buf, 0)

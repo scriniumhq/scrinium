@@ -19,7 +19,7 @@ func (v *VFS) statsBody() []byte {
 	if v.statsProvider != nil {
 		return v.statsProvider()
 	}
-	s := v.view.Stats
+	s := v.view.StatsSnapshot()
 	var b strings.Builder
 	b.WriteString("Scrinium projection stats\n\n[view]\n")
 	fmt.Fprintf(&b, "TotalNodes:       %d\n", s.TotalNodes)

@@ -27,6 +27,10 @@ type fakeCustomIndex struct {
 	closeCalls  int
 
 	captured customindex.Substrate
+
+	// applyFn, if set, runs inside Apply (a backend transaction). Used to
+	// exercise transactional operations like Inc from their real call site.
+	applyFn func(store customindex.Substrate) error
 }
 
 func (e *fakeCustomIndex) Name() string                       { return e.name }
@@ -43,6 +47,11 @@ func (e *fakeCustomIndex) Apply(ctx context.Context, store customindex.Substrate
 	e.applyCalls = append(e.applyCalls, args)
 	if e.applyErr != nil {
 		return e.applyErr
+	}
+	if e.applyFn != nil {
+		if err := e.applyFn(store); err != nil {
+			return err
+		}
 	}
 	// For ManifestIndexed, write something into the store so
 	// dispatch atomicity can be verified.
@@ -369,35 +378,55 @@ func TestExtStore_DeletePrefix_EmptyRejected(t *testing.T) {
 }
 
 func TestExtStore_Inc(t *testing.T) {
+	ctx := t.Context()
 	idx := openMemIndex(t)
 	defer idx.Close()
 
-	ext := &fakeCustomIndex{name: "test.inc", version: 1}
+	// Inc is transactional (atomic only inside a backend tx), so drive it from
+	// Apply — its real call site — through the IndexManifest dispatch fixture.
+	var got []int64
+	ext := &fakeCustomIndex{
+		name:      "test.inc",
+		version:   1,
+		subscribe: []customindex.EventKind{customindex.EventKindManifestIndexed},
+		applyFn: func(store customindex.Substrate) error {
+			for _, d := range []int64{5, 3, -10} {
+				v, err := store.Inc("counters", "k1", d)
+				if err != nil {
+					return err
+				}
+				got = append(got, v)
+			}
+			return nil
+		},
+	}
+	if err := idx.CustomIndexes().Register(context.Background(), ext); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	m := makeBlobManifest("art-inc")
+	addr := domain.PhysicalAddress{Path: "/blobs/inc"}
+	if err := idx.IndexManifest(ctx, m, addr); err != nil {
+		t.Fatalf("IndexManifest: %v", err)
+	}
+
+	if len(got) != 3 || got[0] != 5 || got[1] != 8 || got[2] != -2 {
+		t.Errorf("Inc results = %v, want [5 8 -2]", got)
+	}
+}
+
+// TestExtStore_Inc_OutsideApply asserts Inc is refused on the read-side
+// substrate (after Register, no transaction): it cannot be atomic there.
+func TestExtStore_Inc_OutsideApply(t *testing.T) {
+	idx := openMemIndex(t)
+	defer idx.Close()
+
+	ext := &fakeCustomIndex{name: "test.inc.ro", version: 1}
 	idx.CustomIndexes().Register(context.Background(), ext)
-	store := ext.captured
 
-	v, err := store.Inc("counters", "k1", 5)
-	if err != nil {
-		t.Fatalf("Inc: %v", err)
-	}
-	if v != 5 {
-		t.Errorf("first Inc returned %d, want 5", v)
-	}
-
-	v, err = store.Inc("counters", "k1", 3)
-	if err != nil {
-		t.Fatalf("Inc: %v", err)
-	}
-	if v != 8 {
-		t.Errorf("second Inc returned %d, want 8", v)
-	}
-
-	v, err = store.Inc("counters", "k1", -10)
-	if err != nil {
-		t.Fatalf("Inc: %v", err)
-	}
-	if v != -2 {
-		t.Errorf("negative Inc returned %d, want -2", v)
+	_, err := ext.captured.Inc("counters", "k1", 1)
+	if !errors.Is(err, customindex.ErrIncOutsideApply) {
+		t.Fatalf("read-side Inc: got %v, want ErrIncOutsideApply", err)
 	}
 }
 

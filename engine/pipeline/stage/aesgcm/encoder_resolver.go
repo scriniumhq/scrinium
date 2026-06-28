@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 
+	aeadkit "scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/pipeline"
 	segaead2 "scrinium.dev/engine/pipeline/internal/segaead"
 )
@@ -41,6 +42,13 @@ func (e *resolverEncoder) Transform(r io.Reader) io.Reader {
 		return errReader{err: err}
 	}
 	dek := keys[0]
+	// The write side uses only the chosen key; the remaining candidates are
+	// never tried (rotation is a read-path concern). Wipe them now so unused
+	// DEK copies do not linger in the heap. keys[0]/dek must survive: AES-GCM
+	// and the convergent-IV HMAC hold it for the whole seal.
+	for _, k := range keys[1:] {
+		aeadkit.Wipe(k)
+	}
 	aead, err := buildAEAD(dek)
 	if err != nil {
 		return errReader{err: err}

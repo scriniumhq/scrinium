@@ -47,6 +47,13 @@ type VFS struct {
 	rootView  vw.RootView
 	startedAt time.Time
 
+	// provRoots is the set of extension-contributed roots the
+	// dispatcher uses to recognise provided-view service trees.
+	// ProvidedRoots is fixed once the View is built, so it is
+	// materialised once here rather than rebuilt on every Stat /
+	// OpenFile (FUSE calls those thousands of times a second).
+	provRoots map[vw.RootView]bool
+
 	// statsProvider, if non-nil, returns the bytes served at
 	// _scrinium/stats. Hosts inject one that bundles live
 	// capacity, custom index list, and policy snippets in
@@ -100,12 +107,18 @@ func WithNameFilter(fn func(name string) bool) Option {
 // View and Ops) keeps the projection's internal types out of caller
 // code: daemons name only *projection.Projection.
 func New(proj *projection.Projection, cfg Config, opts ...Option) *VFS {
+	pr := make(map[vw.RootView]bool)
+	for _, r := range proj.View.ProvidedRoots() {
+		pr[r] = true
+	}
+
 	v := &VFS{
 		view:       proj.View,
 		fsops:      proj.FSOps,
 		routingCfg: cfg,
 		rootView:   proj.View.RootView(),
 		startedAt:  time.Now().UTC(),
+		provRoots:  pr,
 	}
 	for _, o := range opts {
 		o(v)
@@ -219,20 +232,9 @@ func (v *VFS) Setattr(ctx context.Context, name string, attrs Attrs) error {
 // FileInfo. Service trees produce synthetic infos for the
 // service root and the stats virtual file; the rest go
 // through the View.
-// providedRoots is the set of extension-contributed roots the dispatcher
-// uses to recognise provided-view service trees. The VFS names none of
-// them; it asks the View.
-func (v *VFS) providedRoots() map[vw.RootView]bool {
-	out := make(map[vw.RootView]bool)
-	for _, r := range v.view.ProvidedRoots() {
-		out[r] = true
-	}
-	return out
-}
-
 func (v *VFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	clean := CleanPath(name)
-	tgt, err := route(clean, v.routingCfg, v.rootView, v.providedRoots())
+	tgt, err := route(clean, v.routingCfg, v.rootView, v.provRoots)
 	if err != nil {
 		if errors.Is(err, errRejected) {
 			return nil, fs.ErrNotExist
@@ -268,7 +270,7 @@ func (v *VFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 // callers ignore flag bits and pass 0.
 func (v *VFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (File, error) {
 	clean := CleanPath(name)
-	tgt, err := route(clean, v.routingCfg, v.rootView, v.providedRoots())
+	tgt, err := route(clean, v.routingCfg, v.rootView, v.provRoots)
 	if err != nil {
 		if errors.Is(err, errRejected) {
 			return nil, fs.ErrNotExist

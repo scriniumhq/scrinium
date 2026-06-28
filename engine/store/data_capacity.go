@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/engine/index"
 )
 
 // Capacity returns aggregated storage info. Best-effort:
@@ -37,12 +38,23 @@ func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 	// user manifest (artifact_id present), which already excludes
 	// system artifacts (name-addressed, not indexed), so store.config and
 	// the future store.agent writers do not inflate user-facing storage stats.
+	// Prefer a database-side count (ManifestCounter): iterating every
+	// manifest just to increment a counter deserialises each row for nothing.
+	// Fall back to the walk for indexes without the capability.
 	var artifactCount int64
-	if err := s.index.IterateManifests(ctx, func(domain.Manifest) error {
-		artifactCount++
-		return nil
-	}); err != nil {
-		return domain.StorageInfo{}, fmt.Errorf("store.Capacity: count manifests: %w", err)
+	if counter, ok := s.index.(index.ManifestCounter); ok {
+		n, err := counter.CountManifests(ctx)
+		if err != nil {
+			return domain.StorageInfo{}, fmt.Errorf("store.Capacity: count manifests: %w", err)
+		}
+		artifactCount = n
+	} else {
+		if err := s.index.IterateManifests(ctx, func(domain.Manifest) error {
+			artifactCount++
+			return nil
+		}); err != nil {
+			return domain.StorageInfo{}, fmt.Errorf("store.Capacity: count manifests: %w", err)
+		}
 	}
 	out.ArtifactCount = artifactCount
 

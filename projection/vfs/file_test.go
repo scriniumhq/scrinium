@@ -10,7 +10,7 @@ import (
 	"scrinium.dev/testutil/projectionfx"
 )
 
-// fakeFsoFile is a minimal in-memory fsops.File for exercising rwFile's
+// fakeFsoFile is a minimal in-memory fsops.Handle for exercising rwFile's
 // offset tracking and delegation without a real store handle.
 type fakeFsoFile struct {
 	buf    []byte
@@ -52,7 +52,7 @@ func (f *fakeFsoFile) Truncate(size int64) error {
 	return nil
 }
 
-var _ fso.File = (*fakeFsoFile)(nil)
+var _ fso.Handle = (*fakeFsoFile)(nil)
 
 // --- readHandleFile ---
 

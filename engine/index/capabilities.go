@@ -119,3 +119,13 @@ type SyncWaiter interface {
 type ManifestResolver interface {
 	ManifestByDigest(ctx context.Context, digest domain.ManifestDigest) (domain.Manifest, bool, error)
 }
+
+// ManifestCounter is the optional capability of a StoreIndex that can report
+// the number of user manifests (artifact_id present) without materialising
+// them. Capacity uses it to avoid deserialising every manifest just to count;
+// backends that cannot answer cheaply (or at all) simply do not implement it,
+// and the caller falls back to a full IterateManifests walk. The count must
+// match exactly what IterateManifests would yield — same user-manifest filter.
+type ManifestCounter interface {
+	CountManifests(ctx context.Context) (int64, error)
+}

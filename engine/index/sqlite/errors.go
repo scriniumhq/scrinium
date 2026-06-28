@@ -12,10 +12,11 @@ import (
 // where appropriate. Used at the boundary of every public method.
 //
 // Both supported drivers (modernc and mattn) surface contention as
-// errors whose Error() contains "SQLITE_BUSY" or "SQLITE_LOCKED" or
-// the textual "database is locked" / "database table is locked".
-// We match by substring rather than by typed error to keep the two
-// drivers interchangeable.
+// SQLITE_BUSY / SQLITE_LOCKED. The default modernc build matches the
+// typed result code first (typedBusy, errors_busy_purego.go); both
+// builds fall back to message-text matching (substringBusy), which is
+// the only path under sqlite_cgo and also catches contention surfaced
+// as a wrapped/untyped error the typed check cannot see.
 //
 // On a contention hit we also return the original error wrapped so
 // errors.Unwrap exposes it; this makes log messages helpful without
@@ -33,12 +34,24 @@ func classifyError(err error) error {
 	return err
 }
 
-// isBusyError detects SQLite contention errors. Driver-agnostic:
-// inspects the error text instead of typed errors.
+// isBusyError detects SQLite contention (busy/locked). The default
+// (modernc) build matches the driver's typed result code first
+// (typedBusy); both builds fall back to message-text matching
+// (substringBusy), which stays the only path under sqlite_cgo and
+// also covers contention wrapped as an untyped error.
 func isBusyError(err error) bool {
 	if err == nil {
 		return false
 	}
+	return typedBusy(err) || substringBusy(err)
+}
+
+// substringBusy is the driver-agnostic fallback: it inspects the error
+// text. Both drivers embed the symbolic result code (SQLITE_BUSY /
+// SQLITE_LOCKED) or the canonical "database is locked" message, so the
+// four substrings cover modernc and mattn without importing either's
+// error type. Kept as a safety net even where typedBusy fires.
+func substringBusy(err error) bool {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "SQLITE_BUSY"),

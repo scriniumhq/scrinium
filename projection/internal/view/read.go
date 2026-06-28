@@ -40,7 +40,27 @@ func (v *View) ProvidedRoots() []RootView {
 // the method form of the Stats field, so the read-only projection
 // surface can expose stats through an interface without leaking the
 // field (and thus the View type) to external callers.
-func (v *View) StatsSnapshot() Stats { return v.Stats }
+//
+// Stats holds maps (ViewCounts, ByStore), which a plain struct copy
+// would alias by reference — a caller ranging over them while a
+// writer mutates them under the lock would trip "concurrent map
+// iteration and map write". The maps are therefore deep-copied under
+// the read lock so the returned snapshot is fully detached.
+func (v *View) StatsSnapshot() Stats {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	s := v.Stats
+	s.ViewCounts = make(map[RootView]int64, len(v.Stats.ViewCounts))
+	for k, val := range v.Stats.ViewCounts {
+		s.ViewCounts[k] = val
+	}
+	s.ByStore = make(map[string]int64, len(v.Stats.ByStore))
+	for k, val := range v.Stats.ByStore {
+		s.ByStore[k] = val
+	}
+	return s
+}
 
 // SourceName returns the source kind as a string (e.g. "store",
 // "multistore"). Method form of the Source field, for the same
@@ -81,9 +101,12 @@ func (v *View) LookupLocations(id domain.ArtifactID) (Locations, bool) {
 //     jump straight to it).
 //
 // limit caps the result count; passing 0 disables the cap (use
-// only for diagnostic flows). Order matches the scan order over
-// the artifacts map — random-but-stable within a single View
-// state. Callers sort if they need a specific order.
+// only for diagnostic flows). Results are ordered deterministically
+// (exact-id matches first, then newest CreatedAt, then ArtifactID):
+// the scan is over a map whose iteration order is randomised per
+// call, so the cap is applied only after sorting — otherwise a query
+// with more matches than limit would return a different arbitrary
+// subset each time.
 //
 // Implementation is the same linear scan as RelatedByBlobRef:
 // O(N) under RLock, fast for stores up to ~100K artifacts.
@@ -106,23 +129,29 @@ func (v *View) Search(query string, limit int) []SearchResult {
 		// Exact id match — strongest signal, surface first.
 		if string(id) == query {
 			out = append(out, v.makeSearchResult(id, rec, "id"))
-			if limit > 0 && len(out) >= limit {
-				return out
-			}
 			continue
 		}
 
 		path := strings.ToLower(rec.paths[v.opts.rootView])
-
-		switch {
-		case path != "" && strings.Contains(path, q):
+		if path != "" && strings.Contains(path, q) {
 			out = append(out, v.makeSearchResult(id, rec, "path"))
-		default:
-			continue
 		}
-		if limit > 0 && len(out) >= limit {
-			return out
+	}
+
+	// Order deterministically before capping: map iteration is randomised
+	// per call, so cutting at limit mid-scan would return an arbitrary
+	// jumping subset. id-matches first, then newest, then by id.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].MatchReason != out[j].MatchReason {
+			return out[i].MatchReason == "id"
 		}
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.After(out[j].CreatedAt)
+		}
+		return string(out[i].ArtifactID) < string(out[j].ArtifactID)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out
 }

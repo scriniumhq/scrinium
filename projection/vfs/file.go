@@ -69,7 +69,7 @@ type FileAt interface {
 //   - readHandleFile  : read-only over a store.ReadHandle (service
 //                       trees, by-X paths inside _scrinium).
 //   - bytesFile       : in-memory read-only (stats virtual file).
-//   - rwFile          : read/write over fso.File (root view).
+//   - rwFile          : read/write over fso.Handle (root view).
 //   - blackHoleFile   : write-discarding (used by surface-level
 //                       junk-filter wrappers — safe to ignore
 //                       when not needed).
@@ -225,12 +225,12 @@ func (f *bytesFile) WriteAt(p []byte, off int64) (int, error) {
 
 func (f *bytesFile) Sync() error { return nil }
 
-// rwFile wraps a fso.File for the root view. Tracks a
+// rwFile wraps a fso.Handle for the root view. Tracks a
 // manual offset to satisfy io.Reader/io.Writer/io.Seeker on
-// top of the fso.File's WriteAt/ReadAt.
+// top of the fso.Handle's WriteAt/ReadAt.
 type rwFile struct {
 	nonDirStub
-	f      fso.File
+	f      fso.Handle
 	path   string
 	size   int64
 	mtime  time.Time
@@ -240,7 +240,7 @@ type rwFile struct {
 	closed bool
 }
 
-func wrapFile(pf fso.File, path string, fi fso.FileInfo) *rwFile {
+func wrapFile(pf fso.Handle, path string, fi fso.FileInfo) *rwFile {
 	return &rwFile{
 		f:     pf,
 		path:  path,
@@ -252,7 +252,7 @@ func wrapFile(pf fso.File, path string, fi fso.FileInfo) *rwFile {
 }
 
 // wrapWriteFile is a Create-side variant: a fresh file, size 0.
-func wrapWriteFile(pf fso.File, path string) *rwFile {
+func wrapWriteFile(pf fso.Handle, path string) *rwFile {
 	return &rwFile{
 		f:     pf,
 		path:  path,

@@ -179,5 +179,5 @@ func (o *Ops) fileInfoFromNode(n vw.Node) FileInfo {
 
 // Compile-time guards.
 var (
-	_ File = (*readOnlyFile)(nil)
+	_ Handle = (*readOnlyFile)(nil)
 )

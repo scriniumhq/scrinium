@@ -75,7 +75,7 @@ func (o *Ops) Listdir(path string) FileInfoSeq {
 	}
 }
 
-// Open returns a File handle. The mode bits select the access
+// Open returns a Handle. The mode bits select the access
 // pattern:
 //
 //   - OpenReadOnly — read existing artifact via View.
@@ -89,7 +89,7 @@ func (o *Ops) Listdir(path string) FileInfoSeq {
 // In stage 4b, Open with a write mode on an existing file
 // returns ErrEditingDisabled — Create is the documented entry
 // point for new files; Setattr/Truncate (4c) covers editing.
-func (o *Ops) Open(ctx context.Context, path string, mode OpenMode) (File, error) {
+func (o *Ops) Open(ctx context.Context, path string, mode OpenMode) (Handle, error) {
 	if o.readOnly && mode != OpenReadOnly {
 		return nil, fmt.Errorf("%w: write-mode Open on read-only Ops",
 			errs.ErrEditingDisabled)
@@ -118,7 +118,7 @@ func (o *Ops) Open(ctx context.Context, path string, mode OpenMode) (File, error
 // openForEdit prepares a writeFile pre-loaded with the existing
 // artifact's content and vfsmeta, ready for arbitrary WriteAt /
 // Truncate. On Close the result lands in the View through Move.
-func (o *Ops) openForEdit(ctx context.Context, path string, mode OpenMode) (File, error) {
+func (o *Ops) openForEdit(ctx context.Context, path string, mode OpenMode) (Handle, error) {
 	lock := o.pathLocks.Get(path)
 	lock.Lock()
 
@@ -142,7 +142,7 @@ func (o *Ops) openForEdit(ctx context.Context, path string, mode OpenMode) (File
 // bits at Close time? — no: the handle holds no per-op policy,
 // it just performs whatever writes/truncates the caller dispatches.
 // In practice O_APPEND callers only WriteAt at the end and Close.
-func (o *Ops) openForAppend(ctx context.Context, path string) (File, error) {
+func (o *Ops) openForAppend(ctx context.Context, path string) (Handle, error) {
 	lock := o.pathLocks.Get(path)
 	lock.Lock()
 
@@ -156,7 +156,7 @@ func (o *Ops) openForAppend(ctx context.Context, path string) (File, error) {
 }
 
 // openForRead is the stage-4a code path: pure View read.
-func (o *Ops) openForRead(ctx context.Context, path string) (File, error) {
+func (o *Ops) openForRead(ctx context.Context, path string) (Handle, error) {
 	n, err := o.lookupInRoot(path)
 	if err != nil {
 		return nil, err

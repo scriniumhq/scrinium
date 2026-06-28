@@ -58,6 +58,9 @@ func Seal(src io.Reader, p SealParams) (*SealReader, error) {
 	if segSize <= 0 {
 		segSize = DefaultSegmentSize
 	}
+	if segSize > MaxSegmentSize {
+		return nil, fmt.Errorf("%w: requested %d", ErrSegmentTooLarge, segSize)
+	}
 
 	hdr, err := encodeHeader(header{
 		Mode:        p.Mode,

@@ -17,7 +17,7 @@ type readOnlyFile struct {
 
 func (f *readOnlyFile) ReadAt(p []byte, off int64) (int, error) {
 	if !f.rh.SupportsRandomAccess() {
-		// Ops File contract requires ReadAt; fall back to the
+		// Ops Handle contract requires ReadAt; fall back to the
 		// stream-only error so callers can detect the situation
 		// and degrade if they have an alternative path.
 		return 0, fmt.Errorf("%w: read handle has no random access",

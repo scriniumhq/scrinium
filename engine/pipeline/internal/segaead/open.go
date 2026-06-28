@@ -121,6 +121,12 @@ func (d *openReader) readSegment() error {
 
 	iv := fh[:IVLen]
 	ctLen := binary.BigEndian.Uint32(fh[IVLen:])
+	if ctLen > maxCiphertextLen {
+		// The ct_len comes straight off disk and may be forged; refuse to
+		// allocate an attacker-chosen amount (OOM DoS) before reading the body.
+		return fmt.Errorf("%w: ct_len %d exceeds maximum %d",
+			ErrSegmentTooLarge, ctLen, maxCiphertextLen)
+	}
 
 	ct := make([]byte, ctLen)
 	if _, err := io.ReadFull(d.src, ct); err != nil {

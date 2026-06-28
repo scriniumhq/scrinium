@@ -43,7 +43,7 @@ func newFSOpsForWrite(t *testing.T, opts ...fso.Option) (*fso.Ops, *projectionfx
 
 // writeAll writes the full byte slice via repeated WriteAt at
 // increasing offsets.
-func writeAll(t *testing.T, f fso.File, data []byte) {
+func writeAll(t *testing.T, f fso.Handle, data []byte) {
 	t.Helper()
 	n, err := f.WriteAt(data, 0)
 	if err != nil {

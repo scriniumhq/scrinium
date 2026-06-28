@@ -79,6 +79,25 @@ const frameHeaderLen = IVLen + 4
 // other.
 const MaxKeyIDLen = 255
 
+// MaxSegmentSize is the hard upper bound on a blob's plaintext segment size.
+// It is independent of the on-disk header — which an attacker controls — and
+// caps the per-frame read allocation: a forged segment_size or ct_len above
+// this is rejected rather than honoured, so a tampered blob cannot drive an
+// unbounded allocation (Out-Of-Memory DoS). Generous over DefaultSegmentSize
+// (1 MiB) to leave room for larger configured segments while keeping a single
+// frame bounded.
+const MaxSegmentSize = 64 << 20 // 64 MiB
+
+// maxAEADOverhead is a generous upper bound on an AEAD's per-segment expansion
+// (tag plus any framing). Real primitives (AES-GCM, ChaCha20-Poly1305) add a
+// 16-byte tag; 64 leaves headroom without weakening the ct_len bound.
+const maxAEADOverhead = 64
+
+// maxCiphertextLen is the largest legitimate ct_len: a full plaintext segment
+// plus AEAD overhead. The read path rejects any frame claiming more before
+// allocating its body buffer.
+const maxCiphertextLen = MaxSegmentSize + maxAEADOverhead
+
 // Format sentinels. Open failures (tag mismatch, wrong key,
 // tampered ciphertext) are reported as ErrSegmentAuth; the aesgcm
 // adapter folds that into the public errs.ErrDecryptionFailed.
@@ -87,6 +106,7 @@ var (
 	ErrUnsupportedVersion = errors.New("segaead: unsupported blob version")
 	ErrBadMode            = errors.New("segaead: unknown iv_mode")
 	ErrTruncated          = errors.New("segaead: truncated blob")
+	ErrSegmentTooLarge    = errors.New("segaead: segment exceeds maximum size")
 	ErrSegmentAuth        = errors.New("segaead: segment authentication failed")
 	ErrKeyIDTooLong       = fmt.Errorf("segaead: KeyID exceeds %d bytes", MaxKeyIDLen)
 )
@@ -135,6 +155,9 @@ func decodeFixedHeader(b []byte) (mode IVMode, segSize uint32, keyIDLen int, err
 		return 0, 0, 0, ErrBadMode
 	}
 	segSize = binary.BigEndian.Uint32(b[6:10])
+	if segSize > MaxSegmentSize {
+		return 0, 0, 0, fmt.Errorf("%w: header segment_size %d", ErrSegmentTooLarge, segSize)
+	}
 	keyIDLen = int(binary.BigEndian.Uint16(b[10:12]))
 	return mode, segSize, keyIDLen, nil
 }

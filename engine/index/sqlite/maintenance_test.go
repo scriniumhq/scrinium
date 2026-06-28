@@ -14,7 +14,7 @@ import (
 
 // MarkVerified and MarkVerified-related listing
 // behaviour live in the conformance suite at
-// internal/testutil/indextest. This file is for sqlite-specific
+// internal/testutil/indexsuite. This file is for sqlite-specific
 // behaviour: WriteCheckpoint (the optional index.CheckpointWriter
 // capability, which sqlite implements via VACUUM INTO — it needs an
 // on-disk source and so does not map to in-memory backends, and other

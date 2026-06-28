@@ -1,4 +1,4 @@
-// Package indextest is the shared conformance suite for
+// Package indexsuite is the shared conformance suite for
 // implementations of index.StoreIndex.
 //
 // Every implementation (engine/index/sqlite, future engine/index/postgres,
@@ -17,7 +17,7 @@
 // Usage:
 //
 //	func TestConformance_SQLite(t *testing.T) {
-//	    indextest.Run(t, indextest.Factory{
+//	    indexsuite.Run(t, indexsuite.Factory{
 //	        Name: "sqlite-memory",
 //	        New: func(t *testing.T) index.StoreIndex {
 //	            idx, err := sqlite.NewStore(context.Background(), ":memory:")
@@ -27,4 +27,4 @@
 //	        },
 //	    })
 //	}
-package indextest
+package indexsuite

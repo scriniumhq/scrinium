@@ -51,6 +51,11 @@ type store struct {
 	// when nil so call sites never need a guard.
 	log *slog.Logger
 
+	// logStore is the "store"-component sublogger, derived from log once at
+	// construction. componentLogger("store") — the hot trace path — returns
+	// it instead of re-deriving the With attribute on every call.
+	logStore *slog.Logger
+
 	// activeConfig is the StoreConfig in effect for new operations,
 	// replaced atomically by UpdateConfig under cfgMu.
 	cfgMu        sync.RWMutex

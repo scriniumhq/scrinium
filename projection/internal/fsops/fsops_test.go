@@ -388,12 +388,12 @@ func TestReadOnlyFile_ReadAtRandomAccess(t *testing.T) {
 
 // asReader adapts a File handle into an io.Reader by sequentially
 // reading from offset 0. Used to test through io.ReadAll.
-func asReader(f fso.File) io.Reader {
+func asReader(f fso.Handle) io.Reader {
 	return &fileReader{f: f}
 }
 
 type fileReader struct {
-	f   fso.File
+	f   fso.Handle
 	off int64
 }
 
