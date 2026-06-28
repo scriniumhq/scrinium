@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/cmd/scrinium-webview/internal/web"
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/vfsmeta"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/projection/vfs"
 )
 
@@ -24,10 +25,11 @@ import (
 type webBackingFS struct {
 	v      *vfs.VFS
 	reader projection.Reader
+	sys    systemstore.Store // unscoped system partition, for the /_system viewer (read-only use)
 }
 
-func newWebBackingFS(v *vfs.VFS, reader projection.Reader) *webBackingFS {
-	return &webBackingFS{v: v, reader: reader}
+func newWebBackingFS(v *vfs.VFS, reader projection.Reader, sys systemstore.Store) *webBackingFS {
+	return &webBackingFS{v: v, reader: reader, sys: sys}
 }
 
 func (b *webBackingFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
@@ -168,4 +170,54 @@ func (b *webBackingFS) LookupLocations(ctx context.Context, id domain.ArtifactID
 		return projection.Locations{}, false, nil
 	}
 	return locs, true, nil
+}
+
+// maxSystemArtifactBytes caps the viewer read. System envelopes are tiny
+// (JSON in RAM); the cap only matters for a pointer artifact whose external
+// blob (e.g. a checkpoint .db) could be large — the viewer shows a prefix
+// rather than streaming megabytes into a browser.
+const maxSystemArtifactBytes = 1 << 20 // 1 MiB
+
+// SystemArtifact reads the active version of the named system artifact for
+// the viewer. It is deliberately forgiving: Get applies the store_id envelope
+// check (ADR-104) and rejects envelope-exempt or non-enveloped artifacts (the
+// descriptor, or a payload stored as a bare JSON body), which an inspector
+// still wants to see. So existence and the raw stored bytes come from Walk
+// (no envelope enforcement); the envelope-decoded inner payload is preferred
+// when Get resolves cleanly, otherwise the raw bytes are returned. The viewer
+// therefore never fails on an artifact Get would reject.
+func (b *webBackingFS) SystemArtifact(ctx context.Context, name string) ([]byte, bool, error) {
+	if b.sys == nil {
+		return nil, false, nil
+	}
+
+	var raw []byte
+	found := false
+	if err := b.sys.Walk(ctx, name, func(n string, m domain.Manifest) error {
+		if n == name {
+			raw = m.InlineBlob
+			found = true
+		}
+		return nil
+	}); err != nil {
+		return nil, false, err
+	}
+	if !found {
+		return nil, false, nil
+	}
+
+	// Prefer the envelope-decoded inner payload (the actual config/registry
+	// JSON) when the envelope resolves; fall back to the raw stored bytes.
+	if rh, err := b.sys.Get(ctx, name); err == nil {
+		body, rerr := io.ReadAll(io.LimitReader(rh, maxSystemArtifactBytes))
+		rh.Close()
+		if rerr == nil && len(body) > 0 {
+			return body, true, nil
+		}
+	}
+
+	if len(raw) > maxSystemArtifactBytes {
+		raw = raw[:maxSystemArtifactBytes]
+	}
+	return raw, true, nil
 }

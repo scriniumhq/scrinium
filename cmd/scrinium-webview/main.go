@@ -79,13 +79,14 @@ func runServe(args []string) int {
 		for _, d := range asm.Extensions() {
 			exts = append(exts, web.StatsExtension{Name: d.Name})
 		}
+		sysArts := gatherSystemArtifacts(capCtx, asm.Store.System())
 		// webview is always read-only; reflect that on the page.
-		return buildWebStatsData(asm.Projection.Queries(), capPtr, exts, startedAt, asm.MountSession,
+		return buildWebStatsData(asm.Projection.Queries(), capPtr, exts, sysArts, startedAt, asm.MountSession,
 			meta.StoreURI, true, "off")
 	}
 
 	v := vfs.New(asm.Projection, routingCfg, vfs.WithStatsProvider(textStats))
-	backing := newWebBackingFS(v, asm.Projection.Queries())
+	backing := newWebBackingFS(v, asm.Projection.Queries(), asm.Store.System())
 
 	// Nav tabs reflect what is actually mounted: the intrinsic browsable trees
 	// the routing config exposes, plus whatever roots the connected extensions

@@ -73,6 +73,13 @@ type BackingFS interface {
 	// Used by the artifact details page's Locations panel
 	// to wire "show me where this lives" links.
 	LookupLocations(ctx context.Context, id domain.ArtifactID) (projection.Locations, bool, error)
+
+	// SystemArtifact returns the decoded payload of the active version
+	// of the named system artifact (envelope-resolved: inline body, or
+	// the external blob a pointer artifact references). (body, true, nil)
+	// — found. (nil, false, nil) — no such name. The body is capped; system
+	// envelopes are small. Used by the /_system/<name> viewer.
+	SystemArtifact(ctx context.Context, name string) ([]byte, bool, error)
 }
 
 // ArtifactMeta is the small descriptor returned alongside the
@@ -196,6 +203,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if rel == "_search" || rel == "_search/" {
 		h.serveSearch(w, r)
+		return
+	}
+	if name, ok := matchSystemRoute(rel); ok {
+		h.serveSystemArtifact(w, r, name)
 		return
 	}
 

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"scrinium.dev/cmd/internal/humanize"
+	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/projection"
 
 	"scrinium.dev/cmd/scrinium-webview/internal/web"
@@ -24,6 +26,7 @@ func buildWebStatsData(
 	reader projection.Reader,
 	cap *domain.StorageInfo,
 	exts []web.StatsExtension,
+	sysArts []web.StatsSystemArtifact,
 	startedAt time.Time,
 	mountSession domain.SessionID,
 	storePath string,
@@ -54,6 +57,8 @@ func buildWebStatsData(
 		Extensions: exts,
 	}
 
+	d.SystemArtifacts = sysArts
+
 	if cap != nil {
 		d.Storage = web.StatsStorage{
 			ArtifactCount:  formatCountOrNA(cap.ArtifactCount),
@@ -75,6 +80,28 @@ func buildWebStatsData(
 	}
 
 	return d
+}
+
+// gatherSystemArtifacts walks the store's system partition and renders one
+// row per active service artifact (versioned actives and keep=0 cells alike,
+// in name order — the SystemStore.Walk contract). Best-effort: a walk error
+// yields whatever was collected so far rather than failing the stats page,
+// matching the page's other best-effort sections. sys may be nil (no system
+// partition) → empty.
+func gatherSystemArtifacts(ctx context.Context, sys systemstore.Store) []web.StatsSystemArtifact {
+	out := make([]web.StatsSystemArtifact, 0)
+	if sys == nil {
+		return out
+	}
+	_ = sys.Walk(ctx, "", func(name string, m domain.Manifest) error {
+		out = append(out, web.StatsSystemArtifact{
+			Name:    name,
+			Size:    humanize.Bytes(m.OriginalSize),
+			Created: m.CreatedAt.UTC().Format(time.RFC3339),
+		})
+		return nil
+	})
+	return out
 }
 
 // formatCountOrNA renders an int64 count, treating -1 as "n/a"

@@ -20,13 +20,14 @@ import (
 // the IsZero/HasX flags on the embedded structs — the daemon
 // passes zero values when a section has no meaningful data.
 type StatsData struct {
-	Daemon     StatsDaemon
-	View       StatsView
-	Storage    StatsStorage
-	HasStorage bool
-	Extensions []StatsExtension
-	Config     StatsConfig
-	HasConfig  bool
+	Daemon          StatsDaemon
+	View            StatsView
+	Storage         StatsStorage
+	HasStorage      bool
+	Extensions      []StatsExtension
+	SystemArtifacts []StatsSystemArtifact
+	Config          StatsConfig
+	HasConfig       bool
 }
 
 // StatsDaemon mirrors projection.DaemonInfo's daemon-level
@@ -71,6 +72,16 @@ type StatsStorage struct {
 // StatsExtension is one row of the [extensions] section.
 type StatsExtension struct {
 	Name string
+}
+
+// StatsSystemArtifact is one row of the [system artifacts] section:
+// a service artifact's active version as reported by SystemStore.Walk.
+// Strings are pre-formatted by the daemon (size humanised). The manifest
+// digest is omitted — the walk-loaded system manifest does not carry one.
+type StatsSystemArtifact struct {
+	Name    string
+	Size    string
+	Created string
 }
 
 // StatsConfig mirrors the daemon's policy switches. Boolean
@@ -250,6 +261,24 @@ const statsPageHTML = `<!DOCTYPE html>
   <tbody>
     {{range .Extensions}}
     <tr><td class="label mono">{{.Name}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+{{end}}
+
+{{if .SystemArtifacts}}
+<h2>System Artifacts</h2>
+<table>
+  <thead>
+    <tr><th>name</th><th>size</th><th>created</th></tr>
+  </thead>
+  <tbody>
+    {{range .SystemArtifacts}}
+    <tr>
+      <td class="label mono"><a href="{{$.BrowsePrefix}}/_system/{{.Name}}">{{.Name}}</a></td>
+      <td class="value">{{.Size}}</td>
+      <td class="value">{{.Created}}</td>
+    </tr>
     {{end}}
   </tbody>
 </table>
