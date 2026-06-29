@@ -3,8 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
-	"fmt"
-	iofs "io/fs"
+	"io/fs"
 	"net/http"
 	"os"
 	"time"
@@ -15,6 +14,7 @@ import (
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"
 
+	"scrinium.dev/cmd/internal/clog"
 	"scrinium.dev/cmd/internal/daemon"
 	"scrinium.dev/projection/vfs"
 )
@@ -28,12 +28,13 @@ func main() {
 }
 
 func runServe(args []string) int {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	configPath := fs.String("config", "", "Path to a Scrinium YAML configuration file (required).")
-	listen := fs.String("listen", ":8080", "HTTP listen address.")
-	allowOSJunk := fs.Bool("allow-os-junk", false, "Permit .DS_Store / Thumbs.db writes instead of filtering them.")
-	if err := fs.Parse(args); err != nil {
+	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	configPath := flags.String("config", "", "Path to a Scrinium YAML configuration file (required).")
+	listen := flags.String("listen", ":8080", "HTTP listen address.")
+	allowOSJunk := flags.Bool("allow-os-junk", false, "Permit .DS_Store / Thumbs.db writes instead of filtering them.")
+	debug := flags.Bool("debug", clog.EnvDebug(), "Log every request (method, status, duration); off shows only errors.")
+	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 
@@ -43,6 +44,7 @@ func runServe(args []string) int {
 	}
 	defer stop()
 
+	log := clog.New(*debug)
 	startedAt := time.Now().UTC()
 	// WebDAV exposes only the user filesystem: every diagnostic tree is
 	// off so Finder/rclone see a clean root. Service prefix is kept for
@@ -57,25 +59,25 @@ func runServe(args []string) int {
 		FileSystem: wfs,
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
-			if err == nil {
+			// A 404 is normal traffic; only real faults reach Error. The
+			// per-request trace (incl. 404s) is the middleware's job under
+			// --debug.
+			if err == nil || errors.Is(err, fs.ErrNotExist) {
 				return
-			}
-			if errors.Is(err, iofs.ErrNotExist) {
-				return // a 404 is normal WebDAV traffic, not a fault
 			}
 			if !*allowOSJunk && isOSJunk(vfs.CleanPath(r.URL.Path)) {
 				return
 			}
-			fmt.Fprintf(os.Stderr, "webdav: %s %s: %v\n", r.Method, r.URL.Path, err)
+			log.Error("webdav", "method", r.Method, "path", r.URL.Path, "err", err)
 		},
 	}
 
 	srv := &http.Server{
 		Addr:              *listen,
-		Handler:           handler,
+		Handler:           clog.Middleware(log, "webdav")(handler),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	fmt.Fprintf(os.Stderr, "Serving WebDAV on %s\n", *listen)
+	log.Info("serving webdav", "addr", *listen)
 	return daemon.ServeHTTP(ctx, name, srv)
 }
 

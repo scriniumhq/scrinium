@@ -1,9 +1,7 @@
 package web
 
 import (
-	"fmt"
 	"net/http"
-	"os"
 	"time"
 )
 
@@ -133,6 +131,6 @@ func (h *Handler) serveStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", "no-store")
 	if err := render(w, "stats", data); err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-web: stats render: %v\n", err)
+		h.log.Error("stats render", "err", err)
 	}
 }

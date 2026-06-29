@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"scrinium.dev/cmd/internal/clog"
 	"scrinium.dev/cmd/internal/daemon"
 	"scrinium.dev/cmd/scrinium-webview/internal/web"
 	"scrinium.dev/domain"
@@ -33,6 +34,7 @@ func runServe(args []string) int {
 	listen := fs.String("listen", ":8081", "HTTP listen address.")
 	browsePrefix := fs.String("browse-prefix", "/", "URL prefix to serve the browser under (\"/\" for root).")
 	defaultTree := fs.String("default-tree", "by-path", "Tree the bare browse prefix redirects to.")
+	debug := fs.Bool("debug", clog.EnvDebug(), "Log every request (method, status, duration); off shows only errors.")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -47,6 +49,7 @@ func runServe(args []string) int {
 	}
 	defer stop()
 
+	log := clog.New(*debug)
 	startedAt := time.Now().UTC()
 	meta := asm.Info
 
@@ -117,6 +120,7 @@ func runServe(args []string) int {
 	})
 	webHandler.RegisterDecoder(vfsmetaDecoder{})
 	webHandler.SetStatsProvider(htmlStats)
+	webHandler.SetLogger(log)
 
 	tree := *defaultTree
 	if tree == "" {
@@ -136,10 +140,10 @@ func runServe(args []string) int {
 
 	srv := &http.Server{
 		Addr:              *listen,
-		Handler:           mux,
+		Handler:           clog.Middleware(log, "webview")(mux),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	fmt.Fprintf(os.Stderr, "Serving HTML view on %s\n", *listen)
+	log.Info("serving webview", "addr", *listen)
 	return daemon.ServeHTTP(ctx, name, srv)
 }
 

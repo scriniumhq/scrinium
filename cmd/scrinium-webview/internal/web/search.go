@@ -1,9 +1,7 @@
 package web
 
 import (
-	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 )
@@ -84,12 +82,12 @@ func (h *Handler) serveSearch(w http.ResponseWriter, r *http.Request) {
 				data.Results = append(data.Results, row)
 			}
 		} else {
-			fmt.Fprintf(os.Stderr, "scrinium-web: search %q: %v\n", q, err)
+			h.log.Error("search", "query", q, "err", err)
 		}
 	}
 
 	w.Header().Set("Cache-Control", "no-store")
 	if err := render(w, "search", data); err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-web: search render: %v\n", err)
+		h.log.Error("search render", "err", err)
 	}
 }

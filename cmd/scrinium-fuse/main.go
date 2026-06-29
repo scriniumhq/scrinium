@@ -15,6 +15,7 @@ import (
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"
 
+	"scrinium.dev/cmd/internal/clog"
 	"scrinium.dev/cmd/internal/daemon"
 	"scrinium.dev/projection/vfs"
 )
@@ -34,6 +35,7 @@ func runMount(args []string) int {
 	configPath := fset.String("config", "", "Path to a Scrinium YAML configuration file (required).")
 	mountPoint := fset.String("mount-point", "", "Directory to mount onto (required).")
 	allowOther := fset.Bool("allow-other", false, "Allow other users to access the mount (needs user_allow_other).")
+	debug := fset.Bool("debug", clog.EnvDebug(), "Log every mutation (create/unlink/rename/…) with result; off shows only errors.")
 	if err := fset.Parse(args); err != nil {
 		return 2
 	}
@@ -48,6 +50,7 @@ func runMount(args []string) int {
 	}
 	defer stop()
 
+	log := clog.New(*debug)
 	startedAt := time.Now().UTC()
 	// FUSE is a desktop browse target: every service tree is on, rooted
 	// at by-path under the _scrinium prefix.
@@ -66,7 +69,7 @@ func runMount(args []string) int {
 		routingCfg,
 		vfs.WithStatsProvider(daemon.StatsProvider(asm, startedAt, 2*time.Second)),
 	)
-	root := newRoot(fsys, startedAt)
+	root := newRoot(fsys, startedAt, log)
 
 	mountOpts := &fs.Options{
 		MountOptions: fuse.MountOptions{
@@ -78,7 +81,7 @@ func runMount(args []string) int {
 
 	server, err := fs.Mount(*mountPoint, root, mountOpts)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: mount %s: %v\n", name, *mountPoint, err)
+		log.Error("mount failed", "mount_point", *mountPoint, "err", err)
 		return 1
 	}
 	go func() {
@@ -86,7 +89,7 @@ func runMount(args []string) int {
 		_ = server.Unmount()
 	}()
 
-	fmt.Fprintf(os.Stderr, "Mounted at %s\n", *mountPoint)
+	log.Info("mounted", "mount_point", *mountPoint)
 	server.Wait()
 	return 0
 }
