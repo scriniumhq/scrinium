@@ -25,7 +25,7 @@ type Config struct {
 	Multistore *MultistoreSpec       `yaml:"multistore,omitempty" json:"multistore,omitempty"`
 	Policies   map[string]*Policy    `yaml:"policies,omitempty" json:"policies,omitempty"`
 	Projection *Projection           `yaml:"projection,omitempty" json:"projection,omitempty"`
-	Agents     []ComponentSpec       `yaml:"agents,omitempty" json:"agents,omitempty"`
+	Agents     []AgentSpec           `yaml:"agents,omitempty" json:"agents,omitempty"`
 	// Defaults supplies the fallback index (and, in future, driver)
 	// scheme for stores that omit their own — the middle rung of the
 	// default ladder (ADR-63): an explicit store.index wins, then
@@ -163,12 +163,12 @@ type ScrubSchedule struct {
 	PerStageVerification bool     `yaml:"perStageVerification,omitempty" json:"perStageVerification,omitempty"`
 }
 
-// ComponentSpec is a generic kind+config block, used for user
-// agents. Config is left as a raw map for the registered factory
-// to decode into its own typed struct. Every (interval) or Schedule
-// (cron) is an optional, mutually-exclusive trigger that puts the agent
-// on the scheduler at build time (§9.7).
-type ComponentSpec struct {
+// AgentSpec is a user agent's kind+config block. Config is left as a
+// raw map for the registered factory to decode into its own typed
+// struct. Every (interval) or Schedule (cron) is an optional,
+// mutually-exclusive trigger that puts the agent on the scheduler at
+// build time (§9.7).
+type AgentSpec struct {
 	Kind     string         `yaml:"kind" json:"kind"`
 	Config   map[string]any `yaml:"config,omitempty" json:"config,omitempty"`
 	Every    Duration       `yaml:"every,omitempty" json:"every,omitempty"`

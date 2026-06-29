@@ -48,7 +48,7 @@ func TestValidate_RejectsBothTriggers_GC(t *testing.T) {
 func TestValidate_RejectsBothTriggers_Agent(t *testing.T) {
 	c := &Config{
 		Store:  &StoreSpec{Driver: "file:///x"},
-		Agents: []ComponentSpec{{Kind: "x", Every: Duration(time.Hour), Schedule: "0 3 * * *"}},
+		Agents: []AgentSpec{{Kind: "x", Every: Duration(time.Hour), Schedule: "0 3 * * *"}},
 	}
 	err := validate(c)
 	if err == nil || !strings.Contains(err.Error(), "both") {
