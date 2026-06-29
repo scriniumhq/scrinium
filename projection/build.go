@@ -115,10 +115,11 @@ func editingPolicy(cfg Config) fsops.EditingPolicy {
 		return fsops.EditingOn()
 	case "custom":
 		return fsops.EditingPolicy{
-			AllowRename:   derefBool(cfg.AllowRename),
-			AllowSetattr:  derefBool(cfg.AllowSetattr),
-			AllowTruncate: derefBool(cfg.AllowTruncate),
-			AllowAppend:   derefBool(cfg.AllowAppend),
+			AllowRename:    derefBool(cfg.AllowRename),
+			AllowSetattr:   derefBool(cfg.AllowSetattr),
+			AllowTruncate:  derefBool(cfg.AllowTruncate),
+			AllowAppend:    derefBool(cfg.AllowAppend),
+			AllowDirRename: derefBool(cfg.AllowDirRename),
 		}
 	default:
 		return fsops.EditingOff()

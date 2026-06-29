@@ -11,31 +11,49 @@ import (
 
 // --- Editing existing artifacts ---
 
-// Rename moves an artifact from oldPath to newPath. In CAS terms
-// the operation is a Put-with-new-vfsmeta-Path followed by a
-// Delete of the old artifact, atomically reflected in the View
-// via View.Move.
+// Rename moves oldPath to newPath. What it does depends on oldPath:
+//
+//   - A file: Put-with-new-vfsmeta-Path then Delete of the old artifact,
+//     reflected in the View via Move. Gated by AllowRename.
+//   - An empty pending directory: a pure namespace re-key (no Store touch),
+//     carrying any nested pending dirs. Gated by AllowDirRename.
+//   - A non-empty (view-backed) directory: a recursive re-path — one file
+//     rename per descendant, plus nested pending dirs. Gated by AllowDirRename.
+//     See renameDirTree.
+//
+// Mkdir/Rmdir stay on read-only alone; only renaming a directory crosses into
+// the editing surface, which is why directory rename has its own policy bit.
 //
 // Errors:
-//   - ErrEditingDisabled if AllowRename is off or Ops is read-only.
+//   - ErrEditingDisabled if Ops is read-only, or the matching policy bit
+//     (AllowRename for files, AllowDirRename for directories) is off.
 //   - ErrInvalidPath if newPath fails validation.
 //   - ErrPathNotFound if oldPath does not exist.
-//   - ErrIsADirectory if oldPath is a non-empty (view-backed) directory.
-//     An empty pending directory instead renames as a namespace operation:
-//     no AllowRename, no Store touch — just a re-key (see renamePendingDir).
 //   - ErrPathExists if newPath is already taken.
 //   - Any error from Store.Put / Store.Delete.
 func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 	if o.readOnly {
 		return fmt.Errorf("%w: Rename on read-only Ops", errs.ErrEditingDisabled)
 	}
-	// An empty pending directory (Mkdir-created, no real children) renames as a
-	// pure namespace operation: no artifact, no Store touch. It follows Mkdir's
-	// gate (read-only only), not AllowRename, so it is handled before the
-	// editing-policy gate by re-keying pendingDirs.
+
+	// Directory rename — empty pending dir or recursive non-empty dir — is one
+	// capability under AllowDirRename, separate from file rename's AllowRename
+	// (the recursive form rewrites every descendant's manifest).
 	if o.isPendingDir(oldPath) {
+		if !o.editing.AllowDirRename {
+			return fmt.Errorf("%w: directory rename without AllowDirRename", errs.ErrEditingDisabled)
+		}
 		return o.renamePendingDir(oldPath, newPath)
 	}
+	if o.isViewDir(oldPath) {
+		if !o.editing.AllowDirRename {
+			return fmt.Errorf("%w: directory rename without AllowDirRename", errs.ErrEditingDisabled)
+		}
+		return o.renameDirTree(ctx, oldPath, newPath)
+	}
+
+	// File rename. A missing oldPath falls here too and surfaces ErrPathNotFound
+	// from the staging lookup below.
 	if !o.editing.AllowRename {
 		return fmt.Errorf("%w: Rename without AllowRename", errs.ErrEditingDisabled)
 	}
@@ -62,25 +80,37 @@ func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 		return fmt.Errorf("%w: %q is a pending directory", errs.ErrPathExists, newPath)
 	}
 
-	// Stage the old artifact's content and vfsmeta into a scratch
-	// editing handle whose Close performs Put+Delete+Move.
+	return o.renameArtifactLocked(ctx, oldPath, newPath)
+}
+
+// renameArtifactLocked re-stamps the single artifact at oldPath with newPath:
+// stage its content+vfsmeta into a scratch handle whose Close performs
+// Put(new path)+Delete(old)+View.Move. The caller holds the path locks for
+// oldPath and newPath and has verified newPath is free.
+func (o *Ops) renameArtifactLocked(ctx context.Context, oldPath, newPath string) error {
 	wf, err := o.prepareEditingScratch(ctx, oldPath)
 	if err != nil {
 		return err
 	}
 	wf.path = newPath
-	wf.forceDirty = true // content unchanged; metadata change alone triggers Put
-	// Lock has already been taken by LockAll; substitute the
-	// closer used by the writeFile so it does not double-unlock.
-	wf.unlock = func() {} // unlock is handled by the deferred LockAll
-
+	wf.forceDirty = true  // content unchanged; metadata change alone triggers Put
+	wf.unlock = func() {} // lock is held by the caller, not this writeFile
 	return wf.Close()
+}
+
+// isViewDir reports whether path resolves to a virtual (view-backed) directory
+// — one that exists because it has artifact descendants. Files and pending
+// directories return false.
+func (o *Ops) isViewDir(path string) bool {
+	n, err := o.lookupInRoot(path)
+	return err == nil && n.FS.IsDir
 }
 
 // renamePendingDir re-keys an empty pending directory from oldPath to newPath,
 // carrying any nested pending directories with it. The target must be free (no
 // file, view-dir, or pending dir). Nothing in the Store or View changes — the
-// directory lives only in pendingDirs until a real child lands.
+// directory lives only in pendingDirs until a real child lands. The caller
+// (Rename) has already checked AllowDirRename.
 func (o *Ops) renamePendingDir(oldPath, newPath string) error {
 	if err := vfsmeta.ValidatePath(newPath); err != nil {
 		return err

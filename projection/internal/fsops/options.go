@@ -20,11 +20,17 @@ type fsOpsOptions struct {
 // EditingPolicy is the per-operation switchboard for the editing
 // surface (rename, setattr, truncate, append). Each bit is
 // independent; helpers EditingOff / EditingOn are sugar.
+//
+// AllowRename governs file rename. Directory rename — both the empty
+// pending-dir case and the recursive non-empty case — is a separate
+// capability under AllowDirRename, because a recursive rename rewrites
+// every descendant's manifest (one Put+Delete per child).
 type EditingPolicy struct {
-	AllowRename   bool
-	AllowSetattr  bool
-	AllowTruncate bool
-	AllowAppend   bool
+	AllowRename    bool
+	AllowSetattr   bool
+	AllowTruncate  bool
+	AllowAppend    bool
+	AllowDirRename bool
 }
 
 // EditingOff is the conservative default: no editing of existing
@@ -36,10 +42,11 @@ func EditingOff() EditingPolicy { return EditingPolicy{} }
 // produces a new artifact).
 func EditingOn() EditingPolicy {
 	return EditingPolicy{
-		AllowRename:   true,
-		AllowSetattr:  true,
-		AllowTruncate: true,
-		AllowAppend:   true,
+		AllowRename:    true,
+		AllowSetattr:   true,
+		AllowTruncate:  true,
+		AllowAppend:    true,
+		AllowDirRename: true,
 	}
 }
 
