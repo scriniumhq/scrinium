@@ -23,7 +23,7 @@ func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
 		}
 		return f(ctx, spec.Driver, creds)
 	}
-	return driver.DialDriver(spec.Driver)
+	return driver.DialDriver(ctx, spec.Driver)
 }
 
 // dialIndex resolves the index along the default ladder (ADR-63): an

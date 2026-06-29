@@ -39,3 +39,16 @@ func NewPutConfig(opts ...PutOption) PutConfig {
 func WithExclusive() PutOption {
 	return func(c *PutConfig) { c.Exclusive = true }
 }
+
+// DialOption is an option for a Driver dialer — DialDriver and the scheme
+// dialers it dispatches to. It mirrors index.IndexOption: the variadic keeps
+// the dial signature uniform across driver and index and ready for a
+// networked backend (s3, snp) that needs cross-backend tunables. Local
+// backends (localfs, memory) ignore it.
+type DialOption func(*DialOptions)
+
+// DialOptions is the resolved dial-option aggregate. Exported so scheme
+// dialers in subpackages can read the resolved values. Add fields here only
+// when they are common to every driver backend; scheme-specific knobs stay
+// in the URI or private to the implementing package.
+type DialOptions struct{}

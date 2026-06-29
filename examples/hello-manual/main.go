@@ -38,7 +38,7 @@ func main() {
 	ctx := context.Background()
 
 	// Driver — the byte-level backend (here, the local filesystem).
-	drv, err := driver.DialDriver("file://" + *dir)
+	drv, err := driver.DialDriver(ctx, "file://"+*dir)
 	if err != nil {
 		log.Fatalf("dial driver: %v", err)
 	}

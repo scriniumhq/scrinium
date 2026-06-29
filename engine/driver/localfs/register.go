@@ -1,6 +1,7 @@
 package localfs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -27,7 +28,7 @@ func init() {
 // Any other host (file://example.com/path) is rejected. The
 // ~ and . aliases are resolved uniformly across every URI
 // consumer, so file://~/x and the bare path ~/x mean the same.
-func openFileURI(u *url.URL) (driver.Driver, error) {
+func openFileURI(ctx context.Context, u *url.URL, opts ...driver.DialOption) (driver.Driver, error) {
 	abs, err := uri.ResolveLocalPath(u)
 	if err != nil {
 		switch {

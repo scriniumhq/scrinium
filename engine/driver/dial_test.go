@@ -1,6 +1,7 @@
 package driver_test
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -19,7 +20,7 @@ import (
 func TestDialDriver_BarePath(t *testing.T) {
 	tmp := t.TempDir()
 
-	d, err := driver.DialDriver(tmp)
+	d, err := driver.DialDriver(context.Background(), tmp)
 	if err != nil {
 		t.Fatalf("DialDriver: %v", err)
 	}
@@ -35,7 +36,7 @@ func TestDialDriver_FileURI(t *testing.T) {
 	tmp := t.TempDir()
 	uri := "file://" + tmp
 
-	d, err := driver.DialDriver(uri)
+	d, err := driver.DialDriver(context.Background(), uri)
 	if err != nil {
 		t.Fatalf("DialDriver: %v", err)
 	}
@@ -55,7 +56,7 @@ func TestDialDriver_TildeBare(t *testing.T) {
 	// against a real home).
 	target := t.TempDir()
 
-	d, err := driver.DialDriver(target)
+	d, err := driver.DialDriver(context.Background(), target)
 	if err != nil {
 		t.Fatalf("DialDriver: %v", err)
 	}
@@ -79,7 +80,7 @@ func TestDialDriver_FileURI_TildeHostExpands(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	d, err := driver.DialDriver("file://~/scrinium-dial-test-host")
+	d, err := driver.DialDriver(context.Background(), "file://~/scrinium-dial-test-host")
 	if err != nil {
 		t.Fatalf("DialDriver(file://~/...): %v", err)
 	}
@@ -95,7 +96,7 @@ func TestDialDriver_FileURI_DotHostExpands(t *testing.T) {
 	// CREATES the directory; chdir into a temp dir so the created tree lands
 	// there and is auto-removed, instead of leaking into the working directory.
 	t.Chdir(t.TempDir())
-	d, err := driver.DialDriver("file://./scrinium-dial-test-cwd")
+	d, err := driver.DialDriver(context.Background(), "file://./scrinium-dial-test-cwd")
 	if err != nil {
 		t.Fatalf("DialDriver(file://./...): %v", err)
 	}
@@ -115,7 +116,7 @@ func TestDialDriver_UnsupportedScheme(t *testing.T) {
 		"http://example.com/store",
 	}
 	for _, uri := range cases {
-		_, err := driver.DialDriver(uri)
+		_, err := driver.DialDriver(context.Background(), uri)
 		if err == nil {
 			t.Errorf("DialDriver(%q) succeeded; want error", uri)
 			continue
@@ -128,7 +129,7 @@ func TestDialDriver_UnsupportedScheme(t *testing.T) {
 
 // TestDialDriver_Empty verifies the empty-URI guard.
 func TestDialDriver_Empty(t *testing.T) {
-	_, err := driver.DialDriver("")
+	_, err := driver.DialDriver(context.Background(), "")
 	if err == nil {
 		t.Fatal("DialDriver(\"\") succeeded; want error")
 	}
@@ -139,7 +140,7 @@ func TestDialDriver_Empty(t *testing.T) {
 // localfs driver doesn't talk to remote hosts, so accepting this
 // would silently misroute.
 func TestDialDriver_FileURI_BadHost(t *testing.T) {
-	_, err := driver.DialDriver("file://example.com/store")
+	_, err := driver.DialDriver(context.Background(), "file://example.com/store")
 	if err == nil {
 		t.Fatal("DialDriver: expected error for non-local host")
 	}
