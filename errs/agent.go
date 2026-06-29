@@ -6,8 +6,8 @@ import "errors"
 // methods, queue back-pressure. Used by the agent package and its
 // built-ins (Ingester, GC, Scrub, Snapshot, Sync, Ejector).
 
-// ErrAgentNotRunning — command-style methods (ForceCommit, Eject,
-// Trigger, TakeCheckpoint, ...) called on an agent whose Run is not
+// ErrAgentNotRunning — command-style methods (RunNow, Eject, ...)
+// called on an agent whose Run is not
 // active.
 var ErrAgentNotRunning = errors.New("scrinium: agent not running")
 

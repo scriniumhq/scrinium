@@ -152,9 +152,9 @@ func TestScrub_HappyPath_VerifiesAndStamps(t *testing.T) {
 	f.rec.Clear()
 
 	a := newScrub(t, f, forceCfg())
-	stats, err := a.RunOnce(context.Background())
+	stats, err := a.RunNow(context.Background())
 	if err != nil {
-		t.Fatalf("RunOnce: %v", err)
+		t.Fatalf("RunNow: %v", err)
 	}
 	if stats.ScannedBlobs < 1 || stats.VerifiedBlobs < 1 {
 		t.Errorf("stats = %+v, want at least 1 scanned and 1 verified", stats)
@@ -194,9 +194,9 @@ func TestScrub_TamperedBlob_EmitsFailedAndContinues(t *testing.T) {
 	f.rec.Clear()
 
 	a := newScrub(t, f, forceCfg())
-	stats, err := a.RunOnce(context.Background())
+	stats, err := a.RunNow(context.Background())
 	if err != nil {
-		t.Fatalf("RunOnce: %v", err)
+		t.Fatalf("RunNow: %v", err)
 	}
 	if stats.FailedBlobs < 1 {
 		t.Errorf("FailedBlobs = %d, want >= 1 (tampered blob)", stats.FailedBlobs)
@@ -232,8 +232,8 @@ func TestScrub_InlineArtifact_CoveredByManifestPass(t *testing.T) {
 	f.rec.Clear()
 
 	a := newScrub(t, f, forceCfg())
-	if _, err := a.RunOnce(context.Background()); err != nil {
-		t.Fatalf("RunOnce: %v", err)
+	if _, err := a.RunNow(context.Background()); err != nil {
+		t.Fatalf("RunNow: %v", err)
 	}
 
 	var pending []string
@@ -257,8 +257,8 @@ func TestScrub_BlockedByForeignLease(t *testing.T) {
 	leasefx.StageForeign(t, f.drv, "store.agent.scrub.lease", "other-host", "Scrub", time.Hour)
 
 	a := newScrub(t, f, forceCfg())
-	if _, err := a.RunOnce(context.Background()); err == nil {
-		t.Fatal("RunOnce with a live foreign lease = nil err, want lease-held failure")
+	if _, err := a.RunNow(context.Background()); err == nil {
+		t.Fatal("RunNow with a live foreign lease = nil err, want lease-held failure")
 	}
 }
 
@@ -268,8 +268,8 @@ func TestScrub_CancelledContext(t *testing.T) {
 	a := newScrub(t, f, forceCfg())
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := a.RunOnce(ctx); err == nil {
-		t.Fatal("RunOnce(cancelled) = nil, want error")
+	if _, err := a.RunNow(ctx); err == nil {
+		t.Fatal("RunNow(cancelled) = nil, want error")
 	}
 }
 

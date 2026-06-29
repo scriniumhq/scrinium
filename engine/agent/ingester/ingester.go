@@ -58,10 +58,10 @@ type IngesterConfig struct {
 type Ingester interface {
 	agent.Agent
 
-	// ForceCommit immediately commits the accumulated batch
+	// RunNow immediately commits the accumulated batch
 	// regardless of BatchSize/FlushTimeout. Used before an external
 	// event (log rotation, snapshot, graceful shutdown).
-	ForceCommit(ctx context.Context) error
+	RunNow(ctx context.Context) error
 }
 
 // NewIngester creates an Ingester instance. User-managed: started

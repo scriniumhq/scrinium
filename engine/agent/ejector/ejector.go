@@ -21,7 +21,7 @@ import (
 // to M4/S3 pending the reconciliation-mechanism decision.
 type SyncAgent interface {
 	agent.Agent
-	Trigger(ctx context.Context, artifactID domain.ArtifactID) error
+	RunNow(ctx context.Context, artifactID domain.ArtifactID) error
 }
 
 // --- Ejector Agent (ADR-70) ---

@@ -32,7 +32,7 @@ type gcFixture struct {
 }
 
 // newGCFixture builds a store sharing one index with the agent. grace
-// and policy go into StoreConfig, which RunOnce reads via store.Config().
+// and policy go into StoreConfig, which RunNow reads via store.Config().
 func newGCFixture(t *testing.T, grace time.Duration, policy domain.GCLeasePolicy) gcFixture {
 	t.Helper()
 	rec := eventfx.New()
@@ -126,9 +126,9 @@ func TestGC_MarkTombstonesOrphan(t *testing.T) {
 	}
 
 	a := newGC(t, f, gc.GCConfig{})
-	stats, err := a.RunOnce(context.Background())
+	stats, err := a.RunNow(context.Background())
 	if err != nil {
-		t.Fatalf("RunOnce: %v", err)
+		t.Fatalf("RunNow: %v", err)
 	}
 	if stats.MarkedBlobs < 1 {
 		t.Errorf("MarkedBlobs = %d, want >= 1", stats.MarkedBlobs)
@@ -163,8 +163,8 @@ func TestGC_SweepRemovesAfterGrace(t *testing.T) {
 	a := newGC(t, f, gc.GCConfig{})
 
 	// Cycle 1 — Mark only (fresh tombstone is younger than grace).
-	if _, err := a.RunOnce(context.Background()); err != nil {
-		t.Fatalf("RunOnce #1: %v", err)
+	if _, err := a.RunNow(context.Background()); err != nil {
+		t.Fatalf("RunNow #1: %v", err)
 	}
 	tomb := blob + ".tombstone"
 	if !f.fileExists(tomb) {
@@ -178,9 +178,9 @@ func TestGC_SweepRemovesAfterGrace(t *testing.T) {
 	}
 
 	// Cycle 2 — Sweep (grace now elapsed).
-	stats, err := a.RunOnce(context.Background())
+	stats, err := a.RunNow(context.Background())
 	if err != nil {
-		t.Fatalf("RunOnce #2: %v", err)
+		t.Fatalf("RunNow #2: %v", err)
 	}
 	if stats.RemovedBlobs < 1 {
 		t.Errorf("RemovedBlobs = %d, want >= 1 after grace elapsed", stats.RemovedBlobs)
@@ -218,9 +218,9 @@ func TestGC_RevivedBlobSurvivesSweep(t *testing.T) {
 	}
 
 	a := newGC(t, f, gc.GCConfig{})
-	stats, err := a.RunOnce(context.Background())
+	stats, err := a.RunNow(context.Background())
 	if err != nil {
-		t.Fatalf("RunOnce: %v", err)
+		t.Fatalf("RunNow: %v", err)
 	}
 	if stats.RemovedBlobs != 0 {
 		t.Errorf("RemovedBlobs = %d, want 0 (blob was revived)", stats.RemovedBlobs)
@@ -238,8 +238,8 @@ func TestGC_SingleHostTakesNoLease(t *testing.T) {
 	f.putAndOrphan(t, "data")
 	leasefx.StageForeign(t, f.drv, "store.agent.gc.lease", "other-host", "GC", time.Hour)
 	a := newGC(t, f, gc.GCConfig{})
-	if _, err := a.RunOnce(context.Background()); err != nil {
-		t.Fatalf("SingleHost RunOnce must ignore the lease, got %v", err)
+	if _, err := a.RunNow(context.Background()); err != nil {
+		t.Fatalf("SingleHost RunNow must ignore the lease, got %v", err)
 	}
 }
 
@@ -248,8 +248,8 @@ func TestGC_LeaderElectionBlockedByForeignLease(t *testing.T) {
 	f.putAndOrphan(t, "data")
 	leasefx.StageForeign(t, f.drv, "store.agent.gc.lease", "other-host", "GC", time.Hour)
 	a := newGC(t, f, gc.GCConfig{LeaseTTL: time.Minute})
-	if _, err := a.RunOnce(context.Background()); err == nil {
-		t.Fatal("LeaderElection RunOnce with a live foreign lease = nil, want lease-held failure")
+	if _, err := a.RunNow(context.Background()); err == nil {
+		t.Fatal("LeaderElection RunNow with a live foreign lease = nil, want lease-held failure")
 	}
 }
 
@@ -259,8 +259,8 @@ func TestGC_CancelledContext(t *testing.T) {
 	a := newGC(t, f, gc.GCConfig{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := a.RunOnce(ctx); err == nil {
-		t.Fatal("RunOnce(cancelled) = nil, want error")
+	if _, err := a.RunNow(ctx); err == nil {
+		t.Fatal("RunNow(cancelled) = nil, want error")
 	}
 }
 
