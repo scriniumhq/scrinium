@@ -127,42 +127,6 @@ type asm struct {
 
 var _ Assembly = (*asm)(nil)
 
-// New builds an Assembly from already-assembled components. The
-// assembler is the intended caller; closeFn unwinds store/index/view in
-// the correct order and must be idempotent. recoveryKit carries the
-// init-time kit bytes (nil unless a fresh encrypted store was created).
-func New(
-	st store.Store,
-	idx index.StoreIndex,
-	proj *projection.Projection,
-	mountSession domain.SessionID,
-	info Info,
-	recoveryKit []byte,
-	closeFn func() error,
-	agentDeps agent.AgentDeps,
-	bus event.EventBus,
-	sched agent.Scheduler,
-	cronParser agent.CronParser,
-	exts []extension.Descriptor,
-	presenters present.Registry,
-) Assembly {
-	return &asm{
-		store:        st,
-		index:        idx,
-		proj:         proj,
-		mountSession: mountSession,
-		info:         info,
-		recoveryKit:  recoveryKit,
-		closeFn:      closeFn,
-		agentDeps:    agentDeps,
-		bus:          bus,
-		sched:        sched,
-		cronParser:   cronParser,
-		extensions:   exts,
-		presenters:   presenters,
-	}
-}
-
 func (a *asm) Store() store.Store                 { return a.store }
 func (a *asm) Projection() *projection.Projection { return a.proj }
 func (a *asm) MountSession() domain.SessionID     { return a.mountSession }

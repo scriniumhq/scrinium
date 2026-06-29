@@ -3,6 +3,7 @@ package assembly
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"scrinium.dev/engine/driver"
@@ -51,4 +52,39 @@ func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.
 		return f(ctx, indexUri, creds)
 	}
 	return index.DialIndex(ctx, indexUri)
+}
+
+// dialBackends constructs the driver and index and, for a non-open mode on
+// a local store, ensures the store directory exists. The index is the first
+// rollback-registered resource.
+func (bs *buildState) dialBackends() error {
+	// 1. Driver.
+	drv, err := dialDriver(bs.ctx, bs.spec)
+	if err != nil {
+		return fmt.Errorf("scrinium: driver: %w", err)
+	}
+	bs.drv = drv
+
+	// 2. For an Init/OpenOrInit on a local store, ensure the directory.
+	if bs.mode != modeOpen {
+		if p, perr := uri.ResolveLocalURI(bs.spec.Driver); perr == nil {
+			if err := os.MkdirAll(p, 0o755); err != nil {
+				return fmt.Errorf("scrinium: mkdir store: %w", err)
+			}
+		}
+	}
+
+	// 3. Index (default ladder: explicit spec.Index, then Config.Defaults,
+	//    then a built-in sqlite next to a local store).
+	idx, err := dialIndex(bs.ctx, bs.spec, bs.c.Defaults)
+	if err != nil {
+		return fmt.Errorf("scrinium: index: %w", err)
+	}
+	bs.idx = idx
+	bs.cleanups = append(bs.cleanups, func() {
+		if err := idx.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "scrinium: index close on rollback: %v\n", err)
+		}
+	})
+	return nil
 }
