@@ -85,3 +85,23 @@ func (o *Ops) dropPendingTree(path string) {
 		}
 	}
 }
+
+// renamePendingTree re-keys the pending entry for oldPath and every pending
+// entry beneath it onto the newPath prefix. Used by renamePendingDir to move
+// an empty pending directory (and any nested pending dirs) in one shot. A no-op
+// if oldPath is no longer pending (e.g. a concurrent write gave it a real
+// child); the swap and this check both run under pendingDirsMu.
+func (o *Ops) renamePendingTree(oldPath, newPath string) {
+	o.pendingDirsMu.Lock()
+	defer o.pendingDirsMu.Unlock()
+	var moved []string
+	for p := range o.pendingDirs {
+		if pathx.IsUnder(p, oldPath) {
+			moved = append(moved, p)
+		}
+	}
+	for _, p := range moved {
+		delete(o.pendingDirs, p)
+		o.pendingDirs[newPath+p[len(oldPath):]] = struct{}{}
+	}
+}

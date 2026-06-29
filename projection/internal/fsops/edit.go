@@ -20,12 +20,21 @@ import (
 //   - ErrEditingDisabled if AllowRename is off or Ops is read-only.
 //   - ErrInvalidPath if newPath fails validation.
 //   - ErrPathNotFound if oldPath does not exist.
-//   - ErrIsADirectory if oldPath points at a virtual directory.
+//   - ErrIsADirectory if oldPath is a non-empty (view-backed) directory.
+//     An empty pending directory instead renames as a namespace operation:
+//     no AllowRename, no Store touch — just a re-key (see renamePendingDir).
 //   - ErrPathExists if newPath is already taken.
 //   - Any error from Store.Put / Store.Delete.
 func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 	if o.readOnly {
 		return fmt.Errorf("%w: Rename on read-only Ops", errs.ErrEditingDisabled)
+	}
+	// An empty pending directory (Mkdir-created, no real children) renames as a
+	// pure namespace operation: no artifact, no Store touch. It follows Mkdir's
+	// gate (read-only only), not AllowRename, so it is handled before the
+	// editing-policy gate by re-keying pendingDirs.
+	if o.isPendingDir(oldPath) {
+		return o.renamePendingDir(oldPath, newPath)
 	}
 	if !o.editing.AllowRename {
 		return fmt.Errorf("%w: Rename without AllowRename", errs.ErrEditingDisabled)
@@ -66,6 +75,34 @@ func (o *Ops) Rename(ctx context.Context, oldPath, newPath string) error {
 	wf.unlock = func() {} // unlock is handled by the deferred LockAll
 
 	return wf.Close()
+}
+
+// renamePendingDir re-keys an empty pending directory from oldPath to newPath,
+// carrying any nested pending directories with it. The target must be free (no
+// file, view-dir, or pending dir). Nothing in the Store or View changes — the
+// directory lives only in pendingDirs until a real child lands.
+func (o *Ops) renamePendingDir(oldPath, newPath string) error {
+	if err := vfsmeta.ValidatePath(newPath); err != nil {
+		return err
+	}
+	if oldPath == newPath {
+		return nil
+	}
+
+	unlock := o.pathLocks.LockAll(oldPath, newPath)
+	defer unlock()
+
+	if _, err := o.lookupInRoot(newPath); err == nil {
+		return fmt.Errorf("%w: %q already exists", errs.ErrPathExists, newPath)
+	} else if !errors.Is(err, errs.ErrPathNotFound) {
+		return err
+	}
+	if o.isPendingDir(newPath) {
+		return fmt.Errorf("%w: %q is a pending directory", errs.ErrPathExists, newPath)
+	}
+
+	o.renamePendingTree(oldPath, newPath)
+	return nil
 }
 
 // Setattr changes POSIX attributes (mode, uid, gid, mtime) of an
