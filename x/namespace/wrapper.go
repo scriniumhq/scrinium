@@ -170,10 +170,10 @@ func (s *scopedStore) Put(ctx context.Context, a domain.Artifact, opts ...domain
 // Walk yields only artifacts of the bound namespace, ignoring the argument:
 // a scoped store is the one-namespace view. It delegates to the core's
 // extension-agnostic WalkByExt over the nsid projection (proj_ext) — the
-// filter runs in the index, no manifest-file I/O, and the "namespace"/"nsid"
+// filter runs in the index, no manifest-file I/O, and the "scrinium.namespace"/"nsid"
 // coordinates live here in the extension, not in the core.
 func (s *scopedStore) Walk(ctx context.Context, cb func(domain.Manifest) error) error {
-	return s.DataStore.WalkByExt(ctx, extensionName, nsidField, string(s.nsid), cb)
+	return s.DataStore.WalkByExt(ctx, indexName, nsidField, string(s.nsid), cb)
 }
 
 // Get returns the artifact only if it belongs to the bound namespace;

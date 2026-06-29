@@ -12,9 +12,9 @@ import (
 
 const (
 	// indexName is the custom-index identifier and the proj_ext ext_name
-	// the nsid lands under: Walk(ns) reads ext_name="namespace",
+	// the nsid lands under: Walk(ns) reads ext_name="scrinium.namespace",
 	// field="nsid" (09 §9.2, ADR-79).
-	indexName = "namespace"
+	indexName = "scrinium.namespace"
 
 	// nsidField is the projected field name in proj_ext and the Ext JSON
 	// key the nsid is stamped under on Put.
@@ -33,7 +33,7 @@ const (
 // Index is the namespace custom index (ADR-79/88; 09 §9.2). It occupies
 // the Indexer (write-side) capability and the ViewProvider capability: on
 // each Put it projects the artifact's nsid (read from Manifest.Ext) into
-// the core-maintained proj_ext equality store under ext_name="namespace",
+// the core-maintained proj_ext equality store under ext_name="scrinium.namespace",
 // field="nsid"; and it backs the by-namespace projection view (ADR-98),
 // keyed by nsid with human-name labels from the registry. It keeps NO own
 // tables and exposes no Accessor — Walk(ns) is the core's proj_ext equality
@@ -77,7 +77,7 @@ func (e *Index) Close() error { return nil }
 // Index projects the artifact's nsid into the core proj_ext store. It
 // reads the "nsid" key from Manifest.Ext; when present and non-empty it
 // returns a single PocketExt projection (field "nsid"), which the core
-// stamps with the manifest digest and ext_name="namespace". A manifest
+// stamps with the manifest digest and ext_name="scrinium.namespace". A manifest
 // with no nsid (most artifacts, system artifacts, nil Ext) is skipped —
 // it simply belongs to no namespace. It writes nothing to its own store.
 func (e *Index) Index(ctx context.Context, sub customindex.Substrate, m domain.Manifest) ([]customindex.Projection, error) {

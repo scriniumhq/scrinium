@@ -29,8 +29,8 @@ func TestExtension_OccupiesIndexAxis(t *testing.T) {
 	if !ok {
 		t.Fatal("CustomIndex() ok = false, want true")
 	}
-	if ci.Name() != "namespace" {
-		t.Errorf("index Name = %q, want namespace", ci.Name())
+	if ci.Name() != "scrinium.namespace" {
+		t.Errorf("index Name = %q, want scrinium.namespace", ci.Name())
 	}
 }
 

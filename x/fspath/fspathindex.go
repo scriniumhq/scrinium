@@ -30,7 +30,7 @@ const (
 )
 
 // Name is the stable custom index identifier.
-const Name = "scrinium.fspathindex"
+const Name = "scrinium.fspath"
 
 // schemaVersion is the on-disk layout version. Bump and add a
 // migration switch in Setup whenever the table layout changes.

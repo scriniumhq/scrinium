@@ -91,8 +91,8 @@ func TestIndex_UnindexNoop(t *testing.T) {
 
 func TestIndex_Contract(t *testing.T) {
 	e := NewIndex(nil)
-	if e.Name() != "namespace" {
-		t.Errorf("Name = %q, want namespace", e.Name())
+	if e.Name() != "scrinium.namespace" {
+		t.Errorf("Name = %q, want scrinium.namespace", e.Name())
 	}
 	if err := e.Setup(context.Background(), nil, 0); err != nil {
 		t.Errorf("Setup(0): %v", err)
