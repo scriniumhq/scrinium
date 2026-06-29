@@ -118,7 +118,7 @@ func runServe(args []string) int {
 		BrowsePrefix:  *browsePrefix,
 		Roots:         browseRoots,
 	})
-	webHandler.RegisterDecoder(vfsmetaDecoder{})
+	webHandler.SetPresenters(asm.SchemaPresenters())
 	webHandler.SetStatsProvider(htmlStats)
 	webHandler.SetLogger(log)
 

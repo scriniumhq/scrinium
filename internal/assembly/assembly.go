@@ -11,6 +11,7 @@ import (
 	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
 	"scrinium.dev/extension"
+	"scrinium.dev/present"
 	"scrinium.dev/projection"
 )
 
@@ -26,6 +27,11 @@ type Assembly interface {
 	// they occupy: the raw StoreIndex (with its mutating
 	// IndexManifest/DeletePacked) and the raw Driver stay internal.
 	Extensions() []extension.Descriptor
+
+	// SchemaPresenters maps each presentable Ext-schema key to its
+	// presenter, assembled from the installed extensions' SchemaPresenter
+	// capability (ADR-109). Handed to surfaces that render schema blocks.
+	SchemaPresenters() present.Registry
 
 	// Projection is the read-side View plus the optional read/write
 	// FSOps facade, bundled. Nil when the assembly was built without a
@@ -116,6 +122,7 @@ type asm struct {
 	sched        agent.Scheduler        // built-in scheduler; nil unless WithStandardScheduler
 	cronParser   agent.CronParser       // nil unless a cron adapter was enabled
 	extensions   []extension.Descriptor // loaded extensions, for diagnostics
+	presenters   present.Registry       // schema-key → presenter, assembled from extensions (ADR-109)
 }
 
 var _ Assembly = (*asm)(nil)
@@ -137,6 +144,7 @@ func New(
 	sched agent.Scheduler,
 	cronParser agent.CronParser,
 	exts []extension.Descriptor,
+	presenters present.Registry,
 ) Assembly {
 	return &asm{
 		store:        st,
@@ -151,6 +159,7 @@ func New(
 		sched:        sched,
 		cronParser:   cronParser,
 		extensions:   exts,
+		presenters:   presenters,
 	}
 }
 
@@ -163,6 +172,8 @@ func (a *asm) Info() Info                         { return a.info }
 // units. The raw index is held only internally (a.index) and never
 // handed out.
 func (a *asm) Extensions() []extension.Descriptor { return a.extensions }
+
+func (a *asm) SchemaPresenters() present.Registry { return a.presenters }
 
 func (a *asm) RecoveryKit() ([]byte, bool) {
 	if len(a.recoveryKit) == 0 {
