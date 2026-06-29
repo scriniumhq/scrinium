@@ -24,6 +24,7 @@ import (
 	"scrinium.dev/event"
 	"scrinium.dev/extension"
 	"scrinium.dev/internal/uri"
+	"scrinium.dev/present"
 	"scrinium.dev/projection"
 )
 
@@ -136,6 +137,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	// the composition root unions them with the native views and feeds the
 	// projection below. Root is unique per view.
 	providedViews := map[string]customindex.ProvidedView{}
+	presenters := present.Registry{}
 	for _, e := range exts {
 		loadedExts = append(loadedExts, e.Descriptor())
 		if ci, ok := e.CustomIndex(); ok {
@@ -150,6 +152,14 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 						return nil, fmt.Errorf("scrinium: view %q provided by more than one extension", pv.Root)
 					}
 					providedViews[pv.Root] = pv
+				}
+			}
+			if sp, ok := ci.(present.SchemaPresenter); ok {
+				for _, sc := range sp.PresentedSchemas() {
+					if _, dup := presenters[sc.Key]; dup {
+						return nil, fmt.Errorf("scrinium: schema %q presented by more than one extension", sc.Key)
+					}
+					presenters[sc.Key] = sc
 				}
 			}
 		}
@@ -465,7 +475,7 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 		info.ReadOnly = effProj.ReadOnly
 	}
 
-	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus, sched, aw.cronParser, loadedExts), nil
+	return New(st, idx, proj, mountSession, info, kit, closeFn, agentDeps, bus, sched, aw.cronParser, loadedExts, presenters), nil
 }
 
 // agentCfg returns the WithAgentConfig override for kind, or nil.

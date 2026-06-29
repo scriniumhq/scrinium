@@ -11,6 +11,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/slogx"
+	"scrinium.dev/present"
 	"scrinium.dev/projection"
 )
 
@@ -135,11 +136,11 @@ type Handler struct {
 	// builder so navigation stays inside the browser surface.
 	prefix string
 
-	// decoders maps a Manifest.Ext schema key (e.g. "vfsmeta") to
-	// the SchemaDecoder that knows how to render it. nil until the
-	// host calls RegisterDecoder. Lookup on the request hot
-	// path is cheap (small map, no contention).
-	decoders map[string]SchemaDecoder
+	// presenters maps a Manifest.Ext schema key (e.g. "vfsmeta") to
+	// its presenter (ADR-109), assembled from the installed extensions
+	// and handed in via SetPresenters. nil-safe to read. Lookup on the
+	// request hot path is cheap (small map, no contention).
+	presenters present.Registry
 
 	// statsProvider, when set, supplies the live data for the
 	// /_stats HTML page. nil disables the page (404). The

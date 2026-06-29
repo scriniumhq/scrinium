@@ -19,46 +19,52 @@ import (
 	"scrinium.dev/cmd/internal/humanize"
 	"scrinium.dev/domain"
 	"scrinium.dev/domain/vfsmeta"
+	"scrinium.dev/present"
 	"scrinium.dev/projection"
 	"scrinium.dev/projection/pathx"
 )
 
-// SchemaDecoder is the contract for plugging schema-aware
-// rendering into the artifact details page. Daemons register
-// decoders at startup via Handler.RegisterDecoder; the web pkg
-// itself ships none — it stays schema-agnostic so any host
-// (FUSE, WebDAV, future ones) can install whatever they care
-// about.
-//
-// Key is the schema's key in Manifest.Ext (e.g. "vfsmeta",
-// "email", "acme.archive"). Render receives the full Ext object
-// and pulls its own key from it, producing an HTML fragment for
-// the schema; the web pkg slots it into the artifact page's
-// "Schema" section.
-//
-// Decoder errors don't break the page — the handler falls back
-// to the generic JSON view and notes the error inline.
-type SchemaDecoder interface {
-	Key() string
-	Render(ext json.RawMessage) (template.HTML, error)
+// SetPresenters installs the schema-presenter registry (ADR-109),
+// assembled from the installed extensions and handed in by the host at
+// boot. The web pkg ships no presenter of its own — it stays
+// schema-agnostic and renders whatever Representation a presenter
+// returns. Set once before serving; concurrent calls during request
+// handling are not supported.
+func (h *Handler) SetPresenters(reg present.Registry) { h.presenters = reg }
+
+// renderSchema turns a format-neutral present.Representation into the
+// HTML fragment slotted into the artifact page's "Schema" section. The
+// markup mirrors the prior per-schema rendering: a label/value table with
+// machine-token kinds (path, mode, ref, time, bytes) shown monospace.
+// Title and Ref are not surfaced here (other surfaces may use them).
+func renderSchema(rep present.Representation) template.HTML {
+	var b strings.Builder
+	b.WriteString(`<table class="schema-table"><tbody>`)
+	for _, f := range rep.Fields {
+		cls := "value"
+		if monoKind(f.Kind) {
+			cls += " mono"
+		}
+		fmt.Fprintf(&b, `<tr><td class="label">%s</td><td class="%s">%s</td></tr>`,
+			template.HTMLEscapeString(f.Label), cls, template.HTMLEscapeString(f.Value))
+	}
+	b.WriteString(`</tbody></table>`)
+	return template.HTML(b.String())
 }
 
-// RegisterDecoder installs a schema decoder. Subsequent calls
-// with the same Key overwrite the previous registration —
-// the daemon sets up its decoders at boot, in a fixed order;
-// later, last-write-wins is the simplest contract.
-//
-// Concurrent calls during request handling are not supported;
-// register decoders before mounting the handler.
-func (h *Handler) RegisterDecoder(d SchemaDecoder) {
-	if h.decoders == nil {
-		h.decoders = map[string]SchemaDecoder{}
+// monoKind reports whether a value is a machine token best shown
+// monospace (path, ref, mode, time, byte size) vs prose/number.
+func monoKind(k present.Kind) bool {
+	switch k {
+	case present.Path, present.Ref, present.Mode, present.Time, present.Bytes:
+		return true
+	default:
+		return false
 	}
-	h.decoders[d.Key()] = d
 }
 
 // extKeys reads the top-level keys of a Manifest.Ext object so the
-// handler can dispatch each schema block to its registered decoder.
+// handler can dispatch each schema block to its registered presenter.
 // Manifest.Ext is a JSON object keyed by schema name ("vfsmeta",
 // "namespace", "email", ...); a non-object or empty Ext yields no keys.
 func extKeys(ext json.RawMessage) []string {
@@ -525,12 +531,12 @@ type artifactPageData struct {
 	Related []relatedView
 
 	// Schema renders one of:
-	//   - SchemaHTML — when a registered decoder claimed one of
-	//     the Ext schema keys. Trusted HTML, the decoder owns it.
-	//   - SchemaJSON — pretty-printed fallback when no decoder
-	//     applied or the decoder errored.
+	//   - SchemaHTML — when a registered presenter claimed one of
+	//     the Ext schema keys. Trusted HTML, the presenter owns it.
+	//   - SchemaJSON — pretty-printed fallback when no presenter
+	//     applied or the presenter declined/errored.
 	//   - SchemaError — note shown above the JSON when a
-	//     decoder explicitly returned an error.
+	//     presenter explicitly returned an error.
 	SchemaKind  string
 	SchemaHTML  template.HTML
 	SchemaJSON  string
@@ -677,31 +683,40 @@ func (h *Handler) buildArtifactData(ctx context.Context, m domain.Manifest) (art
 
 	// Schema rendering targets the engine-custom index block (Ext
 	// per ADR-54), a JSON object keyed by schema name where vfsmeta
-	// and similar schemas live. Three branches:
+	// and similar schemas live. A presenter (ADR-109), supplied by the
+	// schema's owning extension and handed in via SetPresenters, turns
+	// the matched block into a Representation we render to HTML. Three
+	// branches:
 	//
-	//   1. Ext is empty → no Schema section.
-	//   2. A key in Ext matches a registered decoder → render
-	//      through the decoder (it pulls its own key from Ext); on
-	//      error, fall back to JSON with the error noted.
-	//   3. Otherwise → pretty JSON view, no schema highlighted.
+	//   1. No Ext key matches a registered presenter → pretty JSON.
+	//   2. The presenter errors or declines the payload → pretty JSON
+	//      (with the error noted, if any).
+	//   3. The presenter returns a Representation → render it.
 	if len(m.Ext) > 0 {
-		var dec SchemaDecoder
+		var (
+			sc    present.Schema
+			found bool
+		)
 		for _, k := range extKeys(m.Ext) {
-			if d, ok := h.decoders[k]; ok {
-				dec, data.SchemaKind = d, k
+			if pr, ok := h.presenters.Lookup(k); ok {
+				sc, data.SchemaKind, found = pr, k, true
 				break
 			}
 		}
-		if dec != nil {
-			rendered, err := dec.Render(m.Ext)
-			if err != nil {
+		switch {
+		case !found:
+			data.SchemaJSON = prettyJSON(m.Ext)
+		default:
+			rep, ok, err := sc.Present(m.Ext)
+			switch {
+			case err != nil:
 				data.SchemaError = err.Error()
 				data.SchemaJSON = prettyJSON(m.Ext)
-			} else {
-				data.SchemaHTML = rendered
+			case ok:
+				data.SchemaHTML = renderSchema(rep)
+			default:
+				data.SchemaJSON = prettyJSON(m.Ext)
 			}
-		} else {
-			data.SchemaJSON = prettyJSON(m.Ext)
 		}
 	}
 

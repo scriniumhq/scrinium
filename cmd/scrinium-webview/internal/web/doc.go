@@ -9,8 +9,9 @@
 // It never speaks WebDAV — it only consumes a small FS-shaped
 // interface (BackingFS below) that the daemon implements on
 // top of webdavFS. Schema-aware rendering of artifact metadata
-// is plugged in via SchemaDecoder, registered at daemon
-// startup so the web pkg itself stays schema-agnostic.
+// comes from the extensions' present.SchemaPresenter capability
+// (ADR-109), handed in by the daemon (SetPresenters) so the web
+// pkg itself stays schema-agnostic.
 //
 // The split happened in the docs/web-fase-1 milestone — earlier
 // versions kept the listing in the cmd top-level browser.go.

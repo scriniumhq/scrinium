@@ -41,6 +41,7 @@ import (
 	"scrinium.dev/event"
 	"scrinium.dev/extension"
 	"scrinium.dev/internal/assembly"
+	"scrinium.dev/present"
 	"scrinium.dev/projection"
 )
 
@@ -143,6 +144,11 @@ func (c *ScriniumClient) Close() error {
 // client deals in extensions, not in the index/store axes they occupy;
 // the raw StoreIndex is intentionally never surfaced.
 func (c *ScriniumClient) Extensions() []extension.Descriptor { return c.asm.Extensions() }
+
+// SchemaPresenters returns the schema-key → presenter registry assembled
+// from the installed extensions (ADR-109), for surfaces that render Ext
+// schema blocks.
+func (c *ScriniumClient) SchemaPresenters() present.Registry { return c.asm.SchemaPresenters() }
 
 // RecoveryKit returns the recovery-kit bytes produced when this client
 // freshly initialised an encrypted store, and true. For a store that
