@@ -57,11 +57,6 @@ func (e *Index) Name() string { return indexName }
 // SchemaVersion returns the projection layout version.
 func (e *Index) SchemaVersion() int { return indexSchemaVersion }
 
-// Subscribe returns no event subscriptions: the index populates proj_ext
-// through the Indexer capability (Index/Unindex), which the core runs in
-// the index-write and delete transactions — not via the Apply event path.
-func (e *Index) Subscribe() []customindex.EventKind { return nil }
-
 // Setup runs once per registration. The index keeps no own tables, so
 // there is nothing to create or migrate; it only rejects an unknown
 // stored version.
@@ -72,13 +67,6 @@ func (e *Index) Setup(ctx context.Context, sub customindex.Substrate, oldVersion
 	default:
 		return fmt.Errorf("namespace index: unsupported old schema version: %d", oldVersion)
 	}
-}
-
-// Apply is unreachable: Subscribe declares no events. It satisfies
-// customindex.CustomIndex and fails loudly if a backend regression ever
-// dispatches to a non-subscriber.
-func (e *Index) Apply(ctx context.Context, sub customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
-	return fmt.Errorf("namespace index: Apply called for %s but the index subscribes to no events (it projects via the Indexer capability)", kind)
 }
 
 // Close releases index-side resources. The index holds none.

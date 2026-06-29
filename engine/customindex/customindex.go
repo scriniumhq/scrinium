@@ -21,13 +21,6 @@ type CustomIndex interface {
 	// the custom index migrates.
 	SchemaVersion() int
 
-	// Subscribe returns the event kinds this custom index wants to
-	// observe. An empty slice means "no subscriptions" — useful
-	// for read-only custom indexes that initialise data in Setup
-	// and never react to mutations. Called once at Register;
-	// the result is cached.
-	Subscribe() []EventKind
-
 	// Setup runs once per registration, inside the registration
 	// transaction. oldVersion is 0 on the first registration; a
 	// positive value is the persisted SchemaVersion from a
@@ -35,15 +28,26 @@ type CustomIndex interface {
 	// SchemaVersion().
 	Setup(ctx context.Context, store Substrate, oldVersion int) error
 
-	// Apply is invoked for each subscribed event, inside the
-	// backend's transaction. Mutations through store land in
-	// the same transaction as the main index write; an error
-	// returned here aborts both.
-	Apply(ctx context.Context, store Substrate, kind EventKind, args EventArgs) error
-
 	// Close releases custom index-side resources. Backend storage
 	// remains owned by the StoreIndex.
 	Close() error
+}
+
+// Observer is an OPTIONAL capability (detected by assertion, ADR-88) for a
+// CustomIndex that must react to index-level events outside the projection
+// model. Most custom indexes do not implement it — the Indexer capability
+// (Index/Unindex) covers the common projection case. The two existing
+// EventKinds correspond exactly to IndexManifest/DeleteManifest; Observer is
+// only needed when the reaction is not expressible as projected keys.
+type Observer interface {
+	// Subscribe returns the event kinds this index observes. Called once
+	// at Register; the result is cached.
+	Subscribe() []EventKind
+
+	// Apply is invoked for each subscribed event, inside the backend's
+	// transaction. Mutations through store land in the same transaction
+	// as the main index write; an error returned here aborts both.
+	Apply(ctx context.Context, store Substrate, kind EventKind, args EventArgs) error
 }
 
 // EventKind names an index-level operation a custom index can

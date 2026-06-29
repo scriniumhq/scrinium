@@ -71,14 +71,6 @@ func (e *CustomIndex) Name() string { return Name }
 // SchemaVersion returns the current data layout version.
 func (e *CustomIndex) SchemaVersion() int { return schemaVersion }
 
-// Subscribe returns no event subscriptions: fspathindex populates and
-// clears its own path tree through the Indexer capability (Index /
-// Unindex), which the core runs inside the index-write and delete
-// transactions — not through the Subscribe/Apply event path. Returning
-// the empty slice keeps the backend from double-dispatching (it would
-// otherwise call both Index and Apply on the same write).
-func (e *CustomIndex) Subscribe() []customindex.EventKind { return nil }
-
 // Setup runs once per registration. v1 is initial; nothing to
 // migrate on a fresh DB or on an existing v1.
 func (e *CustomIndex) Setup(ctx context.Context, sub customindex.Substrate, oldVersion int) error {
@@ -92,14 +84,6 @@ func (e *CustomIndex) Setup(ctx context.Context, sub customindex.Substrate, oldV
 	}
 	e.sub = sub
 	return nil
-}
-
-// Apply is unreachable: Subscribe declares no events, so the backend
-// never dispatches here. It exists to satisfy customindex.CustomIndex
-// and fails loudly if a backend regression ever dispatches to a
-// non-subscriber.
-func (e *CustomIndex) Apply(ctx context.Context, sub customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
-	return fmt.Errorf("fspathindex: Apply called for %s but the index subscribes to no events (it writes via the Indexer capability)", kind)
 }
 
 // Close releases custom index-side resources. Backend storage stays

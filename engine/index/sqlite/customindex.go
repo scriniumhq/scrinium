@@ -120,8 +120,14 @@ func (r *customIndexRegistry) Register(ctx context.Context, ci customindex.Custo
 	// new Register call and the new Subscribe() result wins.
 	r.idx.ciByName[name] = ci
 	r.idx.ciSubstrates[name] = sub
-	for _, kind := range ci.Subscribe() {
-		r.idx.ciByKind[kind] = append(r.idx.ciByKind[kind], ci)
+	// Observer is optional (ADR-88: capability by assertion). Only an index
+	// that implements it subscribes; Indexer-only indexes never dispatch
+	// through Apply. ciByKind stores the CustomIndex (Name() is needed at
+	// dispatch); membership guarantees it also satisfies Observer.
+	if obs, ok := ci.(customindex.Observer); ok {
+		for _, kind := range obs.Subscribe() {
+			r.idx.ciByKind[kind] = append(r.idx.ciByKind[kind], ci)
+		}
 	}
 	return nil
 }
@@ -451,9 +457,15 @@ func (i *Index) dispatchCustomIndexes(
 ) error {
 	subs := i.snapshotSubscribers(kind)
 	for _, ext := range subs {
+		obs, ok := ext.(customindex.Observer)
+		if !ok {
+			// Only Observers are registered into ciByKind; a non-Observer
+			// here would be a backend regression.
+			continue
+		}
 		sub := newSqliteSubstrate(ext.Name())
 		sub.useTx(tx)
-		if err := ext.Apply(ctx, sub, kind, args); err != nil {
+		if err := obs.Apply(ctx, sub, kind, args); err != nil {
 			return fmt.Errorf("custom index %q apply (%s): %w",
 				ext.Name(), kind.String(), err)
 		}
