@@ -3,12 +3,14 @@ package web
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/internal/slogx"
 	"scrinium.dev/projection"
 )
 
@@ -143,6 +145,11 @@ type Handler struct {
 	// /_stats HTML page. nil disables the page (404). The
 	// host typically sets one at boot via SetStatsProvider.
 	statsProvider StatsProvider
+
+	// log receives render failures (Error) — never nil after
+	// NewHandler, which seeds it with the discard logger so call
+	// sites need no guard. The host overrides it via SetLogger.
+	log *slog.Logger
 }
 
 // NewHandler builds a Handler. Empty BrowsePrefix is rejected —
@@ -157,12 +164,17 @@ func NewHandler(fs BackingFS, clean PathCleaner, cfg Config) *Handler {
 		clean:  clean,
 		cfg:    cfg,
 		prefix: prefix,
+		log:    slogx.OrDiscard(nil),
 	}
 }
 
 // Prefix returns the normalised URL prefix (leading slash, no
 // trailing slash). Useful for daemons setting up the mux.
 func (h *Handler) Prefix() string { return h.prefix }
+
+// SetLogger installs the logger render failures are reported to. Passing
+// nil restores the silent discard logger. Set once at boot, before serving.
+func (h *Handler) SetLogger(l *slog.Logger) { h.log = slogx.OrDiscard(l) }
 
 // ServeHTTP routes within the browser surface. Today only
 // directory listings, file streaming, and artifact details

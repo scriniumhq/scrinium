@@ -69,3 +69,39 @@ func (o *Ops) dropParentPendingDirs(path string) {
 		}
 	}
 }
+
+// dropPendingTree removes the pending entry for path and every pending entry
+// beneath it. Called by RemoveTree so a recursive delete also clears virtual
+// sub-directories that were Mkdir-created but never given a real child.
+func (o *Ops) dropPendingTree(path string) {
+	o.pendingDirsMu.Lock()
+	defer o.pendingDirsMu.Unlock()
+	for p := range o.pendingDirs {
+		if p == "" {
+			continue
+		}
+		if pathx.IsUnder(p, path) {
+			delete(o.pendingDirs, p)
+		}
+	}
+}
+
+// renamePendingTree re-keys the pending entry for oldPath and every pending
+// entry beneath it onto the newPath prefix. Used by renamePendingDir to move
+// an empty pending directory (and any nested pending dirs) in one shot. A no-op
+// if oldPath is no longer pending (e.g. a concurrent write gave it a real
+// child); the swap and this check both run under pendingDirsMu.
+func (o *Ops) renamePendingTree(oldPath, newPath string) {
+	o.pendingDirsMu.Lock()
+	defer o.pendingDirsMu.Unlock()
+	var moved []string
+	for p := range o.pendingDirs {
+		if pathx.IsUnder(p, oldPath) {
+			moved = append(moved, p)
+		}
+	}
+	for _, p := range moved {
+		delete(o.pendingDirs, p)
+		o.pendingDirs[newPath+p[len(oldPath):]] = struct{}{}
+	}
+}

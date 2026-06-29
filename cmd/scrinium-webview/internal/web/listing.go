@@ -334,7 +334,7 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, dir strin
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if err := render(w, "listing", data); err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-web: render listing: %v\n", err)
+		h.log.Error("render listing", "err", err)
 	}
 }
 

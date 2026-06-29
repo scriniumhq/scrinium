@@ -62,11 +62,12 @@ type Projection struct {
 
 	// Editing controls in-place edits: "off" (strict CAS), "on", or
 	// "custom" (consult the Allow* flags). Empty = off.
-	Editing       string `yaml:"editing,omitempty" json:"editing,omitempty"`
-	AllowRename   *bool  `yaml:"allowRename,omitempty" json:"allowRename,omitempty"`
-	AllowSetattr  *bool  `yaml:"allowSetattr,omitempty" json:"allowSetattr,omitempty"`
-	AllowTruncate *bool  `yaml:"allowTruncate,omitempty" json:"allowTruncate,omitempty"`
-	AllowAppend   *bool  `yaml:"allowAppend,omitempty" json:"allowAppend,omitempty"`
+	Editing        string `yaml:"editing,omitempty" json:"editing,omitempty"`
+	AllowRename    *bool  `yaml:"allowRename,omitempty" json:"allowRename,omitempty"`
+	AllowSetattr   *bool  `yaml:"allowSetattr,omitempty" json:"allowSetattr,omitempty"`
+	AllowTruncate  *bool  `yaml:"allowTruncate,omitempty" json:"allowTruncate,omitempty"`
+	AllowAppend    *bool  `yaml:"allowAppend,omitempty" json:"allowAppend,omitempty"`
+	AllowDirRename *bool  `yaml:"allowDirRename,omitempty" json:"allowDirRename,omitempty"`
 
 	// ScratchDir / ScratchQuota govern the staging area for in-flight
 	// FSOps writes. Empty dir defaults under a local store; 0 quota is

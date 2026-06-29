@@ -3,9 +3,7 @@ package web
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
 	"strings"
 )
 
@@ -66,6 +64,6 @@ func (h *Handler) serveSystemArtifact(w http.ResponseWriter, r *http.Request, na
 
 	w.Header().Set("Cache-Control", "no-store")
 	if err := render(w, "system", data); err != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-web: render system artifact: %v\n", err)
+		h.log.Error("render system artifact", "err", err)
 	}
 }

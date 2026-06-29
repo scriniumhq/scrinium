@@ -95,7 +95,7 @@ func (h *Handler) serveArtifact(w http.ResponseWriter, r *http.Request, id domai
 		// sub-renders fail — the user sees the unaffected
 		// sections plus the error inline. This mirrors
 		// "best effort" rendering elsewhere in the daemon.
-		fmt.Fprintf(os.Stderr, "scrinium-web: artifact %q render: %v\n", id, renderErr)
+		h.log.Error("artifact render", "id", string(id), "err", renderErr)
 	}
 
 	// Content preview: dispatched on MIME so JSON/XML/CSV/text
@@ -120,7 +120,7 @@ func (h *Handler) serveArtifact(w http.ResponseWriter, r *http.Request, id domai
 
 	w.Header().Set("Cache-Control", "no-store")
 	if execErr := render(w, "artifact", data); execErr != nil {
-		fmt.Fprintf(os.Stderr, "scrinium-web: artifact render: %v\n", execErr)
+		h.log.Error("artifact render", "err", execErr)
 	}
 }
 

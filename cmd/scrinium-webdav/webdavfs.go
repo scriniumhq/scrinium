@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"syscall"
@@ -59,12 +60,12 @@ func (w *webdavFS) Mkdir(ctx context.Context, name string, perm os.FileMode) err
 	if w.rejectJunk && isOSJunk(clean) {
 		return fs.ErrPermission
 	}
-	return w.v.Mkdir(ctx, clean, perm)
+	return notFound(w.v.Mkdir(ctx, clean, perm))
 }
 
 func (w *webdavFS) RemoveAll(ctx context.Context, name string) error {
 	clean := vfs.CleanPath(name)
-	return w.v.RemoveAll(ctx, clean)
+	return notFound(w.v.RemoveTree(ctx, clean))
 }
 
 func (w *webdavFS) Rename(ctx context.Context, oldName, newName string) error {
@@ -73,7 +74,7 @@ func (w *webdavFS) Rename(ctx context.Context, oldName, newName string) error {
 	if w.rejectJunk && isOSJunk(newClean) {
 		return fs.ErrPermission
 	}
-	return w.v.Rename(ctx, oldClean, newClean)
+	return notFound(w.v.Rename(ctx, oldClean, newClean))
 }
 
 func (w *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
@@ -81,7 +82,8 @@ func (w *webdavFS) Stat(ctx context.Context, name string) (os.FileInfo, error) {
 	if w.rejectJunk && isOSJunk(clean) {
 		return nil, fs.ErrNotExist
 	}
-	return w.v.Stat(ctx, clean)
+	fi, err := w.v.Stat(ctx, clean)
+	return fi, notFound(err)
 }
 
 func (w *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
@@ -101,7 +103,7 @@ func (w *webdavFS) OpenFile(ctx context.Context, name string, flag int, perm os.
 	}
 	f, err := w.v.OpenFile(ctx, clean, flag, perm)
 	if err != nil {
-		return nil, err
+		return nil, notFound(err)
 	}
 	return webdavFileAdapter{f}, nil
 }
@@ -126,6 +128,21 @@ func (a webdavFileAdapter) Readdir(count int) ([]os.FileInfo, error) {
 func (a webdavFileAdapter) Stat() (os.FileInfo, error) { return a.f.Stat() }
 
 // --- helpers ---
+
+// notFound collapses a VFS "path does not exist" error onto the canonical
+// fs.ErrNotExist. The VFS returns errs.ErrPathNotFound, which bridges to
+// fs.ErrNotExist under errors.Is — but golang.org/x/net/webdav decides 404 vs
+// 405 with os.IsNotExist, the legacy check that does NOT consult a sentinel's
+// Is method (it only unwraps *PathError/syscall). Passing the bridged error
+// through yields 405 Method Not Allowed on a missing path, which macOS reads as
+// a server fault and retries in a tight storm. Returning the bare sentinel
+// makes os.IsNotExist true -> a clean 404. Other errors pass through.
+func notFound(err error) error {
+	if err != nil && errors.Is(err, fs.ErrNotExist) {
+		return fs.ErrNotExist
+	}
+	return err
+}
 
 // Compile-time guard.
 var _ webdav.FileSystem = (*webdavFS)(nil)

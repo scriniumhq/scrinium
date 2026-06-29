@@ -33,11 +33,12 @@ type Config struct {
 
 	// Editing controls in-place edits: "off" (strict CAS), "on", or
 	// "custom" (consult the Allow* flags). Empty = off.
-	Editing       string
-	AllowRename   *bool
-	AllowSetattr  *bool
-	AllowTruncate *bool
-	AllowAppend   *bool
+	Editing        string
+	AllowRename    *bool
+	AllowSetattr   *bool
+	AllowTruncate  *bool
+	AllowAppend    *bool
+	AllowDirRename *bool
 
 	// ScratchDir is the staging area for in-flight FSOps writes,
 	// already resolved by the caller (empty = none; the engine

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	iofs "io/fs"
+	"log/slog"
 	"os"
 	"syscall"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 	"scrinium.dev/errs"
+	"scrinium.dev/internal/slogx"
 	"scrinium.dev/projection/pathx"
 	"scrinium.dev/projection/vfs"
 )
@@ -26,6 +28,7 @@ import (
 type fuseFS struct {
 	v         *vfs.VFS
 	startedAt time.Time
+	log       *slog.Logger
 }
 
 // node is a single inode at a mount-relative path. path == "" is the
@@ -40,8 +43,28 @@ type node struct {
 	path string
 }
 
-func newRoot(v *vfs.VFS, startedAt time.Time) *node {
-	return &node{fsys: &fuseFS{v: v, startedAt: startedAt}}
+func newRoot(v *vfs.VFS, startedAt time.Time, log *slog.Logger) *node {
+	return &node{fsys: &fuseFS{v: v, startedAt: startedAt, log: slogx.OrDiscard(log)}}
+}
+
+// logOp records a mutation. Success logs at Debug (visible only under
+// --debug); failures log at Error, except the everyday control-flow errnos
+// (a missing target, an existing one, a non-empty dir, a read-only tree, …),
+// which are normal and stay at Debug. Returns e so call sites tail-return it.
+func (n *node) logOp(op, target string, e syscall.Errno) syscall.Errno {
+	if e == 0 {
+		n.fsys.log.Debug("fuse", "op", op, "path", target)
+		return e
+	}
+	level := slog.LevelError
+	switch e {
+	case syscall.ENOENT, syscall.EEXIST, syscall.ENOTEMPTY, syscall.EROFS,
+		syscall.EXDEV, syscall.ENOTDIR, syscall.EISDIR, syscall.EPERM, syscall.ENOSYS:
+		level = slog.LevelDebug
+	}
+	n.fsys.log.LogAttrs(context.Background(), level, "fuse",
+		slog.String("op", op), slog.String("path", target), slog.String("errno", e.Error()))
+	return e
 }
 
 func (n *node) childPath(name string) string {
@@ -124,47 +147,51 @@ func (n *node) Create(ctx context.Context, name string, flags uint32, mode uint3
 	child := n.childPath(name)
 	f, err := n.fsys.v.OpenFileAt(ctx, child, int(flags)|os.O_CREATE, os.FileMode(mode))
 	if err != nil {
-		return nil, nil, 0, errnoFromError(err)
+		return nil, nil, 0, n.logOp("create", child, errnoFromError(err))
 	}
 	fi, err := n.fsys.v.Stat(ctx, child)
 	if err != nil {
 		_ = f.Close()
-		return nil, nil, 0, syscall.EIO
+		return nil, nil, 0, n.logOp("create", child, syscall.EIO)
 	}
 	fillAttr(&out.Attr, fi)
 	ino := inodeForPath(child)
 	c := &node{fsys: n.fsys, path: child}
 	inode := n.NewInode(ctx, c, fs.StableAttr{Mode: fuse.S_IFREG, Ino: ino})
+	n.logOp("create", child, 0)
 	return inode, newVFSFileHandle(f), 0, 0
 }
 
 func (n *node) Mkdir(ctx context.Context, name string, mode uint32, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	child := n.childPath(name)
 	if err := n.fsys.v.Mkdir(ctx, child, os.FileMode(mode)); err != nil {
-		return nil, errnoFromError(err)
+		return nil, n.logOp("mkdir", child, errnoFromError(err))
 	}
 	fi, err := n.fsys.v.Stat(ctx, child)
 	if err != nil {
-		return nil, errnoFromError(err)
+		return nil, n.logOp("mkdir", child, errnoFromError(err))
 	}
 	fillAttr(&out.Attr, fi)
 	ino := inodeForPath(child)
 	c := &node{fsys: n.fsys, path: child}
+	n.logOp("mkdir", child, 0)
 	return n.NewInode(ctx, c, fs.StableAttr{Mode: fuse.S_IFDIR, Ino: ino}), 0
 }
 
 func (n *node) Unlink(ctx context.Context, name string) syscall.Errno {
-	if err := n.fsys.v.RemoveAll(ctx, n.childPath(name)); err != nil {
-		return errnoFromError(err)
+	child := n.childPath(name)
+	if err := n.fsys.v.RemoveAll(ctx, child); err != nil {
+		return n.logOp("unlink", child, errnoFromError(err))
 	}
-	return 0
+	return n.logOp("unlink", child, 0)
 }
 
 func (n *node) Rmdir(ctx context.Context, name string) syscall.Errno {
-	if err := n.fsys.v.RemoveAll(ctx, n.childPath(name)); err != nil {
-		return errnoFromError(err)
+	child := n.childPath(name)
+	if err := n.fsys.v.RemoveAll(ctx, child); err != nil {
+		return n.logOp("rmdir", child, errnoFromError(err))
 	}
-	return 0
+	return n.logOp("rmdir", child, 0)
 }
 
 func (n *node) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
@@ -172,16 +199,17 @@ func (n *node) Rename(ctx context.Context, name string, newParent fs.InodeEmbedd
 	if !ok {
 		return syscall.EXDEV
 	}
-	if err := n.fsys.v.Rename(ctx, n.childPath(name), np.childPath(newName)); err != nil {
-		return errnoFromError(err)
+	from, to := n.childPath(name), np.childPath(newName)
+	if err := n.fsys.v.Rename(ctx, from, to); err != nil {
+		return n.logOp("rename", from+" -> "+to, errnoFromError(err))
 	}
-	return 0
+	return n.logOp("rename", from+" -> "+to, 0)
 }
 
 func (n *node) Setattr(ctx context.Context, fh fs.FileHandle, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
 	if size, ok := in.GetSize(); ok {
 		if err := n.fsys.v.Truncate(ctx, n.path, int64(size)); err != nil {
-			return errnoFromError(err)
+			return n.logOp("setattr", n.path, errnoFromError(err))
 		}
 	}
 	var attrs vfs.Attrs
@@ -208,15 +236,15 @@ func (n *node) Setattr(ctx context.Context, fh fs.FileHandle, in *fuse.SetAttrIn
 	}
 	if changed {
 		if err := n.fsys.v.Setattr(ctx, n.path, attrs); err != nil {
-			return errnoFromError(err)
+			return n.logOp("setattr", n.path, errnoFromError(err))
 		}
 	}
 	fi, err := n.fsys.v.Stat(ctx, n.path)
 	if err != nil {
-		return errnoFromError(err)
+		return n.logOp("setattr", n.path, errnoFromError(err))
 	}
 	fillAttr(&out.Attr, fi)
-	return 0
+	return n.logOp("setattr", n.path, 0)
 }
 
 // --- helpers ---
