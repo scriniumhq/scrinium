@@ -3,6 +3,7 @@ package assembly
 import (
 	"context"
 
+	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/event"
 	"scrinium.dev/extension"
@@ -65,6 +66,7 @@ func Build(ctx context.Context, cfg Config, opts ...BuildOption) (Assembly, erro
 		schedules:    o.schedules,
 		agentConfigs: o.agentConfigs,
 		extensions:   o.extensions,
+		passphrase:   o.passphrase,
 	})
 }
 
@@ -93,6 +95,10 @@ type Options struct {
 	// They are installed alongside any registered process-wide
 	// (RegisterExtension); the assembler special-cases none (ADR-88/98).
 	extensions []extension.Extension
+	// passphrase, when set via WithPassphrase, supplies the encryption
+	// passphrase provider directly (imperative path); it takes precedence
+	// over one derived from the policy.
+	passphrase domain.PassphraseProvider
 }
 
 // SetCronParser installs the cron expression parser used by ScheduleCron.
@@ -100,6 +106,13 @@ type Options struct {
 // calls it from the option it exports); applications do not call it
 // directly.
 func (o *Options) SetCronParser(p agent.CronParser) { o.cronParser = p }
+
+// WithPassphrase supplies the encryption passphrase provider directly
+// (imperative path), taking precedence over a policy-derived one. Use it to
+// open or unlock an encrypted store without a policy declaring the passphrase.
+func WithPassphrase(p domain.PassphraseProvider) BuildOption {
+	return func(o *Options) { o.passphrase = p }
+}
 
 // WithMode sets the open/init behaviour (default ModeOpenOrInit).
 func WithMode(m Mode) BuildOption {

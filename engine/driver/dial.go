@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 
@@ -16,7 +17,7 @@ import (
 // receives the *url.URL and is responsible for translating
 // scheme-specific parts (host, path, query) into driver
 // configuration.
-type Dialer func(u *url.URL) (Driver, error)
+type Dialer func(ctx context.Context, u *url.URL, opts ...DialOption) (Driver, error)
 
 // dialers holds the registered URI scheme handlers. Populated
 // by package init() in driver/<scheme> packages, read by
@@ -70,7 +71,7 @@ func RegisteredSchemes() []string {
 //   - URL parse failure               → wrapped url.Parse error
 //   - unregistered scheme             → "scheme X not registered"
 //   - dialer-specific failures        → wrapped from the dialer
-func DialDriver(rawURI string) (Driver, error) {
+func DialDriver(ctx context.Context, rawURI string, opts ...DialOption) (Driver, error) {
 	if rawURI == "" {
 		return nil, fmt.Errorf("driver: empty URI")
 	}
@@ -81,7 +82,7 @@ func DialDriver(rawURI string) (Driver, error) {
 		if err != nil {
 			return nil, fmt.Errorf("driver: %w", err)
 		}
-		return dialBarePath(path)
+		return dialBarePath(ctx, path, opts...)
 	}
 
 	u, err := url.Parse(rawURI)
@@ -94,7 +95,7 @@ func DialDriver(rawURI string) (Driver, error) {
 		return nil, fmt.Errorf("driver: scheme %q not registered (import driver/%s to enable; available: %v)",
 			u.Scheme, u.Scheme, RegisteredSchemes())
 	}
-	return d(u)
+	return d(ctx, u, opts...)
 }
 
 // dialBarePath synthesises a file:// URL out of a bare path
@@ -102,11 +103,11 @@ func DialDriver(rawURI string) (Driver, error) {
 // rather than calling localfs.New directly keeps the dial
 // path uniform — every Driver creation goes through the
 // registered file dialer.
-func dialBarePath(absPath string) (Driver, error) {
+func dialBarePath(ctx context.Context, absPath string, opts ...DialOption) (Driver, error) {
 	d, ok := dialers.Get("file")
 	if !ok {
 		return nil, fmt.Errorf("driver: bare path requires the file:// scheme but it is not registered (import driver/localfs)")
 	}
 	u := &url.URL{Scheme: "file", Path: absPath}
-	return d(u)
+	return d(ctx, u, opts...)
 }

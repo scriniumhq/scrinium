@@ -93,15 +93,15 @@ func TestNewCheckpoint_RequiresDeps(t *testing.T) {
 	}
 }
 
-func TestCheckpoint_TakeCheckpoint_PublishesToCAS(t *testing.T) {
+func TestCheckpoint_RunNow_PublishesToCAS(t *testing.T) {
 	f := newCheckpointFixture(t)
 	f.put(t, "artifact one")
 	f.put(t, "artifact two")
 
 	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{})
-	stats, err := a.TakeCheckpoint(context.Background())
+	stats, err := a.RunNow(context.Background())
 	if err != nil {
-		t.Fatalf("TakeCheckpoint: %v", err)
+		t.Fatalf("RunNow: %v", err)
 	}
 	if stats.CheckpointID == "" {
 		t.Error("empty CheckpointID")
@@ -144,9 +144,9 @@ func TestCheckpoint_RetentionPrunesOldest(t *testing.T) {
 	var ids []string
 	for i := 0; i < 3; i++ {
 		f.put(t, "payload variation "+string(rune('A'+i)))
-		st, err := a.TakeCheckpoint(context.Background())
+		st, err := a.RunNow(context.Background())
 		if err != nil {
-			t.Fatalf("TakeCheckpoint #%d: %v", i, err)
+			t.Fatalf("RunNow #%d: %v", i, err)
 		}
 		ids = append(ids, st.CheckpointID)
 	}
@@ -168,8 +168,8 @@ func TestCheckpoint_BlockedByForeignLease(t *testing.T) {
 	f.put(t, "payload")
 	leasefx.StageForeign(t, f.drv, "store.agent.checkpoint.lease", "other-host", "Checkpoint", time.Hour)
 	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{})
-	if _, err := a.TakeCheckpoint(context.Background()); err == nil {
-		t.Fatal("TakeCheckpoint with a live foreign lease = nil, want lease-held failure")
+	if _, err := a.RunNow(context.Background()); err == nil {
+		t.Fatal("RunNow with a live foreign lease = nil, want lease-held failure")
 	}
 }
 
@@ -179,8 +179,8 @@ func TestCheckpoint_CancelledContext(t *testing.T) {
 	a := newCheckpoint(t, f, checkpoint.CheckpointConfig{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := a.TakeCheckpoint(ctx); err == nil {
-		t.Fatal("TakeCheckpoint(cancelled) = nil, want error")
+	if _, err := a.RunNow(ctx); err == nil {
+		t.Fatal("RunNow(cancelled) = nil, want error")
 	}
 }
 

@@ -48,10 +48,10 @@ type MigrationStats struct {
 type MigrationAgent interface {
 	agent.Agent
 
-	// Trigger forces finalization for the given dest outside the schedule
+	// RunNow forces finalization for the given dest outside the schedule
 	// (e.g. an external "ship what's accumulated now" signal). A plain Run
 	// is one queue pass; periodicity is provided by the scheduler.
-	Trigger(ctx context.Context, dest string) error
+	RunNow(ctx context.Context, dest string) error
 }
 
 type migrationAgent struct {
@@ -76,7 +76,7 @@ func (a *migrationAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 	return nil, errs.ErrNotImplemented
 }
 
-func (a *migrationAgent) Trigger(ctx context.Context, dest string) error {
+func (a *migrationAgent) RunNow(ctx context.Context, dest string) error {
 	// TODO(migration): force finalize for dest off-schedule.
 	return errs.ErrNotImplemented
 }

@@ -143,8 +143,8 @@ func TestScopedStore_WalkDelegatesToNSIDProjection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Walk: %v", err)
 	}
-	if inner.extName != "namespace" || inner.field != "nsid" || inner.value != "ns-7" {
-		t.Errorf("WalkByExt query = (%q,%q,%q), want (namespace,nsid,ns-7)", inner.extName, inner.field, inner.value)
+	if inner.extName != "scrinium.namespace" || inner.field != "nsid" || inner.value != "ns-7" {
+		t.Errorf("WalkByExt query = (%q,%q,%q), want (scrinium.namespace,nsid,ns-7)", inner.extName, inner.field, inner.value)
 	}
 	if seen != 2 {
 		t.Errorf("forwarded %d manifests, want 2 (index result set passes through)", seen)
@@ -279,8 +279,8 @@ func TestDeleteNamespace_K3RefusesNonEmpty(t *testing.T) {
 	if err := e.DeleteNamespace(ctx, members, "docs"); !errors.Is(err, ErrNamespaceNotEmpty) {
 		t.Fatalf("DeleteNamespace(non-empty) = %v, want ErrNamespaceNotEmpty", err)
 	}
-	if members.extName != "namespace" || members.field != "nsid" || members.value != string(id) {
-		t.Errorf("membership query = %q/%q/%q, want namespace/nsid/%s",
+	if members.extName != "scrinium.namespace" || members.field != "nsid" || members.value != string(id) {
+		t.Errorf("membership query = %q/%q/%q, want scrinium.namespace/nsid/%s",
 			members.extName, members.field, members.value, id)
 	}
 	v, err := e.Registry().Load(ctx)

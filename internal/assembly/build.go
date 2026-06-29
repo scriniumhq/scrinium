@@ -49,6 +49,9 @@ type agentWiring struct {
 	// extensions are the per-build extensions from WithExtension, installed
 	// alongside the process-wide registry set.
 	extensions []extension.Extension
+	// passphrase, if set via WithPassphrase, overrides the policy-derived
+	// passphrase provider.
+	passphrase domain.PassphraseProvider
 }
 
 // build turns a validated, defaulted Config into an assembled stack. It
@@ -161,6 +164,9 @@ func buildSingle(ctx context.Context, c *Config, mode buildMode, aw agentWiring)
 	pp, err := passphraseProvider(ctx, spec.Policy)
 	if err != nil {
 		return nil, fmt.Errorf("scrinium: passphrase: %w", err)
+	}
+	if aw.passphrase != nil {
+		pp = aw.passphrase // WithPassphrase: option takes precedence over policy
 	}
 
 	// Event bus: shared by the store and the agents the assembler wires,

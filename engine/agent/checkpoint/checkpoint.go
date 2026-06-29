@@ -64,10 +64,10 @@ type CheckpointStats struct {
 type CheckpointAgent interface {
 	agent.Agent
 
-	// TakeCheckpoint forces a checkpoint regardless of Interval and
+	// RunNow forces a checkpoint regardless of Interval and
 	// ArtifactThreshold. Used before critical maintenance
 	// operations (RebuildIndex, MigrateIndex).
-	TakeCheckpoint(ctx context.Context) (CheckpointStats, error)
+	RunNow(ctx context.Context) (CheckpointStats, error)
 }
 
 const (
@@ -163,7 +163,7 @@ func (a *checkpointAgent) Run(ctx context.Context) (*domain.AgentResult, error) 
 }
 
 // maintenanceSpec is the RunLeased configuration shared by Run and
-// TakeCheckpoint: the checkpoint lease (always taken) and the one-shot
+// RunNow: the checkpoint lease (always taken) and the one-shot
 // terminal (EventAgentCompleted on success).
 func (a *checkpointAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
@@ -182,12 +182,12 @@ func checkpointStatsMap(s CheckpointStats) map[string]int64 {
 	return map[string]int64{"db_bytes": s.DBBytes}
 }
 
-// TakeCheckpoint forces a checkpoint regardless of Interval and
+// RunNow forces a checkpoint regardless of Interval and
 // ArtifactThreshold — the ad-hoc entry of the CheckpointAgent interface.
 // It runs the same leased lifecycle as Run (agent.RunLeased, ADR-94):
 // vacuum the index into a temp file, publish it into the CAS under
 // index_checkpoint/<ts> (unindexed), then prune past Retention.
-func (a *checkpointAgent) TakeCheckpoint(ctx context.Context) (CheckpointStats, error) {
+func (a *checkpointAgent) RunNow(ctx context.Context) (CheckpointStats, error) {
 	var stats CheckpointStats
 	_, err := agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), func(ctx context.Context) (map[string]int64, error) {
 		var werr error

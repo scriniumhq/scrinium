@@ -261,6 +261,13 @@ func WithExtension(exts ...extension.Extension) BuildOption {
 	return assembly.WithExtension(exts...)
 }
 
+// WithPassphrase supplies the encryption passphrase provider for opening or
+// unlocking an encrypted store imperatively (Open/Build), without a config
+// policy declaring it. Takes precedence over a policy-derived passphrase.
+func WithPassphrase(p domain.PassphraseProvider) BuildOption {
+	return assembly.WithPassphrase(p)
+}
+
 // LoadYAML / LoadInitYAML / LoadOrInitYAML assemble from a YAML
 // configuration document. JSON variants mirror them. opts are the same
 // build-time options Open/Build accept (e.g. WithExtension), applied on
@@ -287,6 +294,14 @@ func LoadInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (*Scrin
 
 func LoadOrInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (*ScriniumClient, error) {
 	return wrapErr(assembly.LoadOrInitJSON(ctx, data, opts...))
+}
+
+// Explain resolves a YAML/JSON config and returns a human-readable
+// description of the store it would assemble (driver, index, policy,
+// extensions) without building it — for debugging "what does my config
+// produce". Thin facade over the internal assembler.
+func Explain(ctx context.Context, data []byte) ([]byte, error) {
+	return assembly.Explain(ctx, data)
 }
 
 func wrapErr(a assembly.Assembly, err error) (*ScriniumClient, error) {

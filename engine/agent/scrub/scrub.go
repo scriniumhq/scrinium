@@ -58,10 +58,10 @@ type ScrubStats struct {
 type ScrubAgent interface {
 	agent.Agent
 
-	// RunOnce performs one full verification pass over every blob
+	// RunNow performs one full verification pass over every blob
 	// whose last_verified_at is older than MaxAge and returns. Used
 	// for ad hoc runs after media-corruption suspicions.
-	RunOnce(ctx context.Context) (ScrubStats, error)
+	RunNow(ctx context.Context) (ScrubStats, error)
 }
 
 // NewScrubAgent creates a Scrub Agent. Constructed by the assembler
@@ -186,11 +186,11 @@ func (a *scrubAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 	})
 }
 
-// RunOnce performs one verification pass under the scrub lease and
+// RunNow performs one verification pass under the scrub lease and
 // returns the typed stats — the ad-hoc entry of the ScrubAgent
 // interface. Runs the same leased lifecycle as Run (agent.RunLeased,
 // ADR-94).
-func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
+func (a *scrubAgent) RunNow(ctx context.Context) (ScrubStats, error) {
 	var stats ScrubStats
 	_, err := agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), func(ctx context.Context) (map[string]int64, error) {
 		var werr error
@@ -201,7 +201,7 @@ func (a *scrubAgent) RunOnce(ctx context.Context) (ScrubStats, error) {
 }
 
 // maintenanceSpec is the RunLeased configuration shared by Run and
-// RunOnce: the scrub lease (always taken) and the per-cycle terminal.
+// RunNow: the scrub lease (always taken) and the per-cycle terminal.
 func (a *scrubAgent) maintenanceSpec() agent.MaintenanceSpec {
 	return agent.MaintenanceSpec{
 		AgentType:    "scrub",
@@ -305,7 +305,7 @@ func (a *scrubAgent) verify(ctx context.Context) (ScrubStats, error) {
 	}
 
 	if err := agent.FirstNonCtxErr(blobErr, manErr); err != nil {
-		return stats, fmt.Errorf("scrub.Scrub.RunOnce: %w", err)
+		return stats, fmt.Errorf("scrub.Scrub.RunNow: %w", err)
 	}
 	return stats, nil
 }

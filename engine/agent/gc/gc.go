@@ -62,10 +62,10 @@ type GCStats struct {
 type GCAgent interface {
 	agent.Agent
 
-	// RunOnce executes one full Mark+Sweep cycle and returns. Used
+	// RunNow executes one full Mark+Sweep cycle and returns. Used
 	// for manual runs and tests; unlike Run it does not block on
 	// ScanInterval.
-	RunOnce(ctx context.Context) (GCStats, error)
+	RunNow(ctx context.Context) (GCStats, error)
 }
 
 // NewGCAgent creates a GC Agent. Constructed by the assembler with the
@@ -188,10 +188,10 @@ func (a *gcAgent) Run(ctx context.Context) (*domain.AgentResult, error) {
 	})
 }
 
-// RunOnce executes one full Mark+Sweep cycle and returns the typed stats
+// RunNow executes one full Mark+Sweep cycle and returns the typed stats
 // — the manual/test entry of the GCAgent interface. Runs the same leased
 // lifecycle as Run (agent.RunLeased, ADR-94).
-func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
+func (a *gcAgent) RunNow(ctx context.Context) (GCStats, error) {
 	var stats GCStats
 	_, err := agent.RunLeased(ctx, &a.BaseState, a.maintenanceSpec(), func(ctx context.Context) (map[string]int64, error) {
 		var werr error
@@ -202,7 +202,7 @@ func (a *gcAgent) RunOnce(ctx context.Context) (GCStats, error) {
 }
 
 // maintenanceSpec is the RunLeased configuration shared by Run and
-// RunOnce. The lease is conditional: LeaderElection coordinates via
+// RunNow. The lease is conditional: LeaderElection coordinates via
 // gc/lease, SingleHost relies on location.lock and takes none
 // (leaseRequired).
 func (a *gcAgent) maintenanceSpec() agent.MaintenanceSpec {
@@ -242,7 +242,7 @@ func (a *gcAgent) runCycle(ctx context.Context) (GCStats, error) {
 	sweepErr := a.sweep(ctx, grace, &stats)
 
 	if err := agent.FirstNonCtxErr(markErr, sweepErr); err != nil {
-		return stats, fmt.Errorf("gc.GC.RunOnce: %w", err)
+		return stats, fmt.Errorf("gc.GC.RunNow: %w", err)
 	}
 	return stats, nil
 }

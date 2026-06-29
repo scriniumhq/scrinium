@@ -58,11 +58,6 @@ func (e *customIndex) Name() string { return ciName }
 
 func (e *customIndex) SchemaVersion() int { return ciSchemaVersion }
 
-// Subscribe returns no event kinds: the placement map is populated
-// through RecordPack, not derived from index mutations (the per-member
-// entries are not present in EventArgs).
-func (e *customIndex) Subscribe() []customindex.EventKind { return nil }
-
 // Setup captures the long-lived sub for the read/write API. The
 // stored value flips to db-mode once registration commits.
 //
@@ -70,11 +65,6 @@ func (e *customIndex) Subscribe() []customindex.EventKind { return nil }
 // start, rebuild placement by scanning each volume's TOC-blob.
 func (e *customIndex) Setup(ctx context.Context, sub customindex.Substrate, oldVersion int) error {
 	e.sub = sub
-	return nil
-}
-
-// Apply is a no-op: this custom index has no subscriptions.
-func (e *customIndex) Apply(ctx context.Context, sub customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
 	return nil
 }
 

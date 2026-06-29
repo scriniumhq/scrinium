@@ -104,19 +104,6 @@ func TestRegister_DoubleRegister_Rejects(t *testing.T) {
 	}
 }
 
-// --- Subscribe: none (population is via the Indexer capability) ---
-
-func TestSubscribe_None(t *testing.T) {
-	// fspathindex populates and clears its path tree through Index/Unindex,
-	// run by the core inside the index-write and delete transactions — not
-	// via the Subscribe/Apply event path. It therefore declares no
-	// subscriptions; a non-empty result would double-dispatch (the backend
-	// would call both Index and Apply on the same write).
-	if subs := fsExt.NewIndex().Subscribe(); len(subs) != 0 {
-		t.Fatalf("Subscribe: got %d kinds, want 0 (population is via Indexer)", len(subs))
-	}
-}
-
 // --- Index (write-side capability) ---
 
 func TestIndex_VFSMetadata_Stored(t *testing.T) {

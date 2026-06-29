@@ -91,21 +91,14 @@ func TestIndex_UnindexNoop(t *testing.T) {
 
 func TestIndex_Contract(t *testing.T) {
 	e := NewIndex(nil)
-	if e.Name() != "namespace" {
-		t.Errorf("Name = %q, want namespace", e.Name())
-	}
-	if e.Subscribe() != nil {
-		t.Errorf("Subscribe = %v, want nil", e.Subscribe())
+	if e.Name() != "scrinium.namespace" {
+		t.Errorf("Name = %q, want scrinium.namespace", e.Name())
 	}
 	if err := e.Setup(context.Background(), nil, 0); err != nil {
 		t.Errorf("Setup(0): %v", err)
 	}
 	if err := e.Setup(context.Background(), nil, 99); err == nil {
 		t.Error("Setup(99): want unsupported-version error")
-	}
-	// Apply is unreachable for a non-subscriber and must fail loudly.
-	if err := e.Apply(context.Background(), nil, customindex.EventKindManifestIndexed, customindex.EventArgs{}); err == nil {
-		t.Error("Apply: want loud error for non-subscriber")
 	}
 	if err := e.Close(); err != nil {
 		t.Errorf("Close: %v", err)

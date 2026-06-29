@@ -12,9 +12,9 @@ import (
 
 const (
 	// indexName is the custom-index identifier and the proj_ext ext_name
-	// the nsid lands under: Walk(ns) reads ext_name="namespace",
+	// the nsid lands under: Walk(ns) reads ext_name="scrinium.namespace",
 	// field="nsid" (09 §9.2, ADR-79).
-	indexName = "namespace"
+	indexName = "scrinium.namespace"
 
 	// nsidField is the projected field name in proj_ext and the Ext JSON
 	// key the nsid is stamped under on Put.
@@ -33,7 +33,7 @@ const (
 // Index is the namespace custom index (ADR-79/88; 09 §9.2). It occupies
 // the Indexer (write-side) capability and the ViewProvider capability: on
 // each Put it projects the artifact's nsid (read from Manifest.Ext) into
-// the core-maintained proj_ext equality store under ext_name="namespace",
+// the core-maintained proj_ext equality store under ext_name="scrinium.namespace",
 // field="nsid"; and it backs the by-namespace projection view (ADR-98),
 // keyed by nsid with human-name labels from the registry. It keeps NO own
 // tables and exposes no Accessor — Walk(ns) is the core's proj_ext equality
@@ -57,11 +57,6 @@ func (e *Index) Name() string { return indexName }
 // SchemaVersion returns the projection layout version.
 func (e *Index) SchemaVersion() int { return indexSchemaVersion }
 
-// Subscribe returns no event subscriptions: the index populates proj_ext
-// through the Indexer capability (Index/Unindex), which the core runs in
-// the index-write and delete transactions — not via the Apply event path.
-func (e *Index) Subscribe() []customindex.EventKind { return nil }
-
 // Setup runs once per registration. The index keeps no own tables, so
 // there is nothing to create or migrate; it only rejects an unknown
 // stored version.
@@ -74,13 +69,6 @@ func (e *Index) Setup(ctx context.Context, sub customindex.Substrate, oldVersion
 	}
 }
 
-// Apply is unreachable: Subscribe declares no events. It satisfies
-// customindex.CustomIndex and fails loudly if a backend regression ever
-// dispatches to a non-subscriber.
-func (e *Index) Apply(ctx context.Context, sub customindex.Substrate, kind customindex.EventKind, args customindex.EventArgs) error {
-	return fmt.Errorf("namespace index: Apply called for %s but the index subscribes to no events (it projects via the Indexer capability)", kind)
-}
-
 // Close releases index-side resources. The index holds none.
 func (e *Index) Close() error { return nil }
 
@@ -89,7 +77,7 @@ func (e *Index) Close() error { return nil }
 // Index projects the artifact's nsid into the core proj_ext store. It
 // reads the "nsid" key from Manifest.Ext; when present and non-empty it
 // returns a single PocketExt projection (field "nsid"), which the core
-// stamps with the manifest digest and ext_name="namespace". A manifest
+// stamps with the manifest digest and ext_name="scrinium.namespace". A manifest
 // with no nsid (most artifacts, system artifacts, nil Ext) is skipped —
 // it simply belongs to no namespace. It writes nothing to its own store.
 func (e *Index) Index(ctx context.Context, sub customindex.Substrate, m domain.Manifest) ([]customindex.Projection, error) {

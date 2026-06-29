@@ -160,7 +160,7 @@ func (e *Extension) DeleteNamespace(ctx context.Context, members MemberLister, n
 	}
 	found := false
 	errStop := errors.New("stop")
-	werr := members.WalkByExt(ctx, extensionName, nsidField, string(id), func(domain.Manifest) error {
+	werr := members.WalkByExt(ctx, indexName, nsidField, string(id), func(domain.Manifest) error {
 		found = true
 		return errStop
 	})
