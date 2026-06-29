@@ -176,6 +176,23 @@ func (v *VFS) RemoveAll(ctx context.Context, name string) error {
 	return err
 }
 
+// RemoveTree deletes name and, when name is a directory, its entire subtree —
+// the WebDAV DELETE semantics (depth-infinity on a collection, RFC 4918 §9.6).
+// It is separate from RemoveAll because POSIX rmdir — and thus the FUSE Rmdir
+// path RemoveAll serves — must refuse a non-empty directory; only the WebDAV
+// adapter calls this. The mount root and the service-tree root are refused, as
+// in RemoveAll.
+func (v *VFS) RemoveTree(ctx context.Context, name string) error {
+	clean := CleanPath(name)
+	if clean == "" {
+		return errs.ErrEditingDisabled
+	}
+	if isAtServiceRoot(clean, v.routingCfg) {
+		return errs.ErrEditingDisabled
+	}
+	return v.fsops.RemoveTree(ctx, clean)
+}
+
 // Rename moves a path. Cross-tree renames are not supported:
 // destinations under the service prefix are rejected.
 func (v *VFS) Rename(ctx context.Context, oldName, newName string) error {

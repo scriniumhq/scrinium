@@ -65,7 +65,7 @@ func (w *webdavFS) Mkdir(ctx context.Context, name string, perm os.FileMode) err
 
 func (w *webdavFS) RemoveAll(ctx context.Context, name string) error {
 	clean := vfs.CleanPath(name)
-	return notFound(w.v.RemoveAll(ctx, clean))
+	return notFound(w.v.RemoveTree(ctx, clean))
 }
 
 func (w *webdavFS) Rename(ctx context.Context, oldName, newName string) error {
@@ -136,7 +136,7 @@ func (a webdavFileAdapter) Stat() (os.FileInfo, error) { return a.f.Stat() }
 // Is method (it only unwraps *PathError/syscall). Passing the bridged error
 // through yields 405 Method Not Allowed on a missing path, which macOS reads as
 // a server fault and retries in a tight storm. Returning the bare sentinel
-// makes os.IsNotExist true → a clean 404. Other errors pass through.
+// makes os.IsNotExist true -> a clean 404. Other errors pass through.
 func notFound(err error) error {
 	if err != nil && errors.Is(err, fs.ErrNotExist) {
 		return fs.ErrNotExist

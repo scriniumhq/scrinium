@@ -69,3 +69,19 @@ func (o *Ops) dropParentPendingDirs(path string) {
 		}
 	}
 }
+
+// dropPendingTree removes the pending entry for path and every pending entry
+// beneath it. Called by RemoveTree so a recursive delete also clears virtual
+// sub-directories that were Mkdir-created but never given a real child.
+func (o *Ops) dropPendingTree(path string) {
+	o.pendingDirsMu.Lock()
+	defer o.pendingDirsMu.Unlock()
+	for p := range o.pendingDirs {
+		if p == "" {
+			continue
+		}
+		if pathx.IsUnder(p, path) {
+			delete(o.pendingDirs, p)
+		}
+	}
+}
