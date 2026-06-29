@@ -2,6 +2,7 @@ package assembly
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"scrinium.dev/domain"
@@ -140,27 +141,30 @@ type buildState struct {
 // diagnostic Info from the optional namer capabilities, and returns the
 // constructed Assembly.
 func (bs *buildState) assemble(proj *projection.Projection) Assembly {
-	// closeFn unwinds in LIFO order; idempotency is the assembly's job.
+	// closeFn unwinds in dependency order — scheduler first (its ticker
+	// touches the store), then projection, store, index — and collects every
+	// error rather than only the first, so one failing Close cannot mask
+	// another. Idempotency is the assembly's job.
 	closeFn := func() error {
-		var firstErr error
+		var errs []error
 		if bs.sched != nil {
 			bs.stopTicker()
-			if err := bs.sched.Stop(context.Background()); err != nil && firstErr == nil {
-				firstErr = err
+			if err := bs.sched.Stop(context.Background()); err != nil {
+				errs = append(errs, err)
 			}
 		}
 		if proj != nil {
-			if err := proj.Close(); err != nil && firstErr == nil {
-				firstErr = err
+			if err := proj.Close(); err != nil {
+				errs = append(errs, err)
 			}
 		}
-		if err := bs.st.Close(); err != nil && firstErr == nil {
-			firstErr = err
+		if err := bs.st.Close(); err != nil {
+			errs = append(errs, err)
 		}
-		if err := bs.idx.Close(); err != nil && firstErr == nil {
-			firstErr = err
+		if err := bs.idx.Close(); err != nil {
+			errs = append(errs, err)
 		}
-		return firstErr
+		return errors.Join(errs...)
 	}
 
 	info := Info{StoreURI: bs.spec.Driver, Created: bs.created}
