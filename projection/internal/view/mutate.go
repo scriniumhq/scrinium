@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"scrinium.dev/domain"
+	"scrinium.dev/event"
 	"scrinium.dev/projection/pathx"
 )
 
@@ -32,6 +33,12 @@ func (v *View) Add(m domain.Manifest) error {
 	if !v.passesFilter(m) {
 		return nil
 	}
+	// emit runs after v.mu is released (LIFO defers: the Unlock below is
+	// registered later, so it runs first). Publishing the collision events
+	// outside the lock keeps a synchronous subscriber that reads the View
+	// from deadlocking.
+	var events []event.Event
+	defer func() { v.emit(events) }()
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -39,7 +46,7 @@ func (v *View) Add(m domain.Manifest) error {
 	if _, exists := v.artifacts[m.ArtifactID]; exists {
 		return nil
 	}
-	v.indexArtifact(m, false)
+	v.indexArtifact(m, false, &events)
 	return nil
 }
 
@@ -133,6 +140,9 @@ func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 	if v.closed.Load() {
 		return os.ErrClosed
 	}
+	// See Add: collision events are flushed after the lock is released.
+	var events []event.Event
+	defer func() { v.emit(events) }()
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -157,7 +167,7 @@ func (v *View) Move(oldPath, newPath string, m domain.Manifest) error {
 	if _, exists := v.artifacts[m.ArtifactID]; exists {
 		return nil
 	}
-	v.indexArtifact(m, false)
+	v.indexArtifact(m, false, &events)
 	_ = newPath
 	return nil
 }

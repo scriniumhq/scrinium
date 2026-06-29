@@ -20,7 +20,13 @@ import (
 // The caller records rec.paths[root] before calling (a loser still has
 // its path recorded for Remove). The "fresher" rule is CreatedAt
 // descending; on tie the lexicographically larger ArtifactID wins.
-func (v *View) applyCollisionInsert(root RootView, path string, m domain.Manifest, rec *artifactRecord) {
+//
+// Collision events are appended to *events rather than published inline:
+// applyCollisionInsert runs under the View write lock (via indexArtifact
+// from Add/Move/applyDelta), and the synchronous bus would deadlock a
+// subscriber that reads the View. The caller flushes *events with emit
+// after releasing the lock.
+func (v *View) applyCollisionInsert(root RootView, path string, m domain.Manifest, rec *artifactRecord, events *[]event.Event) {
 	owners := v.pathOwner[root]
 	tree := v.trees[root]
 
@@ -46,10 +52,13 @@ func (v *View) applyCollisionInsert(root RootView, path string, m domain.Manifes
 		v.removeFile(tree, path)
 		v.insertFile(tree, path, m)
 		v.pushLoser(root, path, currentRec.manifest)
-		v.publish(event.EventPathCollision, event.PathCollisionPayload{
-			Path:   path,
-			Winner: m.ArtifactID,
-			Loser:  currentOwner,
+		*events = append(*events, event.Event{
+			Type: event.EventPathCollision,
+			Payload: event.PathCollisionPayload{
+				Path:   path,
+				Winner: m.ArtifactID,
+				Loser:  currentOwner,
+			},
 		})
 		v.Stats.CollisionCount++
 		return
@@ -57,10 +66,13 @@ func (v *View) applyCollisionInsert(root RootView, path string, m domain.Manifes
 
 	// Newcomer loses.
 	v.pushLoser(root, path, m)
-	v.publish(event.EventPathCollision, event.PathCollisionPayload{
-		Path:   path,
-		Winner: currentOwner,
-		Loser:  m.ArtifactID,
+	*events = append(*events, event.Event{
+		Type: event.EventPathCollision,
+		Payload: event.PathCollisionPayload{
+			Path:   path,
+			Winner: currentOwner,
+			Loser:  m.ArtifactID,
+		},
 	})
 	v.Stats.CollisionCount++
 }

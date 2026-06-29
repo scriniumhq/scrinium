@@ -59,6 +59,23 @@ func (v *View) publish(eventType string, payload any) {
 	v.bus.Publish(event.Event{Type: eventType, Payload: payload})
 }
 
+// emit publishes a batch of events collected during a locked mutation.
+//
+// It MUST be called only after v.mu has been released: the default bus
+// (event.NewEventBus) delivers synchronously on the calling goroutine, so
+// a subscriber that reads the View from its handler would self-deadlock if
+// emit ran while the write lock was still held. Mutators accumulate
+// collision events into a local slice under the lock and hand it here once
+// unlocked — see Add/Move/applyDelta.
+func (v *View) emit(events []event.Event) {
+	if v.bus == nil {
+		return
+	}
+	for _, e := range events {
+		v.bus.Publish(e)
+	}
+}
+
 // --- Error mapping ---
 
 func mapSourceError(err error) error {
