@@ -92,12 +92,12 @@ func buildSingle(ctx context.Context, c *Config, opts *Options) (_ Assembly, ret
 	}
 
 	bs.mountSession = domain.NewMountSessionID()
-	proj, err := bs.buildProjection()
+	projFacade, err := bs.buildProjection()
 	if err != nil {
 		return nil, err
 	}
 
-	return bs.assemble(proj), nil
+	return bs.assemble(projFacade), nil
 }
 
 // buildState threads the accumulating single-store assembly across the
@@ -140,7 +140,7 @@ type buildState struct {
 // assemble builds the LIFO closeFn over the live resources, fills the
 // diagnostic Info from the optional namer capabilities, and returns the
 // constructed Assembly.
-func (bs *buildState) assemble(proj *projection.Projection) Assembly {
+func (bs *buildState) assemble(projFacade *projection.Projection) Assembly {
 	// closeFn unwinds in dependency order — scheduler first (its ticker
 	// touches the store), then projection, store, index — and collects every
 	// error rather than only the first, so one failing Close cannot mask
@@ -153,8 +153,8 @@ func (bs *buildState) assemble(proj *projection.Projection) Assembly {
 				errs = append(errs, err)
 			}
 		}
-		if proj != nil {
-			if err := proj.Close(); err != nil {
+		if projFacade != nil {
+			if err := projFacade.Close(); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -185,7 +185,7 @@ func (bs *buildState) assemble(proj *projection.Projection) Assembly {
 	return &asm{
 		store:        bs.st,
 		index:        bs.idx,
-		proj:         proj,
+		proj:         projFacade,
 		mountSession: bs.mountSession,
 		info:         info,
 		recoveryKit:  bs.kit,

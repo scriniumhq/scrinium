@@ -58,7 +58,7 @@ type registries struct {
 	extensions *kvreg.Map[ExtensionFactory]
 }
 
-var reg = &registries{
+var globalRegistry = &registries{
 	drivers:    kvreg.New[DriverFactory](),
 	indexes:    kvreg.New[IndexFactory](),
 	stages:     kvreg.New[PipelineStageFactory](),
@@ -70,23 +70,23 @@ var reg = &registries{
 // (e.g. "myco-blob"). Panics on empty scheme, nil factory, or
 // duplicate — a double import or typo fails at startup.
 func RegisterDriver(scheme string, f DriverFactory) {
-	register(reg.drivers, scheme, f, f == nil, "driver")
+	register(globalRegistry.drivers, scheme, f, f == nil, "driver")
 }
 
 // RegisterIndex registers a custom index index under a URI scheme.
 func RegisterIndex(scheme string, f IndexFactory) {
-	register(reg.indexes, scheme, f, f == nil, "index")
+	register(globalRegistry.indexes, scheme, f, f == nil, "index")
 }
 
 // RegisterPipelineStage registers a custom index pipeline stage under a
 // kind (e.g. "mycompany-watermark").
 func RegisterPipelineStage(kind string, f PipelineStageFactory) {
-	register(reg.stages, kind, f, f == nil, "pipeline stage")
+	register(globalRegistry.stages, kind, f, f == nil, "pipeline stage")
 }
 
 // RegisterAgent registers a user background agent under a kind.
 func RegisterAgent(kind string, f AgentFactory) {
-	register(reg.agents, kind, f, f == nil, "agent")
+	register(globalRegistry.agents, kind, f, f == nil, "agent")
 }
 
 // RegisterExtension registers an extension factory under its stable name
@@ -95,7 +95,7 @@ func RegisterAgent(kind string, f AgentFactory) {
 // build pulls the registered set, installs each as a whole (ADR-88), and
 // discovers its index/view/wrapper/agent parts by assertion (ADR-98).
 func RegisterExtension(name string, f ExtensionFactory) {
-	register(reg.extensions, name, f, f == nil, "extension")
+	register(globalRegistry.extensions, name, f, f == nil, "extension")
 }
 
 // register validates the key/factory and installs it first-wins. A

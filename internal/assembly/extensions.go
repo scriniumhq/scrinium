@@ -21,7 +21,7 @@ import (
 // assembler special-cases no extension; the projection seams below come
 // from whichever extensions provide those views (ADR-63/88/98).
 func (bs *buildState) installExtensions() error {
-	bs.exts = append(reg.extensionList(), bs.opts.extensions...)
+	bs.exts = append(globalRegistry.extensionList(), bs.opts.extensions...)
 	for _, e := range bs.exts {
 		bs.loadedExts = append(bs.loadedExts, e.Descriptor())
 		if ci, ok := e.CustomIndex(); ok {

@@ -17,7 +17,7 @@ import (
 // schemes are registered by the consumer's blank import (ADR-63).
 func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
 	scheme := uri.SchemeOf(spec.Driver)
-	if f, ok := reg.driver(scheme); ok {
+	if f, ok := globalRegistry.driver(scheme); ok {
 		creds, err := resolveCredentials(ctx, spec.Credentials)
 		if err != nil {
 			return nil, err
@@ -44,7 +44,7 @@ func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.
 		}
 		indexUri = "sqlite:///" + filepath.Join(p, "index", "index.db")
 	}
-	if f, ok := reg.indexFor(uri.SchemeOf(indexUri)); ok {
+	if f, ok := globalRegistry.indexFor(uri.SchemeOf(indexUri)); ok {
 		creds, err := resolveCredentials(ctx, spec.Credentials)
 		if err != nil {
 			return nil, err
