@@ -59,6 +59,23 @@ func (v *View) publish(eventType string, payload any) {
 	v.bus.Publish(event.Event{Type: eventType, Payload: payload})
 }
 
+// emit publishes a batch of events collected during a locked mutation.
+//
+// It MUST be called only after v.mu has been released: the default bus
+// (event.NewEventBus) delivers synchronously on the calling goroutine, so
+// a subscriber that reads the View from its handler would self-deadlock if
+// emit ran while the write lock was still held. Mutators accumulate
+// collision events into a local slice under the lock and hand it here once
+// unlocked — see Add/Move/applyDelta.
+func (v *View) emit(events []event.Event) {
+	if v.bus == nil {
+		return
+	}
+	for _, e := range events {
+		v.bus.Publish(e)
+	}
+}
+
 // --- Error mapping ---
 
 func mapSourceError(err error) error {
@@ -76,13 +93,24 @@ func mapSourceError(err error) error {
 
 // --- Path-building helpers ---
 
+// Path-sharding geometry. The by-artifact and by-session trees shard on a
+// two-level <aa>/<bb> prefix of the hex hash — each segment shardSegmentLen
+// wide — so entries fan out across 256×256 directories; identifiers shorter
+// than the combined shardPrefixLen bucket under "_short/". shortIDLen is the
+// hex width of the short id used in by-date filenames and synthetic paths.
+const (
+	shardSegmentLen = 2
+	shardPrefixLen  = 2 * shardSegmentLen
+	shortIDLen      = 16
+)
+
 // byArtifactPath: <aa>/<bb>/<full-id>
 func byArtifactPath(id domain.ArtifactID) string {
 	hash := hashPart(string(id))
-	if len(hash) < 4 {
+	if len(hash) < shardPrefixLen {
 		return "_short/" + string(id)
 	}
-	return hash[:2] + "/" + hash[2:4] + "/" + string(id)
+	return hash[:shardSegmentLen] + "/" + hash[shardSegmentLen:shardPrefixLen] + "/" + string(id)
 }
 
 // byDatePath: <YYYY>/<MM>/<DD>/<HH-MM-SS>-<id-short>.bin
@@ -135,18 +163,18 @@ func bySessionPath(m domain.Manifest) string {
 // Used by syntheticPath; format mirrors bySessionPath's prefix.
 func sessionShard(sid domain.SessionID) string {
 	s := string(sid)
-	if len(s) < 4 {
+	if len(s) < shardPrefixLen {
 		return "_short/" + s
 	}
-	return s[:2] + "/" + s[2:4] + "/" + s
+	return s[:shardSegmentLen] + "/" + s[shardSegmentLen:shardPrefixLen] + "/" + s
 }
 
-// shortID returns the first 16 hex characters of the hash part of
-// an ArtifactID. Used by by-date filenames and synthetic paths.
+// shortID returns the leading shortIDLen hex characters of the hash part
+// of an ArtifactID. Used by by-date filenames and synthetic paths.
 func shortID(id domain.ArtifactID) string {
 	hash := hashPart(string(id))
-	if len(hash) > 16 {
-		return hash[:16]
+	if len(hash) > shortIDLen {
+		return hash[:shortIDLen]
 	}
 	return hash
 }

@@ -96,6 +96,6 @@ func TestValidateProjectionEnums(t *testing.T) {
 func TestValidateAgentKinds(t *testing.T) {
 	wantErr(t, &Config{
 		Store:  &StoreSpec{Driver: "file:///d"},
-		Agents: []ComponentSpec{{Kind: ""}},
+		Agents: []AgentSpec{{Kind: ""}},
 	}, "agents[0]")
 }

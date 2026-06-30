@@ -70,9 +70,34 @@ type FileAt interface {
 //                       trees, by-X paths inside _scrinium).
 //   - bytesFile       : in-memory read-only (stats virtual file).
 //   - rwFile          : read/write over fso.Handle (root view).
-//   - blackHoleFile   : write-discarding (used by surface-level
-//                       junk-filter wrappers — safe to ignore
-//                       when not needed).
+//
+// blackHoleFile (write-discarding, surface-only) lives in blackhole.go —
+// VFS never returns it from OpenFile.
+
+// calcSeek resolves an io.Seeker request for a cursor-tracking handle. It
+// returns the new absolute offset for the given whence; current is the live
+// cursor and size the end-of-data offset. A negative result clamps to 0 and
+// reports fs.ErrInvalid (the cursor is reset to 0). An unknown whence reports
+// fs.ErrInvalid and returns current, leaving the caller's cursor unchanged.
+// Shared by the three cursor-backed handles (readHandleFile, bytesFile,
+// rwFile); the black-hole handle (blackhole.go) keeps its own stateless seek.
+func calcSeek(offset int64, whence int, current, size int64) (int64, error) {
+	var next int64
+	switch whence {
+	case io.SeekStart:
+		next = offset
+	case io.SeekCurrent:
+		next = current + offset
+	case io.SeekEnd:
+		next = size + offset
+	default:
+		return current, fs.ErrInvalid
+	}
+	if next < 0 {
+		return 0, fs.ErrInvalid
+	}
+	return next, nil
+}
 
 // readHandleFile is read-only. Tracks a manual offset to
 // satisfy io.Reader/io.Seeker since store.ReadHandle is
@@ -118,21 +143,9 @@ func (f *readHandleFile) Close() error {
 }
 
 func (f *readHandleFile) Seek(offset int64, whence int) (int64, error) {
-	switch whence {
-	case io.SeekStart:
-		f.off = offset
-	case io.SeekCurrent:
-		f.off += offset
-	case io.SeekEnd:
-		f.off = f.size + offset
-	default:
-		return 0, fs.ErrInvalid
-	}
-	if f.off < 0 {
-		f.off = 0
-		return 0, fs.ErrInvalid
-	}
-	return f.off, nil
+	off, err := calcSeek(offset, whence, f.off, f.size)
+	f.off = off
+	return off, err
 }
 
 func (f *readHandleFile) Stat() (os.FileInfo, error) {
@@ -184,21 +197,9 @@ func (f *bytesFile) Write(p []byte) (int, error) { return 0, fs.ErrPermission }
 func (f *bytesFile) Close() error                { return nil }
 
 func (f *bytesFile) Seek(offset int64, whence int) (int64, error) {
-	switch whence {
-	case io.SeekStart:
-		f.off = offset
-	case io.SeekCurrent:
-		f.off += offset
-	case io.SeekEnd:
-		f.off = int64(len(f.body)) + offset
-	default:
-		return 0, fs.ErrInvalid
-	}
-	if f.off < 0 {
-		f.off = 0
-		return 0, fs.ErrInvalid
-	}
-	return f.off, nil
+	off, err := calcSeek(offset, whence, f.off, int64(len(f.body)))
+	f.off = off
+	return off, err
 }
 
 func (f *bytesFile) Stat() (os.FileInfo, error) {
@@ -289,21 +290,9 @@ func (f *rwFile) Close() error {
 }
 
 func (f *rwFile) Seek(offset int64, whence int) (int64, error) {
-	switch whence {
-	case io.SeekStart:
-		f.off = offset
-	case io.SeekCurrent:
-		f.off += offset
-	case io.SeekEnd:
-		f.off = f.size + offset
-	default:
-		return 0, fs.ErrInvalid
-	}
-	if f.off < 0 {
-		f.off = 0
-		return 0, fs.ErrInvalid
-	}
-	return f.off, nil
+	off, err := calcSeek(offset, whence, f.off, f.size)
+	f.off = off
+	return off, err
 }
 
 func (f *rwFile) Stat() (os.FileInfo, error) {
@@ -332,83 +321,13 @@ func (f *rwFile) WriteAt(p []byte, off int64) (int, error) {
 
 func (f *rwFile) Sync() error { return f.f.Sync() }
 
-// blackHoleFile is a write-discarding placeholder. Useful for
-// surface-level filters (e.g. WebDAV's OS-junk filter) that
-// need to satisfy a client's PUT without actually persisting
-// the bytes. Reads return EOF, writes silently succeed,
-// nothing reaches the store.
-//
-// VFS itself doesn't return blackHoleFile from OpenFile —
-// surfaces wrap VFS and substitute one when their own policy
-// demands.
-type blackHoleFile struct {
-	nonDirStub
-	name    string
-	written int64
-	closed  bool
-}
-
-// NewBlackHoleFile constructs a write-discarding handle. name
-// surfaces in the resulting Stat info.
-func NewBlackHoleFile(name string) File {
-	return &blackHoleFile{name: name}
-}
-
-func (f *blackHoleFile) Read(p []byte) (int, error) {
-	return 0, io.EOF
-}
-
-func (f *blackHoleFile) Write(p []byte) (int, error) {
-	f.written += int64(len(p))
-	return len(p), nil
-}
-
-func (f *blackHoleFile) Close() error {
-	f.closed = true
-	return nil
-}
-
-func (f *blackHoleFile) Seek(offset int64, whence int) (int64, error) {
-	switch whence {
-	case io.SeekStart:
-		return offset, nil
-	case io.SeekCurrent:
-		return f.written, nil
-	case io.SeekEnd:
-		return f.written + offset, nil
-	}
-	return 0, fs.ErrInvalid
-}
-
-func (f *blackHoleFile) Stat() (os.FileInfo, error) {
-	return synthInfo{
-		name:    f.name,
-		size:    f.written,
-		mode:    0o644,
-		modTime: time.Now(),
-	}, nil
-}
-
-func (f *blackHoleFile) ReadAt(p []byte, off int64) (int, error) {
-	return 0, io.EOF
-}
-
-func (f *blackHoleFile) WriteAt(p []byte, off int64) (int, error) {
-	f.written += int64(len(p))
-	return len(p), nil
-}
-
-func (f *blackHoleFile) Sync() error { return nil }
-
-// Compile-time guards.
+// Compile-time guards. blackHoleFile's guards live in blackhole.go.
 var (
 	_ File = (*readHandleFile)(nil)
 	_ File = (*bytesFile)(nil)
 	_ File = (*rwFile)(nil)
-	_ File = (*blackHoleFile)(nil)
 
 	_ FileAt = (*readHandleFile)(nil)
 	_ FileAt = (*bytesFile)(nil)
 	_ FileAt = (*rwFile)(nil)
-	_ FileAt = (*blackHoleFile)(nil)
 )

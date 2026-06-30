@@ -91,6 +91,11 @@ func New(v *vw.View, opts ...Option) (*Ops, error) {
 	for _, opt := range opts {
 		opt(&o)
 	}
+	// Reclaim scratch files orphaned by a previous run (e.g. a daemon
+	// killed before Close could clean up). Only an explicitly configured
+	// dir is swept — the default OS temp dir is shared and not ours to
+	// touch. Best-effort: errors are ignored and startup never blocks.
+	reapStaleScratch(o.scratchDir)
 	return &Ops{
 		view:         v,
 		store:        o.store,

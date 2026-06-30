@@ -148,13 +148,57 @@ func clonePolicy(p *Policy) *Policy {
 		s := *p.Checkpoint
 		cp.Checkpoint = &s
 	}
-	if p.Pipeline != nil {
-		cp.Pipeline = append([]PipelineStage(nil), p.Pipeline...)
-	}
-	if p.PipelineExtra != nil {
-		cp.PipelineExtra = append([]PipelineStage(nil), p.PipelineExtra...)
-	}
+	cp.Pipeline = clonePipeline(p.Pipeline)
+	cp.PipelineExtra = clonePipeline(p.PipelineExtra)
 	return &cp
+}
+
+// clonePipeline deep-copies a pipeline slice, including each stage's
+// Params map (and any nested map/slice inside it), so the clone shares no
+// reference with the source. nil in, nil out.
+//
+// The previous append-based copy duplicated the slice but left every
+// stage's Params map aliased — editing one store's stage params would
+// have bled into the template and every sibling store.
+func clonePipeline(in []PipelineStage) []PipelineStage {
+	if in == nil {
+		return nil
+	}
+	out := make([]PipelineStage, len(in))
+	for i, st := range in {
+		st.Params = cloneParams(st.Params)
+		out[i] = st
+	}
+	return out
+}
+
+// cloneParams deep-copies a stage's free-form params. Values are the
+// shapes a YAML/JSON decode produces (scalars, map[string]any, []any);
+// each map and slice is rebuilt so the clone shares none with the source.
+func cloneParams(m map[string]any) map[string]any {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = deepCopyValue(v)
+	}
+	return out
+}
+
+func deepCopyValue(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		return cloneParams(t)
+	case []any:
+		s := make([]any, len(t))
+		for i, e := range t {
+			s[i] = deepCopyValue(e)
+		}
+		return s
+	default:
+		return v
+	}
 }
 
 // allStores returns every StoreSpec in the config (the single Store or

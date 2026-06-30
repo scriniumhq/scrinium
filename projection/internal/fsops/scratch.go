@@ -11,10 +11,54 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"time"
 
 	"scrinium.dev/domain/vfsmeta"
 	"scrinium.dev/errs"
 )
+
+// staleScratchTTL bounds how old a leftover scratch file must be before
+// a freshly starting process reclaims it. A live peer's in-progress
+// scratch is younger than this and is therefore spared; an older file is
+// either an orphan from a crashed run or a stalled handle whose owner
+// still holds the open descriptor — unlinking by path is harmless in that
+// case (the writer keeps its fd, and its own Close would have removed the
+// file anyway). It is a var, not a const, so tests can shorten it.
+var staleScratchTTL = time.Hour
+
+// reapStaleScratch removes scratch files left behind by previous runs.
+//
+// It runs only against an explicitly configured scratch directory; the
+// shared OS temp dir (the empty-dir fallback in newScratchFile) is never
+// swept. Everything here is best-effort: a glob, stat, or remove error is
+// ignored rather than failing Ops construction, and the function does not
+// recurse or block.
+//
+// Safety: access to a scratch file is always through the *os.File held by
+// its writeFile — no code re-opens a scratch by path — so removing the
+// directory entry of a file another instance still has open does not
+// disturb that instance. The TTL exists only to avoid racing a peer that
+// created a scratch microseconds ago.
+func reapStaleScratch(dir string) {
+	if dir == "" {
+		return
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "scratch-*.tmp"))
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-staleScratchTTL)
+	for _, p := range matches {
+		fi, err := os.Stat(p)
+		if err != nil || fi.IsDir() {
+			continue
+		}
+		if fi.ModTime().Before(cutoff) {
+			_ = os.Remove(p)
+		}
+	}
+}
 
 // prepareEditingScratch assembles a writeFile for editing the
 // artifact at path: it allocates a scratch file, copies the

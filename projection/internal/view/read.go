@@ -287,38 +287,58 @@ func (v *View) listInTree(rv RootView, path string) Seq {
 			yield(Node{}, os.ErrClosed)
 			return
 		}
-		v.mu.RLock()
-		defer v.mu.RUnlock()
-
-		tree := v.trees[rv]
-		if tree == nil {
-			yield(Node{}, errs.ErrPathNotFound)
+		nodes, err := v.snapshotChildren(rv, path)
+		if err != nil {
+			yield(Node{}, err)
 			return
 		}
-		n, ok := tree[path]
-		if !ok {
-			yield(Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, path))
-			return
-		}
-		if !n.fs.IsDir {
-			yield(Node{}, fmt.Errorf("%w: %q", errs.ErrNotADirectory, path))
-			return
-		}
-		names := append([]string(nil), n.children...)
-		for _, name := range names {
-			childPath := name
-			if path != "" {
-				childPath = path + "/" + name
-			}
-			child, ok := tree[childPath]
-			if !ok {
-				continue
-			}
-			if !yield(v.exportNode(child), nil) {
+		// Iterate the detached copy: v.mu is no longer held, so yield may
+		// run arbitrarily long, do I/O, or even mutate the View without
+		// risking a self-deadlock or starving writers.
+		for _, n := range nodes {
+			if !yield(n, nil) {
 				return
 			}
 		}
 	}
+}
+
+// snapshotChildren returns a detached copy of the immediate children of
+// path in the rv tree. The whole copy is built under the read lock and the
+// lock is dropped before the caller iterates, so holding the View across a
+// user-supplied yield (the previous behaviour) is no longer possible.
+//
+// Cost: the children are materialised up front rather than streamed. For
+// the directory fan-out of a single path that is negligible; WalkIn (whole
+// subtree) carries the larger copy — see snapshotSubtree.
+func (v *View) snapshotChildren(rv RootView, path string) ([]Node, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	tree := v.trees[rv]
+	if tree == nil {
+		return nil, errs.ErrPathNotFound
+	}
+	n, ok := tree[path]
+	if !ok {
+		return nil, fmt.Errorf("%w: %q", errs.ErrPathNotFound, path)
+	}
+	if !n.fs.IsDir {
+		return nil, fmt.Errorf("%w: %q", errs.ErrNotADirectory, path)
+	}
+	out := make([]Node, 0, len(n.children))
+	for _, name := range n.children {
+		childPath := name
+		if path != "" {
+			childPath = path + "/" + name
+		}
+		child, ok := tree[childPath]
+		if !ok {
+			continue
+		}
+		out = append(out, v.exportNode(child))
+	}
+	return out, nil
 }
 
 func (v *View) walkInTree(rv RootView, prefix string) Seq {
@@ -327,41 +347,62 @@ func (v *View) walkInTree(rv RootView, prefix string) Seq {
 			yield(Node{}, os.ErrClosed)
 			return
 		}
-		v.mu.RLock()
-		defer v.mu.RUnlock()
-
-		tree := v.trees[rv]
-		if tree == nil {
-			yield(Node{}, errs.ErrPathNotFound)
+		nodes, err := v.snapshotSubtree(rv, prefix)
+		if err != nil {
+			yield(Node{}, err)
 			return
 		}
-		root, ok := tree[prefix]
-		if !ok {
-			yield(Node{}, fmt.Errorf("%w: %q", errs.ErrPathNotFound, prefix))
-			return
-		}
-		var stack []*viewNode
-		stack = append(stack, root)
-		for len(stack) > 0 {
-			n := stack[len(stack)-1]
-			stack = stack[:len(stack)-1]
-			if !yield(v.exportNode(n), nil) {
+		for _, n := range nodes {
+			if !yield(n, nil) {
 				return
 			}
-			if n.fs.IsDir {
-				for i := len(n.children) - 1; i >= 0; i-- {
-					name := n.children[i]
-					childPath := name
-					if n.fs.Path != "" {
-						childPath = n.fs.Path + "/" + name
-					}
-					if c, ok := tree[childPath]; ok {
-						stack = append(stack, c)
-					}
+		}
+	}
+}
+
+// snapshotSubtree returns a detached pre-order copy of every node at or
+// under prefix in the rv tree, built under the read lock so the caller can
+// iterate (and mutate the View) without holding v.mu across yield.
+//
+// Traversal order is identical to the previous streaming walk: children
+// are pushed onto the stack in reverse so siblings pop in tree order.
+//
+// Cost: the whole subtree is materialised. At the View's ~100K-node budget
+// that is bounded and acceptable; the alternative (holding RLock across the
+// user callback) reintroduces the deadlock and starves writers for the
+// duration of the walk.
+func (v *View) snapshotSubtree(rv RootView, prefix string) ([]Node, error) {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
+	tree := v.trees[rv]
+	if tree == nil {
+		return nil, errs.ErrPathNotFound
+	}
+	root, ok := tree[prefix]
+	if !ok {
+		return nil, fmt.Errorf("%w: %q", errs.ErrPathNotFound, prefix)
+	}
+	var out []Node
+	stack := []*viewNode{root}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		out = append(out, v.exportNode(n))
+		if n.fs.IsDir {
+			for i := len(n.children) - 1; i >= 0; i-- {
+				name := n.children[i]
+				childPath := name
+				if n.fs.Path != "" {
+					childPath = n.fs.Path + "/" + name
+				}
+				if c, ok := tree[childPath]; ok {
+					stack = append(stack, c)
 				}
 			}
 		}
 	}
+	return out, nil
 }
 
 func (v *View) openInTree(
