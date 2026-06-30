@@ -74,6 +74,31 @@ type FileAt interface {
 //                       junk-filter wrappers — safe to ignore
 //                       when not needed).
 
+// calcSeek resolves an io.Seeker request for a cursor-tracking handle. It
+// returns the new absolute offset for the given whence; current is the live
+// cursor and size the end-of-data offset. A negative result clamps to 0 and
+// reports fs.ErrInvalid (the cursor is reset to 0). An unknown whence reports
+// fs.ErrInvalid and returns current, leaving the caller's cursor unchanged.
+// Shared by the three cursor-backed handles (readHandleFile, bytesFile,
+// rwFile); blackHoleFile keeps its own stateless seek.
+func calcSeek(offset int64, whence int, current, size int64) (int64, error) {
+	var next int64
+	switch whence {
+	case io.SeekStart:
+		next = offset
+	case io.SeekCurrent:
+		next = current + offset
+	case io.SeekEnd:
+		next = size + offset
+	default:
+		return current, fs.ErrInvalid
+	}
+	if next < 0 {
+		return 0, fs.ErrInvalid
+	}
+	return next, nil
+}
+
 // readHandleFile is read-only. Tracks a manual offset to
 // satisfy io.Reader/io.Seeker since store.ReadHandle is
 // offset-addressable via ReadAt only.
@@ -118,21 +143,9 @@ func (f *readHandleFile) Close() error {
 }
 
 func (f *readHandleFile) Seek(offset int64, whence int) (int64, error) {
-	switch whence {
-	case io.SeekStart:
-		f.off = offset
-	case io.SeekCurrent:
-		f.off += offset
-	case io.SeekEnd:
-		f.off = f.size + offset
-	default:
-		return 0, fs.ErrInvalid
-	}
-	if f.off < 0 {
-		f.off = 0
-		return 0, fs.ErrInvalid
-	}
-	return f.off, nil
+	off, err := calcSeek(offset, whence, f.off, f.size)
+	f.off = off
+	return off, err
 }
 
 func (f *readHandleFile) Stat() (os.FileInfo, error) {
@@ -184,21 +197,9 @@ func (f *bytesFile) Write(p []byte) (int, error) { return 0, fs.ErrPermission }
 func (f *bytesFile) Close() error                { return nil }
 
 func (f *bytesFile) Seek(offset int64, whence int) (int64, error) {
-	switch whence {
-	case io.SeekStart:
-		f.off = offset
-	case io.SeekCurrent:
-		f.off += offset
-	case io.SeekEnd:
-		f.off = int64(len(f.body)) + offset
-	default:
-		return 0, fs.ErrInvalid
-	}
-	if f.off < 0 {
-		f.off = 0
-		return 0, fs.ErrInvalid
-	}
-	return f.off, nil
+	off, err := calcSeek(offset, whence, f.off, int64(len(f.body)))
+	f.off = off
+	return off, err
 }
 
 func (f *bytesFile) Stat() (os.FileInfo, error) {
@@ -289,21 +290,9 @@ func (f *rwFile) Close() error {
 }
 
 func (f *rwFile) Seek(offset int64, whence int) (int64, error) {
-	switch whence {
-	case io.SeekStart:
-		f.off = offset
-	case io.SeekCurrent:
-		f.off += offset
-	case io.SeekEnd:
-		f.off = f.size + offset
-	default:
-		return 0, fs.ErrInvalid
-	}
-	if f.off < 0 {
-		f.off = 0
-		return 0, fs.ErrInvalid
-	}
-	return f.off, nil
+	off, err := calcSeek(offset, whence, f.off, f.size)
+	f.off = off
+	return off, err
 }
 
 func (f *rwFile) Stat() (os.FileInfo, error) {
