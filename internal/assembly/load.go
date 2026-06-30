@@ -1,6 +1,7 @@
 package assembly
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -61,7 +62,9 @@ func Explain(ctx context.Context, data []byte) ([]byte, error) {
 	return out, nil
 }
 
-type unmarshalFunc func([]byte, *Config) error
+// decoderFunc decodes config bytes into a Config. The two concrete
+// decoders (YAML/JSON) and detectUnmarshal's sniffing share this shape.
+type decoderFunc func([]byte, *Config) error
 
 func unmarshalYAML(data []byte, c *Config) error { return yaml.Unmarshal(data, c) }
 func unmarshalJSON(data []byte, c *Config) error { return json.Unmarshal(data, c) }
@@ -69,22 +72,16 @@ func unmarshalJSON(data []byte, c *Config) error { return json.Unmarshal(data, c
 // detectUnmarshal picks JSON when the document's first non-space byte
 // is '{' or '[', YAML otherwise. Used only by Explain, which is
 // format-agnostic; the Load*/LoadJSON entry points are explicit.
-func detectUnmarshal(data []byte) unmarshalFunc {
-	for _, b := range data {
-		switch b {
-		case ' ', '\t', '\r', '\n':
-			continue
-		case '{', '[':
-			return unmarshalJSON
-		default:
-			return unmarshalYAML
-		}
+func detectUnmarshal(data []byte) decoderFunc {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
+		return unmarshalJSON
 	}
 	return unmarshalYAML
 }
 
-func loadAndBuild(ctx context.Context, data []byte, um unmarshalFunc, mode buildMode, opts []BuildOption) (Assembly, error) {
-	c, err := parse(data, um)
+func loadAndBuild(ctx context.Context, data []byte, decode decoderFunc, mode buildMode, opts []BuildOption) (Assembly, error) {
+	c, err := parse(data, decode)
 	if err != nil {
 		return nil, err
 	}
@@ -107,9 +104,9 @@ func modeToPublic(m buildMode) Mode {
 	}
 }
 
-func parse(data []byte, um unmarshalFunc) (*Config, error) {
+func parse(data []byte, decode decoderFunc) (*Config, error) {
 	var c Config
-	if err := um(data, &c); err != nil {
+	if err := decode(data, &c); err != nil {
 		return nil, fmt.Errorf("scrinium: parse config: %w", err)
 	}
 	return &c, nil
