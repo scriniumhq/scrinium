@@ -2,7 +2,10 @@ package assembly
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
@@ -117,4 +120,64 @@ type syncWaiter struct{ sw index.SyncWaiter }
 func (a syncWaiter) Wait(ctx context.Context, after uint64) (uint64, error) {
 	t, err := a.sw.Wait(ctx, index.Token(after))
 	return uint64(t), err
+}
+
+// buildProjection bundles the read/write ends into a Projection from the
+// config's projection section, or returns nil when there is none (store-only
+// consumers never touch it). Provided views are forwarded verbatim in Root
+// order (the assembler names none); the sync seam is wired when the index
+// backs SyncSource/SyncWaiter, with the delta adapter preferred when the
+// index can also resolve manifests by digest (ADR-98/107).
+func (bs *buildState) buildProjection() (*projection.Projection, error) {
+	effProj := bs.c.Projection
+	if effProj == nil {
+		return nil, nil
+	}
+	pcfg, cfgErr := projectionConfig(effProj, bs.mountSession, bs.spec.Driver)
+	if cfgErr != nil {
+		return nil, fmt.Errorf("scrinium: %w", cfgErr)
+	}
+
+	var metaSrc projection.MetadataIndex
+	roots := make([]string, 0, len(bs.providedViews))
+	for root := range bs.providedViews {
+		roots = append(roots, root)
+	}
+	sort.Strings(roots)
+	pcfg.ProvidedViews = make([]projection.ProvidedView, 0, len(roots))
+	for _, root := range roots {
+		pv := bs.providedViews[root]
+		pcfg.ProvidedViews = append(pcfg.ProvidedViews, projection.ProvidedView{
+			Root:     pv.Root,
+			Path:     pv.Path,
+			Collide:  pv.Collide,
+			Orphans:  pv.Orphans,
+			CountKey: pv.CountKey,
+		})
+		if pv.Metadata != nil && metaSrc == nil {
+			metaSrc = pv.Metadata
+		}
+	}
+
+	if ss, ok := bs.idx.(index.SyncSource); ok {
+		if res, ok := bs.idx.(index.ManifestResolver); ok {
+			pcfg.SyncSource = syncDeltaSource{ss: ss, res: res}
+		} else {
+			pcfg.SyncSource = syncTokenSource{ss}
+		}
+	}
+	if sw, ok := bs.idx.(index.SyncWaiter); ok {
+		pcfg.SyncWaiter = syncWaiter{sw}
+	}
+
+	p, buildErr := projection.Build(bs.ctx, bs.st, metaSrc, pcfg)
+	if buildErr != nil {
+		return nil, fmt.Errorf("scrinium: %w", buildErr)
+	}
+	bs.cleanups = append(bs.cleanups, func() {
+		if err := p.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "scrinium: projection close on rollback: %v\n", err)
+		}
+	})
+	return p, nil
 }

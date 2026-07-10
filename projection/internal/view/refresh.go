@@ -93,13 +93,16 @@ func (v *View) applyDelta(ctx context.Context, changes []domain.Manifest) int64 
 	}
 
 	v.mu.Lock()
+	// emit after the lock is released (LIFO: Unlock runs before this).
+	var events []event.Event
+	defer func() { v.emit(events) }()
 	defer v.mu.Unlock()
 	for _, p := range prep {
 		if rec, exists := v.artifacts[p.m.ArtifactID]; exists {
 			v.removeArtifactFromTrees(p.m.ArtifactID, rec)
 		}
 		if p.keep {
-			v.indexArtifact(p.m, false)
+			v.indexArtifact(p.m, false, &events)
 		}
 	}
 	return v.Stats.TotalNodes

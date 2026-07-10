@@ -7,6 +7,7 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
+	"scrinium.dev/event"
 )
 
 // backfill walks the source and classifies each manifest. The
@@ -34,7 +35,12 @@ func (v *View) backfill(ctx context.Context) error {
 			return nil
 		}
 		v.populateExt(ctx, &m)
-		v.indexArtifact(m, true /*duringBackfill*/)
+		var events []event.Event
+		v.indexArtifact(m, true /*duringBackfill*/, &events)
+		// backfill holds no lock and runs single-threaded before New
+		// returns, so emitting inline cannot deadlock; route through emit
+		// anyway to keep the publish path uniform.
+		v.emit(events)
 		return nil
 	}
 	if err := v.src.Walk(ctx, cb); err != nil {
@@ -155,7 +161,11 @@ func (v *View) syntheticPath(m domain.Manifest) string {
 // The function does NOT take the View lock — callers (backfill,
 // Add) handle locking themselves. backfill runs single-threaded;
 // Add takes the write lock around the call.
-func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
+//
+// Collision events raised while placing the artifact are appended to
+// *events instead of being published inline; the caller flushes them with
+// emit after releasing the lock (see emit's contract).
+func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool, events *[]event.Event) {
 	rec := &artifactRecord{manifest: m, paths: make(map[RootView]string)}
 
 	for _, d := range v.defs {
@@ -177,7 +187,7 @@ func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
 				sp := v.syntheticPath(m)
 				rec.paths[d.root] = sp
 				if d.collide {
-					v.applyCollisionInsert(d.root, sp, m, rec)
+					v.applyCollisionInsert(d.root, sp, m, rec, events)
 				} else {
 					v.insertFile(v.trees[d.root], sp, m)
 				}
@@ -192,7 +202,7 @@ func (v *View) indexArtifact(m domain.Manifest, duringBackfill bool) {
 
 		rec.paths[d.root] = path
 		if d.collide {
-			v.applyCollisionInsert(d.root, path, m, rec)
+			v.applyCollisionInsert(d.root, path, m, rec, events)
 		} else {
 			v.insertFile(v.trees[d.root], path, m)
 		}

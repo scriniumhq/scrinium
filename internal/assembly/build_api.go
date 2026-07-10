@@ -59,15 +59,7 @@ func Build(ctx context.Context, cfg Config, opts ...BuildOption) (Assembly, erro
 	if err := prepare(&cfg); err != nil {
 		return nil, err
 	}
-	return build(ctx, &cfg, o.mode.internal(), agentWiring{
-		handlers:     o.eventHandlers,
-		stdSched:     o.standardScheduler,
-		cronParser:   o.cronParser,
-		schedules:    o.schedules,
-		agentConfigs: o.agentConfigs,
-		extensions:   o.extensions,
-		passphrase:   o.passphrase,
-	})
+	return build(ctx, &cfg, &o)
 }
 
 // BuildOption tunes a Build call.

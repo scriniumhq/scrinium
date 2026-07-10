@@ -1,6 +1,7 @@
 package assembly
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -10,8 +11,8 @@ import (
 // confusing failure deep inside the engine. It runs after policyRef
 // resolution and defaulting.
 func validate(c *Config) error {
-	var errs []string
-	add := func(format string, a ...any) { errs = append(errs, fmt.Sprintf(format, a...)) }
+	var errs []error
+	add := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
 
 	switch {
 	case c.Store == nil && len(c.Stores) == 0:
@@ -65,7 +66,7 @@ func validate(c *Config) error {
 	validateProjection(c.Projection, add)
 
 	if len(errs) > 0 {
-		return fmt.Errorf("scrinium config: %s", strings.Join(errs, "; "))
+		return fmt.Errorf("scrinium config: %w", errors.Join(errs...))
 	}
 	return nil
 }
