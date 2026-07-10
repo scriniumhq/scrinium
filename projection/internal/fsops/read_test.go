@@ -17,14 +17,14 @@ import (
 
 // --- Construction ---
 
-func TestNewFSOps_NilView(t *testing.T) {
+func TestNew_NilView(t *testing.T) {
 	_, err := fso.New(nil)
 	if err == nil {
 		t.Fatal("expected error for nil view")
 	}
 }
 
-func TestNewFSOps_DefaultsApplied(t *testing.T) {
+func TestNew_DefaultsApplied(t *testing.T) {
 	src := projectionfx.New()
 	v, _ := vw.New(context.Background(), src)
 	defer v.Close()
