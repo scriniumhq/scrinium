@@ -1,6 +1,6 @@
 package artifact
 
-// crypto.go — Sealed and Paranoid manifest crypto per docs/2 Internals/07
+// crypto.go — Sealed and Paranoid manifest crypto per docs/2. Internals/Formats/01 Manifest Format
 // §7.1 + §7.4 + ADR-54, plus the body-AEAD primitive they share.
 //
 // Sealed: the sys block stays plain JSON; ext, usr, and inline_blob are

@@ -12,8 +12,8 @@ import (
 //  1. Mark closed under stateMu (early-return for repeat calls).
 //     This is the gate any subsequent operation hits via
 //     checkOperational, which short-circuits to os.ErrClosed.
-//  2. Wipe DEK and capability token via crypto.CloseSecrets —
-//     long-lived secret material that does not survive shutdown.
+//  2. Wipe the DEK via crypto.CloseSecrets — long-lived secret
+//     material that does not survive shutdown.
 //  3. If the resolver in force exposes a Close() method, call it so it
 //     can drop its DEK copy. The default promoted StaticKeyResolver
 //     does. A host-supplied resolver is closed only if it opts in by

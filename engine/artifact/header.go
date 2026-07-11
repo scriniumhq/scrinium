@@ -1,7 +1,7 @@
 package artifact
 
 // header.go — the manifest file-format header (magic + crypto flag +
-// optional KeyID) per docs/2 Internals/07 §7.1. The byte values here are
+// optional KeyID) per docs/2. Internals/Formats/01 Manifest Format §1.1. The byte values here are
 // the on-disk contract: changing any of them requires a migration. The
 // body codec lives in body.go and the encrypted modes in crypto.go.
 
@@ -15,13 +15,13 @@ import (
 	"scrinium.dev/errs"
 )
 
-// File-format magic bytes (§7.1).
+// File-format magic bytes (Formats/01 §1.1).
 var (
 	magicJSON   = []byte{0x00, 'S', 'C', '1'}
 	magicBinary = []byte{0x00, 'S', 'C', '2'}
 )
 
-// Crypto flags (§7.1). Byte values are stable across the ADR-55 rename so
+// Crypto flags (Formats/01 §1.1). Byte values are stable across the ADR-55 rename so
 // old manifests on disk read transparently.
 const (
 	cryptoPlain    = 0x00
@@ -43,7 +43,7 @@ type fileHeader struct {
 	KeyID    string
 }
 
-// writeHeader serialises h to its on-disk representation (§7.1):
+// writeHeader serialises h to its on-disk representation (Formats/01 §1.1):
 //
 //   - 4 bytes magic
 //   - 1 byte crypto flag
@@ -95,8 +95,9 @@ func writeHeader(h fileHeader) ([]byte, error) {
 // Errors: ErrUnsupportedEncoding for the reserved binary magic (\x00SC2),
 // ErrUnsupportedCrypto for an unknown crypto flag, and a plain parse error
 // for missing-magic / truncated-header / invalid-UTF-8-KeyID. These are
-// deliberately NOT ErrCorruptedManifest, which is reserved for an
-// ArtifactID mismatch (a stronger statement); the caller decides how to
+// deliberately NOT ErrCorruptedManifest, which is reserved for a
+// manifest-digest mismatch (a stronger statement — the file no longer
+// hashes to its name, ADR-73); the caller decides how to
 // surface a header-level malformation.
 func readHeader(data []byte) (fileHeader, int, error) {
 	if len(data) < 5 {

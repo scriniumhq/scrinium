@@ -62,7 +62,7 @@ const (
 const MaxManifestSize = 32 * 1024 * 1024
 
 // SegmentSize bounds for the segmented AEAD blob format (ADR-59,
-// docs/4 §11.1 "SegmentSize"). The on-disk header stores the
+// docs/3. Reference/End-to-End/11 Configuration §11.3 "SegmentSize"). The on-disk header stores the
 // segment size as a uint32, and a too-small segment makes the
 // per-segment overhead (12-byte IV + 16-byte tag + 4-byte length)
 // dominate, so we constrain it to a sane window. An out-of-range

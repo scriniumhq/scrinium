@@ -19,7 +19,7 @@ import (
 // pays nothing: the shared slogx.Discard wraps slog.DiscardHandler, whose
 // Enabled always reports false. This package is the canonical instance of
 // the system-wide model — the contract lives in docs/3 Reference/14 Logging.md,
-// the cross-layer invariants in docs/2 Internals/13 Concurrency Model.md.
+// the cross-layer invariants in docs/2. Internals/11 Concurrency model.md.
 //
 // Three rules this package follows (and that sibling files must keep):
 //

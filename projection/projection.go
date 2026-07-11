@@ -11,14 +11,17 @@ import (
 // through FSOps), and FSOps is constructed from a View, so pairing them
 // in one value matches how callers consume them.
 //
-// FSOps is nil for a read-only projection; View is always present.
+// Build always populates both: ReadOnly is enforced inside FSOps
+// (mutations surface errs.ErrEditingDisabled), not by omitting it.
+// FSOps is nil only in a caller-assembled value; View is always present.
 type Projection struct {
 	// View is the read-side: the materialised trees (by-path, by-date,
 	// …) over the store. Always non-nil in a built Projection.
 	View *view.View
 
-	// FSOps is the read/write filesystem facade over View. Nil when the
-	// projection is read-only.
+	// FSOps is the read/write filesystem facade over View. In a built
+	// Projection it is always non-nil (ReadOnly stores reject mutations
+	// from inside); nil only when a caller assembles the value manually.
 	FSOps *fsops.Ops
 }
 
