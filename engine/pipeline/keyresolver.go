@@ -30,6 +30,13 @@ type KeyResolver interface {
 // KeyContext carries the write-time context the engine hands to
 // ResolveWriteKey. Extended additively — new fields are added
 // without changing the method signature. See ADR-58. It carries no
-// namespace: namespace is not a security boundary, and crypto is
-// namespace-agnostic (ADR-99 §1b). It is currently empty.
+// namespace FIELD: namespace is not a security boundary, and crypto
+// is namespace-agnostic (ADR-99 §1b). It is currently empty.
+//
+// TODO(M4.3, decision R3): add Ext json.RawMessage — a read-only
+// copy of the manifest's ext pocket, filled by the write path. A
+// host KeyResolver reads nsid (or any attribute) out of it to pick
+// a key (per-namespace keys, tenant crypto-shredding); the engine
+// never interprets the pocket, so ADR-99 §1b holds. Does not depend
+// on M4.2 — the bytes come from the manifest being written.
 type KeyContext struct{}

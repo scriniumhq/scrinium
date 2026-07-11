@@ -27,6 +27,12 @@ import (
 
 // Config holds the slicing parameters. The algorithm
 // (FastCDC) is hard-wired; only sizes and the window are tunable.
+//
+// TODO(M4.5, decision R4): this struct is fed from the immutable
+// StoreConfig.ChunkerConfig field (Types / 11 Configuration §11.3;
+// ADR-44) — the field does not exist in domain.StoreConfig yet and
+// lands with the chunker milestone. Immutable because changing the
+// slicing parameters breaks chunk dedup between old and new writes.
 type Config struct {
 	// MinChunkSize, AvgChunkSize, MaxChunkSize define the chunk-size
 	// distribution. FastCDC produces a distribution peaking near

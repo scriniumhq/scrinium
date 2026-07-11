@@ -101,6 +101,13 @@ func NewScrubAgent(
 }
 
 const (
+	// TODO(R6): once per cycle run the cheap duplicate-handle invariant
+	// check — SELECT artifact_id FROM manifests WHERE artifact_id IS NOT
+	// NULL GROUP BY artifact_id HAVING COUNT(*) > 1 — and surface hits in
+	// the cycle report (Warn + ScrubStats). The manifests_artifact index
+	// is non-UNIQUE by design (safe two-phase form migration); outside an
+	// active migration a duplicate is a write-path bug the schema will
+	// not catch, so the watch lives here.
 	scrubLeaseName           = "store.agent.scrub.lease"
 	defaultScrubScanInterval = 24 * time.Hour
 	defaultScrubMaxAge       = 30 * 24 * time.Hour

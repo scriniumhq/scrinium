@@ -124,8 +124,13 @@ func (r *Runner) BuildPut(
 		}
 
 		// Each stage gets its own hasher: per-stage hashes are
-		// recorded in the manifest for diagnostic purposes (and will
-		// be re-verified by Scrub in M3).
+		// recorded in the manifest unconditionally (decision R2 —
+		// no config knob; localization must exist in stores that did
+		// not anticipate needing it) and will be re-verified by Scrub
+		// in M3.
+		// TODO(R2 backlog): the LAST stage's hasher duplicates
+		// blobRefHash (both observe the final output stream) — reuse
+		// blobRefHash for it and drop one hash pass for free.
 		stageHasher, err := r.hashes.NewHasher(hashAlgo)
 		if err != nil {
 			return nil, nil, fmt.Errorf("pipeline: stage hasher %q: %w", algo, err)

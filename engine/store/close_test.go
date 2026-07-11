@@ -94,13 +94,13 @@ func TestClose_EmptyDEK_NoPanic(t *testing.T) {
 	}
 }
 
-func TestClose_NoCapabilityToken_NoPanic(t *testing.T) {
+func TestClose_PartialCryptoState_NoPanic(t *testing.T) {
 	s := &store{
 		state:  domain.StateUnlocked,
 		crypto: crypto.New(nil, []byte{1, 2, 3}, nil, nil, nil),
 	}
 	if err := s.Close(); err != nil {
-		t.Fatalf("Close on nil token: %v", err)
+		t.Fatalf("Close on partially populated crypto state: %v", err)
 	}
 }
 

@@ -443,8 +443,16 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 }
 
 // ResolveManifestDigest returns the current on-disk digest for a handle.
+//
+// The manifests_artifact index is deliberately NON-UNIQUE (decision R6):
+// a form migration (re-key, rebundling) may safely hold two rows for one
+// handle in transit — build the new form first, tear down the old one
+// after. During that window the resolve is made deterministic by csn:
+// the freshest form (max csn) wins. Duplicate-handle detection outside
+// an active migration is the Scrub Agent's invariant check, not a
+// schema constraint.
 func (i *Index) ResolveManifestDigest(ctx context.Context, id domain.ArtifactID) (domain.ManifestDigest, bool, error) {
-	const stmt = `SELECT manifest_digest FROM manifests WHERE artifact_id = ? LIMIT 1`
+	const stmt = `SELECT manifest_digest FROM manifests WHERE artifact_id = ? ORDER BY csn DESC LIMIT 1`
 	var d string
 	err := i.db.QueryRowContext(ctx, stmt, string(id)).Scan(&d)
 	switch {

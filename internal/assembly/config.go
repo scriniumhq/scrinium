@@ -156,11 +156,17 @@ type Schedule struct {
 }
 
 // ScrubSchedule is a Schedule (interval Every or cron Schedule, mutually
-// exclusive) plus per-stage verification (Scrub).
+// exclusive).
+//
+// Per-stage hashes are always written by the pipeline runner (decision
+// R2) — the former perStageVerification key was parsed but mapped to
+// nothing and has been removed. Scrub-side verification DEPTH (whether
+// a scheduled pass runs the reverse pipeline per stage) will be a
+// ScrubConfig parameter when per-stage re-verification lands (M3 TODO
+// in pipeline.BuildPut), not a store or schedule knob here.
 type ScrubSchedule struct {
-	Every                Duration `yaml:"every,omitempty" json:"every,omitempty"`
-	Schedule             string   `yaml:"schedule,omitempty" json:"schedule,omitempty"`
-	PerStageVerification bool     `yaml:"perStageVerification,omitempty" json:"perStageVerification,omitempty"`
+	Every    Duration `yaml:"every,omitempty" json:"every,omitempty"`
+	Schedule string   `yaml:"schedule,omitempty" json:"schedule,omitempty"`
 }
 
 // AgentSpec is a user agent's kind+config block. Config is left as a

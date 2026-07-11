@@ -80,8 +80,9 @@ type Manifest struct {
 	// pack containers (slot empty).
 	ArtifactID ArtifactID
 
-	// Name is the identity slot of a system artifact (config/<seq>,
-	// scrub/cursor, migration/pending, …), written via
+	// Name is the identity slot of a system artifact
+	// (store.config.<seq>, store.agent.orphanscan.last,
+	// extension.bundler.migration.pending, …), written via
 	// AdminStore.System().Put (ADR-85). Present ⟺ system artifact;
 	// the user Put path never sets it. Empty for user artifacts and
 	// pack containers.

@@ -99,7 +99,7 @@ func (e *CustomIndex) Close() error {
 // inside the index-write transaction. It writes:
 //
 //   - byID:   artifactID → raw vfsmeta JSON (verbatim — we don't
-//     re-encode `fs`, so future vfsmeta versions that add fields flow
+//     re-encode the vfsmeta payload, so future schema versions that add fields flow
 //     through without an fspathindex migration);
 //   - byPath: "<path>\x00<artifactID>" → artifactID (the path tree).
 //
