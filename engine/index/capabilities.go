@@ -6,6 +6,20 @@ import (
 	"scrinium.dev/domain"
 )
 
+// DuplicateHandleAuditor is the optional capability of a StoreIndex that
+// can cheaply enumerate handles carrying more than one live manifest row.
+//
+// The manifests_artifact index is deliberately NON-UNIQUE (decision R6):
+// a form migration may transiently hold two rows per handle. Outside an
+// active migration a duplicate is a write-path bug the schema will not
+// catch, so the Scrub Agent probes this capability once per cycle and
+// surfaces hits (Warn + ScrubStats). Optional by-assertion, like every
+// index capability: a backend without a cheap GROUP BY simply does not
+// implement it and the check is skipped.
+type DuplicateHandleAuditor interface {
+	ListDuplicateHandles(ctx context.Context) ([]domain.ArtifactID, error)
+}
+
 // CheckpointWriter is the optional capability of a StoreIndex that can
 // serialize its full state into a self-contained checkpoint file — a
 // point-in-time copy the RebuildIndexAgent can later restore and replay

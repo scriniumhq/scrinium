@@ -110,7 +110,7 @@ func (r *Runner) BuildPut(
 		formatHash:  r.hashes.Format,
 	}
 
-	for _, algo := range algoIDs {
+	for i, algo := range algoIDs {
 		factory, err := r.transformers.Get(algo)
 		if err != nil {
 			return nil, nil, fmt.Errorf("pipeline: get factory %q: %w", algo, err)
@@ -123,17 +123,25 @@ func (r *Runner) BuildPut(
 			pp.closers = append(pp.closers, c)
 		}
 
-		// Each stage gets its own hasher: per-stage hashes are
-		// recorded in the manifest unconditionally (decision R2 —
-		// no config knob; localization must exist in stores that did
-		// not anticipate needing it) and will be re-verified by Scrub
-		// in M3.
-		// TODO(R2 backlog): the LAST stage's hasher duplicates
-		// blobRefHash (both observe the final output stream) — reuse
-		// blobRefHash for it and drop one hash pass for free.
-		stageHasher, err := r.hashes.NewHasher(hashAlgo)
-		if err != nil {
-			return nil, nil, fmt.Errorf("pipeline: stage hasher %q: %w", algo, err)
+		// Each stage gets a hasher: per-stage hashes are recorded in
+		// the manifest unconditionally (decision R2 — no config knob;
+		// localization must exist in stores that did not anticipate
+		// needing it). Per-stage RE-verification on a scheduled scrub
+		// pass is a future ScrubConfig depth knob (decision R2).
+		//
+		// The LAST stage's output IS the final stream, so it reuses
+		// blobRefHasher instead of paying a second hash pass over the
+		// same bytes (decision R2 rider); the final tee below is then
+		// skipped — double-feeding the hasher would corrupt BlobRef.
+		var stageHasher hash.Hash
+		if i == len(algoIDs)-1 {
+			stageHasher = blobRefHasher
+		} else {
+			h, herr := r.hashes.NewHasher(hashAlgo)
+			if herr != nil {
+				return nil, nil, fmt.Errorf("pipeline: stage hasher %q: %w", algo, herr)
+			}
+			stageHasher = h
 		}
 		current = io.TeeReader(stageOut, stageHasher)
 
@@ -144,8 +152,12 @@ func (r *Runner) BuildPut(
 		})
 	}
 
-	// Final tee: the bytes about to hit the disk feed BlobRef.
-	current = io.TeeReader(current, blobRefHasher)
+	// Final tee: the bytes about to hit the disk feed BlobRef. With a
+	// non-empty pipeline the last stage's tee already feeds
+	// blobRefHasher (reuse above) — only the stage-less path tees here.
+	if len(algoIDs) == 0 {
+		current = io.TeeReader(current, blobRefHasher)
+	}
 
 	return current, pp, nil
 }

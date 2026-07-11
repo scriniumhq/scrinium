@@ -9,6 +9,7 @@ import (
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
+	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/lease"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -50,6 +51,14 @@ type ScrubStats struct {
 	ScannedBlobs  int64
 	VerifiedBlobs int64
 	FailedBlobs   int64
+
+	// DuplicateHandles counts handles carrying more than one live
+	// manifest row (decision R6): the manifests_artifact index is
+	// non-UNIQUE by design (safe two-phase form migration), so outside
+	// an active migration a duplicate is a write-path bug — the schema
+	// will not catch it, the scrub cycle does. Populated only when the
+	// index implements index.DuplicateHandleAuditor.
+	DuplicateHandles int64
 }
 
 // ScrubAgent is the background blob-integrity verifier.
@@ -101,13 +110,6 @@ func NewScrubAgent(
 }
 
 const (
-	// TODO(R6): once per cycle run the cheap duplicate-handle invariant
-	// check — SELECT artifact_id FROM manifests WHERE artifact_id IS NOT
-	// NULL GROUP BY artifact_id HAVING COUNT(*) > 1 — and surface hits in
-	// the cycle report (Warn + ScrubStats). The manifests_artifact index
-	// is non-UNIQUE by design (safe two-phase form migration); outside an
-	// active migration a duplicate is a write-path bug the schema will
-	// not catch, so the watch lives here.
 	scrubLeaseName           = "store.agent.scrub.lease"
 	defaultScrubScanInterval = 24 * time.Hour
 	defaultScrubMaxAge       = 30 * 24 * time.Hour
@@ -224,9 +226,10 @@ func (a *scrubAgent) maintenanceSpec() agent.MaintenanceSpec {
 
 func scrubStatsMap(s ScrubStats) map[string]int64 {
 	return map[string]int64{
-		"scanned_blobs":  s.ScannedBlobs,
-		"verified_blobs": s.VerifiedBlobs,
-		"failed_blobs":   s.FailedBlobs,
+		"scanned_blobs":     s.ScannedBlobs,
+		"verified_blobs":    s.VerifiedBlobs,
+		"failed_blobs":      s.FailedBlobs,
+		"duplicate_handles": s.DuplicateHandles,
 	}
 }
 
@@ -308,6 +311,25 @@ func (a *scrubAgent) verify(ctx context.Context) (ScrubStats, error) {
 			manErr = err
 		default:
 			stats.FailedBlobs++ // manifest corruption counts as a failure too
+		}
+	}
+
+	// Phase C — duplicate-handle invariant (decision R6). By-assertion:
+	// only when the backend implements the auditor capability. A hit is
+	// legal only inside an active form migration; anything the operator
+	// did not expect is a write-path bug, surfaced loudly but without
+	// failing the pass — corruption counters are about data, this is
+	// about the index invariant.
+	if aud, ok := a.idx.(index.DuplicateHandleAuditor); ok && ctx.Err() == nil {
+		switch dups, err := aud.ListDuplicateHandles(ctx); {
+		case err != nil && !agent.IsCtxErr(err):
+			a.Logger().Warn("scrub: duplicate-handle audit failed", "err", err)
+		case err == nil && len(dups) > 0:
+			stats.DuplicateHandles = int64(len(dups))
+			for _, id := range dups {
+				a.Logger().Warn("scrub: duplicate manifest rows for handle (legal only during an active form migration)",
+					"artifact_id", id)
+			}
 		}
 	}
 

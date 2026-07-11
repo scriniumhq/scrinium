@@ -464,6 +464,35 @@ func (i *Index) ResolveManifestDigest(ctx context.Context, id domain.ArtifactID)
 	return domain.ManifestDigest(d), true, nil
 }
 
+// ListDuplicateHandles returns every handle carrying more than one live
+// manifest row (index.DuplicateHandleAuditor, decision R6). A duplicate
+// is legal only inside an active form migration; the Scrub Agent calls
+// this once per cycle and reports anything it finds. Cheap: a single
+// GROUP BY over the manifests_artifact index.
+func (i *Index) ListDuplicateHandles(ctx context.Context) ([]domain.ArtifactID, error) {
+	const stmt = `SELECT artifact_id FROM manifests
+		WHERE artifact_id IS NOT NULL AND artifact_id != ''
+		GROUP BY artifact_id HAVING COUNT(*) > 1
+		ORDER BY artifact_id`
+	rows, err := i.db.QueryContext(ctx, stmt)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer rows.Close()
+	var dups []domain.ArtifactID
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, classifyError(err)
+		}
+		dups = append(dups, domain.ArtifactID(id))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, classifyError(err)
+	}
+	return dups, nil
+}
+
 // ManifestExistsByDigest reports whether a manifest row carries digest.
 // The digest is the primary key, so this is a direct point-lookup.
 func (i *Index) ManifestExistsByDigest(ctx context.Context, digest domain.ManifestDigest) (bool, error) {
