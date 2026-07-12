@@ -202,6 +202,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		slog.Bool("encrypted_dek", desc.DEKEncrypted),
 		manifestCryptoAttr(cfg.ManifestCrypto),
 		slog.Bool("recovery_kit", kit != nil))
+	s.startLiveness(o.livenessInterval)
 	return s, kit, nil
 }
 

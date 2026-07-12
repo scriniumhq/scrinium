@@ -207,3 +207,27 @@ func TestHistory_EmptyStore_ReturnsEmpty(t *testing.T) {
 		t.Errorf("History on empty store: got %d entries, want 0", len(hist))
 	}
 }
+
+// R-a (config review): KDFParams are input-only at InitStore and live
+// in the descriptor; Write must never serialise them into a
+// store.config snapshot (they used to leak into every version).
+func TestWrite_StripsKDFParams(t *testing.T) {
+	drv := newDriver(t)
+	cfg := sampleConfig()
+	cfg.KDFParams = &domain.KDFParams{Time: 3, Memory: 64 * 1024, Threads: 4}
+
+	if err := Write(context.Background(), drv, testHashes{}, cfg); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	// The caller's value is untouched (Write gets a copy).
+	if cfg.KDFParams == nil {
+		t.Fatal("caller's KDFParams must not be mutated")
+	}
+	got, err := Read(context.Background(), drv, testHashes{})
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got.KDFParams != nil {
+		t.Errorf("KDFParams leaked into the store.config snapshot: %+v", got.KDFParams)
+	}
+}

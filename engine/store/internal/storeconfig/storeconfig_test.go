@@ -107,6 +107,14 @@ func TestValidateImmutable_RejectsUnknownEnums(t *testing.T) {
 		"ContentHasher":    func(c *domain.StoreConfig) { c.ContentHasher = "bogus" },
 		"ManifestEncoding": func(c *domain.StoreConfig) { c.ManifestEncoding = "bogus" },
 		"EncryptedDedup":   func(c *domain.StoreConfig) { c.EncryptedDedup = "bogus" },
+		// R-a (config review): these enums used to pass unvalidated and
+		// persist through UpdateConfig.
+		"BlobStorage":    func(c *domain.StoreConfig) { c.BlobStorage = "bogus" },
+		"IdentityMode":   func(c *domain.StoreConfig) { c.IdentityMode = "bogus" },
+		"VerifyOnRead":   func(c *domain.StoreConfig) { c.VerifyOnRead = "bogus" },
+		"DeletionPolicy": func(c *domain.StoreConfig) { c.DeletionPolicy = "bogus" },
+		"GCLeasePolicy":  func(c *domain.StoreConfig) { c.GCLeasePolicy = "bogus" },
+		"PackAlignment":  func(c *domain.StoreConfig) { c.PackAlignment = 777 },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -230,5 +238,27 @@ func TestValidateAgainstActive_AccumulatesMultipleMismatches(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "PathTopology") || !strings.Contains(err.Error(), "ContentHasher") {
 		t.Errorf("error should report both mismatches; got %v", err)
+	}
+}
+
+// R-a (config review): IdentityMode is immutable (ADR-73) and used to
+// be missing from the against-active comparison — a WithConfig with a
+// diverging mode passed OpenStore silently.
+func TestValidateAgainstActive_IdentityMode(t *testing.T) {
+	active := ApplyDefaults(domain.StoreConfig{IdentityMode: domain.IdentityModeUnique})
+
+	req := domain.StoreConfig{IdentityMode: domain.IdentityModeCoalesced}
+	if err := ValidateAgainstActive(req, active); !errors.Is(err, errs.ErrConfigMismatch) {
+		t.Errorf("diverging IdentityMode: want ErrConfigMismatch, got %v", err)
+	}
+
+	// Empty request field = "not asked" — passes, like every immutable.
+	if err := ValidateAgainstActive(domain.StoreConfig{}, active); err != nil {
+		t.Errorf("empty request must pass, got %v", err)
+	}
+	// Matching value passes.
+	req = domain.StoreConfig{IdentityMode: domain.IdentityModeUnique}
+	if err := ValidateAgainstActive(req, active); err != nil {
+		t.Errorf("matching IdentityMode must pass, got %v", err)
 	}
 }

@@ -62,10 +62,20 @@ type store struct {
 	activeConfig domain.StoreConfig
 
 	// State machine, guarded by stateMu.
-	stateMu     sync.RWMutex
-	state       domain.StoreState
-	maintenance domain.MaintenanceMode
-	closed      bool
+	stateMu sync.RWMutex
+	state   domain.StoreState
+	// Liveness sentinel (ADR-111): offlineBySentinel marks an Offline
+	// set by the probe (self-healable), substituted makes it sticky
+	// (foreign store_id at our path — reopen only). Guarded by stateMu.
+	offlineBySentinel bool
+	substituted       bool
+	maintenance       domain.MaintenanceMode
+	closed            bool
+
+	// livenessStop/livenessOnce own the sentinel goroutine lifecycle
+	// (ADR-111); nil livenessStop = sentinel never started.
+	livenessStop chan struct{}
+	livenessOnce sync.Once
 
 	// Plugin registries — set at construction, never mutated after.
 	hashes       domain.HashRegistry

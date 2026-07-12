@@ -140,7 +140,7 @@ func runServe(args []string) int {
 
 	srv := &http.Server{
 		Addr:              *listen,
-		Handler:           clog.Middleware(log, "webview")(mux),
+		Handler:           clog.Middleware(log, "webview")(daemon.StoreGuard(asm.MaintenanceMode, mux)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Info("serving webview", "addr", *listen)

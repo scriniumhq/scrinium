@@ -38,6 +38,11 @@ func (s *store) Close() error {
 	s.closed = true
 	s.stateMu.Unlock()
 
+	// Stop the liveness sentinel before wiping secrets: a probe firing
+	// mid-teardown must not observe a half-closed store. Nil-safe and
+	// idempotent (ADR-111).
+	s.stopLiveness()
+
 	resolver := s.crypto.CloseSecrets()
 
 	if r, ok := resolver.(interface{ Close() }); ok {

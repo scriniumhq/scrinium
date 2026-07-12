@@ -74,7 +74,7 @@ func runServe(args []string) int {
 
 	srv := &http.Server{
 		Addr:              *listen,
-		Handler:           clog.Middleware(log, "webdav")(handler),
+		Handler:           clog.Middleware(log, "webdav")(daemon.StoreGuard(asm.MaintenanceMode, handler)),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	log.Info("serving webdav", "addr", *listen)
