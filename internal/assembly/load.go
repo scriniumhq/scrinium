@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"scrinium.dev/config/declarative"
+	decl "scrinium.dev/config/declarative"
 
 	"gopkg.in/yaml.v3"
 )
@@ -15,33 +15,33 @@ import (
 // the same build-time options Build accepts (e.g. WithExtension) and are
 // applied on top of the parsed config.
 func LoadYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, declarative.DecodeYAML, modeOpen, opts)
+	return loadAndBuild(ctx, data, decl.DecodeYAML, modeOpen, opts)
 }
 
 // LoadInitYAML parses a YAML config and creates a fresh store. Errors
 // if the store already exists.
 func LoadInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, declarative.DecodeYAML, modeInit, opts)
+	return loadAndBuild(ctx, data, decl.DecodeYAML, modeInit, opts)
 }
 
 // LoadOrInitYAML opens the described store, creating it if absent.
 func LoadOrInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, declarative.DecodeYAML, modeOpenOrInit, opts)
+	return loadAndBuild(ctx, data, decl.DecodeYAML, modeOpenOrInit, opts)
 }
 
 // LoadJSON parses a JSON config and opens the described store.
 func LoadJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, declarative.DecodeJSON, modeOpen, opts)
+	return loadAndBuild(ctx, data, decl.DecodeJSON, modeOpen, opts)
 }
 
 // LoadInitJSON parses a JSON config and creates a fresh store.
 func LoadInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, declarative.DecodeJSON, modeInit, opts)
+	return loadAndBuild(ctx, data, decl.DecodeJSON, modeInit, opts)
 }
 
 // LoadOrInitJSON opens the described store, creating it if absent.
 func LoadOrInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, declarative.DecodeJSON, modeOpenOrInit, opts)
+	return loadAndBuild(ctx, data, decl.DecodeJSON, modeOpenOrInit, opts)
 }
 
 // Explain parses a config, resolves policy references, applies
@@ -65,7 +65,7 @@ func Explain(ctx context.Context, data []byte) ([]byte, error) {
 
 // decoderFunc decodes config bytes into a Config. The two concrete
 // decoders (YAML/JSON) and detectUnmarshal's sniffing share this shape.
-type decoderFunc func([]byte, *Config) error
+type decoderFunc func([]byte, *decl.Config) error
 
 // detectUnmarshal picks JSON when the document's first non-space byte
 // is '{' or '[', YAML otherwise. Used only by Explain, which is
@@ -73,9 +73,9 @@ type decoderFunc func([]byte, *Config) error
 func detectUnmarshal(data []byte) decoderFunc {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
-		return declarative.DecodeJSON
+		return decl.DecodeJSON
 	}
-	return declarative.DecodeYAML
+	return decl.DecodeYAML
 }
 
 func loadAndBuild(ctx context.Context, data []byte, decode decoderFunc, mode buildMode, opts []BuildOption) (Assembly, error) {
@@ -102,18 +102,19 @@ func modeToPublic(m buildMode) Mode {
 	}
 }
 
-func parse(data []byte, decode decoderFunc) (*Config, error) {
-	var c Config
+func parse(data []byte, decode decoderFunc) (*decl.Config, error) {
+	var c decl.Config
 	if err := decode(data, &c); err != nil {
 		return nil, fmt.Errorf("scrinium: parse config: %w", err)
 	}
 	return &c, nil
 }
 
-// prepare runs the config package's pre-build pipeline (Normalize +
-// Validate) — shared by both Load* and Explain. The model logic lives
-// in package config; prepare is just the assembly-side call site.
-func prepare(c *Config) error {
+// prepare runs the declarative model's pre-build pipeline (Normalize +
+// Validate) — shared by both Load* and Explain. The logic lives in
+// package config/declarative; prepare is just the assembly-side call
+// site.
+func prepare(c *decl.Config) error {
 	if err := c.Normalize(); err != nil {
 		return fmt.Errorf("scrinium: %w", err)
 	}

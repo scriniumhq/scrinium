@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	decl "scrinium.dev/config/declarative"
 
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -15,7 +16,7 @@ import (
 // is registered for the scheme, otherwise the engine's built-in
 // DialDriver (file://, s3:// when present, bare paths). The built-in
 // schemes are registered by the consumer's blank import (ADR-63).
-func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
+func dialDriver(ctx context.Context, spec *decl.StoreSpec) (driver.Driver, error) {
 	scheme := uri.SchemeOf(spec.Driver)
 	if f, ok := globalRegistry.driver(scheme); ok {
 		creds, err := resolveCredentials(ctx, spec.Credentials)
@@ -32,7 +33,7 @@ func dialDriver(ctx context.Context, spec *StoreSpec) (driver.Driver, error) {
 // sqlite in the store's index/ dir. The resolved URI is dialled through an
 // custom index factory if one is registered for its scheme, otherwise the
 // engine's built-in DialIndex.
-func dialIndex(ctx context.Context, spec *StoreSpec, defaults *Defaults) (index.StoreIndex, error) {
+func dialIndex(ctx context.Context, spec *decl.StoreSpec, defaults *decl.Defaults) (index.StoreIndex, error) {
 	indexUri := spec.Index
 	if indexUri == "" && defaults != nil {
 		indexUri = defaults.Index

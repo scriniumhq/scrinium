@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	decl "scrinium.dev/config/declarative"
 	"sort"
 
 	"scrinium.dev/domain"
@@ -18,7 +19,7 @@ import (
 // projection.Config. The actual View+FSOps wiring lives in
 // projection.Build; assembly only owns config translation and the
 // store-URI-aware scratch-dir default.
-func projectionConfig(p *Projection, mountSession domain.SessionID, storeURI string) (projection.Config, error) {
+func projectionConfig(p *decl.Projection, mountSession domain.SessionID, storeURI string) (projection.Config, error) {
 	cfg := projection.Config{
 		RootView:       p.RootView,
 		ByPathFallback: p.ByPathFallback,

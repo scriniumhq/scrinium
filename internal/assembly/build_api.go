@@ -2,6 +2,7 @@ package assembly
 
 import (
 	"context"
+	decl "scrinium.dev/config/declarative"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
@@ -45,13 +46,13 @@ func (m Mode) internal() buildMode {
 // defaulted store. The mode defaults to ModeOpenOrInit; pass
 // WithMode to change it.
 //
-//	asm, err := Build(ctx, Config{
-//	    Store: &StoreSpec{Driver: "file:///data/app"},
+//	asm, err := Build(ctx, decl.Config{
+//	    Store: &decl.StoreSpec{Driver: "file:///data/app"},
 //	})
 //
 // The Config is treated as owned by Build for the duration of the call
 // (defaults are applied in place); do not mutate it concurrently.
-func Build(ctx context.Context, cfg Config, opts ...BuildOption) (Assembly, error) {
+func Build(ctx context.Context, cfg decl.Config, opts ...BuildOption) (Assembly, error) {
 	o := Options{mode: ModeOpenOrInit}
 	for _, opt := range opts {
 		opt(&o)

@@ -3,11 +3,12 @@ package assembly
 import (
 	"context"
 	"fmt"
+	decl "scrinium.dev/config/declarative"
 
 	"scrinium.dev/domain"
 )
 
-func resolveCredentials(ctx context.Context, creds Credentials) (map[string][]byte, error) {
+func resolveCredentials(ctx context.Context, creds decl.Credentials) (map[string][]byte, error) {
 	if len(creds) == 0 {
 		return nil, nil
 	}
@@ -26,7 +27,7 @@ func resolveCredentials(ctx context.Context, creds Credentials) (map[string][]by
 // policy's encryption secret. The secret is resolved once at load
 // time; the provider returns the same bytes on every prompt (init,
 // unlock, rotation) — adequate for the file/env/plain schemes.
-func passphraseProvider(ctx context.Context, p *Policy) (domain.PassphraseProvider, error) {
+func passphraseProvider(ctx context.Context, p *decl.Policy) (domain.PassphraseProvider, error) {
 	if p == nil || p.Encryption == nil {
 		return nil, nil
 	}
