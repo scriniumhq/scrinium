@@ -44,6 +44,9 @@ func HeadlessOf(s Store) (HeadlessDataPlane, bool) {
 // blob and its container manifest encrypt under the same key.
 func (s *store) WriteHeadless(ctx context.Context, input io.Reader) (domain.ManifestDigest, error) {
 	cfg := s.sessionConfig() // class-III write preferences apply to headless puts too (ADR-110)
+	if cfg.MaxArtifactSize > 0 && input != nil {
+		input = newLimitGuard(input, cfg.MaxArtifactSize) // class-II size cap applies to every write path
+	}
 	keyID := s.resolveWriteKeyID()
 	var digest domain.ManifestDigest
 	err := s.withWriteDEK(cfg, func(dek []byte) error {

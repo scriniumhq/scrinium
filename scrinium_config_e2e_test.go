@@ -142,18 +142,29 @@ func TestConfigE2E_StrictDecodeThroughFacade(t *testing.T) {
 	}
 }
 
-// TestConfigE2E_DeadKeyGateThroughFacade: the reserved maxArtifactSize
-// fails fast with an honest ErrNotImplemented instead of creating the
-// illusion of an enforced limit.
-func TestConfigE2E_DeadKeyGateThroughFacade(t *testing.T) {
+// TestConfigE2E_MaxArtifactSizeEnforced: the maxArtifactSize key seeds
+// the class-II limit and the limit actually bites on Put — the file
+// stops being a dead key with an illusion of enforcement.
+func TestConfigE2E_MaxArtifactSizeEnforced(t *testing.T) {
 	ctx := context.Background()
 	doc := []byte(fmt.Sprintf(`store:
   driver: file://%s
   policy:
-    maxArtifactSize: 1GB
+    maxArtifactSize: 1KB
 `, t.TempDir()))
-	_, err := scrinium.LoadInitYAML(ctx, doc)
-	if !errors.Is(err, errs.ErrNotImplemented) {
-		t.Fatalf("maxArtifactSize must fail fast with ErrNotImplemented, got %v", err)
+	c, err := scrinium.LoadInitYAML(ctx, doc)
+	if err != nil {
+		t.Fatalf("LoadInitYAML: %v", err)
+	}
+	defer func() { _ = c.Close() }()
+
+	if got := c.Store.Config().MaxArtifactSize; got != 1000 {
+		t.Fatalf("seeded MaxArtifactSize = %d, want 1000 (1KB, decimal)", got)
+	}
+	if _, err := c.Put(ctx, scrinium.Artifact{Payload: strings.NewReader(strings.Repeat("x", 2000))}); !errors.Is(err, errs.ErrArtifactTooLarge) {
+		t.Fatalf("Put over the declarative limit: want ErrArtifactTooLarge, got %v", err)
+	}
+	if _, err := c.Put(ctx, scrinium.Artifact{Payload: strings.NewReader("tiny")}); err != nil {
+		t.Fatalf("Put under the limit must pass, got %v", err)
 	}
 }

@@ -109,12 +109,13 @@ func TestValidateImmutable_RejectsUnknownEnums(t *testing.T) {
 		"EncryptedDedup":   func(c *domain.StoreConfig) { c.EncryptedDedup = "bogus" },
 		// R-a (config review): these enums used to pass unvalidated and
 		// persist through UpdateConfig.
-		"BlobStorage":    func(c *domain.StoreConfig) { c.BlobStorage = "bogus" },
-		"IdentityMode":   func(c *domain.StoreConfig) { c.IdentityMode = "bogus" },
-		"VerifyOnRead":   func(c *domain.StoreConfig) { c.VerifyOnRead = "bogus" },
-		"DeletionPolicy": func(c *domain.StoreConfig) { c.DeletionPolicy = "bogus" },
-		"GCLeasePolicy":  func(c *domain.StoreConfig) { c.GCLeasePolicy = "bogus" },
-		"PackAlignment":  func(c *domain.StoreConfig) { c.PackAlignment = 777 },
+		"BlobStorage":     func(c *domain.StoreConfig) { c.BlobStorage = "bogus" },
+		"IdentityMode":    func(c *domain.StoreConfig) { c.IdentityMode = "bogus" },
+		"VerifyOnRead":    func(c *domain.StoreConfig) { c.VerifyOnRead = "bogus" },
+		"DeletionPolicy":  func(c *domain.StoreConfig) { c.DeletionPolicy = "bogus" },
+		"GCLeasePolicy":   func(c *domain.StoreConfig) { c.GCLeasePolicy = "bogus" },
+		"PackAlignment":   func(c *domain.StoreConfig) { c.PackAlignment = 777 },
+		"MaxArtifactSize": func(c *domain.StoreConfig) { c.MaxArtifactSize = -1 },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

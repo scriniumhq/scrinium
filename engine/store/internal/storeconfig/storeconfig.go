@@ -153,6 +153,9 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 	default:
 		return fmt.Errorf("%w: SessionOverrides=%q", errs.ErrInvalidConfig, cfg.SessionOverrides)
 	}
+	if cfg.MaxArtifactSize < 0 {
+		return fmt.Errorf("%w: MaxArtifactSize=%d (negative; 0 = unlimited)", errs.ErrInvalidConfig, cfg.MaxArtifactSize)
+	}
 	switch cfg.PackAlignment {
 	case domain.PackAlignmentAuto, domain.PackAlignmentNone, domain.PackAlignment512, domain.PackAlignment4096:
 	default:

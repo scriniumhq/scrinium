@@ -84,5 +84,6 @@ var Specs = []FieldSpec{
 	{"InlineBlobLimit", ClassSession, ConnOverlay},
 	{"GCLeasePolicy", ClassGovernance, ConnRefusedGovernance},
 	{"SessionOverrides", ClassGovernance, ConnRefusedGovernance},
+	{"MaxArtifactSize", ClassGovernance, ConnRefusedGovernance},
 	{"KDFParams", ClassImmutable, ConnIgnored},
 }

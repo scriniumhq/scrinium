@@ -79,6 +79,7 @@ func divergeProbes(active domain.StoreConfig) map[string]domain.StoreConfig {
 		"InlineBlobLimit":      {InlineBlobLimit: active.InlineBlobLimit + 4096},
 		"GCLeasePolicy":        {GCLeasePolicy: domain.GCLeaseLeaderElection},
 		"SessionOverrides":     {SessionOverrides: domain.SessionOverridesDeny},
+		"MaxArtifactSize":      {MaxArtifactSize: active.MaxArtifactSize + (1 << 20)},
 		"KDFParams":            {KDFParams: &domain.KDFParams{Time: 9, Memory: 1 << 16, Threads: 2}},
 	}
 }

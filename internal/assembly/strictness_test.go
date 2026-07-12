@@ -9,15 +9,14 @@ import (
 
 // R-a (config review): every policy feature whose wiring has not
 // landed must fail fast with ErrNotImplemented instead of being
-// silently ignored — maxArtifactSize used to be a dead key an operator
-// could set and believe enforced.
+// silently ignored. maxArtifactSize graduated from this gate: it is
+// enforced on the Put paths now and maps to StoreConfig (class II).
 func TestGuardUnsupportedPolicy(t *testing.T) {
 	cases := map[string]*Policy{
-		"chunking":        {Chunking: &Chunking{MaxSize: 1 << 20}},
-		"bundling":        {Bundling: &Bundling{MaxBundleSize: 1 << 24}},
-		"pipeline":        {Pipeline: []PipelineStage{{Kind: "zstd"}}},
-		"pipelineExtra":   {PipelineExtra: []PipelineStage{{Kind: "zstd"}}},
-		"maxArtifactSize": {MaxArtifactSize: 1 << 30},
+		"chunking":      {Chunking: &Chunking{MaxSize: 1 << 20}},
+		"bundling":      {Bundling: &Bundling{MaxBundleSize: 1 << 24}},
+		"pipeline":      {Pipeline: []PipelineStage{{Kind: "zstd"}}},
+		"pipelineExtra": {PipelineExtra: []PipelineStage{{Kind: "zstd"}}},
 	}
 	for name, p := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -30,7 +29,7 @@ func TestGuardUnsupportedPolicy(t *testing.T) {
 	if err := guardUnsupportedPolicy(nil); err != nil {
 		t.Errorf("nil policy must pass, got %v", err)
 	}
-	wired := &Policy{DeletionPolicy: "retention", Retention: Duration(3600000000000)}
+	wired := &Policy{DeletionPolicy: "retention", Retention: Duration(3600000000000), MaxArtifactSize: 1 << 30}
 	if err := guardUnsupportedPolicy(wired); err != nil {
 		t.Errorf("wired-only policy must pass, got %v", err)
 	}

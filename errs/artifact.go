@@ -57,6 +57,11 @@ var ErrEmptySessionID = errors.New("scrinium: empty session ID")
 // engine-readable extension block (vfsmeta and friends).
 var ErrExtTooLarge = errors.New("scrinium: ext metadata too large")
 
+// ErrArtifactTooLarge — the payload crossed StoreConfig.MaxArtifactSize
+// (class II governance limit; 0 = unlimited). Raised by the streaming
+// guard on the Put paths, so undeclared-length streams are caught too.
+var ErrArtifactTooLarge = errors.New("scrinium: artifact exceeds MaxArtifactSize")
+
 // ErrUsrTooLarge — Artifact.Usr > MaxUsrSize (64 KB). Usr is the
 // opaque host-application block.
 var ErrUsrTooLarge = errors.New("scrinium: usr metadata too large")

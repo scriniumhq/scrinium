@@ -155,6 +155,11 @@ type StoreConfig struct {
 	// SessionOverrides is the class-II admin knob over class-III
 	// client overrides (ADR-110). Empty defaults to Allow.
 	SessionOverrides SessionOverridesPolicy
+	// MaxArtifactSize caps a single artifact's payload in bytes
+	// (class II governance; 0 = unlimited). Enforced as a streaming
+	// guard on the Put paths — the payload aborts with
+	// errs.ErrArtifactTooLarge once the limit is crossed.
+	MaxArtifactSize int64
 
 	KDFParams *KDFParams
 }

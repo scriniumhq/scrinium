@@ -115,11 +115,6 @@ func guardUnsupportedPolicy(p *Policy) error {
 		return fmt.Errorf("scrinium: bundling is not wired yet (M4/S4): %w", errs.ErrNotImplemented)
 	case len(p.Pipeline) > 0 || len(p.PipelineExtra) > 0:
 		return fmt.Errorf("scrinium: explicit pipeline assembly is not wired yet: %w", errs.ErrNotImplemented)
-	case p.MaxArtifactSize > 0:
-		// R-a (config review): the key parsed but mapped to nothing — an
-		// operator who set a limit believed one was enforced. Fail fast
-		// until the Put-side check lands (config-layer rework).
-		return fmt.Errorf("scrinium: maxArtifactSize is not enforced yet: %w", errs.ErrNotImplemented)
 	}
 	return nil
 }
@@ -211,6 +206,9 @@ func storeConfigFromPolicy(p *Policy) (domain.StoreConfig, bool) {
 	}
 	if p.Retention != 0 {
 		cfg.RetentionPeriod = p.Retention.Std()
+	}
+	if p.MaxArtifactSize > 0 {
+		cfg.MaxArtifactSize = int64(p.MaxArtifactSize)
 	}
 
 	return cfg, encrypted

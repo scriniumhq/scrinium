@@ -183,6 +183,10 @@ func divergentGovernance(req, active domain.StoreConfig) []string {
 		out = append(out, fmt.Sprintf("SessionOverrides: requested %q, active %q",
 			req.SessionOverrides, active.SessionOverrides))
 	}
+	if req.MaxArtifactSize != 0 && req.MaxArtifactSize != active.MaxArtifactSize {
+		out = append(out, fmt.Sprintf("MaxArtifactSize: requested %d, active %d",
+			req.MaxArtifactSize, active.MaxArtifactSize))
+	}
 	return out
 }
 
