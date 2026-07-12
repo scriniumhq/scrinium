@@ -27,7 +27,7 @@ func TestPlanConnection_EmptyRequestPasses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("empty client config must pass, got %v", err)
 	}
-	if overlay != (domain.StoreConfig{}) {
+	if !zeroOverlay(overlay) {
 		t.Errorf("empty request must yield a zero overlay, got %+v", overlay)
 	}
 }
@@ -198,4 +198,16 @@ func containsAll(s string, subs ...string) bool {
 		}
 	}
 	return true
+}
+
+// zeroOverlay reports whether an overlay carries no class-III fields.
+// StoreConfig contains a slice (Pipeline), so it is not comparable
+// with == — check the overlay-relevant fields explicitly.
+func zeroOverlay(o domain.StoreConfig) bool {
+	return o.BlobStorage == "" &&
+		o.VerifyOnRead == "" &&
+		o.InlineBlobLimit == 0 &&
+		o.PackAlignment == 0 &&
+		o.EagerFetchLimit == 0 &&
+		len(o.Pipeline) == 0
 }

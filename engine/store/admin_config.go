@@ -84,11 +84,13 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	}
 
 	s.cfgMu.Lock()
-	if err := storeconfig.Write(ctx, s.drv, s.hashes, requested); err != nil {
+	seq, err := storeconfig.Write(ctx, s.drv, s.hashes, requested)
+	if err != nil {
 		s.cfgMu.Unlock()
 		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	s.activeConfig = requested
+	s.lastConfigSeq = seq
 	s.cfgMu.Unlock()
 
 	// Lock-free (cfgMu released): the active config was swapped on disk

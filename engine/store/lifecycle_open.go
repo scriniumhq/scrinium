@@ -104,7 +104,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Load and validate the active StoreConfig ---
 
-	active, overlay, err := loadActiveConfig(ctx, drv, o, wrap)
+	active, overlay, cfgSeq, err := loadActiveConfig(ctx, drv, o, wrap)
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +119,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 			return nil, wrap("", err)
 		}
 		s.sessionOverlay = overlay
+		s.lastConfigSeq = cfgSeq
 		s.crypto.PromoteResolverIfDefault()
 		if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 			return nil, wrap("", err)
@@ -142,6 +143,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 			return nil, wrap("", err)
 		}
 		s.sessionOverlay = overlay
+		s.lastConfigSeq = cfgSeq
 		s.stateMu.Lock()
 		s.state = domain.StateLocked
 		s.stateMu.Unlock()
@@ -184,6 +186,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		return nil, wrap("", err)
 	}
 	s.sessionOverlay = overlay
+	s.lastConfigSeq = cfgSeq
 	s.crypto.PromoteResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		return nil, wrap("", err)
@@ -251,22 +254,22 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, hashes doma
 // caller without WithConfig accepts the on-disk config as-is — a
 // legitimate scenario for diagnostic tools and projection-only
 // consumers.
-func loadActiveConfig(ctx context.Context, drv driver.Driver, o storeOptions, wrap func(string, error) error) (domain.StoreConfig, domain.StoreConfig, error) {
-	active, err := storeconfig.Read(ctx, drv, o.hashRegistry)
+func loadActiveConfig(ctx context.Context, drv driver.Driver, o storeOptions, wrap func(string, error) error) (domain.StoreConfig, domain.StoreConfig, uint64, error) {
+	active, seq, err := storeconfig.Read(ctx, drv, o.hashRegistry)
 	if err != nil {
-		return domain.StoreConfig{}, domain.StoreConfig{}, wrap("read system.config", err)
+		return domain.StoreConfig{}, domain.StoreConfig{}, 0, wrap("read system.config", err)
 	}
 	active = storeconfig.ApplyDefaults(active)
 	if err := storeconfig.ValidateImmutable(active); err != nil {
-		return domain.StoreConfig{}, domain.StoreConfig{}, fmt.Errorf("%w: system.config produced invalid config: %v",
+		return domain.StoreConfig{}, domain.StoreConfig{}, 0, fmt.Errorf("%w: system.config produced invalid config: %v",
 			errs.ErrStoreCorrupted, err)
 	}
 	var overlay domain.StoreConfig
 	if o.cfg != nil {
 		overlay, err = storeconfig.PlanConnection(*o.cfg, active)
 		if err != nil {
-			return domain.StoreConfig{}, domain.StoreConfig{}, err
+			return domain.StoreConfig{}, domain.StoreConfig{}, 0, err
 		}
 	}
-	return active, overlay, nil
+	return active, overlay, seq, nil
 }

@@ -180,7 +180,8 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Persist descriptor and system.config ---
 
-	if err := persistInitState(ctx, drv, o.hashRegistry, cfg, desc, wrap); err != nil {
+	cfgSeq, err := persistInitState(ctx, drv, o.hashRegistry, cfg, desc, wrap)
+	if err != nil {
 		aead.Wipe(dek)
 		return nil, nil, err
 	}
@@ -202,6 +203,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		slog.Bool("encrypted_dek", desc.DEKEncrypted),
 		manifestCryptoAttr(cfg.ManifestCrypto),
 		slog.Bool("recovery_kit", kit != nil))
+	s.lastConfigSeq = cfgSeq
 	s.startLiveness(o.livenessInterval)
 	return s, kit, nil
 }
@@ -256,16 +258,17 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, hashes domain.H
 // config write (system.config must be readable before the Store opens for
 // users). The descriptor is written first so a config-write failure still
 // leaves a readable Store identity behind.
-func persistInitState(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) error {
+func persistInitState(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) (uint64, error) {
 	if err := descriptor.WriteBoth(ctx, drv, hashes, desc); err != nil {
-		return wrap("write descriptor", err)
+		return 0, wrap("write descriptor", err)
 	}
 	if hashes == nil {
-		return fmt.Errorf(
+		return 0, fmt.Errorf(
 			"store.InitStore: WithHashRegistry is required to persist system.config")
 	}
-	if err := storeconfig.Write(ctx, drv, hashes, cfg); err != nil {
-		return wrap("write system.config", err)
+	seq, err := storeconfig.Write(ctx, drv, hashes, cfg)
+	if err != nil {
+		return 0, wrap("write system.config", err)
 	}
-	return nil
+	return seq, nil
 }

@@ -64,6 +64,12 @@ type store struct {
 	// State machine, guarded by stateMu.
 	stateMu sync.RWMutex
 	state   domain.StoreState
+	// lastConfigSeq is the store.config version this instance's
+	// activeConfig was loaded from. Owned by the open path, UpdateConfig
+	// and the liveness tick's freshness check (ADR-110, INV-110-7);
+	// guarded by cfgMu.
+	lastConfigSeq uint64
+
 	// sessionOverlay holds the connection's class-III overrides
 	// (ADR-110): populated at OpenStore from WithConfig, merged over
 	// the active defaults by sessionConfig(). Immutable after open —
