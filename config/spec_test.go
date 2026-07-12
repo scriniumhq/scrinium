@@ -21,26 +21,37 @@ import (
 // Together they retire the bug class "the field was forgotten in one
 // of the validators".
 
-func TestSpec_CoversEveryStoreConfigField(t *testing.T) {
+// fieldsHandledOutsideRegistry are StoreConfig fields deliberately not
+// in the registry, with the reason. KDFParams is ConnIgnored —
+// input-only at InitStore, never validated or compared as config
+// (registry.go documents this). The test allows exactly these.
+var fieldsHandledOutsideRegistry = map[string]string{
+	"KDFParams": "ConnIgnored: input-only, not config",
+}
+
+func TestRegistry_CoversEveryStoreConfigField(t *testing.T) {
 	typ := reflect.TypeOf(domain.StoreConfig{})
 
-	inSpec := map[string]bool{}
-	for _, s := range Specs {
-		if inSpec[s.Name] {
-			t.Errorf("duplicate spec row: %s", s.Name)
+	inReg := map[string]bool{}
+	for _, r := range registryRows() {
+		if inReg[r.Name] {
+			t.Errorf("duplicate registry row: %s", r.Name)
 		}
-		inSpec[s.Name] = true
+		inReg[r.Name] = true
 	}
 
 	for i := 0; i < typ.NumField(); i++ {
 		name := typ.Field(i).Name
-		if !inSpec[name] {
-			t.Errorf("StoreConfig.%s has no spec row — classify it (ADR-110) before shipping", name)
+		if inReg[name] {
+			delete(inReg, name)
+			continue
 		}
-		delete(inSpec, name)
+		if _, ok := fieldsHandledOutsideRegistry[name]; !ok {
+			t.Errorf("StoreConfig.%s is in neither the registry nor the out-of-band allowlist — classify it (ADR-110) before shipping", name)
+		}
 	}
-	for name := range inSpec {
-		t.Errorf("spec row %q matches no StoreConfig field — stale registry", name)
+	for name := range inReg {
+		t.Errorf("registry row %q matches no StoreConfig field — stale registry", name)
 	}
 }
 
@@ -84,11 +95,11 @@ func divergeProbes(active domain.StoreConfig) map[string]domain.StoreConfig {
 	}
 }
 
-func TestSpec_ConnectionBehaviourMatches(t *testing.T) {
+func TestRegistry_ConnectionBehaviourMatches(t *testing.T) {
 	active := ApplyDefaults(domain.StoreConfig{})
 	probes := divergeProbes(active)
 
-	for _, s := range Specs {
+	for _, s := range registryRows() {
 		s := s
 		t.Run(s.Name, func(t *testing.T) {
 			req, ok := probes[s.Name]
@@ -127,19 +138,19 @@ func TestSpec_ConnectionBehaviourMatches(t *testing.T) {
 	}
 
 	// The probe table itself must not outgrow the registry.
-	if len(probes) != len(Specs) {
-		t.Errorf("probe table has %d entries, registry %d — keep them in lockstep", len(probes), len(Specs))
+	if len(probes) != len(registryRows())+len(fieldsHandledOutsideRegistry) {
+		t.Errorf("probe table has %d entries, registry+allowlist %d — keep them in lockstep", len(probes), len(registryRows())+len(fieldsHandledOutsideRegistry))
 	}
 }
 
 // Every session-classified row must actually be merged by MergeSession
 // — a class-III field the merge forgets would be accepted at
 // connection and then silently dropped, the exact INV-110-5 sin.
-func TestSpec_SessionRowsAreMerged(t *testing.T) {
+func TestRegistry_SessionRowsAreMerged(t *testing.T) {
 	active := ApplyDefaults(domain.StoreConfig{})
 	probes := divergeProbes(active)
 
-	for _, s := range Specs {
+	for _, s := range registryRows() {
 		if s.Conn != ConnOverlay && s.Conn != ConnDerived {
 			continue
 		}

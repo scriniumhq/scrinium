@@ -88,119 +88,22 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 // The set of checks here is deliberately small. We catch the obvious
 // mistakes — empty enum, contradictory hashes — and let later
 // milestones add the full matrix.
+// ValidateImmutable checks every StoreConfig field's value against its
+// enum / bounds. It is the single gate on BOTH the init and update
+// paths (despite the historical name — it validates all fields, not
+// only class I; mutable enums reach store.config through UpdateConfig
+// and must be gated too, R-a).
+//
+// The per-field rules live once, in the registry (registry.go); this
+// loops it. A field with no value-level rule (a bool, an unbounded
+// int) carries a nil Check and passes. First failure wins; field order
+// follows the struct.
 func ValidateImmutable(cfg domain.StoreConfig) error {
-	switch cfg.PathTopology {
-	case domain.PathTopologyFlat, domain.PathTopologySharded:
-	default:
-		return errs.ErrInvalidConfig
+	for _, f := range registry {
+		if err := f.validate(cfg); err != nil {
+			return err
+		}
 	}
-	switch cfg.ManifestEncoding {
-	case domain.ManifestEncodingJSON:
-		// OK
-	case domain.ManifestEncodingBinary:
-		// Binary (\x00SC2 / MsgPack) magic is reserved by the format
-		// and recognised by the manifest codec, but the
-		// deterministic-encode side is not yet shipped. Refuse loudly
-		// at InitStore rather than crash on the first user-level Put
-		// with ErrUnsupportedEncoding from the codec.
-		return fmt.Errorf("%w: ManifestEncoding=Binary deferred",
-			errs.ErrInvalidConfig)
-	default:
-		return errs.ErrInvalidConfig
-	}
-	switch cfg.ManifestCrypto {
-	case domain.ManifestCryptoPlain, domain.ManifestCryptoSealed, domain.ManifestCryptoParanoid:
-	default:
-		return errs.ErrInvalidConfig
-	}
-	switch cfg.ContentHasher {
-	case domain.HashSHA256, domain.HashBLAKE3:
-	default:
-		return errs.ErrInvalidConfig
-	}
-	// R-a (config review): the enum fields below were not validated at
-	// all — garbage strings passed ValidateImmutable and, through
-	// UpdateConfig, persisted into store.config. Every enum is checked
-	// now; mutable enums included, because this validator is the single
-	// gate on both init and update paths.
-	switch cfg.BlobStorage {
-	case domain.BlobStorageTarget, domain.BlobStorageInline:
-	default:
-		return fmt.Errorf("%w: BlobStorage=%q", errs.ErrInvalidConfig, cfg.BlobStorage)
-	}
-	switch cfg.IdentityMode {
-	case "", domain.IdentityModeUnique, domain.IdentityModeCoalesced:
-	default:
-		return fmt.Errorf("%w: IdentityMode=%q", errs.ErrInvalidConfig, cfg.IdentityMode)
-	}
-	switch cfg.VerifyOnRead {
-	case domain.VerifyOnReadAuto, domain.VerifyOnReadForceEnabled, domain.VerifyOnReadDisabled:
-	default:
-		return fmt.Errorf("%w: VerifyOnRead=%q", errs.ErrInvalidConfig, cfg.VerifyOnRead)
-	}
-	switch cfg.DeletionPolicy {
-	case domain.DeletionPolicyFree, domain.DeletionPolicyRetention, domain.DeletionPolicyNoDelete:
-	default:
-		return fmt.Errorf("%w: DeletionPolicy=%q", errs.ErrInvalidConfig, cfg.DeletionPolicy)
-	}
-	switch cfg.GCLeasePolicy {
-	case domain.GCLeaseAuto, domain.GCLeaseSingleHost, domain.GCLeaseLeaderElection:
-	default:
-		return fmt.Errorf("%w: GCLeasePolicy=%q", errs.ErrInvalidConfig, cfg.GCLeasePolicy)
-	}
-	switch cfg.SessionOverrides {
-	case "", domain.SessionOverridesAllow, domain.SessionOverridesDeny:
-	default:
-		return fmt.Errorf("%w: SessionOverrides=%q", errs.ErrInvalidConfig, cfg.SessionOverrides)
-	}
-	if cfg.MaxArtifactSize < 0 {
-		return fmt.Errorf("%w: MaxArtifactSize=%d (negative; 0 = unlimited)", errs.ErrInvalidConfig, cfg.MaxArtifactSize)
-	}
-	switch cfg.PackAlignment {
-	case domain.PackAlignmentAuto, domain.PackAlignmentNone, domain.PackAlignment512, domain.PackAlignment4096:
-	default:
-		return fmt.Errorf("%w: PackAlignment=%d", errs.ErrInvalidConfig, cfg.PackAlignment)
-	}
-	// ADR-58: EncryptedDedup is immutable and constrained to the known
-	// modes. "" is legitimate for a Plain store — the field is ignored
-	// there.
-	switch cfg.EncryptedDedup {
-	case "", domain.EncryptedDedupDisabled, domain.EncryptedDedupConvergent:
-	default:
-		return errs.ErrInvalidConfig
-	}
-
-	// ADR-59: SegmentSize is immutable. Zero is legitimate (Plain
-	// store, or a not-yet-defaulted config); a non-zero value must
-	// fall within the format's bounds.
-	if cfg.SegmentSize != 0 &&
-		(cfg.SegmentSize < domain.MinSegmentSize || cfg.SegmentSize > domain.MaxSegmentSize) {
-		return fmt.Errorf("%w: SegmentSize=%d out of range [%d, %d]",
-			errs.ErrInvalidConfig, cfg.SegmentSize, domain.MinSegmentSize, domain.MaxSegmentSize)
-	}
-
-	// TombstoneGracePeriod has its own dedicated sentinel because a
-	// too-short value is the only param with cross-host safety
-	// implications. The minimum below matches docs/4 §5.1.
-	if cfg.TombstoneGracePeriod > 0 && cfg.TombstoneGracePeriod < domain.MinTombstoneGracePeriod {
-		return errs.ErrInvalidTombstoneGracePeriod
-	}
-
-	// InlineBlobLimit upper bound: bigger inline blobs would push hot
-	// index pages out of SQLite's page cache. Zero means "feature off"
-	// — only positive values are constrained.
-	if cfg.InlineBlobLimit > 0 && cfg.InlineBlobLimit > domain.MaxInlineBlobLimit {
-		return fmt.Errorf("%w: InlineBlobLimit=%d exceeds %d",
-			errs.ErrInvalidConfig, cfg.InlineBlobLimit, domain.MaxInlineBlobLimit)
-	}
-
-	// RetentionPeriod lower bound: a shorter window than the GC cycle
-	// defeats the purpose. Zero means "feature off".
-	if cfg.RetentionPeriod > 0 && cfg.RetentionPeriod < domain.MinRetentionPeriod {
-		return fmt.Errorf("%w: RetentionPeriod=%v shorter than %v",
-			errs.ErrInvalidConfig, cfg.RetentionPeriod, domain.MinRetentionPeriod)
-	}
-
 	return nil
 }
 
@@ -218,61 +121,20 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 // indistinguishable from "field omitted". The caller can always pass
 // an explicit value to opt into the check; a default value passes
 // silently.
+// ValidateAgainstActive compares a requested config to the active one
+// on every IMMUTABLE (class I) field; mutable fields pass through.
+// Used by OpenStore's WithConfig check and by UpdateConfig. Derived
+// from the registry filtered to class I — the same field list, the
+// same diverges rule (populated-and-different), no separate hand list.
+//
+// Only fields the caller populated (non-zero) are compared: a Go zero
+// is indistinguishable from "omitted", so a caller opts into the check
+// by passing an explicit value. DeletionPolicyLock (a bool) rides this
+// exactly: false is the relaxed default and reads as unset, so passing
+// false never fails against a locked active config; only an explicit
+// true-vs-false diverges.
 func ValidateAgainstActive(req, active domain.StoreConfig) error {
-	var mismatches []string
-
-	if req.PathTopology != "" && req.PathTopology != active.PathTopology {
-		mismatches = append(mismatches,
-			fmt.Sprintf("PathTopology: requested %q, active %q",
-				req.PathTopology, active.PathTopology))
-	}
-	if req.ManifestEncoding != "" && req.ManifestEncoding != active.ManifestEncoding {
-		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestEncoding: requested %q, active %q",
-				req.ManifestEncoding, active.ManifestEncoding))
-	}
-	if req.ManifestCrypto != "" && req.ManifestCrypto != active.ManifestCrypto {
-		mismatches = append(mismatches,
-			fmt.Sprintf("ManifestCrypto: requested %q, active %q",
-				req.ManifestCrypto, active.ManifestCrypto))
-	}
-	// ADR-58: EncryptedDedup is immutable — changing it would break
-	// reproducibility of historical encrypted blob addresses.
-	if req.EncryptedDedup != "" && req.EncryptedDedup != active.EncryptedDedup {
-		mismatches = append(mismatches,
-			fmt.Sprintf("EncryptedDedup: requested %q, active %q",
-				req.EncryptedDedup, active.EncryptedDedup))
-	}
-	// ADR-59: SegmentSize is immutable — changing it would break
-	// ciphertext reproducibility under Convergent (and therefore dedup
-	// of encrypted blobs/chunks).
-	if req.SegmentSize != 0 && req.SegmentSize != active.SegmentSize {
-		mismatches = append(mismatches,
-			fmt.Sprintf("SegmentSize: requested %d, active %d",
-				req.SegmentSize, active.SegmentSize))
-	}
-	if req.ContentHasher != "" && req.ContentHasher != active.ContentHasher {
-		mismatches = append(mismatches,
-			fmt.Sprintf("ContentHasher: requested %q, active %q",
-				req.ContentHasher, active.ContentHasher))
-	}
-	// ADR-73: IdentityMode is immutable — silently diverging on it at
-	// OpenStore would let two hosts disagree on handle reproducibility.
-	// (R-a: this comparison was missing entirely.)
-	if req.IdentityMode != "" && req.IdentityMode != active.IdentityMode {
-		mismatches = append(mismatches,
-			fmt.Sprintf("IdentityMode: requested %q, active %q",
-				req.IdentityMode, active.IdentityMode))
-	}
-	// DeletionPolicyLock: bool, "not set" indistinguishable from
-	// "false". Compare only when the caller explicitly asked to lock —
-	// false is the relaxed default and passing it should not fail
-	// against a locked active config.
-	if req.DeletionPolicyLock && !active.DeletionPolicyLock {
-		mismatches = append(mismatches,
-			"DeletionPolicyLock: requested true, active false")
-	}
-
+	mismatches := divergentByClass(ClassImmutable, req, active)
 	if len(mismatches) == 0 {
 		return nil
 	}
