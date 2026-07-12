@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 
 	"gopkg.in/yaml.v3"
 )
@@ -66,8 +68,28 @@ func Explain(ctx context.Context, data []byte) ([]byte, error) {
 // decoders (YAML/JSON) and detectUnmarshal's sniffing share this shape.
 type decoderFunc func([]byte, *Config) error
 
-func unmarshalYAML(data []byte, c *Config) error { return yaml.Unmarshal(data, c) }
-func unmarshalJSON(data []byte, c *Config) error { return json.Unmarshal(data, c) }
+// Strict decoding (R-b, config review): an unknown key is an error,
+// not a silent no-op. A declarative file states operator intent —
+// a typo (`retenton:`) or a removed key (the old
+// perStageVerification) must be said out loud, or the intent silently
+// diverges from reality.
+func unmarshalYAML(data []byte, c *Config) error {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(c); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil // empty document → zero Config, same as before
+		}
+		return err
+	}
+	return nil
+}
+
+func unmarshalJSON(data []byte, c *Config) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	return dec.Decode(c)
+}
 
 // detectUnmarshal picks JSON when the document's first non-space byte
 // is '{' or '[', YAML otherwise. Used only by Explain, which is

@@ -27,6 +27,7 @@ const (
 	EventOrphanScanCompleted   = "store.orphan_scan_completed"
 	EventRollbackCompleted     = "store.rollback_completed"
 	EventConfigUpdated         = "store.config_updated"
+	EventStoreRecovered        = "store.store_recovered"
 )
 
 // --- Payload structs ---
@@ -137,6 +138,13 @@ type ScrubFailedPayload struct {
 // Emitted on a transition into StateDegraded (descriptor-replica
 // divergence).
 type StoreDegradedPayload struct {
+	Reason string
+}
+
+// StoreRecoveredPayload is the payload of EventStoreRecovered:
+// the liveness sentinel (ADR-111) healed a sentinel-set Offline —
+// the descriptor is readable again with the same store_id.
+type StoreRecoveredPayload struct {
 	Reason string
 }
 

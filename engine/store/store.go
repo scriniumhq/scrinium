@@ -108,6 +108,11 @@ type AdminStore interface {
 	// State returns the current state of the Store.
 	State() domain.StoreState
 
+	// MaintenanceMode returns the current maintenance mode. Reachable
+	// in every state; surfaces serving data past the store gates
+	// consult it per-request (ADR-111).
+	MaintenanceMode() domain.MaintenanceMode
+
 	// Capabilities returns the bitmask of the underlying driver's
 	// abilities. It is stable for the entire lifetime of the Store.
 	Capabilities() driver.CapabilityMask

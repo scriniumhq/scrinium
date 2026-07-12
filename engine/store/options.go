@@ -1,6 +1,8 @@
 package store
 
 import (
+	"time"
+
 	"log/slog"
 
 	"scrinium.dev/domain"
@@ -16,18 +18,19 @@ type StoreOption func(*storeOptions)
 
 // storeOptions is the resolved aggregate of all StoreOptions.
 type storeOptions struct {
-	forceReinit   bool
-	purgeOnReinit bool
-	cfg           *domain.StoreConfig
-	storeIndex    index.StoreIndex
-	publisher     event.Publisher
-	hashRegistry  domain.HashRegistry
-	readRegistry  pipeline.TransformerRegistry
-	keyResolver   pipeline.KeyResolver
-	passphrase    domain.PassphraseProvider
-	autoUnlock    bool
-	identityMode  domain.IdentityMode
-	logger        *slog.Logger
+	forceReinit      bool
+	purgeOnReinit    bool
+	cfg              *domain.StoreConfig
+	storeIndex       index.StoreIndex
+	publisher        event.Publisher
+	hashRegistry     domain.HashRegistry
+	livenessInterval time.Duration
+	readRegistry     pipeline.TransformerRegistry
+	keyResolver      pipeline.KeyResolver
+	passphrase       domain.PassphraseProvider
+	autoUnlock       bool
+	identityMode     domain.IdentityMode
+	logger           *slog.Logger
 }
 
 // WithForceReinit allows InitStore to run on top of an existing
@@ -74,6 +77,13 @@ func WithPublisher(p event.Publisher) StoreOption {
 // adds its own structure.
 func WithLogger(l *slog.Logger) StoreOption {
 	return func(o *storeOptions) { o.logger = l }
+}
+
+// WithLivenessInterval overrides the liveness-sentinel probe period
+// (ADR-111). Zero = default (5 s); negative = sentinel disabled (hosts
+// running their own probe, or tests constructing partial stores).
+func WithLivenessInterval(d time.Duration) StoreOption {
+	return func(o *storeOptions) { o.livenessInterval = d }
 }
 
 // WithHashRegistry provides the registry of hash algorithms.

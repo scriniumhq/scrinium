@@ -125,6 +125,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
 			storeIDAttr(s), stateAttr(domain.StateUnlocked),
 			slog.Bool("encrypted_dek", false))
+		s.startLiveness(o.livenessInterval)
 		return s, nil
 	}
 
@@ -145,6 +146,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
 			storeIDAttr(s), stateAttr(domain.StateLocked),
 			slog.Bool("encrypted_dek", true))
+		s.startLiveness(o.livenessInterval)
 		return s, nil
 	}
 
@@ -186,6 +188,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo, "store opened",
 		storeIDAttr(s), stateAttr(domain.StateUnlocked),
 		slog.Bool("encrypted_dek", true), slog.Bool("auto_unlock", true))
+	s.startLiveness(o.livenessInterval)
 	return s, nil
 }
 

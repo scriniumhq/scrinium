@@ -115,6 +115,41 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 	default:
 		return errs.ErrInvalidConfig
 	}
+	// R-a (config review): the enum fields below were not validated at
+	// all — garbage strings passed ValidateImmutable and, through
+	// UpdateConfig, persisted into store.config. Every enum is checked
+	// now; mutable enums included, because this validator is the single
+	// gate on both init and update paths.
+	switch cfg.BlobStorage {
+	case domain.BlobStorageTarget, domain.BlobStorageInline:
+	default:
+		return fmt.Errorf("%w: BlobStorage=%q", errs.ErrInvalidConfig, cfg.BlobStorage)
+	}
+	switch cfg.IdentityMode {
+	case "", domain.IdentityModeUnique, domain.IdentityModeCoalesced:
+	default:
+		return fmt.Errorf("%w: IdentityMode=%q", errs.ErrInvalidConfig, cfg.IdentityMode)
+	}
+	switch cfg.VerifyOnRead {
+	case domain.VerifyOnReadAuto, domain.VerifyOnReadForceEnabled, domain.VerifyOnReadDisabled:
+	default:
+		return fmt.Errorf("%w: VerifyOnRead=%q", errs.ErrInvalidConfig, cfg.VerifyOnRead)
+	}
+	switch cfg.DeletionPolicy {
+	case domain.DeletionPolicyFree, domain.DeletionPolicyRetention, domain.DeletionPolicyNoDelete:
+	default:
+		return fmt.Errorf("%w: DeletionPolicy=%q", errs.ErrInvalidConfig, cfg.DeletionPolicy)
+	}
+	switch cfg.GCLeasePolicy {
+	case domain.GCLeaseAuto, domain.GCLeaseSingleHost, domain.GCLeaseLeaderElection:
+	default:
+		return fmt.Errorf("%w: GCLeasePolicy=%q", errs.ErrInvalidConfig, cfg.GCLeasePolicy)
+	}
+	switch cfg.PackAlignment {
+	case domain.PackAlignmentAuto, domain.PackAlignmentNone, domain.PackAlignment512, domain.PackAlignment4096:
+	default:
+		return fmt.Errorf("%w: PackAlignment=%d", errs.ErrInvalidConfig, cfg.PackAlignment)
+	}
 	// ADR-58: EncryptedDedup is immutable and constrained to the known
 	// modes. "" is legitimate for a Plain store — the field is ignored
 	// there.
@@ -209,6 +244,14 @@ func ValidateAgainstActive(req, active domain.StoreConfig) error {
 		mismatches = append(mismatches,
 			fmt.Sprintf("ContentHasher: requested %q, active %q",
 				req.ContentHasher, active.ContentHasher))
+	}
+	// ADR-73: IdentityMode is immutable — silently diverging on it at
+	// OpenStore would let two hosts disagree on handle reproducibility.
+	// (R-a: this comparison was missing entirely.)
+	if req.IdentityMode != "" && req.IdentityMode != active.IdentityMode {
+		mismatches = append(mismatches,
+			fmt.Sprintf("IdentityMode: requested %q, active %q",
+				req.IdentityMode, active.IdentityMode))
 	}
 	// DeletionPolicyLock: bool, "not set" indistinguishable from
 	// "false". Compare only when the caller explicitly asked to lock —

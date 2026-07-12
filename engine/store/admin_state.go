@@ -14,6 +14,12 @@ import (
 // lock-free for readers (RWMutex read).
 func (s *store) State() domain.StoreState { return s.currentState() }
 
+// MaintenanceMode returns the current maintenance mode. Like State,
+// it is reachable in every state including Offline — surfaces that
+// serve data from the index/projection past the store gates (webview
+// listings) consult it per-request (ADR-111, INV-111-5).
+func (s *store) MaintenanceMode() domain.MaintenanceMode { return s.maintenanceMode() }
+
 // Capabilities returns the underlying Driver's capability mask.
 // Stable for the lifetime of the Store; not cached because the
 // Driver is the source of truth and a future Driver may want to

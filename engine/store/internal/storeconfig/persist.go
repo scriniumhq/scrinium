@@ -31,6 +31,14 @@ func Write(
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
 ) error {
+	// KDFParams are input-only at InitStore: they are copied into the
+	// descriptor body and live exclusively there (docs 11, KDFParams).
+	// Never serialise them into the versioned store.config snapshots —
+	// the config history is not a second home for KDF material. (R-a:
+	// they used to leak into every snapshot.) cfg is a value copy, the
+	// caller's struct is untouched.
+	cfg.KDFParams = nil
+
 	payload, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("system config: marshal: %w", err)
