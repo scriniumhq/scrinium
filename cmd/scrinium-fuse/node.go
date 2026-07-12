@@ -9,6 +9,7 @@ import (
 	iofs "io/fs"
 	"log/slog"
 	"os"
+	"scrinium.dev/domain"
 	"syscall"
 	"time"
 
@@ -29,6 +30,21 @@ type fuseFS struct {
 	v         *vfs.VFS
 	startedAt time.Time
 	log       *slog.Logger
+	// mode reports the store's maintenance mode; every read op that
+	// draws from the projection past the store gates consults it
+	// per-request (ADR-111, INV-111-5). Nil = no gating (tests).
+	mode func() domain.MaintenanceMode
+}
+
+// gate is the FUSE face of the liveness sentinel: while the store is
+// Offline (deleted, substituted, or under operator maintenance) every
+// operation answers EIO instead of rendering a vanished world from the
+// index cache — the exact failure the webview guard closes over HTTP.
+func (f *fuseFS) gate() syscall.Errno {
+	if f.mode != nil && f.mode() == domain.MaintenanceModeOffline {
+		return syscall.EIO
+	}
+	return 0
 }
 
 // node is a single inode at a mount-relative path. path == "" is the
@@ -43,8 +59,8 @@ type node struct {
 	path string
 }
 
-func newRoot(v *vfs.VFS, startedAt time.Time, log *slog.Logger) *node {
-	return &node{fsys: &fuseFS{v: v, startedAt: startedAt, log: slogx.OrDiscard(log)}}
+func newRoot(v *vfs.VFS, startedAt time.Time, log *slog.Logger, mode func() domain.MaintenanceMode) *node {
+	return &node{fsys: &fuseFS{v: v, startedAt: startedAt, log: slogx.OrDiscard(log), mode: mode}}
 }
 
 // logOp records a mutation. Success logs at Debug (visible only under
@@ -86,6 +102,9 @@ var (
 )
 
 func (n *node) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
+	if e := n.fsys.gate(); e != 0 {
+		return e
+	}
 	if n.path == "" {
 		t := uint64(n.fsys.startedAt.Unix())
 		out.Mode = fuse.S_IFDIR | 0o755
@@ -101,6 +120,9 @@ func (n *node) Getattr(ctx context.Context, fh fs.FileHandle, out *fuse.AttrOut)
 }
 
 func (n *node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
+	if e := n.fsys.gate(); e != 0 {
+		return nil, e
+	}
 	child := n.childPath(name)
 	fi, err := n.fsys.v.Stat(ctx, child)
 	if err != nil {
@@ -115,6 +137,9 @@ func (n *node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs
 }
 
 func (n *node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
+	if e := n.fsys.gate(); e != 0 {
+		return nil, e
+	}
 	d, err := n.fsys.v.OpenFile(ctx, n.path, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, errnoFromError(err)
@@ -136,6 +161,9 @@ func (n *node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 }
 
 func (n *node) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, syscall.Errno) {
+	if e := n.fsys.gate(); e != 0 {
+		return nil, 0, e
+	}
 	f, err := n.fsys.v.OpenFileAt(ctx, n.path, int(flags), 0)
 	if err != nil {
 		return nil, 0, errnoFromError(err)
