@@ -77,6 +77,9 @@
 // Admin plane (AdminStore):
 //
 //   - admin_config.go      — Config, UpdateConfig, ConfigHistory.
+//   - config_persist.go    — store.config version persistence over named
+//     (writeConfig/readConfig/activeConfigSeq/configHistory); the config
+//     MODEL (defaults, validation) lives in package config.
 //   - admin_crypto.go — Unlock, RotateKEK, SetPassphrase, and
 //     ExportRecoveryKit; holds crypto.mu for the whole operation. The
 //     pure mechanics (CallProvider, buildRecoveryKit, InitEncryptedDEK)
@@ -111,9 +114,7 @@
 //   - named — the named/<name>.<seq> flat address-space mechanics
 //     (name validation, seq claim via atomic create, inline-manifest
 //     build, verify-on-read) shared by the systemStore facade and the
-//     storeconfig bootstrap path (ADR-85).
-//   - storeconfig  — the StoreConfig format, defaults, validation, and
-//     persistence (over named).
+//     store.config bootstrap path (config_persist.go, ADR-85).
 //   - orphanscan   — bootstrap-time orphan recovery.
 //   - reconcile    — replica reconciliation.
 //   - recoverykit  — the recovery-kit format.

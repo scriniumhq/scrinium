@@ -15,7 +15,6 @@ import (
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/reconcile"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
 )
 
@@ -256,7 +255,7 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, hashes doma
 // legitimate scenario for diagnostic tools and projection-only
 // consumers.
 func loadActiveConfig(ctx context.Context, drv driver.Driver, o storeOptions, wrap func(string, error) error) (domain.StoreConfig, domain.StoreConfig, uint64, error) {
-	active, seq, err := storeconfig.Read(ctx, drv, o.hashRegistry)
+	active, seq, err := readConfig(ctx, drv, o.hashRegistry)
 	if err != nil {
 		return domain.StoreConfig{}, domain.StoreConfig{}, 0, wrap("read system.config", err)
 	}

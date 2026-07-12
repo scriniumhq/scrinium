@@ -1,4 +1,4 @@
-package storeconfig
+package store
 
 import (
 	"context"
@@ -19,14 +19,15 @@ import (
 // name→seq mechanism as every other system artifact (named).
 const configName = "store.config"
 
-// Write persists cfg as a new store.config version and returns once the
+// writeConfig persists cfg as a new store.config version and returns once the
 // version is durably written. The active config becomes the one just
 // written (max seq).
 //
-// storeconfig owns the store.config FORMAT (StoreConfig serialisation);
-// named owns the MECHANICS (inline manifest build, seq claim,
-// verify-on-read) shared with every other system artifact.
-func Write(
+// This is the store.config PERSISTENCE: StoreConfig serialisation over
+// named cells. named owns the cell mechanics (inline manifest build,
+// seq claim, verify-on-read) shared with every other system artifact;
+// the StoreConfig MODEL (defaults, validation) lives in package config.
+func writeConfig(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
@@ -57,13 +58,13 @@ func Write(
 	return seq, nil
 }
 
-// Read returns the active StoreConfig (the highest store.config
+// readConfig returns the active StoreConfig (the highest store.config
 // version). It bypasses the StoreIndex entirely — config must be
 // readable at store-open before the index is trusted — by reading the
 // version directory directly. Returns errs.ErrConfigMissing when
 // no config has ever been written; a corrupted version surfaces as
 // errs.ErrCorruptedContent from the verify-on-read in named.Load.
-func Read(
+func readConfig(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
@@ -82,17 +83,17 @@ func Read(
 	return cfg, seq, nil
 }
 
-// ActiveSeq resolves the max store.config version without decoding it
+// activeConfigSeq resolves the max store.config version without decoding it
 // — the cheap freshness probe of the liveness tick (ADR-110,
 // INV-110-7): one readdir, no parse.
-func ActiveSeq(ctx context.Context, drv driver.Driver) (uint64, bool, error) {
+func activeConfigSeq(ctx context.Context, drv driver.Driver) (uint64, bool, error) {
 	return named.ResolveActiveSeq(ctx, drv, configName)
 }
 
-// History returns every store.config version decoded and defaulted,
+// configHistory returns every store.config version decoded and defaulted,
 // newest first (the active config is therefore element zero). Like Read,
 // it enumerates the version directory rather than the index.
-func History(
+func configHistory(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,

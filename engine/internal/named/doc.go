@@ -4,7 +4,7 @@
 // engine/internal/cas. It is the single source of truth for where
 // a system artifact lives and how its active version is chosen, shared by
 // its callers: the systemstore facade (engine/systemstore), the bootstrap
-// config path (engine/store/internal/storeconfig), and the lease primitive
+// config path (engine/store/config_persist.go), and the lease primitive
 // (engine/lease). One layout, one mechanism for all three.
 //
 // A system artifact is identified by a NAME — a flat, dot-separated

@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 
+	"scrinium.dev/domain"
+	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/pipeline"
 )
 
@@ -64,4 +66,18 @@ func WriteDriverFile(s Store, path string, data []byte) error {
 		return fmt.Errorf("WriteDriverFile: not a *store")
 	}
 	return concrete.drv.Put(context.Background(), path, bytes.NewReader(data))
+}
+
+// --- store.config persistence (test-only) ---
+// The config persist path is package-private; these aliases give the
+// storesuite and freshness tests the same entry points production uses.
+
+// WriteConfig persists a StoreConfig version and returns its seq.
+func WriteConfig(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, cfg domain.StoreConfig) (uint64, error) {
+	return writeConfig(ctx, drv, hashes, cfg)
+}
+
+// ReadConfig returns the active StoreConfig and its seq.
+func ReadConfig(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry) (domain.StoreConfig, uint64, error) {
+	return readConfig(ctx, drv, hashes)
 }

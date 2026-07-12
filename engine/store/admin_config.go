@@ -7,7 +7,6 @@ import (
 
 	"scrinium.dev/config"
 	"scrinium.dev/domain"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
@@ -85,7 +84,7 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	}
 
 	s.cfgMu.Lock()
-	seq, err := storeconfig.Write(ctx, s.drv, s.hashes, requested)
+	seq, err := writeConfig(ctx, s.drv, s.hashes, requested)
 	if err != nil {
 		s.cfgMu.Unlock()
 		return fmt.Errorf("store.UpdateConfig: %w", err)
@@ -115,7 +114,7 @@ func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
 	if err := s.enterRead(ctx); err != nil {
 		return nil, err
 	}
-	hist, err := storeconfig.History(ctx, s.drv, s.hashes)
+	hist, err := configHistory(ctx, s.drv, s.hashes)
 	if err != nil {
 		return nil, fmt.Errorf("store.ConfigHistory: %w", err)
 	}

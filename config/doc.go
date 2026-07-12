@@ -18,7 +18,7 @@
 // only its own job — wiring components.
 //
 // What deliberately does NOT live here: the persistence of
-// store.config versions (engine/store/internal/storeconfig — engine
+// store.config versions (engine/store/config_persist.go — engine
 // plumbing over named cells; how the store keeps its config on disk is
 // the store's business), and the runtime construction of components
 // (agents, projection, adapters) from the declarative blocks — that is

@@ -8,7 +8,6 @@ import (
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/testutil/artifactfx"
@@ -37,7 +36,7 @@ func TestConfigFreshness_ExternalChangePickedUp(t *testing.T) {
 	// act — no message, no shared memory.
 	external := before
 	external.RetentionPeriod = newRetention
-	if _, err := storeconfig.Write(context.Background(), drv, storefx.Hashes(), external); err != nil {
+	if _, err := store.WriteConfig(context.Background(), drv, storefx.Hashes(), external); err != nil {
 		t.Fatalf("external Write: %v", err)
 	}
 
@@ -90,7 +89,7 @@ func TestConfigFreshness_GovernanceReachesDeletePath(t *testing.T) {
 
 	external := st.Config()
 	external.DeletionPolicy = domain.DeletionPolicyNoDelete
-	if _, err := storeconfig.Write(ctx, drv, storefx.Hashes(), external); err != nil {
+	if _, err := store.WriteConfig(ctx, drv, storefx.Hashes(), external); err != nil {
 		t.Fatalf("external Write: %v", err)
 	}
 	eventually(t, "NoDelete to reach this instance", func() bool {

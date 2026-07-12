@@ -14,7 +14,6 @@ import (
 	"scrinium.dev/engine/store/internal/crypto"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
 )
 
@@ -267,7 +266,7 @@ func persistInitState(ctx context.Context, drv driver.Driver, hashes domain.Hash
 		return 0, fmt.Errorf(
 			"store.InitStore: WithHashRegistry is required to persist system.config")
 	}
-	seq, err := storeconfig.Write(ctx, drv, hashes, cfg)
+	seq, err := writeConfig(ctx, drv, hashes, cfg)
 	if err != nil {
 		return 0, wrap("write system.config", err)
 	}
