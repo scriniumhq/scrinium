@@ -1,7 +1,10 @@
 // Package assembly is the engine-internal assembler behind the public
-// scrinium facade. It turns a Config — parsed from a YAML/JSON document
-// or built in code — into a live, fully assembled Scrinium stack: store,
-// index, projection view, and the read/write FSOps facade, ready to use.
+// scrinium facade. It turns a Config — the declarative model owned by
+// package config (scrinium.dev/config), parsed there and validated
+// there — into a live, fully assembled Scrinium stack: store, index,
+// projection view, and the read/write FSOps facade, ready to use. The
+// assembly's own job is wiring components; the configuration model
+// (shape, defaults, validation, policy mapping) is not here.
 //
 // It deliberately has no Serve/Run loop: the assembler's job ends at
 // assembling the stack; how it is exposed (mounted via FUSE, served over

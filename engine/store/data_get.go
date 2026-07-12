@@ -42,7 +42,9 @@ func (s *store) Get(ctx context.Context, id domain.ArtifactID, opts ...domain.Ge
 	// engine is the only guard against silent bit rot. AEAD blobs and
 	// media with native checksums auto-skip; ForceEnabled always wraps;
 	// Disabled never does (see shouldVerifyOnRead).
-	cfg := s.snapshotConfig()
+	// Session-effective config (ADR-110): Get consumes class-III
+	// fields (VerifyOnRead, EagerFetchLimit).
+	cfg := s.sessionConfig()
 	verify := shouldVerifyOnRead(cfg.VerifyOnRead, manifest.Pipeline, s.drv.Capabilities(), s.transformers)
 	if log := s.componentLogger("store"); log.Enabled(ctx, slog.LevelDebug) {
 		log.LogAttrs(ctx, slog.LevelDebug, "get opened",

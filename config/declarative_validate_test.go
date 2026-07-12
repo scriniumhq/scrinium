@@ -1,4 +1,4 @@
-package assembly
+package config
 
 import (
 	"strings"
@@ -7,7 +7,7 @@ import (
 
 func wantErr(t *testing.T, c *Config, substr string) {
 	t.Helper()
-	err := validate(c)
+	err := validateConfig(c)
 	if err == nil {
 		t.Fatalf("expected error containing %q, got nil", substr)
 	}
@@ -18,7 +18,7 @@ func wantErr(t *testing.T, c *Config, substr string) {
 
 func TestValidateOK(t *testing.T) {
 	c := &Config{Store: &StoreSpec{Driver: "file:///d"}}
-	if err := validate(c); err != nil {
+	if err := validateConfig(c); err != nil {
 		t.Fatalf("valid single store rejected: %v", err)
 	}
 }

@@ -69,7 +69,7 @@ func runMount(args []string) int {
 		routingCfg,
 		vfs.WithStatsProvider(daemon.StatsProvider(asm, startedAt, 2*time.Second)),
 	)
-	root := newRoot(fsys, startedAt, log)
+	root := newRoot(fsys, startedAt, log, asm.MaintenanceMode)
 
 	mountOpts := &fs.Options{
 		MountOptions: fuse.MountOptions{

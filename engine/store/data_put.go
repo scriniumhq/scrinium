@@ -25,7 +25,15 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts ...domain.PutOp
 	}
 	dopts := domain.ApplyPut(opts...)
 
-	cfg := s.snapshotConfig()
+	// Session-effective config (ADR-110): Put consumes class-III
+	// fields (BlobStorage, InlineBlobLimit, Pipeline, PackAlignment).
+	cfg := s.sessionConfig()
+
+	// MaxArtifactSize (class II): streaming guard — a is a value copy,
+	// the caller's Artifact is untouched.
+	if cfg.MaxArtifactSize > 0 && a.Payload != nil {
+		a.Payload = newLimitGuard(a.Payload, cfg.MaxArtifactSize)
+	}
 
 	if err := validatePutInputs(a, dopts); err != nil {
 		return "", err

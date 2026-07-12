@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/named"
@@ -30,7 +31,7 @@ func Write(
 	drv driver.Driver,
 	hashes domain.HashRegistry,
 	cfg domain.StoreConfig,
-) error {
+) (uint64, error) {
 	// KDFParams are input-only at InitStore: they are copied into the
 	// descriptor body and live exclusively there (docs 11, KDFParams).
 	// Never serialise them into the versioned store.config snapshots —
@@ -41,18 +42,19 @@ func Write(
 
 	payload, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return fmt.Errorf("system config: marshal: %w", err)
+		return 0, fmt.Errorf("system config: marshal: %w", err)
 	}
 	payload = append(payload, '\n')
 
 	fileBytes, _, err := named.BuildInlineManifest(configName, payload, string(cfg.ContentHasher), hashes, domain.ManifestCryptoPlain, nil, "")
 	if err != nil {
-		return fmt.Errorf("system config: build: %w", err)
+		return 0, fmt.Errorf("system config: build: %w", err)
 	}
-	if _, _, err := named.ClaimVersion(ctx, drv, configName, fileBytes); err != nil {
-		return fmt.Errorf("system config: write: %w", err)
+	seq, _, err := named.ClaimVersion(ctx, drv, configName, fileBytes)
+	if err != nil {
+		return 0, fmt.Errorf("system config: write: %w", err)
 	}
-	return nil
+	return seq, nil
 }
 
 // Read returns the active StoreConfig (the highest store.config
@@ -65,15 +67,26 @@ func Read(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
-) (domain.StoreConfig, error) {
+) (domain.StoreConfig, uint64, error) {
 	seq, found, err := named.ResolveActiveSeq(ctx, drv, configName)
 	if err != nil {
-		return domain.StoreConfig{}, fmt.Errorf("system config: resolve active: %w", err)
+		return domain.StoreConfig{}, 0, fmt.Errorf("system config: resolve active: %w", err)
 	}
 	if !found {
-		return domain.StoreConfig{}, errs.ErrConfigMissing
+		return domain.StoreConfig{}, 0, errs.ErrConfigMissing
 	}
-	return loadVersion(ctx, drv, hashes, seq)
+	cfg, err := loadVersion(ctx, drv, hashes, seq)
+	if err != nil {
+		return domain.StoreConfig{}, 0, err
+	}
+	return cfg, seq, nil
+}
+
+// ActiveSeq resolves the max store.config version without decoding it
+// — the cheap freshness probe of the liveness tick (ADR-110,
+// INV-110-7): one readdir, no parse.
+func ActiveSeq(ctx context.Context, drv driver.Driver) (uint64, bool, error) {
+	return named.ResolveActiveSeq(ctx, drv, configName)
 }
 
 // History returns every store.config version decoded and defaulted,
@@ -96,7 +109,7 @@ func History(
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ApplyDefaults(cfg))
+		out = append(out, config.ApplyDefaults(cfg))
 	}
 	return out, nil
 }

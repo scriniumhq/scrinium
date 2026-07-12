@@ -8,11 +8,19 @@ import "errors"
 // ErrConfigMissing — no store.config version has ever been written.
 var ErrConfigMissing = errors.New("scrinium: config missing")
 
+// ErrGovernanceMismatch — a CONNECTING client's config carries a
+// class-II (governance) field diverging from the store's active
+// defaults (ADR-110): DeletionPolicy, RetentionPeriod,
+// TombstoneGracePeriod, GCLeasePolicy, SessionOverrides. Governance
+// changes only by an explicit admin act (UpdateConfig), never by
+// connecting with a softer config.
+var ErrGovernanceMismatch = errors.New(
+	"scrinium: governance config field (class II, ADR-110) differs from store defaults")
+
 // ErrConfigMismatch — an attempt to change an immutable parameter
 // through UpdateConfig, or a conflict between the cfg passed to
 // OpenStore and the active store.config version, or an attempt to
-// remove NoDelete while
-// DeletionPolicyLock is in effect.
+// remove NoDelete while DeletionPolicyLock is in effect.
 var ErrConfigMismatch = errors.New("scrinium: config mismatch")
 
 // ErrInvalidConfig — a StoreConfig parameter is out of range or

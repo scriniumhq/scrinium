@@ -28,7 +28,7 @@ func newTestRoot(t *testing.T, manifests ...domain.Manifest) *node {
 	t.Helper()
 	proj, _ := viewfx.Stack(t, manifests...)
 	fsys := vfs.New(proj, viewfx.RoutingAll())
-	return newRoot(fsys, time.Now(), nil)
+	return newRoot(fsys, time.Now(), nil, nil)
 }
 
 // --- errnoFromError (FUSE-specific error translation) ---

@@ -6,8 +6,10 @@ import (
 	"log/slog"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store/internal/descriptor"
+	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/event"
 )
 
@@ -95,7 +97,58 @@ func (s *store) probeLiveness() {
 		s.sentinelSubstituted(desc.StoreID)
 	default:
 		s.sentinelHealthy()
+		s.refreshGovernance(ctx)
 	}
+}
+
+// refreshGovernance is the second consumer of the liveness tick
+// (ADR-110, INV-110-7): a cheap max-seq probe of store.config; when
+// another host published a new version (UpdateConfig writes the file,
+// not a message), the in-memory active config is re-read and swapped,
+// so agents and the Delete path — every snapshotConfig reader — see
+// fresh governance defaults within a tick instead of "until restart".
+// The local UpdateConfig path bumps lastConfigSeq itself, so its own
+// write never looks like an external change here.
+func (s *store) refreshGovernance(ctx context.Context) {
+	seq, found, err := storeconfig.ActiveSeq(ctx, s.drv)
+	if err != nil || !found {
+		return // liveness already vouched for the world; stay quiet
+	}
+	s.cfgMu.RLock()
+	known := s.lastConfigSeq
+	s.cfgMu.RUnlock()
+	if seq == known {
+		return
+	}
+
+	cfg, readSeq, err := storeconfig.Read(ctx, s.drv, s.hashes)
+	if err != nil {
+		s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn,
+			"config freshness: new version detected but unreadable",
+			storeIDAttr(s), slog.Uint64("seq", seq), slog.String("err", err.Error()))
+		return
+	}
+	cfg = config.ApplyDefaults(cfg)
+	if err := config.ValidateImmutable(cfg); err != nil {
+		s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn,
+			"config freshness: new version invalid, keeping current",
+			storeIDAttr(s), slog.Uint64("seq", readSeq), slog.String("err", err.Error()))
+		return
+	}
+
+	s.cfgMu.Lock()
+	if readSeq <= s.lastConfigSeq { // lost the race to a local UpdateConfig
+		s.cfgMu.Unlock()
+		return
+	}
+	s.activeConfig = cfg
+	s.lastConfigSeq = readSeq
+	s.cfgMu.Unlock()
+
+	s.componentLogger("store").LogAttrs(ctx, slog.LevelInfo,
+		"config refreshed from disk (external admin change)",
+		storeIDAttr(s), slog.Uint64("seq", readSeq))
+	s.publish(event.EventConfigUpdated, event.ConfigUpdatedPayload{Config: cfg})
 }
 
 // sentinelLost transitions to Offline with sentinel provenance. An

@@ -30,7 +30,7 @@ func mustWriteSysConfig(t *testing.T) (string, domain.StoreConfig) {
 		ManifestCrypto:   domain.ManifestCryptoPlain,
 	}
 
-	if err := storeconfig.Write(context.Background(), drv, storefx.Hashes(), cfg); err != nil {
+	if _, err := storeconfig.Write(context.Background(), drv, storefx.Hashes(), cfg); err != nil {
 		t.Fatalf("WriteSystemConfig: %v", err)
 	}
 	return root, cfg
@@ -44,7 +44,7 @@ func TestWriteReadSystemConfig_RoundTrip(t *testing.T) {
 		t.Fatalf("localfs.New: %v", err)
 	}
 
-	got, err := storeconfig.Read(context.Background(), drv, storefx.Hashes())
+	got, _, err := storeconfig.Read(context.Background(), drv, storefx.Hashes())
 	if err != nil {
 		t.Fatalf("ReadSystemConfig: %v", err)
 	}

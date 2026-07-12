@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
@@ -21,10 +22,25 @@ func (s *store) Config() domain.StoreConfig {
 // snapshotConfig returns the active config under cfgMu.RLock(). The
 // single in-memory read used by Config() and by every method that
 // needs the current config without re-reading disk.
+//
+// Deliberately WITHOUT the session overlay: Config() is the admin
+// view of the store's defaults, and a Config()→tweak→UpdateConfig
+// round-trip must never persist session values into them. Class-III
+// consumers on the data paths use sessionConfig() instead (ADR-110).
 func (s *store) snapshotConfig() domain.StoreConfig {
 	s.cfgMu.RLock()
 	defer s.cfgMu.RUnlock()
 	return s.activeConfig
+}
+
+// sessionConfig is the connection's effective config: the active
+// defaults with the class-III session overlay laid over them
+// (ADR-110). Used by the data paths that consume class-III fields
+// (Put, Get, headless writes); governance consumers (Delete, agents)
+// stay on snapshotConfig — an overlay can never soften governance by
+// construction (it carries class III only).
+func (s *store) sessionConfig() domain.StoreConfig {
+	return config.MergeSession(s.snapshotConfig(), s.sessionOverlay)
 }
 
 // UpdateConfig swaps the active StoreConfig. Only mutable fields
@@ -47,15 +63,15 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	}
 
 	current := s.snapshotConfig()
-	requested := storeconfig.ApplyDefaults(cfg)
+	requested := config.ApplyDefaults(cfg)
 
-	if err := storeconfig.ValidateImmutable(requested); err != nil {
+	if err := config.ValidateImmutable(requested); err != nil {
 		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	// ValidateAgainstActive compares requested to current on every
 	// immutable field; mutable fields pass through. Same contract as
 	// OpenStore's WithConfig check.
-	if err := storeconfig.ValidateAgainstActive(requested, current); err != nil {
+	if err := config.ValidateAgainstActive(requested, current); err != nil {
 		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	// DeletionPolicyLock guard: once locked, NoDelete cannot be
@@ -69,11 +85,13 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	}
 
 	s.cfgMu.Lock()
-	if err := storeconfig.Write(ctx, s.drv, s.hashes, requested); err != nil {
+	seq, err := storeconfig.Write(ctx, s.drv, s.hashes, requested)
+	if err != nil {
 		s.cfgMu.Unlock()
 		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	s.activeConfig = requested
+	s.lastConfigSeq = seq
 	s.cfgMu.Unlock()
 
 	// Lock-free (cfgMu released): the active config was swapped on disk
