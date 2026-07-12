@@ -64,6 +64,12 @@ type store struct {
 	// State machine, guarded by stateMu.
 	stateMu sync.RWMutex
 	state   domain.StoreState
+	// sessionOverlay holds the connection's class-III overrides
+	// (ADR-110): populated at OpenStore from WithConfig, merged over
+	// the active defaults by sessionConfig(). Immutable after open —
+	// no lock needed. Zero for a connection without overrides.
+	sessionOverlay domain.StoreConfig
+
 	// Liveness sentinel (ADR-111): offlineBySentinel marks an Offline
 	// set by the probe (self-healable), substituted makes it sticky
 	// (foreign store_id at our path — reopen only). Guarded by stateMu.

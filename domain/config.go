@@ -74,6 +74,17 @@ const (
 	DeletionPolicyFree      DeletionPolicy = "Free"
 )
 
+// SessionOverridesPolicy is the admin knob over class-III client
+// overrides (ADR-110): Allow (default) lets a connection carry its own
+// session preferences; Deny refuses any class-III divergence the same
+// way class II is refused.
+type SessionOverridesPolicy string
+
+const (
+	SessionOverridesAllow SessionOverridesPolicy = "Allow"
+	SessionOverridesDeny  SessionOverridesPolicy = "Deny"
+)
+
 // GCLeasePolicy is the policy for GC Agent coordination.
 type GCLeasePolicy string
 
@@ -141,6 +152,9 @@ type StoreConfig struct {
 	TombstoneGracePeriod time.Duration
 	InlineBlobLimit      int64
 	GCLeasePolicy        GCLeasePolicy
+	// SessionOverrides is the class-II admin knob over class-III
+	// client overrides (ADR-110). Empty defaults to Allow.
+	SessionOverrides SessionOverridesPolicy
 
 	KDFParams *KDFParams
 }

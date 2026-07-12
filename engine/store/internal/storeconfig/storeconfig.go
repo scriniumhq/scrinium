@@ -60,6 +60,9 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 	if cfg.GCLeasePolicy == "" {
 		cfg.GCLeasePolicy = domain.GCLeaseAuto
 	}
+	if cfg.SessionOverrides == "" {
+		cfg.SessionOverrides = domain.SessionOverridesAllow
+	}
 	if cfg.PackAlignment == 0 {
 		// Zero literal in Go for an int-typed enum is also
 		// PackAlignmentNone. We disambiguate "user wanted None" from
@@ -144,6 +147,11 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 	case domain.GCLeaseAuto, domain.GCLeaseSingleHost, domain.GCLeaseLeaderElection:
 	default:
 		return fmt.Errorf("%w: GCLeasePolicy=%q", errs.ErrInvalidConfig, cfg.GCLeasePolicy)
+	}
+	switch cfg.SessionOverrides {
+	case "", domain.SessionOverridesAllow, domain.SessionOverridesDeny:
+	default:
+		return fmt.Errorf("%w: SessionOverrides=%q", errs.ErrInvalidConfig, cfg.SessionOverrides)
 	}
 	switch cfg.PackAlignment {
 	case domain.PackAlignmentAuto, domain.PackAlignmentNone, domain.PackAlignment512, domain.PackAlignment4096:

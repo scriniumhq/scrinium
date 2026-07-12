@@ -21,10 +21,25 @@ func (s *store) Config() domain.StoreConfig {
 // snapshotConfig returns the active config under cfgMu.RLock(). The
 // single in-memory read used by Config() and by every method that
 // needs the current config without re-reading disk.
+//
+// Deliberately WITHOUT the session overlay: Config() is the admin
+// view of the store's defaults, and a Config()→tweak→UpdateConfig
+// round-trip must never persist session values into them. Class-III
+// consumers on the data paths use sessionConfig() instead (ADR-110).
 func (s *store) snapshotConfig() domain.StoreConfig {
 	s.cfgMu.RLock()
 	defer s.cfgMu.RUnlock()
 	return s.activeConfig
+}
+
+// sessionConfig is the connection's effective config: the active
+// defaults with the class-III session overlay laid over them
+// (ADR-110). Used by the data paths that consume class-III fields
+// (Put, Get, headless writes); governance consumers (Delete, agents)
+// stay on snapshotConfig — an overlay can never soften governance by
+// construction (it carries class III only).
+func (s *store) sessionConfig() domain.StoreConfig {
+	return storeconfig.MergeSession(s.snapshotConfig(), s.sessionOverlay)
 }
 
 // UpdateConfig swaps the active StoreConfig. Only mutable fields

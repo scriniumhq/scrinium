@@ -104,7 +104,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// --- Load and validate the active StoreConfig ---
 
-	active, err := loadActiveConfig(ctx, drv, o, wrap)
+	active, overlay, err := loadActiveConfig(ctx, drv, o, wrap)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +118,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		if err != nil {
 			return nil, wrap("", err)
 		}
+		s.sessionOverlay = overlay
 		s.crypto.PromoteResolverIfDefault()
 		if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 			return nil, wrap("", err)
@@ -140,6 +141,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		if err != nil {
 			return nil, wrap("", err)
 		}
+		s.sessionOverlay = overlay
 		s.stateMu.Lock()
 		s.state = domain.StateLocked
 		s.stateMu.Unlock()
@@ -181,6 +183,7 @@ func OpenStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 		aead.Wipe(dek)
 		return nil, wrap("", err)
 	}
+	s.sessionOverlay = overlay
 	s.crypto.PromoteResolverIfDefault()
 	if err := unlockBootstrap(ctx, s, o.publisher); err != nil {
 		return nil, wrap("", err)
@@ -240,25 +243,30 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, hashes doma
 }
 
 // loadActiveConfig reads the active StoreConfig (the max system/config
-// version), applies defaults, and validates it. When the
-// caller supplied WithConfig, its immutable fields are checked against
-// the on-disk config (errs.ErrConfigMismatch on divergence); a caller
-// without WithConfig accepts the on-disk config as-is — a legitimate
-// scenario for diagnostic tools and projection-only consumers.
-func loadActiveConfig(ctx context.Context, drv driver.Driver, o storeOptions, wrap func(string, error) error) (domain.StoreConfig, error) {
+// version), applies defaults, and validates it. When the caller
+// supplied WithConfig, the class-aware connection check runs
+// (ADR-110): class I divergence — ErrConfigMismatch; class II —
+// ErrGovernanceMismatch (change via UpdateConfig, not by connecting);
+// class III — returned as the session overlay for this connection. A
+// caller without WithConfig accepts the on-disk config as-is — a
+// legitimate scenario for diagnostic tools and projection-only
+// consumers.
+func loadActiveConfig(ctx context.Context, drv driver.Driver, o storeOptions, wrap func(string, error) error) (domain.StoreConfig, domain.StoreConfig, error) {
 	active, err := storeconfig.Read(ctx, drv, o.hashRegistry)
 	if err != nil {
-		return domain.StoreConfig{}, wrap("read system.config", err)
+		return domain.StoreConfig{}, domain.StoreConfig{}, wrap("read system.config", err)
 	}
 	active = storeconfig.ApplyDefaults(active)
 	if err := storeconfig.ValidateImmutable(active); err != nil {
-		return domain.StoreConfig{}, fmt.Errorf("%w: system.config produced invalid config: %v",
+		return domain.StoreConfig{}, domain.StoreConfig{}, fmt.Errorf("%w: system.config produced invalid config: %v",
 			errs.ErrStoreCorrupted, err)
 	}
+	var overlay domain.StoreConfig
 	if o.cfg != nil {
-		if err := storeconfig.ValidateAgainstActive(*o.cfg, active); err != nil {
-			return domain.StoreConfig{}, err
+		overlay, err = storeconfig.PlanConnection(*o.cfg, active)
+		if err != nil {
+			return domain.StoreConfig{}, domain.StoreConfig{}, err
 		}
 	}
-	return active, nil
+	return active, overlay, nil
 }

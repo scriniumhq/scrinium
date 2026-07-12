@@ -25,7 +25,9 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts ...domain.PutOp
 	}
 	dopts := domain.ApplyPut(opts...)
 
-	cfg := s.snapshotConfig()
+	// Session-effective config (ADR-110): Put consumes class-III
+	// fields (BlobStorage, InlineBlobLimit, Pipeline, PackAlignment).
+	cfg := s.sessionConfig()
 
 	if err := validatePutInputs(a, dopts); err != nil {
 		return "", err
