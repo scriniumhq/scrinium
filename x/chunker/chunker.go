@@ -1,15 +1,18 @@
 // Package chunker implements the decorator that transparently
-// CDC-slices large streams into anonymous chunks and creates a TOC
-// manifest.
+// CDC-slices large streams into anonymous chunks and records them as a
+// composite: an ordinary manifest whose blob_refs carry the ordered
+// chunk list, with the composite flag in the ext pocket (ADR-87). There
+// is no TOC blob and no manifest type field.
 //
 // The slicing algorithm — FastCDC — is fixed in the format
-// (ADR-44): the algorithm identifier is NOT stored in the TOC blob,
-// which guarantees a deterministic read path and Recovery without
-// knowing the configuration.
+// (ADR-44): the algorithm identifier is NOT stored anywhere in the
+// composite, which guarantees a deterministic read path and Recovery
+// without knowing the configuration.
 //
 // Slicing is transparent to the client: Put returns a regular
-// ArtifactID (the TOC manifest), Get returns the reassembled stream,
-// and Walk presents TOC manifests like ordinary artifacts.
+// ArtifactID (the floating handle of the composite manifest), Get
+// returns the reassembled stream, and Walk presents composites like
+// ordinary artifacts.
 //
 // TODO(M5): CDC-based chunker wrapper (milestones C3).
 package chunker
@@ -24,6 +27,12 @@ import (
 
 // Config holds the slicing parameters. The algorithm
 // (FastCDC) is hard-wired; only sizes and the window are tunable.
+//
+// TODO(M4.5, decision R4): this struct is fed from the immutable
+// StoreConfig.ChunkerConfig field (Types / 11 Configuration §11.3;
+// ADR-44) — the field does not exist in domain.StoreConfig yet and
+// lands with the chunker milestone. Immutable because changing the
+// slicing parameters breaks chunk dedup between old and new writes.
 type Config struct {
 	// MinChunkSize, AvgChunkSize, MaxChunkSize define the chunk-size
 	// distribution. FastCDC produces a distribution peaking near

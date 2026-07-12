@@ -29,8 +29,10 @@ import (
 // lives behind AdminStore.System() and uses its own type rather than
 // overloading domain.Artifact.
 type NamedArtifact struct {
-	// Name is the slash-separated name under which the artifact is
-	// stored and later retrieved (e.g. "scrub/cursor").
+	// Name is the dot-separated name under which the artifact is
+	// stored and later retrieved (e.g. "store.agent.orphanscan.last";
+	// planar keyspace, ADR-100 — slashes belong to the path projection,
+	// never to the logical name).
 	Name string
 
 	// Payload is the artifact body. System payloads are small enough to

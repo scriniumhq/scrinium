@@ -443,8 +443,16 @@ func (i *Index) deleteManifestTx(ctx context.Context, digest domain.ManifestDige
 }
 
 // ResolveManifestDigest returns the current on-disk digest for a handle.
+//
+// The manifests_artifact index is deliberately NON-UNIQUE (decision R6):
+// a form migration (re-key, rebundling) may safely hold two rows for one
+// handle in transit — build the new form first, tear down the old one
+// after. During that window the resolve is made deterministic by csn:
+// the freshest form (max csn) wins. Duplicate-handle detection outside
+// an active migration is the Scrub Agent's invariant check, not a
+// schema constraint.
 func (i *Index) ResolveManifestDigest(ctx context.Context, id domain.ArtifactID) (domain.ManifestDigest, bool, error) {
-	const stmt = `SELECT manifest_digest FROM manifests WHERE artifact_id = ? LIMIT 1`
+	const stmt = `SELECT manifest_digest FROM manifests WHERE artifact_id = ? ORDER BY csn DESC LIMIT 1`
 	var d string
 	err := i.db.QueryRowContext(ctx, stmt, string(id)).Scan(&d)
 	switch {
@@ -454,6 +462,35 @@ func (i *Index) ResolveManifestDigest(ctx context.Context, id domain.ArtifactID)
 		return "", false, classifyError(err)
 	}
 	return domain.ManifestDigest(d), true, nil
+}
+
+// ListDuplicateHandles returns every handle carrying more than one live
+// manifest row (index.DuplicateHandleAuditor, decision R6). A duplicate
+// is legal only inside an active form migration; the Scrub Agent calls
+// this once per cycle and reports anything it finds. Cheap: a single
+// GROUP BY over the manifests_artifact index.
+func (i *Index) ListDuplicateHandles(ctx context.Context) ([]domain.ArtifactID, error) {
+	const stmt = `SELECT artifact_id FROM manifests
+		WHERE artifact_id IS NOT NULL AND artifact_id != ''
+		GROUP BY artifact_id HAVING COUNT(*) > 1
+		ORDER BY artifact_id`
+	rows, err := i.db.QueryContext(ctx, stmt)
+	if err != nil {
+		return nil, classifyError(err)
+	}
+	defer rows.Close()
+	var dups []domain.ArtifactID
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, classifyError(err)
+		}
+		dups = append(dups, domain.ArtifactID(id))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, classifyError(err)
+	}
+	return dups, nil
 }
 
 // ManifestExistsByDigest reports whether a manifest row carries digest.

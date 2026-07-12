@@ -1,6 +1,6 @@
 package artifact
 
-// body.go — deterministic JSON body encoding per docs/2 Internals/07
+// body.go — deterministic JSON body encoding per docs/2. Internals/Formats/01 Manifest Format
 // §7.2 + §7.5. The body has top-level fields (sys, ext, usr, inline_blob)
 // with sys carrying every system field. Determinism: top-level and
 // sys-level fields are declared in alphabetical JSON-tag order so

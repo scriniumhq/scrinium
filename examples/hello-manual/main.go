@@ -29,6 +29,8 @@ import (
 	// Built-in backends register by blank import (ADR-63).
 	_ "scrinium.dev/engine/driver/localfs"
 	_ "scrinium.dev/engine/index/sqlite"
+
+	"scrinium.dev/engine/hashing"
 )
 
 func main() {
@@ -53,11 +55,18 @@ func main() {
 	}
 	defer idx.Close()
 
+	// The hash registry is a required dependency of both constructors
+	// (it reads/persists system.config); the assembly passes it for you,
+	// by hand it is explicit.
+	hashes := hashing.NewHashRegistry()
+
 	// Store — open if present, init otherwise. scrinium's open-or-init
 	// branches on ErrStoreNotFound; here it is explicit.
-	st, err := store.OpenStore(ctx, drv, store.WithStoreIndex(idx))
+	st, err := store.OpenStore(ctx, drv,
+		store.WithStoreIndex(idx), store.WithHashRegistry(hashes))
 	if errors.Is(err, errs.ErrStoreNotFound) {
-		st, _, err = store.InitStore(ctx, drv, store.WithStoreIndex(idx))
+		st, _, err = store.InitStore(ctx, drv,
+			store.WithStoreIndex(idx), store.WithHashRegistry(hashes))
 	}
 	if err != nil {
 		log.Fatalf("open/init store: %v", err)
