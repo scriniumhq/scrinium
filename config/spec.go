@@ -1,4 +1,4 @@
-package storeconfig
+package config
 
 // Field-spec registry (config review R-g; the seed of the Rules
 // Engine, S-11). One row per domain.StoreConfig field — the single

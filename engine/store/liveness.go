@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/storeconfig"
@@ -127,8 +128,8 @@ func (s *store) refreshGovernance(ctx context.Context) {
 			storeIDAttr(s), slog.Uint64("seq", seq), slog.String("err", err.Error()))
 		return
 	}
-	cfg = storeconfig.ApplyDefaults(cfg)
-	if err := storeconfig.ValidateImmutable(cfg); err != nil {
+	cfg = config.ApplyDefaults(cfg)
+	if err := config.ValidateImmutable(cfg); err != nil {
 		s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn,
 			"config freshness: new version invalid, keeping current",
 			storeIDAttr(s), slog.Uint64("seq", readSeq), slog.String("err", err.Error()))

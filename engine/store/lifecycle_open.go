@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/aead"
@@ -259,14 +260,14 @@ func loadActiveConfig(ctx context.Context, drv driver.Driver, o storeOptions, wr
 	if err != nil {
 		return domain.StoreConfig{}, domain.StoreConfig{}, 0, wrap("read system.config", err)
 	}
-	active = storeconfig.ApplyDefaults(active)
-	if err := storeconfig.ValidateImmutable(active); err != nil {
+	active = config.ApplyDefaults(active)
+	if err := config.ValidateImmutable(active); err != nil {
 		return domain.StoreConfig{}, domain.StoreConfig{}, 0, fmt.Errorf("%w: system.config produced invalid config: %v",
 			errs.ErrStoreCorrupted, err)
 	}
 	var overlay domain.StoreConfig
 	if o.cfg != nil {
-		overlay, err = storeconfig.PlanConnection(*o.cfg, active)
+		overlay, err = config.PlanConnection(*o.cfg, active)
 		if err != nil {
 			return domain.StoreConfig{}, domain.StoreConfig{}, 0, err
 		}

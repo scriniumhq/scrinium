@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/named"
@@ -108,7 +109,7 @@ func History(
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, ApplyDefaults(cfg))
+		out = append(out, config.ApplyDefaults(cfg))
 	}
 	return out, nil
 }

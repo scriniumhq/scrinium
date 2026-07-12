@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/aead"
@@ -93,7 +94,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	if o.cfg != nil {
 		cfg = *o.cfg
 	}
-	cfg = storeconfig.ApplyDefaults(cfg)
+	cfg = config.ApplyDefaults(cfg)
 	// WithIdentityMode (and the WithCoalesced/WithUnique shorthands) sets
 	// the immutable IdentityMode at init, overriding the default after
 	// ApplyDefaults so the explicit choice wins. Ignored at OpenStore,
@@ -101,7 +102,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	if o.identityMode != "" {
 		cfg.IdentityMode = o.identityMode
 	}
-	if err := storeconfig.ValidateImmutable(cfg); err != nil {
+	if err := config.ValidateImmutable(cfg); err != nil {
 		return nil, nil, wrap("invalid config", err)
 	}
 

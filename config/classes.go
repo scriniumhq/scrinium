@@ -1,4 +1,4 @@
-package storeconfig
+package config
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 //
 //   - Class I — immutable: fixed at InitStore, changed only by
 //     rebuilding the store. Compared by ValidateAgainstActive
-//     (storeconfig.go); divergence → ErrConfigMismatch.
+//     (model.go); divergence → ErrConfigMismatch.
 //   - Class II — admin-mutable governance defaults: DeletionPolicy,
 //     RetentionPeriod, TombstoneGracePeriod, GCLeasePolicy,
 //     SessionOverrides. Changed only by an explicit admin act

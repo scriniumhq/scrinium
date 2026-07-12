@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
@@ -39,7 +40,7 @@ func (s *store) snapshotConfig() domain.StoreConfig {
 // stay on snapshotConfig — an overlay can never soften governance by
 // construction (it carries class III only).
 func (s *store) sessionConfig() domain.StoreConfig {
-	return storeconfig.MergeSession(s.snapshotConfig(), s.sessionOverlay)
+	return config.MergeSession(s.snapshotConfig(), s.sessionOverlay)
 }
 
 // UpdateConfig swaps the active StoreConfig. Only mutable fields
@@ -62,15 +63,15 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	}
 
 	current := s.snapshotConfig()
-	requested := storeconfig.ApplyDefaults(cfg)
+	requested := config.ApplyDefaults(cfg)
 
-	if err := storeconfig.ValidateImmutable(requested); err != nil {
+	if err := config.ValidateImmutable(requested); err != nil {
 		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	// ValidateAgainstActive compares requested to current on every
 	// immutable field; mutable fields pass through. Same contract as
 	// OpenStore's WithConfig check.
-	if err := storeconfig.ValidateAgainstActive(requested, current); err != nil {
+	if err := config.ValidateAgainstActive(requested, current); err != nil {
 		return fmt.Errorf("store.UpdateConfig: %w", err)
 	}
 	// DeletionPolicyLock guard: once locked, NoDelete cannot be

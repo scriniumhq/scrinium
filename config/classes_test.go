@@ -1,4 +1,4 @@
-package storeconfig
+package config
 
 import (
 	"errors"
