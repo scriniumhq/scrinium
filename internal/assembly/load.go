@@ -3,10 +3,9 @@ package assembly
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
+
+	"scrinium.dev/config"
 
 	"gopkg.in/yaml.v3"
 )
@@ -16,33 +15,33 @@ import (
 // the same build-time options Build accepts (e.g. WithExtension) and are
 // applied on top of the parsed config.
 func LoadYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalYAML, modeOpen, opts)
+	return loadAndBuild(ctx, data, config.DecodeYAML, modeOpen, opts)
 }
 
 // LoadInitYAML parses a YAML config and creates a fresh store. Errors
 // if the store already exists.
 func LoadInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalYAML, modeInit, opts)
+	return loadAndBuild(ctx, data, config.DecodeYAML, modeInit, opts)
 }
 
 // LoadOrInitYAML opens the described store, creating it if absent.
 func LoadOrInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalYAML, modeOpenOrInit, opts)
+	return loadAndBuild(ctx, data, config.DecodeYAML, modeOpenOrInit, opts)
 }
 
 // LoadJSON parses a JSON config and opens the described store.
 func LoadJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalJSON, modeOpen, opts)
+	return loadAndBuild(ctx, data, config.DecodeJSON, modeOpen, opts)
 }
 
 // LoadInitJSON parses a JSON config and creates a fresh store.
 func LoadInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalJSON, modeInit, opts)
+	return loadAndBuild(ctx, data, config.DecodeJSON, modeInit, opts)
 }
 
 // LoadOrInitJSON opens the described store, creating it if absent.
 func LoadOrInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, unmarshalJSON, modeOpenOrInit, opts)
+	return loadAndBuild(ctx, data, config.DecodeJSON, modeOpenOrInit, opts)
 }
 
 // Explain parses a config, resolves policy references, applies
@@ -68,38 +67,15 @@ func Explain(ctx context.Context, data []byte) ([]byte, error) {
 // decoders (YAML/JSON) and detectUnmarshal's sniffing share this shape.
 type decoderFunc func([]byte, *Config) error
 
-// Strict decoding (R-b, config review): an unknown key is an error,
-// not a silent no-op. A declarative file states operator intent —
-// a typo (`retenton:`) or a removed key (the old
-// perStageVerification) must be said out loud, or the intent silently
-// diverges from reality.
-func unmarshalYAML(data []byte, c *Config) error {
-	dec := yaml.NewDecoder(bytes.NewReader(data))
-	dec.KnownFields(true)
-	if err := dec.Decode(c); err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil // empty document → zero Config, same as before
-		}
-		return err
-	}
-	return nil
-}
-
-func unmarshalJSON(data []byte, c *Config) error {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	return dec.Decode(c)
-}
-
 // detectUnmarshal picks JSON when the document's first non-space byte
 // is '{' or '[', YAML otherwise. Used only by Explain, which is
 // format-agnostic; the Load*/LoadJSON entry points are explicit.
 func detectUnmarshal(data []byte) decoderFunc {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
-		return unmarshalJSON
+		return config.DecodeJSON
 	}
-	return unmarshalYAML
+	return config.DecodeYAML
 }
 
 func loadAndBuild(ctx context.Context, data []byte, decode decoderFunc, mode buildMode, opts []BuildOption) (Assembly, error) {
@@ -134,15 +110,12 @@ func parse(data []byte, decode decoderFunc) (*Config, error) {
 	return &c, nil
 }
 
-// prepare resolves policy references, applies defaults, and validates
-// — the shared pre-build pipeline used by both Load* and Explain.
+// prepare runs the config package's pre-build pipeline (Normalize +
+// Validate) — shared by both Load* and Explain. The model logic lives
+// in package config; prepare is just the assembly-side call site.
 func prepare(c *Config) error {
-	if err := resolvePolicyRefs(c); err != nil {
+	if err := c.Normalize(); err != nil {
 		return fmt.Errorf("scrinium: %w", err)
 	}
-	applyDefaults(c)
-	if err := validate(c); err != nil {
-		return err
-	}
-	return nil
+	return c.Validate()
 }

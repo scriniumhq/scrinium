@@ -1,4 +1,4 @@
-package assembly
+package config
 
 import (
 	"errors"
@@ -10,7 +10,16 @@ import (
 // build, so a config mistake surfaces as a clear message rather than a
 // confusing failure deep inside the engine. It runs after policyRef
 // resolution and defaulting.
-func validate(c *Config) error {
+// Validate checks a normalized Config: structural rules, schedule
+// triggers, projection routing — and the policy blocks via the SAME
+// vocabulary tables the mapping uses plus the engine validator
+// (ValidateImmutable on the mapped StoreConfig), so the file-level
+// check can never drift from the domain rules.
+func (c *Config) Validate() error {
+	return validateConfig(c)
+}
+
+func validateConfig(c *Config) error {
 	var errs []error
 	add := func(format string, a ...any) { errs = append(errs, fmt.Errorf(format, a...)) }
 
@@ -101,21 +110,24 @@ func validatePolicy(store string, p *Policy, add func(string, ...any)) {
 		if p.Encryption.Passphrase.IsZero() {
 			add("store %q: encryption set but `passphrase:` missing", store)
 		}
-		switch p.Encryption.Mode {
-		case "", "sealed", "paranoid":
-		default:
-			add("store %q: encryption.mode %q is not one of {sealed, paranoid}", store, p.Encryption.Mode)
+		if _, ok := encryptionModeVocab[p.Encryption.Mode]; !ok && p.Encryption.Mode != "" {
+			add("store %q: encryption.mode %q is not one of %s", store, p.Encryption.Mode, vocabWords(encryptionModeVocab))
 		}
-		switch p.Encryption.Dedup {
-		case "", "disabled", "convergent":
-		default:
-			add("store %q: encryption.dedup %q is not one of {disabled, convergent}", store, p.Encryption.Dedup)
+		if _, ok := dedupVocab[p.Encryption.Dedup]; !ok && p.Encryption.Dedup != "" {
+			add("store %q: encryption.dedup %q is not one of %s", store, p.Encryption.Dedup, vocabWords(dedupVocab))
 		}
 	}
-	switch p.DeletionPolicy {
-	case "", "free", "retention", "noDelete":
-	default:
-		add("store %q: deletionPolicy %q is not one of {free, retention, noDelete}", store, p.DeletionPolicy)
+	if _, ok := deletionPolicyVocab[p.DeletionPolicy]; !ok && p.DeletionPolicy != "" {
+		add("store %q: deletionPolicy %q is not one of %s", store, p.DeletionPolicy, vocabWords(deletionPolicyVocab))
+	}
+	// The words are in the dictionary — now let the engine validator
+	// judge the mapped result (bounds like MinRetentionPeriod included),
+	// so a file error surfaces at validation time with the store label,
+	// not deep inside InitStore.
+	if cfg, ok := StoreConfigFromPolicy(p); ok || p.DeletionPolicy != "" || p.Retention != 0 || p.MaxArtifactSize > 0 {
+		if err := ValidateImmutable(ApplyDefaults(cfg)); err != nil {
+			add("store %q: policy maps to an invalid StoreConfig: %v", store, err)
+		}
 	}
 	if p.GC != nil {
 		validateTrigger(fmt.Sprintf("store %q gc", store), p.GC.Every, p.GC.Schedule, add)

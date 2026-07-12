@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash"
 	"os"
+	"scrinium.dev/config"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
@@ -27,7 +28,7 @@ import (
 // the store. It records the store rollback and fails fast on a locked store.
 func (bs *buildState) openStore() error {
 	// StoreConfig + passphrase from the policy.
-	cfg, _ := storeConfigFromPolicy(bs.spec.Policy)
+	cfg, _ := config.StoreConfigFromPolicy(bs.spec.Policy)
 	pp, err := passphraseProvider(bs.ctx, bs.spec.Policy)
 	if err != nil {
 		return fmt.Errorf("scrinium: passphrase: %w", err)
@@ -102,23 +103,6 @@ func (bs *buildState) composeWrappers() error {
 	return nil
 }
 
-// guardUnsupportedPolicy rejects policy features whose components are
-// not wired yet, with a precise pointer to the landing chunk.
-func guardUnsupportedPolicy(p *Policy) error {
-	if p == nil {
-		return nil
-	}
-	switch {
-	case p.Chunking != nil:
-		return fmt.Errorf("scrinium: chunking is not wired yet (M5/C3): %w", errs.ErrNotImplemented)
-	case p.Bundling != nil:
-		return fmt.Errorf("scrinium: bundling is not wired yet (M4/S4): %w", errs.ErrNotImplemented)
-	case len(p.Pipeline) > 0 || len(p.PipelineExtra) > 0:
-		return fmt.Errorf("scrinium: explicit pipeline assembly is not wired yet: %w", errs.ErrNotImplemented)
-	}
-	return nil
-}
-
 // openOrInitStore opens or initialises the store per mode. It reports
 // whether the store was freshly created and, for a fresh encrypted
 // store, the recovery-kit bytes the host must persist (nil otherwise).
@@ -166,52 +150,6 @@ func initStore(ctx context.Context, drv driver.Driver, opts []store.StoreOption)
 
 func isNotFound(err error) bool {
 	return errors.Is(err, errs.ErrStoreNotFound)
-}
-
-// storeConfigFromPolicy maps a config policy onto a domain.StoreConfig.
-// Returns whether the store is encrypted. A nil policy → zero config
-// (engine defaults: Plain, no dedup).
-func storeConfigFromPolicy(p *Policy) (domain.StoreConfig, bool) {
-	var cfg domain.StoreConfig
-	if p == nil {
-		return cfg, false
-	}
-
-	encrypted := p.Encryption != nil
-	if encrypted {
-		switch p.Encryption.Mode {
-		case "paranoid":
-			cfg.ManifestCrypto = domain.ManifestCryptoParanoid
-		default: // "sealed" (defaulted)
-			cfg.ManifestCrypto = domain.ManifestCryptoSealed
-		}
-		switch p.Encryption.Dedup {
-		case "convergent":
-			cfg.EncryptedDedup = domain.EncryptedDedupConvergent
-		default:
-			cfg.EncryptedDedup = domain.EncryptedDedupDisabled
-		}
-		if p.Encryption.SegmentSize > 0 {
-			cfg.SegmentSize = int(p.Encryption.SegmentSize.Int64())
-		}
-	}
-
-	switch p.DeletionPolicy {
-	case "free":
-		cfg.DeletionPolicy = domain.DeletionPolicyFree
-	case "retention":
-		cfg.DeletionPolicy = domain.DeletionPolicyRetention
-	case "noDelete":
-		cfg.DeletionPolicy = domain.DeletionPolicyNoDelete
-	}
-	if p.Retention != 0 {
-		cfg.RetentionPeriod = p.Retention.Std()
-	}
-	if p.MaxArtifactSize > 0 {
-		cfg.MaxArtifactSize = int64(p.MaxArtifactSize)
-	}
-
-	return cfg, encrypted
 }
 
 func hashRegistry() domain.HashRegistry {

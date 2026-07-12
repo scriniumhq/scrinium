@@ -1,4 +1,4 @@
-package assembly
+package config
 
 import "testing"
 

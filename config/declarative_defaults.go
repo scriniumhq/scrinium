@@ -1,17 +1,19 @@
-package assembly
+package config
 
 import "fmt"
 
 // Default sizes/schedules for declarative configuration.
 const (
-	defaultChunkMaxSize    = Size(64 << 20) // 64 MiB
-	defaultBundleMaxSize   = Size(64 << 20) // 64 MiB
-	defaultBundleFlush     = Duration(5 * 60 * 1e9)
-	defaultEncryptionMode  = "sealed"
-	defaultEncryptedDedup  = "disabled"
-	defaultGCEvery         = Duration(24 * 60 * 60 * 1e9)     // 24h
-	defaultScrubEvery      = Duration(7 * 24 * 60 * 60 * 1e9) // 168h (weekly)
-	defaultCheckpointEvery = Duration(24 * 60 * 60 * 1e9)     // 24h
+	defaultChunkMaxSize   = Size(64 << 20) // 64 MiB
+	defaultBundleMaxSize  = Size(64 << 20) // 64 MiB
+	defaultBundleFlush    = Duration(5 * 60 * 1e9)
+	defaultEncryptionMode = "sealed"
+	defaultEncryptedDedup = "disabled"
+	// Exported: the assembly reads these when materializing the
+	// built-in maintenance schedules (ADR-110 config axis lives here).
+	DefaultGCEvery         = Duration(24 * 60 * 60 * 1e9)     // 24h
+	DefaultScrubEvery      = Duration(7 * 24 * 60 * 60 * 1e9) // 168h (weekly)
+	DefaultCheckpointEvery = Duration(24 * 60 * 60 * 1e9)     // 24h
 )
 
 // applyDefaults fills in the optional fields the spec defaults, in
@@ -84,13 +86,13 @@ func applyPolicyDefaults(p *Policy) {
 	// Absence of the block entirely is handled at agent-wiring time with
 	// the same defaults.
 	if p.GC != nil && p.GC.Every == 0 && p.GC.Schedule == "" {
-		p.GC.Every = defaultGCEvery
+		p.GC.Every = DefaultGCEvery
 	}
 	if p.Scrub != nil && p.Scrub.Every == 0 && p.Scrub.Schedule == "" {
-		p.Scrub.Every = defaultScrubEvery
+		p.Scrub.Every = DefaultScrubEvery
 	}
 	if p.Checkpoint != nil && p.Checkpoint.Every == 0 && p.Checkpoint.Schedule == "" {
-		p.Checkpoint.Every = defaultCheckpointEvery
+		p.Checkpoint.Every = DefaultCheckpointEvery
 	}
 }
 
@@ -221,4 +223,16 @@ func (c *Config) named() map[string]*StoreSpec {
 		return map[string]*StoreSpec{"default": c.Store}
 	}
 	return c.Stores
+}
+
+// Normalize is the pre-build pipeline over a decoded Config: policy
+// references resolved, then the defaults ladder applied. Call Validate
+// afterwards. Exported for the assembly (and any other consumer of the
+// declarative model).
+func (c *Config) Normalize() error {
+	if err := resolvePolicyRefs(c); err != nil {
+		return err
+	}
+	applyDefaults(c)
+	return nil
 }
