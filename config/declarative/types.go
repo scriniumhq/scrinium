@@ -1,4 +1,15 @@
-package config
+// Package declarative is the YAML/JSON configuration document: the
+// Config the operator writes, its Policy/StoreSpec/Encryption blocks,
+// strict decoding (DecodeYAML/DecodeJSON), the defaults ladder and
+// policyRef resolution (Normalize), file validation (Validate), and the
+// mapping from a Policy onto a domain.StoreConfig (StoreConfigFromPolicy)
+// through the YAML↔domain vocabulary.
+//
+// It sits above the store-config model (package config): it maps a
+// parsed document onto a StoreConfig and hands it to config's validator.
+// The assembly consumes this package to turn a document into a live
+// stack; the store-config model does not depend on it.
+package declarative
 
 import (
 	"encoding/json"

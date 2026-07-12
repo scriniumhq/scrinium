@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"scrinium.dev/config"
+	"scrinium.dev/config/declarative"
 
 	"gopkg.in/yaml.v3"
 )
@@ -15,33 +15,33 @@ import (
 // the same build-time options Build accepts (e.g. WithExtension) and are
 // applied on top of the parsed config.
 func LoadYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, config.DecodeYAML, modeOpen, opts)
+	return loadAndBuild(ctx, data, declarative.DecodeYAML, modeOpen, opts)
 }
 
 // LoadInitYAML parses a YAML config and creates a fresh store. Errors
 // if the store already exists.
 func LoadInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, config.DecodeYAML, modeInit, opts)
+	return loadAndBuild(ctx, data, declarative.DecodeYAML, modeInit, opts)
 }
 
 // LoadOrInitYAML opens the described store, creating it if absent.
 func LoadOrInitYAML(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, config.DecodeYAML, modeOpenOrInit, opts)
+	return loadAndBuild(ctx, data, declarative.DecodeYAML, modeOpenOrInit, opts)
 }
 
 // LoadJSON parses a JSON config and opens the described store.
 func LoadJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, config.DecodeJSON, modeOpen, opts)
+	return loadAndBuild(ctx, data, declarative.DecodeJSON, modeOpen, opts)
 }
 
 // LoadInitJSON parses a JSON config and creates a fresh store.
 func LoadInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, config.DecodeJSON, modeInit, opts)
+	return loadAndBuild(ctx, data, declarative.DecodeJSON, modeInit, opts)
 }
 
 // LoadOrInitJSON opens the described store, creating it if absent.
 func LoadOrInitJSON(ctx context.Context, data []byte, opts ...BuildOption) (Assembly, error) {
-	return loadAndBuild(ctx, data, config.DecodeJSON, modeOpenOrInit, opts)
+	return loadAndBuild(ctx, data, declarative.DecodeJSON, modeOpenOrInit, opts)
 }
 
 // Explain parses a config, resolves policy references, applies
@@ -73,9 +73,9 @@ type decoderFunc func([]byte, *Config) error
 func detectUnmarshal(data []byte) decoderFunc {
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') {
-		return config.DecodeJSON
+		return declarative.DecodeJSON
 	}
-	return config.DecodeYAML
+	return declarative.DecodeYAML
 }
 
 func loadAndBuild(ctx context.Context, data []byte, decode decoderFunc, mode buildMode, opts []BuildOption) (Assembly, error) {

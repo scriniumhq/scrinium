@@ -3,7 +3,7 @@ package assembly
 import (
 	"context"
 	"fmt"
-	"scrinium.dev/config"
+	"scrinium.dev/config/declarative"
 	"sync"
 	"time"
 
@@ -53,7 +53,7 @@ func resolveSchedules(spec *StoreSpec, c *Config, opts *Options) (map[string]res
 		return nil
 	}
 
-	// Config policy blocks (gc/scrub/checkpoint). config.Normalize has filled the
+	// Config policy blocks (gc/scrub/checkpoint). declarative.Normalize has filled the
 	// cadence of a present block, so each present block carries a trigger.
 	if spec != nil && spec.Policy != nil {
 		p := spec.Policy
@@ -113,9 +113,9 @@ func addHygieneDefaults(out map[string]resolvedSchedule, opts *Options) {
 		kind  string
 		every Duration
 	}{
-		{"gc", config.DefaultGCEvery},
-		{"scrub", config.DefaultScrubEvery},
-		{"checkpoint", config.DefaultCheckpointEvery},
+		{"gc", declarative.DefaultGCEvery},
+		{"scrub", declarative.DefaultScrubEvery},
+		{"checkpoint", declarative.DefaultCheckpointEvery},
 	}
 	for _, d := range defaults {
 		if _, ok := out[d.kind]; ok {

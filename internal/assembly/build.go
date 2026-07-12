@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"scrinium.dev/config"
+	"scrinium.dev/config/declarative"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
@@ -54,7 +54,7 @@ func buildSingle(ctx context.Context, c *Config, opts *Options) (_ Assembly, ret
 		presenters:    present.Registry{},
 		stopTicker:    func() {},
 	}
-	if err := config.GuardUnsupportedPolicy(bs.spec.Policy); err != nil {
+	if err := declarative.GuardUnsupportedPolicy(bs.spec.Policy); err != nil {
 		return nil, err
 	}
 

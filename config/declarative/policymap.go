@@ -1,4 +1,4 @@
-package config
+package declarative
 
 import (
 	"fmt"
@@ -12,8 +12,7 @@ import (
 // The YAML↔domain vocabulary: the ONE dictionary both the mapping
 // (StoreConfigFromPolicy) and the file validation (validatePolicy)
 // read. A word added here is simultaneously accepted by the parser's
-// validator and translated by the mapper — the two can no longer
-// drift, which is exactly the duplication the config review flagged.
+// validator and translated by the mapper — so the two cannot drift.
 var (
 	deletionPolicyVocab = map[string]domain.DeletionPolicy{
 		"free":      domain.DeletionPolicyFree,

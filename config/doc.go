@@ -1,26 +1,21 @@
-// Package config is the single entry point for Scrinium's high-level
-// store configuration (ADR-110): the field classification (spec.go),
-// defaults (ApplyDefaults), validation (ValidateImmutable,
-// ValidateAgainstActive), the connection plan (PlanConnection) and the
-// session overlay merge (MergeSession). Every consumer of the
-// StoreConfig axis — the engine, the assembly, future CLI/Explain
-// tooling — assembles, validates and presents configuration through
+// Package config is the store-configuration model (ADR-110): the field
+// registry — one declaration per StoreConfig field carrying its class,
+// connection behaviour, validator and default (registry.go) — and the
+// operations derived from it: defaults (ApplyDefaults), validation
+// (ValidateImmutable, ValidateAgainstActive), the connection plan
+// (PlanConnection) and the session overlay merge (MergeSession). Every
+// consumer of the StoreConfig axis — the engine, the assembly, future
+// CLI/Explain tooling — validates and presents configuration through
 // this package.
 //
-// The declarative model lives here too: the Config/Policy file shape
-// (declarative.go), strict decoding (DecodeYAML/DecodeJSON), the
-// defaults ladder and policyRef resolution (Normalize), file
-// validation (Validate — through the same vocabulary tables the
-// mapper reads, plus the engine validator on the mapped result), the
-// YAML↔domain dictionary and the policy mapping
-// (StoreConfigFromPolicy) with the feature gates
-// (GuardUnsupportedPolicy). The assembly consumes all of it and keeps
-// only its own job — wiring components.
+// The machinery that turns those declarations into operations — the
+// typed descriptor, the validator constructors, the traversal engine —
+// lives in the internal subpackage fieldkit and is never edited when
+// adding a field. To add a config field you add one row to the registry
+// (and its struct field in domain.StoreConfig); nothing in fieldkit.
 //
-// What deliberately does NOT live here: the persistence of
-// store.config versions (engine/store/config_persist.go — engine
-// plumbing over named cells; how the store keeps its config on disk is
-// the store's business), and the runtime construction of components
-// (agents, projection, adapters) from the declarative blocks — that is
-// the assembly's wiring.
+// Neighbouring packages own the other two concerns: the YAML/JSON
+// document that an operator writes and its mapping onto a StoreConfig
+// live in config/declarative; the persistence of store.config versions
+// lives in engine/store (config_persist.go, plumbing over named cells).
 package config

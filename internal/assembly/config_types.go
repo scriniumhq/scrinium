@@ -1,6 +1,6 @@
 package assembly
 
-import "scrinium.dev/config"
+import "scrinium.dev/config/declarative"
 
 // The declarative configuration model moved to the public top-level
 // package config — the single entry point of the high-level
@@ -8,20 +8,20 @@ import "scrinium.dev/config"
 // These aliases keep the assembly's internal wiring and the facade
 // re-exports source-compatible; they are the SAME types.
 type (
-	Config         = config.Config
-	Defaults       = config.Defaults
-	Projection     = config.Projection
-	StoreSpec      = config.StoreSpec
-	Credentials    = config.Credentials
-	Policy         = config.Policy
-	Encryption     = config.Encryption
-	Chunking       = config.Chunking
-	Bundling       = config.Bundling
-	MultistoreSpec = config.MultistoreSpec
-	Schedule       = config.Schedule
-	ScrubSchedule  = config.ScrubSchedule
-	AgentSpec      = config.AgentSpec
-	PipelineStage  = config.PipelineStage
-	Size           = config.Size
-	Duration       = config.Duration
+	Config         = declarative.Config
+	Defaults       = declarative.Defaults
+	Projection     = declarative.Projection
+	StoreSpec      = declarative.StoreSpec
+	Credentials    = declarative.Credentials
+	Policy         = declarative.Policy
+	Encryption     = declarative.Encryption
+	Chunking       = declarative.Chunking
+	Bundling       = declarative.Bundling
+	MultistoreSpec = declarative.MultistoreSpec
+	Schedule       = declarative.Schedule
+	ScrubSchedule  = declarative.ScrubSchedule
+	AgentSpec      = declarative.AgentSpec
+	PipelineStage  = declarative.PipelineStage
+	Size           = declarative.Size
+	Duration       = declarative.Duration
 )

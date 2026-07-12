@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"hash"
 	"os"
-	"scrinium.dev/config"
+	"scrinium.dev/config/declarative"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
@@ -28,7 +28,7 @@ import (
 // the store. It records the store rollback and fails fast on a locked store.
 func (bs *buildState) openStore() error {
 	// StoreConfig + passphrase from the policy.
-	cfg, _ := config.StoreConfigFromPolicy(bs.spec.Policy)
+	cfg, _ := declarative.StoreConfigFromPolicy(bs.spec.Policy)
 	pp, err := passphraseProvider(bs.ctx, bs.spec.Policy)
 	if err != nil {
 		return fmt.Errorf("scrinium: passphrase: %w", err)

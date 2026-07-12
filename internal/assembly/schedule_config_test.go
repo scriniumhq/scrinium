@@ -1,7 +1,7 @@
 package assembly
 
 import (
-	"scrinium.dev/config"
+	"scrinium.dev/config/declarative"
 	"strings"
 	"testing"
 	"time"
@@ -17,14 +17,14 @@ func TestApplyDefaults_FillsIntervalCadence(t *testing.T) {
 		t.Fatalf("Normalize: %v", err)
 	}
 	p := c.Store.Policy
-	if p.GC.Every != config.DefaultGCEvery || p.GC.Schedule != "" {
+	if p.GC.Every != declarative.DefaultGCEvery || p.GC.Schedule != "" {
 		t.Errorf("gc cadence = {%v, %q}, want default interval", p.GC.Every, p.GC.Schedule)
 	}
-	if p.Scrub.Every != config.DefaultScrubEvery {
-		t.Errorf("scrub every = %v, want %v", p.Scrub.Every, config.DefaultScrubEvery)
+	if p.Scrub.Every != declarative.DefaultScrubEvery {
+		t.Errorf("scrub every = %v, want %v", p.Scrub.Every, declarative.DefaultScrubEvery)
 	}
-	if p.Checkpoint.Every != config.DefaultCheckpointEvery {
-		t.Errorf("checkpoint every = %v, want %v", p.Checkpoint.Every, config.DefaultCheckpointEvery)
+	if p.Checkpoint.Every != declarative.DefaultCheckpointEvery {
+		t.Errorf("checkpoint every = %v, want %v", p.Checkpoint.Every, declarative.DefaultCheckpointEvery)
 	}
 }
 
