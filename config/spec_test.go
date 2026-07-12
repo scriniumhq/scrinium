@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"reflect"
+	"scrinium.dev/config/internal/fieldkit"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ func TestRegistry_CoversEveryStoreConfigField(t *testing.T) {
 	typ := reflect.TypeOf(domain.StoreConfig{})
 
 	inReg := map[string]bool{}
-	for _, r := range registryRows() {
+	for _, r := range fieldkit.Rows(registry) {
 		if inReg[r.Name] {
 			t.Errorf("duplicate registry row: %s", r.Name)
 		}
@@ -99,7 +100,7 @@ func TestRegistry_ConnectionBehaviourMatches(t *testing.T) {
 	active := ApplyDefaults(domain.StoreConfig{})
 	probes := divergeProbes(active)
 
-	for _, s := range registryRows() {
+	for _, s := range fieldkit.Rows(registry) {
 		s := s
 		t.Run(s.Name, func(t *testing.T) {
 			req, ok := probes[s.Name]
@@ -138,8 +139,8 @@ func TestRegistry_ConnectionBehaviourMatches(t *testing.T) {
 	}
 
 	// The probe table itself must not outgrow the registry.
-	if len(probes) != len(registryRows())+len(fieldsHandledOutsideRegistry) {
-		t.Errorf("probe table has %d entries, registry+allowlist %d — keep them in lockstep", len(probes), len(registryRows())+len(fieldsHandledOutsideRegistry))
+	if len(probes) != len(fieldkit.Rows(registry))+len(fieldsHandledOutsideRegistry) {
+		t.Errorf("probe table has %d entries, registry+allowlist %d — keep them in lockstep", len(probes), len(fieldkit.Rows(registry))+len(fieldsHandledOutsideRegistry))
 	}
 }
 
@@ -150,7 +151,7 @@ func TestRegistry_SessionRowsAreMerged(t *testing.T) {
 	active := ApplyDefaults(domain.StoreConfig{})
 	probes := divergeProbes(active)
 
-	for _, s := range registryRows() {
+	for _, s := range fieldkit.Rows(registry) {
 		if s.Conn != ConnOverlay && s.Conn != ConnDerived {
 			continue
 		}

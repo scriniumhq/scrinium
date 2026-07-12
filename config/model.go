@@ -1,12 +1,8 @@
 package config
 
 import (
-	"fmt"
-	"strings"
-	"time"
-
+	"scrinium.dev/config/internal/fieldkit"
 	"scrinium.dev/domain"
-	"scrinium.dev/errs"
 )
 
 // ApplyDefaults fills in zero-valued StoreConfig fields with sensible
@@ -21,63 +17,18 @@ import (
 // hashed paths for big trees, no encryption, JSON manifests, immediate
 // deletion. Non-default scenarios (S3, encrypted, WORM) require
 // explicit StoreConfig overrides.
+// ApplyDefaults fills zero-valued StoreConfig fields with their
+// defaults. Each field's default lives in its registry row (registry.go)
+// — an unconditional value (DefaultTo) or a function of the whole config
+// for conditional / zero-is-meaningful cases (DefaultFn). This loops
+// the registry; there is no separate hand-written default list.
+//
+// Order matters for the conditional defaults: EncryptedDedup and
+// SegmentSize key off isEncryptingConfig(cfg), which reads
+// ManifestCrypto and Pipeline — neither is mutated by defaulting, so a
+// single forward pass is correct regardless of field order.
 func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
-	if cfg.PathTopology == "" {
-		cfg.PathTopology = domain.PathTopologySharded
-	}
-	if cfg.BlobStorage == "" {
-		cfg.BlobStorage = domain.BlobStorageTarget
-	}
-	if cfg.ManifestEncoding == "" {
-		cfg.ManifestEncoding = domain.ManifestEncodingJSON
-	}
-	if cfg.ManifestCrypto == "" {
-		cfg.ManifestCrypto = domain.ManifestCryptoPlain
-	}
-	// ADR-58: an encrypting store defaults to Disabled (no dedup of
-	// encrypted blobs, full AEAD semantics). A Plain store leaves the
-	// field empty — it is ignored there (crypto-identity is empty, the
-	// dedup key degrades to (ContentHash, OriginalSize)).
-	if cfg.EncryptedDedup == "" && isEncryptingConfig(cfg) {
-		cfg.EncryptedDedup = domain.EncryptedDedupDisabled
-	}
-	// ADR-59: the segmented AEAD blob format needs a segment size for
-	// any encrypting store. Mirror EncryptedDedup — default it only
-	// when the store actually encrypts; a Plain store leaves it zero
-	// (no crypto stage ever reads it). Immutable once chosen.
-	if cfg.SegmentSize == 0 && isEncryptingConfig(cfg) {
-		cfg.SegmentSize = domain.DefaultSegmentSize
-	}
-	if cfg.ContentHasher == "" {
-		cfg.ContentHasher = domain.HashSHA256
-	}
-	if cfg.VerifyOnRead == "" {
-		cfg.VerifyOnRead = domain.VerifyOnReadAuto
-	}
-	if cfg.DeletionPolicy == "" {
-		cfg.DeletionPolicy = domain.DeletionPolicyFree
-	}
-	if cfg.GCLeasePolicy == "" {
-		cfg.GCLeasePolicy = domain.GCLeaseAuto
-	}
-	if cfg.SessionOverrides == "" {
-		cfg.SessionOverrides = domain.SessionOverridesAllow
-	}
-	if cfg.PackAlignment == 0 {
-		// Zero literal in Go for an int-typed enum is also
-		// PackAlignmentNone. We disambiguate "user wanted None" from
-		// "user left it zero" by promoting zero to Auto: most callers
-		// want the engine to derive alignment from the Driver's
-		// capabilities, not "no alignment whatsoever".
-		cfg.PackAlignment = domain.PackAlignmentAuto
-	}
-	if cfg.TombstoneGracePeriod == 0 {
-		cfg.TombstoneGracePeriod = 24 * time.Hour
-	}
-	// InlineBlobLimit, RetentionPeriod, EagerFetchLimit, Pipeline,
-	// KDFParams: zero values are legitimate "feature off" or "use
-	// plugin defaults" signals. We do NOT override them.
-	return cfg
+	return fieldkit.ApplyDefaults(registry, cfg)
 }
 
 // ValidateImmutable checks the immutable subset of StoreConfig for
@@ -99,12 +50,7 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 // int) carries a nil Check and passes. First failure wins; field order
 // follows the struct.
 func ValidateImmutable(cfg domain.StoreConfig) error {
-	for _, f := range registry {
-		if err := f.validate(cfg); err != nil {
-			return err
-		}
-	}
-	return nil
+	return fieldkit.ValidateAll(registry, cfg)
 }
 
 // ValidateAgainstActive compares a requested config to the currently
@@ -134,11 +80,7 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 // false never fails against a locked active config; only an explicit
 // true-vs-false diverges.
 func ValidateAgainstActive(req, active domain.StoreConfig) error {
-	mismatches := divergentByClass(ClassImmutable, req, active)
-	if len(mismatches) == 0 {
-		return nil
-	}
-	return fmt.Errorf("%w: %s", errs.ErrConfigMismatch, strings.Join(mismatches, "; "))
+	return fieldkit.MismatchAgainstActive(registry, req, active)
 }
 
 // isEncryptingConfig reports whether the config produces encrypted

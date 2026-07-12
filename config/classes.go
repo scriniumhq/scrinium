@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"scrinium.dev/config/internal/fieldkit"
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 )
@@ -163,7 +164,7 @@ func cryptoTail(p []string) []string {
 // differ from active. Derived from the registry filtered by class —
 // there is no separate hand-written field list here.
 func divergentGovernance(req, active domain.StoreConfig) []string {
-	return divergentByClass(ClassGovernance, req, active)
+	return fieldkit.DivergentByClass(registry, ClassGovernance, req, active)
 }
 
 // divergentSession lists populated class-III fields of req that differ
@@ -171,23 +172,7 @@ func divergentGovernance(req, active domain.StoreConfig) []string {
 // zero-vs-None ambiguity is preserved exactly as before: zero counts
 // as "not asked" (the registry's diverges treats the Go zero as unset).
 func divergentSession(req, active domain.StoreConfig) []string {
-	return divergentByClass(ClassSession, req, active)
-}
-
-// divergentByClass walks the registry, keeps rows of the given class,
-// and collects a message for each populated field of req that differs
-// from active.
-func divergentByClass(class FieldClass, req, active domain.StoreConfig) []string {
-	var out []string
-	for _, f := range registry {
-		if f.class() != class {
-			continue
-		}
-		if msg, ok := f.diverges(req, active); ok {
-			out = append(out, msg)
-		}
-	}
-	return out
+	return fieldkit.DivergentByClass(registry, ClassSession, req, active)
 }
 
 func equalPipelines(a, b []string) bool {
