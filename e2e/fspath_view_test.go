@@ -1,4 +1,6 @@
-package fspath_test
+//go:build e2e
+
+package e2e_test
 
 // End-to-end coverage of the by-path view as the fspath extension actually
 // provides it: the real ProvidedView (its vfsmeta resolver) driven through a

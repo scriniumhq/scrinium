@@ -18,6 +18,8 @@
 #   make smoke      — long-running million-files smoke (no race,
 #                     bypasses gotestsum for live stderr progress);
 #                     N=K to override the artifact count
+#   make e2e        — end-to-end suite (./e2e/, -tags e2e); run
+#                     before a release/push, excluded from `make test`
 #   make build      — go build ./... (no install)
 #   make tidy       — go mod tidy && go mod verify
 #   make fmt        — gofmt -s -w on all .go files
@@ -59,6 +61,8 @@ help:
 	@echo "  test-pkg P=<pkg-path>  — test one package (e.g. P=core)"
 	@echo "  smoke [N=K] — long-running million-files M1 smoke;"
 	@echo "                always without -race; default N=1_000_000"
+	@echo "  e2e         — end-to-end suite (./e2e/, -tags e2e)"
+	@echo "  e2e-v       — same, verbose (per-test names)"
 	@echo "  fmt         — gofmt -s -w"
 	@echo "  fmt-check   — fail if any file needs gofmt"
 	@echo "  vet         — go vet ./..."
@@ -120,6 +124,32 @@ ifdef GOTESTSUM
 	$(GOTESTSUM) --format testname -- $(RACE_FLAG) -v ./$(P)/...
 else
 	$(GO) test -v $(RACE_FLAG) ./$(P)/...
+endif
+
+# End-to-end suite. Every test under ./e2e/ is guarded by
+# `//go:build e2e`, so it is invisible to `make test` (the tag is off
+# there) and builds only under this target. These are the heavy,
+# full-application scenarios driven through the public facade — run them
+# before a release or a push, not on every save.
+#
+# -tags e2e flips the build constraint on; the scope is ./e2e/ only, so
+# module-level integration suites (storesuite, indexsuite) are NOT pulled
+# in here — they run in the normal `make test`. -count=1 defeats the
+# test cache so a pre-release run is always real.
+.PHONY: e2e
+e2e:
+ifdef GOTESTSUM
+	$(GOTESTSUM) --format testname -- -tags e2e -count=1 $(RACE_FLAG) ./e2e/...
+else
+	$(GO) test -tags e2e -count=1 $(RACE_FLAG) ./e2e/...
+endif
+
+.PHONY: e2e-v
+e2e-v:
+ifdef GOTESTSUM
+	$(GOTESTSUM) --format testname -- -tags e2e -count=1 -v $(RACE_FLAG) ./e2e/...
+else
+	$(GO) test -tags e2e -count=1 -v $(RACE_FLAG) ./e2e/...
 endif
 
 # Long-running smoke: million-files round-trip from the M1 exit
