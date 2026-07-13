@@ -7,6 +7,7 @@ import (
 	"io"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
@@ -37,7 +38,7 @@ func TestAESGCM_RoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	payload := []byte("Scrinium is a content-addressable store.")
+	payload := []byte("Scrinium is a content-addressable config.")
 
 	ct, res := encode(t, factory, pipeline.EncodeContext{}, payload)
 	// Segmented format carries no per-blob IV — Result.IV must be nil.
@@ -134,7 +135,7 @@ func TestAESGCM_ConvergentDeterministicVsDisabled(t *testing.T) {
 	factory, _ := aesgcm.New(mustKey(t))
 	payload := bytes.Repeat([]byte{'z'}, 4096)
 
-	convCtx := pipeline.EncodeContext{EncryptedDedup: domain.EncryptedDedupConvergent, SegmentSize: 1024}
+	convCtx := pipeline.EncodeContext{EncryptedDedup: config.EncryptedDedupConvergent, SegmentSize: 1024}
 	a, _ := encode(t, factory, convCtx, payload)
 	b, _ := encode(t, factory, convCtx, payload)
 	if !bytes.Equal(a, b) {
@@ -147,7 +148,7 @@ func TestAESGCM_ConvergentDeterministicVsDisabled(t *testing.T) {
 		t.Fatalf("convergent round-trip: err=%v eq=%v", err, bytes.Equal(pt, payload))
 	}
 
-	disCtx := pipeline.EncodeContext{EncryptedDedup: domain.EncryptedDedupDisabled, SegmentSize: 1024}
+	disCtx := pipeline.EncodeContext{EncryptedDedup: config.EncryptedDedupDisabled, SegmentSize: 1024}
 	c, _ := encode(t, factory, disCtx, payload)
 	d, _ := encode(t, factory, disCtx, payload)
 	if bytes.Equal(c, d) {

@@ -12,10 +12,10 @@
 // typed descriptor, the validator constructors, the traversal engine —
 // lives in the internal subpackage fieldkit and is never edited when
 // adding a field. To add a config field you add one row to the registry
-// (and its struct field in domain.StoreConfig); nothing in fieldkit.
+// (and its struct field in config.StoreConfig); nothing in fieldkit.
 //
 // Neighbouring packages own the other two concerns: the YAML/JSON
 // document that an operator writes and its mapping onto a StoreConfig
-// live in config/declarative; the persistence of store.config versions
+// live in config/declarative; the persistence of config.StoreConfig versions
 // lives in engine/store (config_persist.go, plumbing over named cells).
 package config

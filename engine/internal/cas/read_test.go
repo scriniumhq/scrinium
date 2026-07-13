@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -24,7 +25,7 @@ import (
 // rwHarness shares one (driver, index) pair between a Writer and a Reader,
 // so an artifact written by the Writer can be read back by the Reader —
 // the true round-trip.
-func rwHarness(t *testing.T) (*cas.IO, *cas.IO, driver.Driver, index.StoreIndex, domain.StoreConfig) {
+func rwHarness(t *testing.T) (*cas.IO, *cas.IO, driver.Driver, index.StoreIndex, config.StoreConfig) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
@@ -37,7 +38,7 @@ func rwHarness(t *testing.T) (*cas.IO, *cas.IO, driver.Driver, index.StoreIndex,
 
 // write puts content through the Writer's three phases and returns the
 // artifact's floating ArtifactID (handle).
-func write(t *testing.T, w *cas.IO, cfg domain.StoreConfig, content string) domain.ArtifactID {
+func write(t *testing.T, w *cas.IO, cfg config.StoreConfig, content string) domain.ArtifactID {
 	t.Helper()
 	ctx := context.Background()
 	opts := domain.PutOptions{}
@@ -133,7 +134,7 @@ func TestOpenBlob_TargetReadsBackContent(t *testing.T) {
 
 func TestOpenBlob_Inline(t *testing.T) {
 	w, r, _, _, cfg := rwHarness(t)
-	cfg.BlobStorage = domain.BlobStorageInline
+	cfg.BlobStorage = config.BlobStorageInline
 	cfg.InlineBlobLimit = 1024
 	id := write(t, w, cfg, "inline content")
 

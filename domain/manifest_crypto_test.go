@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 )
 
 // --- Current names ---
@@ -12,16 +12,16 @@ import (
 func TestManifestCrypto_UnmarshalJSON_AcceptsCurrentNames(t *testing.T) {
 	cases := []struct {
 		in   string
-		want domain.ManifestCrypto
+		want config.ManifestCrypto
 	}{
 		{`""`, ""},
-		{`"Plain"`, domain.ManifestCryptoPlain},
-		{`"Sealed"`, domain.ManifestCryptoSealed},
-		{`"Paranoid"`, domain.ManifestCryptoParanoid},
+		{`"Plain"`, config.ManifestCryptoPlain},
+		{`"Sealed"`, config.ManifestCryptoSealed},
+		{`"Paranoid"`, config.ManifestCryptoParanoid},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
-			var c domain.ManifestCrypto
+			var c config.ManifestCrypto
 			if err := json.Unmarshal([]byte(tc.in), &c); err != nil {
 				t.Fatalf("Unmarshal %s: %v", tc.in, err)
 			}
@@ -36,12 +36,12 @@ func TestManifestCrypto_UnmarshalJSON_AcceptsCurrentNames(t *testing.T) {
 
 func TestManifestCrypto_MarshalJSON_WritesCurrentNames(t *testing.T) {
 	cases := []struct {
-		in   domain.ManifestCrypto
+		in   config.ManifestCrypto
 		want string
 	}{
-		{domain.ManifestCryptoPlain, `"Plain"`},
-		{domain.ManifestCryptoSealed, `"Sealed"`},
-		{domain.ManifestCryptoParanoid, `"Paranoid"`},
+		{config.ManifestCryptoPlain, `"Plain"`},
+		{config.ManifestCryptoSealed, `"Sealed"`},
+		{config.ManifestCryptoParanoid, `"Paranoid"`},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.in), func(t *testing.T) {
@@ -59,10 +59,10 @@ func TestManifestCrypto_MarshalJSON_WritesCurrentNames(t *testing.T) {
 // --- Round-trip ---
 
 func TestManifestCrypto_RoundTrip_AllNames(t *testing.T) {
-	originals := []domain.ManifestCrypto{
-		domain.ManifestCryptoPlain,
-		domain.ManifestCryptoSealed,
-		domain.ManifestCryptoParanoid,
+	originals := []config.ManifestCrypto{
+		config.ManifestCryptoPlain,
+		config.ManifestCryptoSealed,
+		config.ManifestCryptoParanoid,
 	}
 	for _, orig := range originals {
 		t.Run(string(orig), func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestManifestCrypto_RoundTrip_AllNames(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Marshal: %v", err)
 			}
-			var got domain.ManifestCrypto
+			var got config.ManifestCrypto
 			if err := json.Unmarshal(raw, &got); err != nil {
 				t.Fatalf("Unmarshal: %v", err)
 			}
@@ -91,7 +91,7 @@ func TestManifestCrypto_UnmarshalJSON_RejectsUnknown(t *testing.T) {
 	}
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
-			var c domain.ManifestCrypto
+			var c config.ManifestCrypto
 			err := json.Unmarshal([]byte(in), &c)
 			if err == nil {
 				t.Fatalf("Unmarshal %s: expected error, got %q", in, c)

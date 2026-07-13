@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -19,10 +20,10 @@ import (
 
 // TestUpdateConfig_HappyPath: a mutable change lands in the active config.
 func TestUpdateConfig_HappyPath(t *testing.T) {
-	s := storefx.Init(t, store.WithConfig(domain.StoreConfig{
+	s := storefx.Init(t, store.WithConfig(config.StoreConfig{
 		RetentionPeriod: 2 * time.Hour,
 	}))
-	if err := s.UpdateConfig(context.Background(), domain.StoreConfig{
+	if err := s.UpdateConfig(context.Background(), config.StoreConfig{
 		RetentionPeriod: 24 * time.Hour,
 	}); err != nil {
 		t.Fatalf("UpdateConfig: %v", err)
@@ -44,24 +45,24 @@ func TestUpdateConfig_Rejected(t *testing.T) {
 		want error
 	}{
 		{"immutable PathTopology change", func(t *testing.T) error {
-			s := storefx.Init(t, store.WithConfig(domain.StoreConfig{PathTopology: domain.PathTopologyFlat}))
-			err := s.UpdateConfig(context.Background(), domain.StoreConfig{PathTopology: domain.PathTopologySharded})
-			if got := s.Config().PathTopology; got != domain.PathTopologyFlat {
+			s := storefx.Init(t, store.WithConfig(config.StoreConfig{PathTopology: config.PathTopologyFlat}))
+			err := s.UpdateConfig(context.Background(), config.StoreConfig{PathTopology: config.PathTopologySharded})
+			if got := s.Config().PathTopology; got != config.PathTopologyFlat {
 				t.Errorf("PathTopology mutated despite rejection: got %q", got)
 			}
 			return err
 		}, errs.ErrConfigMismatch},
 		{"invalid mutable (retention below min)", func(t *testing.T) error {
 			s := storefx.Init(t)
-			return s.UpdateConfig(context.Background(), domain.StoreConfig{RetentionPeriod: 30 * time.Minute})
+			return s.UpdateConfig(context.Background(), config.StoreConfig{RetentionPeriod: 30 * time.Minute})
 		}, errs.ErrInvalidConfig},
 		{"deletion-policy lock cannot soften", func(t *testing.T) error {
-			s := storefx.Init(t, store.WithConfig(domain.StoreConfig{
-				DeletionPolicy:     domain.DeletionPolicyNoDelete,
+			s := storefx.Init(t, store.WithConfig(config.StoreConfig{
+				DeletionPolicy:     config.DeletionPolicyNoDelete,
 				DeletionPolicyLock: true,
 			}))
-			return s.UpdateConfig(context.Background(), domain.StoreConfig{
-				DeletionPolicy:     domain.DeletionPolicyFree,
+			return s.UpdateConfig(context.Background(), config.StoreConfig{
+				DeletionPolicy:     config.DeletionPolicyFree,
 				DeletionPolicyLock: true,
 			})
 		}, errs.ErrConfigMismatch},
@@ -70,7 +71,7 @@ func TestUpdateConfig_Rejected(t *testing.T) {
 			if err := s.SetMaintenanceMode(context.Background(), domain.MaintenanceModeReadOnly); err != nil {
 				t.Fatalf("SetMaintenanceMode: %v", err)
 			}
-			return s.UpdateConfig(context.Background(), domain.StoreConfig{RetentionPeriod: 5 * time.Hour})
+			return s.UpdateConfig(context.Background(), config.StoreConfig{RetentionPeriod: 5 * time.Hour})
 		}, errs.ErrStoreReadOnly},
 	}
 	for _, tc := range cases {
@@ -85,7 +86,7 @@ func TestUpdateConfig_Rejected(t *testing.T) {
 // TestConfigHistory_SingleSnapshotAfterInit: a fresh store has exactly one
 // history entry — the one InitStore wrote.
 func TestConfigHistory_SingleSnapshotAfterInit(t *testing.T) {
-	s := storefx.Init(t, store.WithConfig(domain.StoreConfig{
+	s := storefx.Init(t, store.WithConfig(config.StoreConfig{
 		RetentionPeriod: 3 * time.Hour,
 	}))
 	hist, err := s.ConfigHistory(context.Background())
@@ -105,17 +106,17 @@ func TestConfigHistory_SingleSnapshotAfterInit(t *testing.T) {
 // at the tail. RetentionPeriod is the mutable witness. (Manifest CreatedAt
 // has 1-second resolution per docs/2 §7.5, hence the sleeps.)
 func TestConfigHistory_OrdersByCreatedAtDesc(t *testing.T) {
-	s := storefx.Init(t, store.WithConfig(domain.StoreConfig{
+	s := storefx.Init(t, store.WithConfig(config.StoreConfig{
 		RetentionPeriod: 1 * time.Hour,
 	}))
 	ctx := context.Background()
 
 	time.Sleep(1100 * time.Millisecond)
-	if err := s.UpdateConfig(ctx, domain.StoreConfig{RetentionPeriod: 2 * time.Hour}); err != nil {
+	if err := s.UpdateConfig(ctx, config.StoreConfig{RetentionPeriod: 2 * time.Hour}); err != nil {
 		t.Fatalf("UpdateConfig #1: %v", err)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	if err := s.UpdateConfig(ctx, domain.StoreConfig{RetentionPeriod: 4 * time.Hour}); err != nil {
+	if err := s.UpdateConfig(ctx, config.StoreConfig{RetentionPeriod: 4 * time.Hour}); err != nil {
 		t.Fatalf("UpdateConfig #2: %v", err)
 	}
 

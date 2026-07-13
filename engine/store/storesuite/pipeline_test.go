@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	zstdstage "scrinium.dev/engine/pipeline/stage/zstd"
@@ -167,7 +168,7 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 		reg := pipeline.NewTransformerRegistry() // empty: "zstd" not registered
 		s, _ := storefx.InitWithRoot(t,
 			store.WithReadRegistry(reg),
-			store.WithConfig(domain.StoreConfig{Pipeline: []string{"zstd"}}))
+			store.WithConfig(config.StoreConfig{Pipeline: []string{"zstd"}}))
 		_, err := s.Put(context.Background(),
 			domain.Artifact{Payload: bytes.NewReader([]byte("x"))},
 		)
@@ -179,9 +180,9 @@ func TestPipeline_ConfigGuards(t *testing.T) {
 	t.Run("pipeline plus inline is refused", func(t *testing.T) {
 		reg := pipeline.NewTransformerRegistry().
 			Register("zstd", zstdstage.New(zstdstage.Options{}))
-		cfg := domain.StoreConfig{
+		cfg := config.StoreConfig{
 			Pipeline:        []string{"zstd"},
-			BlobStorage:     domain.BlobStorageInline,
+			BlobStorage:     config.BlobStorageInline,
 			InlineBlobLimit: 1024,
 		}
 		s, _, err := store.InitStore(context.Background(), driverfx.LocalFS(t),

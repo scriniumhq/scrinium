@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	store2 "scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/layout"
 	"scrinium.dev/errs"
@@ -60,7 +61,7 @@ func (s *store) Delete(ctx context.Context, id domain.ArtifactID) error {
 	}
 
 	cfg := s.snapshotConfig()
-	if cfg.DeletionPolicy == domain.DeletionPolicyNoDelete {
+	if cfg.DeletionPolicy == store2.DeletionPolicyNoDelete {
 		return errs.ErrDeletionForbidden
 	}
 

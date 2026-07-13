@@ -13,6 +13,7 @@ import (
 
 	"crypto/sha256"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver/localfs"
@@ -116,7 +117,7 @@ func TestClaimResolveRoundTrip(t *testing.T) {
 
 	payloads := []string{"v1", "v2", "v3"}
 	for i, p := range payloads {
-		body, _, err := BuildInlineManifest(name, []byte(p), "sha256", testHashes{}, domain.ManifestCryptoPlain, nil, "")
+		body, _, err := BuildInlineManifest(name, []byte(p), "sha256", testHashes{}, config.ManifestCryptoPlain, nil, "")
 		if err != nil {
 			t.Fatalf("BuildInlineManifest %s: %v", p, err)
 		}
@@ -193,7 +194,7 @@ func TestLoad_RejectsTamperedPayload(t *testing.T) {
 	ctx := context.Background()
 	drv := newDriver(t)
 
-	_, m, err := BuildInlineManifest("test/artifact", []byte("real-payload"), "sha256", testHashes{}, domain.ManifestCryptoPlain, nil, "")
+	_, m, err := BuildInlineManifest("test/artifact", []byte("real-payload"), "sha256", testHashes{}, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatalf("BuildInlineManifest: %v", err)
 	}
@@ -202,7 +203,7 @@ func TestLoad_RejectsTamperedPayload(t *testing.T) {
 
 	_, fileBytes, _, err := artifact.ComputeManifestDigest(
 		m, "sha256", testHashes{},
-		domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
+		config.ManifestEncodingJSON, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatalf("encode tampered manifest: %v", err)
 	}

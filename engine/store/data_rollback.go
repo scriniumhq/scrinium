@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	store2 "scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -81,7 +82,7 @@ func (s *store) RollbackSession(ctx context.Context, sessionID domain.SessionID)
 	// 3. Atomic DeletionPolicy pre-check. Mirrors Delete:
 	//    DeletionPolicyNoDelete refuses regardless of retention.
 	cfg := s.snapshotConfig()
-	if cfg.DeletionPolicy == domain.DeletionPolicyNoDelete {
+	if cfg.DeletionPolicy == store2.DeletionPolicyNoDelete {
 		return errs.ErrDeletionForbidden
 	}
 

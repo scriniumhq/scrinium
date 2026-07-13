@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/errs"
 )
@@ -80,7 +80,7 @@ func TestHasDEK(t *testing.T) {
 
 func TestDEKForWrite_LockedReturnsErrLocked(t *testing.T) {
 	// No DEK == Locked: an encrypting write must be refused with ErrLocked.
-	_, err := New(nil, nil, nil, nil, nil).DEKForWrite(domain.ManifestCryptoSealed)
+	_, err := New(nil, nil, nil, nil, nil).DEKForWrite(config.ManifestCryptoSealed)
 	if !errors.Is(err, errs.ErrLocked) {
 		t.Fatalf("DEKForWrite while locked: got %v, want ErrLocked", err)
 	}
@@ -89,7 +89,7 @@ func TestDEKForWrite_LockedReturnsErrLocked(t *testing.T) {
 func TestDEKForWrite_NoResolverRejected(t *testing.T) {
 	// DEK present but no resolver: an encrypting write still needs one.
 	// Distinct from the locked case — this is NOT an ErrLocked.
-	_, err := New(nil, []byte{1, 2, 3, 4}, nil, nil, nil).DEKForWrite(domain.ManifestCryptoSealed)
+	_, err := New(nil, []byte{1, 2, 3, 4}, nil, nil, nil).DEKForWrite(config.ManifestCryptoSealed)
 	if err == nil {
 		t.Fatal("DEKForWrite without a resolver should error")
 	}
@@ -102,7 +102,7 @@ func TestDEKForWrite_ReturnsPrivateCopy(t *testing.T) {
 	dek := []byte{1, 2, 3, 4, 5, 6, 7, 8}
 	s := New(nil, dek, nil, pipeline.NewStaticKeyResolver(dek), nil)
 
-	got, err := s.DEKForWrite(domain.ManifestCryptoSealed)
+	got, err := s.DEKForWrite(config.ManifestCryptoSealed)
 	if err != nil {
 		t.Fatalf("DEKForWrite: %v", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/named"
@@ -22,7 +23,7 @@ import (
 )
 
 const (
-	leaseName = "store.agent.maintenance.lease"
+	leaseName = "config.agent.maintenance.lease"
 	hostA     = "host-A"
 	hostB     = "host-B"
 	storeX    = "store-X"
@@ -78,7 +79,7 @@ func writeRecord(t *testing.T, drv driver.Driver, rec lease.Record) {
 	if err != nil {
 		t.Fatalf("marshal record: %v", err)
 	}
-	fileBytes, _, err := named.BuildInlineManifest(leaseName, body, "sha256", leaseTestHashes{}, domain.ManifestCryptoPlain, nil, "")
+	fileBytes, _, err := named.BuildInlineManifest(leaseName, body, "sha256", leaseTestHashes{}, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatalf("build manifest: %v", err)
 	}

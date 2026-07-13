@@ -2,7 +2,7 @@
 // Config the operator writes, its Policy/StoreSpec/Encryption blocks,
 // strict decoding (DecodeYAML/DecodeJSON), the defaults ladder and
 // policyRef resolution (Normalize), file validation (Validate), and the
-// mapping from a Policy onto a domain.StoreConfig (StoreConfigFromPolicy)
+// mapping from a Policy onto a config.StoreConfig (StoreConfigFromPolicy)
 // through the YAML↔domain vocabulary.
 //
 // It sits above the store-config model (package config): it maps a

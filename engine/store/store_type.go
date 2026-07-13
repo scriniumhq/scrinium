@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -59,7 +60,7 @@ type store struct {
 	// activeConfig is the StoreConfig in effect for new operations,
 	// replaced atomically by UpdateConfig under cfgMu.
 	cfgMu        sync.RWMutex
-	activeConfig domain.StoreConfig
+	activeConfig config.StoreConfig
 
 	// State machine, guarded by stateMu.
 	stateMu sync.RWMutex
@@ -74,7 +75,7 @@ type store struct {
 	// (ADR-110): populated at OpenStore from WithConfig, merged over
 	// the active defaults by sessionConfig(). Immutable after open —
 	// no lock needed. Zero for a connection without overrides.
-	sessionOverlay domain.StoreConfig
+	sessionOverlay config.StoreConfig
 
 	// Liveness sentinel (ADR-111): offlineBySentinel marks an Offline
 	// set by the probe (self-healable), substituted makes it sticky

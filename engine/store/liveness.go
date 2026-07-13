@@ -101,7 +101,7 @@ func (s *store) probeLiveness() {
 }
 
 // refreshGovernance is the second consumer of the liveness tick
-// (ADR-110, INV-110-7): a cheap max-seq probe of store.config; when
+// (ADR-110, INV-110-7): a cheap max-seq probe of config.StoreConfig; when
 // another host published a new version (UpdateConfig writes the file,
 // not a message), the in-memory active config is re-read and swapped,
 // so agents and the Delete path — every snapshotConfig reader — see

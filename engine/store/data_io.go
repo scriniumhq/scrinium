@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/internal/cas"
@@ -64,8 +65,8 @@ var errPipelineWithInline = errors.New(
 // nil DEK. The DEK never escapes fn, so no write path can leak it by
 // forgetting to wipe. The write KeyID is resolved by the caller (Put);
 // withWriteDEK is purely DEK custody.
-func (s *store) withWriteDEK(cfg domain.StoreConfig, fn func(dek []byte) error) error {
-	if cfg.ManifestCrypto == "" || cfg.ManifestCrypto == domain.ManifestCryptoPlain {
+func (s *store) withWriteDEK(cfg config.StoreConfig, fn func(dek []byte) error) error {
+	if cfg.ManifestCrypto == "" || cfg.ManifestCrypto == config.ManifestCryptoPlain {
 		return fn(nil)
 	}
 	dek, err := s.crypto.DEKForWrite(cfg.ManifestCrypto)

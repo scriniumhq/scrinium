@@ -13,7 +13,7 @@
 // each write of that name claims a new, monotonically increasing SEQ,
 // stored as a dot-suffixed flat file (no per-artifact subdirectory):
 //
-//	named/<name>.<seq>     e.g. named/store.config.0000000001
+//	named/<name>.<seq>     e.g. named/config.StoreConfig.0000000001
 //	                            named/store.agent.checkpoint.<ts>.0000000001
 //
 // The file at named/<name>.<seq> IS the (inline) manifest — system artifacts

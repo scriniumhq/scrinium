@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/scrub"
@@ -45,8 +46,8 @@ func newScrubFixture(t *testing.T) scrubFixture {
 // exercising the scrub manifest pass.
 func newScrubFixtureInline(t *testing.T) scrubFixture {
 	t.Helper()
-	return newScrubFixtureCfg(t, store.WithConfig(domain.StoreConfig{
-		BlobStorage:     domain.BlobStorageInline,
+	return newScrubFixtureCfg(t, store.WithConfig(config.StoreConfig{
+		BlobStorage:     config.BlobStorageInline,
 		InlineBlobLimit: 1024,
 	}))
 }
@@ -84,7 +85,7 @@ func (f scrubFixture) blobRefOf(t *testing.T, id domain.ArtifactID) string {
 // tamperBlob flips a byte in the on-disk blob file for blobRef.
 func (f scrubFixture) tamperBlob(t *testing.T, blobRef string) {
 	t.Helper()
-	rel, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, blobRef)
+	rel, err := layout.BlobPath(config.PathTopologySharded, domain.BlobTypeRegular, blobRef)
 	if err != nil {
 		t.Fatalf("BlobPath: %v", err)
 	}

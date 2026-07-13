@@ -31,7 +31,7 @@ func writeConfig(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
-	cfg domain.StoreConfig,
+	cfg config.StoreConfig,
 ) (uint64, error) {
 	// KDFParams are input-only at InitStore: they are copied into the
 	// descriptor body and live exclusively there (docs 11, KDFParams).
@@ -47,7 +47,7 @@ func writeConfig(
 	}
 	payload = append(payload, '\n')
 
-	fileBytes, _, err := named.BuildInlineManifest(configName, payload, string(cfg.ContentHasher), hashes, domain.ManifestCryptoPlain, nil, "")
+	fileBytes, _, err := named.BuildInlineManifest(configName, payload, string(cfg.ContentHasher), hashes, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		return 0, fmt.Errorf("system config: build: %w", err)
 	}
@@ -68,17 +68,17 @@ func readConfig(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
-) (domain.StoreConfig, uint64, error) {
+) (config.StoreConfig, uint64, error) {
 	seq, found, err := named.ResolveActiveSeq(ctx, drv, configName)
 	if err != nil {
-		return domain.StoreConfig{}, 0, fmt.Errorf("system config: resolve active: %w", err)
+		return config.StoreConfig{}, 0, fmt.Errorf("system config: resolve active: %w", err)
 	}
 	if !found {
-		return domain.StoreConfig{}, 0, errs.ErrConfigMissing
+		return config.StoreConfig{}, 0, errs.ErrConfigMissing
 	}
 	cfg, err := loadVersion(ctx, drv, hashes, seq)
 	if err != nil {
-		return domain.StoreConfig{}, 0, err
+		return config.StoreConfig{}, 0, err
 	}
 	return cfg, seq, nil
 }
@@ -97,12 +97,12 @@ func configHistory(
 	ctx context.Context,
 	drv driver.Driver,
 	hashes domain.HashRegistry,
-) ([]domain.StoreConfig, error) {
+) ([]config.StoreConfig, error) {
 	seqs, err := named.ListVersions(ctx, drv, configName)
 	if err != nil {
 		return nil, fmt.Errorf("system config: list versions: %w", err)
 	}
-	out := make([]domain.StoreConfig, 0, len(seqs))
+	out := make([]config.StoreConfig, 0, len(seqs))
 	// seqs is ascending; walk it in reverse so the active (max) version
 	// comes first.
 	for i := len(seqs) - 1; i >= 0; i-- {
@@ -117,18 +117,18 @@ func configHistory(
 
 // loadVersion reads, verifies, and unmarshals the config at a specific
 // store.config seq.
-func loadVersion(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, seq uint64) (domain.StoreConfig, error) {
+func loadVersion(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, seq uint64) (config.StoreConfig, error) {
 	path, err := named.VersionPath(configName, seq)
 	if err != nil {
-		return domain.StoreConfig{}, err
+		return config.StoreConfig{}, err
 	}
 	m, err := named.Load(ctx, drv, hashes, path)
 	if err != nil {
-		return domain.StoreConfig{}, fmt.Errorf("system config: load: %w", err)
+		return config.StoreConfig{}, fmt.Errorf("system config: load: %w", err)
 	}
-	var cfg domain.StoreConfig
+	var cfg config.StoreConfig
 	if err := json.Unmarshal(m.InlineBlob, &cfg); err != nil {
-		return domain.StoreConfig{}, fmt.Errorf("system config: unmarshal: %w", err)
+		return config.StoreConfig{}, fmt.Errorf("system config: unmarshal: %w", err)
 	}
 	return cfg, nil
 }

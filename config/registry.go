@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 )
 
@@ -15,7 +14,7 @@ import (
 // second hand-written enumeration of the fields anywhere.
 //
 // This file is the rulebook. To add a config field you add one row here
-// (and its struct field in domain.StoreConfig) — nothing in fieldkit.
+// (and its struct field in config.StoreConfig) — nothing in fieldkit.
 // The row's slots:
 //
 //	FName/FClass/FConn — identity, class, connection fate
@@ -29,174 +28,174 @@ import (
 
 var registry = []fieldDesc{
 	// --- Class I: immutable ---
-	field[domain.PathTopology]{
-		FName: "PathTopology", FClass: ClassImmutable, FConn: ConnRefusedImmutable,
-		Get:       func(c domain.StoreConfig) domain.PathTopology { return c.PathTopology },
-		Set:       func(c *domain.StoreConfig, v domain.PathTopology) { c.PathTopology = v },
-		Check:     enum(domain.PathTopologyFlat, domain.PathTopologySharded),
-		DefaultTo: domain.PathTopologySharded,
+	field[PathTopology]{
+		FName: "PathTopology", FClass: classImmutable, FConn: connRefusedImmutable,
+		Get:       func(c StoreConfig) PathTopology { return c.PathTopology },
+		Set:       func(c *StoreConfig, v PathTopology) { c.PathTopology = v },
+		Check:     enum(PathTopologyFlat, PathTopologySharded),
+		DefaultTo: PathTopologySharded,
 	},
-	field[domain.ManifestEncoding]{
-		FName: "ManifestEncoding", FClass: ClassImmutable, FConn: ConnRefusedImmutable,
-		Get:       func(c domain.StoreConfig) domain.ManifestEncoding { return c.ManifestEncoding },
-		Set:       func(c *domain.StoreConfig, v domain.ManifestEncoding) { c.ManifestEncoding = v },
+	field[ManifestEncoding]{
+		FName: "ManifestEncoding", FClass: classImmutable, FConn: connRefusedImmutable,
+		Get:       func(c StoreConfig) ManifestEncoding { return c.ManifestEncoding },
+		Set:       func(c *StoreConfig, v ManifestEncoding) { c.ManifestEncoding = v },
 		Check:     encodingCheck,
-		DefaultTo: domain.ManifestEncodingJSON,
+		DefaultTo: ManifestEncodingJSON,
 	},
-	field[domain.ManifestCrypto]{
-		FName: "ManifestCrypto", FClass: ClassImmutable, FConn: ConnRefusedImmutable,
-		Get:       func(c domain.StoreConfig) domain.ManifestCrypto { return c.ManifestCrypto },
-		Set:       func(c *domain.StoreConfig, v domain.ManifestCrypto) { c.ManifestCrypto = v },
-		Check:     enum(domain.ManifestCryptoPlain, domain.ManifestCryptoSealed, domain.ManifestCryptoParanoid),
-		DefaultTo: domain.ManifestCryptoPlain,
+	field[ManifestCrypto]{
+		FName: "ManifestCrypto", FClass: classImmutable, FConn: connRefusedImmutable,
+		Get:       func(c StoreConfig) ManifestCrypto { return c.ManifestCrypto },
+		Set:       func(c *StoreConfig, v ManifestCrypto) { c.ManifestCrypto = v },
+		Check:     enum(ManifestCryptoPlain, ManifestCryptoSealed, ManifestCryptoParanoid),
+		DefaultTo: ManifestCryptoPlain,
 	},
-	field[domain.EncryptedDedup]{
-		FName: "EncryptedDedup", FClass: ClassImmutable, FConn: ConnRefusedImmutable,
-		Get:   func(c domain.StoreConfig) domain.EncryptedDedup { return c.EncryptedDedup },
-		Set:   func(c *domain.StoreConfig, v domain.EncryptedDedup) { c.EncryptedDedup = v },
-		Check: enum(domain.EncryptedDedupDisabled, domain.EncryptedDedupConvergent),
+	field[EncryptedDedup]{
+		FName: "EncryptedDedup", FClass: classImmutable, FConn: connRefusedImmutable,
+		Get:   func(c StoreConfig) EncryptedDedup { return c.EncryptedDedup },
+		Set:   func(c *StoreConfig, v EncryptedDedup) { c.EncryptedDedup = v },
+		Check: enum(EncryptedDedupDisabled, EncryptedDedupConvergent),
 		// ADR-58: default Disabled only for an encrypting store; a Plain
 		// store leaves it empty (crypto-identity empty, dedup key
 		// degrades to (ContentHash, OriginalSize)).
-		DefaultFn: func(c domain.StoreConfig) (domain.EncryptedDedup, bool) {
+		DefaultFn: func(c StoreConfig) (EncryptedDedup, bool) {
 			if c.EncryptedDedup == "" && isEncryptingConfig(c) {
-				return domain.EncryptedDedupDisabled, true
+				return EncryptedDedupDisabled, true
 			}
 			return "", false
 		},
 	},
-	field[domain.ContentHashAlgorithm]{
-		FName: "ContentHasher", FClass: ClassImmutable, FConn: ConnRefusedImmutable,
-		Get:       func(c domain.StoreConfig) domain.ContentHashAlgorithm { return c.ContentHasher },
-		Set:       func(c *domain.StoreConfig, v domain.ContentHashAlgorithm) { c.ContentHasher = v },
-		Check:     enum(domain.HashSHA256, domain.HashBLAKE3),
-		DefaultTo: domain.HashSHA256,
+	field[ContentHashAlgorithm]{
+		FName: "ContentHasher", FClass: classImmutable, FConn: connRefusedImmutable,
+		Get:       func(c StoreConfig) ContentHashAlgorithm { return c.ContentHasher },
+		Set:       func(c *StoreConfig, v ContentHashAlgorithm) { c.ContentHasher = v },
+		Check:     enum(HashSHA256, HashBLAKE3),
+		DefaultTo: HashSHA256,
 	},
 	field[int]{
-		FName: "SegmentSize", FClass: ClassImmutable, FConn: ConnRefusedImmutable,
-		Get:   func(c domain.StoreConfig) int { return c.SegmentSize },
-		Set:   func(c *domain.StoreConfig, v int) { c.SegmentSize = v },
-		Check: rangeVal("SegmentSize", domain.MinSegmentSize, domain.MaxSegmentSize),
+		FName: "SegmentSize", FClass: classImmutable, FConn: connRefusedImmutable,
+		Get:   func(c StoreConfig) int { return c.SegmentSize },
+		Set:   func(c *StoreConfig, v int) { c.SegmentSize = v },
+		Check: rangeVal("SegmentSize", MinSegmentSize, MaxSegmentSize),
 		// ADR-59: the segmented AEAD format needs a segment size only
 		// when the store encrypts; a Plain store leaves it zero.
-		DefaultFn: func(c domain.StoreConfig) (int, bool) {
+		DefaultFn: func(c StoreConfig) (int, bool) {
 			if c.SegmentSize == 0 && isEncryptingConfig(c) {
-				return domain.DefaultSegmentSize, true
+				return DefaultSegmentSize, true
 			}
 			return 0, false
 		},
 	},
-	field[domain.IdentityMode]{
-		FName: "IdentityMode", FClass: ClassImmutable, FConn: ConnRefusedImmutable,
-		Get:   func(c domain.StoreConfig) domain.IdentityMode { return c.IdentityMode },
-		Set:   func(c *domain.StoreConfig, v domain.IdentityMode) { c.IdentityMode = v },
-		Check: enum(domain.IdentityModeUnique, domain.IdentityModeCoalesced),
+	field[IdentityMode]{
+		FName: "IdentityMode", FClass: classImmutable, FConn: connRefusedImmutable,
+		Get:   func(c StoreConfig) IdentityMode { return c.IdentityMode },
+		Set:   func(c *StoreConfig, v IdentityMode) { c.IdentityMode = v },
+		Check: enum(IdentityModeUnique, IdentityModeCoalesced),
 		// Empty = IdentityModeUnique; left un-defaulted so the zero
 		// stays meaningful downstream (matches prior ApplyDefaults).
 	},
 	field[bool]{
-		FName: "DeletionPolicyLock", FClass: ClassImmutable, FConn: ConnRefusedImmutable,
-		Get: func(c domain.StoreConfig) bool { return c.DeletionPolicyLock },
-		Set: func(c *domain.StoreConfig, v bool) { c.DeletionPolicyLock = v },
+		FName: "DeletionPolicyLock", FClass: classImmutable, FConn: connRefusedImmutable,
+		Get: func(c StoreConfig) bool { return c.DeletionPolicyLock },
+		Set: func(c *StoreConfig, v bool) { c.DeletionPolicyLock = v },
 		// bool: no value-level validation, no default.
 	},
 
 	// --- Class II: governance ---
-	field[domain.DeletionPolicy]{
-		FName: "DeletionPolicy", FClass: ClassGovernance, FConn: ConnRefusedGovernance,
-		Get:       func(c domain.StoreConfig) domain.DeletionPolicy { return c.DeletionPolicy },
-		Set:       func(c *domain.StoreConfig, v domain.DeletionPolicy) { c.DeletionPolicy = v },
-		Check:     enum(domain.DeletionPolicyFree, domain.DeletionPolicyRetention, domain.DeletionPolicyNoDelete),
-		DefaultTo: domain.DeletionPolicyFree,
+	field[DeletionPolicy]{
+		FName: "DeletionPolicy", FClass: classGovernance, FConn: connRefusedGovernance,
+		Get:       func(c StoreConfig) DeletionPolicy { return c.DeletionPolicy },
+		Set:       func(c *StoreConfig, v DeletionPolicy) { c.DeletionPolicy = v },
+		Check:     enum(DeletionPolicyFree, DeletionPolicyRetention, DeletionPolicyNoDelete),
+		DefaultTo: DeletionPolicyFree,
 	},
 	field[time.Duration]{
-		FName: "RetentionPeriod", FClass: ClassGovernance, FConn: ConnRefusedGovernance,
-		Get:   func(c domain.StoreConfig) time.Duration { return c.RetentionPeriod },
-		Set:   func(c *domain.StoreConfig, v time.Duration) { c.RetentionPeriod = v },
-		Check: minVal("RetentionPeriod", domain.MinRetentionPeriod),
+		FName: "RetentionPeriod", FClass: classGovernance, FConn: connRefusedGovernance,
+		Get:   func(c StoreConfig) time.Duration { return c.RetentionPeriod },
+		Set:   func(c *StoreConfig, v time.Duration) { c.RetentionPeriod = v },
+		Check: minVal("RetentionPeriod", MinRetentionPeriod),
 		// Zero = feature off; not defaulted.
 	},
 	field[time.Duration]{
-		FName: "TombstoneGracePeriod", FClass: ClassGovernance, FConn: ConnRefusedGovernance,
-		Get: func(c domain.StoreConfig) time.Duration { return c.TombstoneGracePeriod },
-		Set: func(c *domain.StoreConfig, v time.Duration) { c.TombstoneGracePeriod = v },
+		FName: "TombstoneGracePeriod", FClass: classGovernance, FConn: connRefusedGovernance,
+		Get: func(c StoreConfig) time.Duration { return c.TombstoneGracePeriod },
+		Set: func(c *StoreConfig, v time.Duration) { c.TombstoneGracePeriod = v },
 		Check: withSentinel(
-			minVal("TombstoneGracePeriod", domain.MinTombstoneGracePeriod),
+			minVal("TombstoneGracePeriod", MinTombstoneGracePeriod),
 			errs.ErrInvalidTombstoneGracePeriod),
 		// Unconditional 24h, but a Duration's zero-fill needs an
 		// explicit fn (DefaultTo's "non-zero enum" convention is for
 		// string enums; keep the intent obvious here).
-		DefaultFn: func(c domain.StoreConfig) (time.Duration, bool) {
+		DefaultFn: func(c StoreConfig) (time.Duration, bool) {
 			if c.TombstoneGracePeriod == 0 {
 				return 24 * time.Hour, true
 			}
 			return 0, false
 		},
 	},
-	field[domain.GCLeasePolicy]{
-		FName: "GCLeasePolicy", FClass: ClassGovernance, FConn: ConnRefusedGovernance,
-		Get:       func(c domain.StoreConfig) domain.GCLeasePolicy { return c.GCLeasePolicy },
-		Set:       func(c *domain.StoreConfig, v domain.GCLeasePolicy) { c.GCLeasePolicy = v },
-		Check:     enum(domain.GCLeaseAuto, domain.GCLeaseSingleHost, domain.GCLeaseLeaderElection),
-		DefaultTo: domain.GCLeaseAuto,
+	field[GCLeasePolicy]{
+		FName: "GCLeasePolicy", FClass: classGovernance, FConn: connRefusedGovernance,
+		Get:       func(c StoreConfig) GCLeasePolicy { return c.GCLeasePolicy },
+		Set:       func(c *StoreConfig, v GCLeasePolicy) { c.GCLeasePolicy = v },
+		Check:     enum(GCLeaseAuto, GCLeaseSingleHost, GCLeaseLeaderElection),
+		DefaultTo: GCLeaseAuto,
 	},
-	field[domain.SessionOverridesPolicy]{
-		FName: "SessionOverrides", FClass: ClassGovernance, FConn: ConnRefusedGovernance,
-		Get:       func(c domain.StoreConfig) domain.SessionOverridesPolicy { return c.SessionOverrides },
-		Set:       func(c *domain.StoreConfig, v domain.SessionOverridesPolicy) { c.SessionOverrides = v },
-		Check:     enum(domain.SessionOverridesAllow, domain.SessionOverridesDeny),
-		DefaultTo: domain.SessionOverridesAllow,
+	field[SessionOverridesPolicy]{
+		FName: "SessionOverrides", FClass: classGovernance, FConn: connRefusedGovernance,
+		Get:       func(c StoreConfig) SessionOverridesPolicy { return c.SessionOverrides },
+		Set:       func(c *StoreConfig, v SessionOverridesPolicy) { c.SessionOverrides = v },
+		Check:     enum(SessionOverridesAllow, SessionOverridesDeny),
+		DefaultTo: SessionOverridesAllow,
 	},
 	field[int64]{
-		FName: "MaxArtifactSize", FClass: ClassGovernance, FConn: ConnRefusedGovernance,
-		Get:   func(c domain.StoreConfig) int64 { return c.MaxArtifactSize },
-		Set:   func(c *domain.StoreConfig, v int64) { c.MaxArtifactSize = v },
+		FName: "MaxArtifactSize", FClass: classGovernance, FConn: connRefusedGovernance,
+		Get:   func(c StoreConfig) int64 { return c.MaxArtifactSize },
+		Set:   func(c *StoreConfig, v int64) { c.MaxArtifactSize = v },
 		Check: nonNegative[int64]("MaxArtifactSize"),
 		// Zero = unlimited; not defaulted.
 	},
 
 	// --- Class III: session ---
-	field[domain.BlobStorage]{
-		FName: "BlobStorage", FClass: ClassSession, FConn: ConnOverlay,
-		Get:       func(c domain.StoreConfig) domain.BlobStorage { return c.BlobStorage },
-		Set:       func(c *domain.StoreConfig, v domain.BlobStorage) { c.BlobStorage = v },
-		Check:     enum(domain.BlobStorageTarget, domain.BlobStorageInline),
-		DefaultTo: domain.BlobStorageTarget,
+	field[BlobStorage]{
+		FName: "BlobStorage", FClass: classSession, FConn: connOverlay,
+		Get:       func(c StoreConfig) BlobStorage { return c.BlobStorage },
+		Set:       func(c *StoreConfig, v BlobStorage) { c.BlobStorage = v },
+		Check:     enum(BlobStorageTarget, BlobStorageInline),
+		DefaultTo: BlobStorageTarget,
 	},
-	field[domain.VerifyOnReadPolicy]{
-		FName: "VerifyOnRead", FClass: ClassSession, FConn: ConnOverlay,
-		Get:       func(c domain.StoreConfig) domain.VerifyOnReadPolicy { return c.VerifyOnRead },
-		Set:       func(c *domain.StoreConfig, v domain.VerifyOnReadPolicy) { c.VerifyOnRead = v },
-		Check:     enum(domain.VerifyOnReadAuto, domain.VerifyOnReadForceEnabled, domain.VerifyOnReadDisabled),
-		DefaultTo: domain.VerifyOnReadAuto,
+	field[VerifyOnReadPolicy]{
+		FName: "VerifyOnRead", FClass: classSession, FConn: connOverlay,
+		Get:       func(c StoreConfig) VerifyOnReadPolicy { return c.VerifyOnRead },
+		Set:       func(c *StoreConfig, v VerifyOnReadPolicy) { c.VerifyOnRead = v },
+		Check:     enum(VerifyOnReadAuto, VerifyOnReadForceEnabled, VerifyOnReadDisabled),
+		DefaultTo: VerifyOnReadAuto,
 	},
 	field[int64]{
-		FName: "InlineBlobLimit", FClass: ClassSession, FConn: ConnOverlay,
-		Get:   func(c domain.StoreConfig) int64 { return c.InlineBlobLimit },
-		Set:   func(c *domain.StoreConfig, v int64) { c.InlineBlobLimit = v },
-		Check: maxVal[int64]("InlineBlobLimit", domain.MaxInlineBlobLimit),
+		FName: "InlineBlobLimit", FClass: classSession, FConn: connOverlay,
+		Get:   func(c StoreConfig) int64 { return c.InlineBlobLimit },
+		Set:   func(c *StoreConfig, v int64) { c.InlineBlobLimit = v },
+		Check: maxVal[int64]("InlineBlobLimit", MaxInlineBlobLimit),
 		// Zero = feature off; not defaulted.
 	},
-	field[domain.PackAlignmentPolicy]{
-		FName: "PackAlignment", FClass: ClassSession, FConn: ConnOverlay,
-		Get:   func(c domain.StoreConfig) domain.PackAlignmentPolicy { return c.PackAlignment },
-		Set:   func(c *domain.StoreConfig, v domain.PackAlignmentPolicy) { c.PackAlignment = v },
-		Check: enum(domain.PackAlignmentAuto, domain.PackAlignmentNone, domain.PackAlignment512, domain.PackAlignment4096),
+	field[PackAlignmentPolicy]{
+		FName: "PackAlignment", FClass: classSession, FConn: connOverlay,
+		Get:   func(c StoreConfig) PackAlignmentPolicy { return c.PackAlignment },
+		Set:   func(c *StoreConfig, v PackAlignmentPolicy) { c.PackAlignment = v },
+		Check: enum(PackAlignmentAuto, PackAlignmentNone, PackAlignment512, PackAlignment4096),
 		// Zero literal is also PackAlignmentNone; promote zero to Auto
 		// (derive from the Driver) rather than "no alignment". This is
 		// why it needs DefaultFn — DefaultTo would refuse to touch a
 		// value that equals the field's zero.
-		DefaultFn: func(c domain.StoreConfig) (domain.PackAlignmentPolicy, bool) {
+		DefaultFn: func(c StoreConfig) (PackAlignmentPolicy, bool) {
 			if c.PackAlignment == 0 {
-				return domain.PackAlignmentAuto, true
+				return PackAlignmentAuto, true
 			}
 			return 0, false
 		},
 	},
 	field[int64]{
-		FName: "EagerFetchLimit", FClass: ClassSession, FConn: ConnOverlay,
-		Get: func(c domain.StoreConfig) int64 { return c.EagerFetchLimit },
-		Set: func(c *domain.StoreConfig, v int64) { c.EagerFetchLimit = v },
+		FName: "EagerFetchLimit", FClass: classSession, FConn: connOverlay,
+		Get: func(c StoreConfig) int64 { return c.EagerFetchLimit },
+		Set: func(c *StoreConfig, v int64) { c.EagerFetchLimit = v },
 		// No bound, no default; row carries class/conn for the overlay.
 	},
 
@@ -208,11 +207,11 @@ var registry = []fieldDesc{
 // is recognised-but-deferred (a distinct message from invalid), and
 // anything else is invalid. Not a plain enum because of the deferred
 // member.
-func encodingCheck(e domain.ManifestEncoding) error {
+func encodingCheck(e ManifestEncoding) error {
 	switch e {
-	case "", domain.ManifestEncodingJSON:
+	case "", ManifestEncodingJSON:
 		return nil
-	case domain.ManifestEncodingBinary:
+	case ManifestEncodingBinary:
 		return fmt.Errorf("%w: ManifestEncoding=Binary deferred", errs.ErrInvalidConfig)
 	default:
 		return errs.ErrInvalidConfig
@@ -229,14 +228,14 @@ func encodingCheck(e domain.ManifestEncoding) error {
 type pipelineDesc struct{}
 
 func (pipelineDesc) Name() string       { return "Pipeline" }
-func (pipelineDesc) Class() FieldClass  { return ClassSession }
-func (pipelineDesc) Conn() ConnBehavior { return ConnDerived }
+func (pipelineDesc) Class() FieldClass  { return classSession }
+func (pipelineDesc) Conn() ConnBehavior { return connDerived }
 
-func (pipelineDesc) Validate(domain.StoreConfig) error { return nil }
+func (pipelineDesc) Validate(StoreConfig) error { return nil }
 
-func (pipelineDesc) ApplyDefault(*domain.StoreConfig) {} // Pipeline is never defaulted
+func (pipelineDesc) ApplyDefault(*StoreConfig) {} // Pipeline is never defaulted
 
-func (pipelineDesc) Diverges(req, active domain.StoreConfig) (string, bool) {
+func (pipelineDesc) Diverges(req, active StoreConfig) (string, bool) {
 	if len(req.Pipeline) == 0 || equalPipelines(req.Pipeline, active.Pipeline) {
 		return "", false
 	}

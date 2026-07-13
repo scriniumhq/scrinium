@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/hashing"
@@ -20,7 +21,7 @@ import (
 // so it carries its own registry rather than depending on the wired store
 // registry, which pre-config and recovery paths do not have in scope.
 var canonicalHashes = hashing.NewHashRegistry().
-	Register(string(domain.HashSHA256), func() hash.Hash { return sha256.New() })
+	Register(string(config.HashSHA256), func() hash.Hash { return sha256.New() })
 
 // CanonicalHashes returns the descriptor's fixed sha256 hash registry, for
 // callers that must write or read a descriptor cell without a wired store
@@ -127,7 +128,7 @@ func Unmarshal(data []byte) (*Descriptor, error) {
 // manifest is named after the cell, hashed with the canonical sha256, and
 // carries no crypto (Plain) — it is read pre-DEK at bootstrap.
 func writeReplicaCell(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, name string, data []byte) error {
-	body, _, err := named.BuildInlineManifest(name, data, string(domain.HashSHA256), hashes, domain.ManifestCryptoPlain, nil, "")
+	body, _, err := named.BuildInlineManifest(name, data, string(config.HashSHA256), hashes, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		return fmt.Errorf("descriptor: build manifest %q: %w", name, err)
 	}
@@ -151,7 +152,7 @@ func Read(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry) (*
 // RotateKEK) goes through it.
 //
 // Each cell write is atomic; the pair is not. A crash between the two
-// leaves the backup stale, which reconcile heals on the next OpenStore.
+// leaves the backup stale, which reconcile heals on the next Openconfig.
 func WriteBoth(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, d *Descriptor) error {
 	data, err := Marshal(d)
 	if err != nil {

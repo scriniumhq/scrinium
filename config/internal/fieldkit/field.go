@@ -13,7 +13,7 @@ package fieldkit
 import (
 	"fmt"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config/internal/storeconfig"
 )
 
 // FieldClass is a field's ADR-110 class.
@@ -60,16 +60,16 @@ type Desc interface {
 	Class() FieldClass
 	Conn() ConnBehavior
 	// Validate checks this field's value in cfg (enum / bounds).
-	Validate(cfg domain.StoreConfig) error
+	Validate(cfg storeconfig.StoreConfig) error
 	// Diverges reports whether req's populated value differs from
 	// active's, with a human message. Zero (unset) never diverges.
-	Diverges(req, active domain.StoreConfig) (string, bool)
+	Diverges(req, active storeconfig.StoreConfig) (string, bool)
 	// ApplyDefault writes this field's default into cfg when the row
 	// declares one and its condition holds. No-op otherwise.
-	ApplyDefault(cfg *domain.StoreConfig)
+	ApplyDefault(cfg *storeconfig.StoreConfig)
 }
 
-// Field is one typed row. T is the field's Go type (domain.PathTopology,
+// Field is one typed row. T is the field's Go type (config.PathTopology,
 // time.Duration, int64, …).
 //
 //   - Get / Set read and write the field on a StoreConfig.
@@ -91,26 +91,26 @@ type Field[T comparable] struct {
 	FName     string
 	FClass    FieldClass
 	FConn     ConnBehavior
-	Get       func(domain.StoreConfig) T
-	Set       func(*domain.StoreConfig, T)
+	Get       func(storeconfig.StoreConfig) T
+	Set       func(*storeconfig.StoreConfig, T)
 	Check     func(T) error
 	Fmt       func(T) string
 	DefaultTo T
-	DefaultFn func(domain.StoreConfig) (T, bool)
+	DefaultFn func(storeconfig.StoreConfig) (T, bool)
 }
 
 func (f Field[T]) Name() string       { return f.FName }
 func (f Field[T]) Class() FieldClass  { return f.FClass }
 func (f Field[T]) Conn() ConnBehavior { return f.FConn }
 
-func (f Field[T]) Validate(cfg domain.StoreConfig) error {
+func (f Field[T]) Validate(cfg storeconfig.StoreConfig) error {
 	if f.Check == nil {
 		return nil
 	}
 	return f.Check(f.Get(cfg))
 }
 
-func (f Field[T]) Diverges(req, active domain.StoreConfig) (string, bool) {
+func (f Field[T]) Diverges(req, active storeconfig.StoreConfig) (string, bool) {
 	var zero T
 	rv := f.Get(req)
 	if rv == zero || rv == f.Get(active) {
@@ -126,7 +126,7 @@ func (f Field[T]) render(v T) string {
 	return fmt.Sprintf("%v", v)
 }
 
-func (f Field[T]) ApplyDefault(cfg *domain.StoreConfig) {
+func (f Field[T]) ApplyDefault(cfg *storeconfig.StoreConfig) {
 	if f.DefaultFn != nil {
 		if v, ok := f.DefaultFn(*cfg); ok {
 			f.Set(cfg, v)

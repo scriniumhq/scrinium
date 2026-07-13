@@ -89,7 +89,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 
 	// Apply defaults to the requested config (the user may have
 	// passed nothing, or only some fields).
-	cfg := domain.StoreConfig{}
+	cfg := config.StoreConfig{}
 	if o.cfg != nil {
 		cfg = *o.cfg
 	}
@@ -131,7 +131,7 @@ func InitStore(ctx context.Context, drv driver.Driver, opts ...StoreOption) (Sto
 	// stored in the descriptor provides no protection, just
 	// operational pain. Caught here at InitStore so the user
 	// sees the conflict before any disk I/O.
-	if cfg.ManifestCrypto != domain.ManifestCryptoPlain && o.passphrase == nil {
+	if cfg.ManifestCrypto != config.ManifestCryptoPlain && o.passphrase == nil {
 		return nil, nil, fmt.Errorf("store.InitStore: %w: ManifestCrypto=%q requires WithPassphrase",
 			errs.ErrPassphraseRequired, cfg.ManifestCrypto)
 	}
@@ -258,7 +258,7 @@ func prepareInitLocation(ctx context.Context, drv driver.Driver, hashes domain.H
 // config write (system.config must be readable before the Store opens for
 // users). The descriptor is written first so a config-write failure still
 // leaves a readable Store identity behind.
-func persistInitState(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, cfg domain.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) (uint64, error) {
+func persistInitState(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, cfg config.StoreConfig, desc *descriptor.Descriptor, wrap func(string, error) error) (uint64, error) {
 	if err := descriptor.WriteBoth(ctx, drv, hashes, desc); err != nil {
 		return 0, wrap("write descriptor", err)
 	}

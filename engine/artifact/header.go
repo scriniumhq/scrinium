@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 )
@@ -38,8 +39,8 @@ const SchemaVersion = 1
 // the package: callers pass the equivalent fields through Encode arguments
 // and read them back from the decoded Manifest.
 type fileHeader struct {
-	Encoding domain.ManifestEncoding
-	Crypto   domain.ManifestCrypto
+	Encoding config.ManifestEncoding
+	Crypto   config.ManifestCrypto
 	KeyID    string
 }
 
@@ -114,7 +115,7 @@ func readHeader(data []byte) (fileHeader, int, error) {
 		return fileHeader{}, 0, err
 	}
 
-	if crypto == domain.ManifestCryptoPlain {
+	if crypto == config.ManifestCryptoPlain {
 		return fileHeader{Encoding: enc, Crypto: crypto}, 5, nil
 	}
 
@@ -138,11 +139,11 @@ func readHeader(data []byte) (fileHeader, int, error) {
 
 // encodingMagic returns the 4-byte magic for an encoding; empty maps to
 // JSON (the default). Binary is reserved but unsupported.
-func encodingMagic(enc domain.ManifestEncoding) ([]byte, error) {
+func encodingMagic(enc config.ManifestEncoding) ([]byte, error) {
 	switch enc {
-	case "", domain.ManifestEncodingJSON:
+	case "", config.ManifestEncodingJSON:
 		return magicJSON, nil
-	case domain.ManifestEncodingBinary:
+	case config.ManifestEncodingBinary:
 		return nil, errs.ErrUnsupportedEncoding
 	default:
 		return nil, errs.ErrUnsupportedEncoding
@@ -150,10 +151,10 @@ func encodingMagic(enc domain.ManifestEncoding) ([]byte, error) {
 }
 
 // magicEncoding is the inverse of encodingMagic.
-func magicEncoding(magic []byte) (domain.ManifestEncoding, error) {
+func magicEncoding(magic []byte) (config.ManifestEncoding, error) {
 	switch {
 	case bytes.Equal(magic, magicJSON):
-		return domain.ManifestEncodingJSON, nil
+		return config.ManifestEncodingJSON, nil
 	case bytes.Equal(magic, magicBinary):
 		return "", errs.ErrUnsupportedEncoding
 	default:
@@ -162,13 +163,13 @@ func magicEncoding(magic []byte) (domain.ManifestEncoding, error) {
 }
 
 // cryptoFlag maps a ManifestCrypto value to its on-disk byte.
-func cryptoFlag(c domain.ManifestCrypto) (byte, error) {
+func cryptoFlag(c config.ManifestCrypto) (byte, error) {
 	switch c {
-	case "", domain.ManifestCryptoPlain:
+	case "", config.ManifestCryptoPlain:
 		return cryptoPlain, nil
-	case domain.ManifestCryptoSealed:
+	case config.ManifestCryptoSealed:
 		return cryptoSealed, nil
-	case domain.ManifestCryptoParanoid:
+	case config.ManifestCryptoParanoid:
 		return cryptoParanoid, nil
 	default:
 		return 0, errs.ErrUnsupportedCrypto
@@ -176,14 +177,14 @@ func cryptoFlag(c domain.ManifestCrypto) (byte, error) {
 }
 
 // cryptoFromFlag is the inverse of cryptoFlag.
-func cryptoFromFlag(flag byte) (domain.ManifestCrypto, error) {
+func cryptoFromFlag(flag byte) (config.ManifestCrypto, error) {
 	switch flag {
 	case cryptoPlain:
-		return domain.ManifestCryptoPlain, nil
+		return config.ManifestCryptoPlain, nil
 	case cryptoSealed:
-		return domain.ManifestCryptoSealed, nil
+		return config.ManifestCryptoSealed, nil
 	case cryptoParanoid:
-		return domain.ManifestCryptoParanoid, nil
+		return config.ManifestCryptoParanoid, nil
 	default:
 		return "", errs.ErrUnsupportedCrypto
 	}

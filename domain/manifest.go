@@ -81,7 +81,7 @@ type Manifest struct {
 	ArtifactID ArtifactID
 
 	// Name is the identity slot of a system artifact
-	// (store.config.<seq>, store.agent.orphanscan.last,
+	// (config.StoreConfig.<seq>, store.agent.orphanscan.last,
 	// extension.bundler.migration.pending, …), written via
 	// AdminStore.System().Put (ADR-85). Present ⟺ system artifact;
 	// the user Put path never sets it. Empty for user artifacts and
@@ -197,3 +197,59 @@ func (m *Manifest) IsComposite() bool {
 	}
 	return probe.Composite
 }
+
+// Manifest and identifier format limits — fixed on-disk/protocol caps,
+// NOT configurable. They come from the engine specification §5.6 and
+// describe the wire format (identifier lengths, manifest block sizes,
+// reference-array counts, manifest read bound); changing them would
+// break compatibility, so they live with the manifest in domain rather
+// than among the configurable bounds in package config.
+
+// MaxNamespaceLen is the maximum byte length of Namespace.
+// Returns errs.ErrNamespaceTooLong when exceeded.
+// Standard FS/DB name limit.
+const MaxNamespaceLen = 255
+
+// MaxSessionIDLen is the maximum byte length of SessionID.
+// Returns errs.ErrSessionIDTooLong when exceeded.
+// Standard FS/DB name limit.
+const MaxSessionIDLen = 255
+
+// MaxKeyIDLength is the upper bound on KeyID byte length in the
+// manifest file header per §7.1. The KeyID-length byte is one
+// octet, so the KeyID itself can be at most 255 bytes; producers
+// that hit the limit must shorten the identifier or prefix-hash
+// it externally. Returns a wrapped error from engine/artifact when
+// exceeded.
+const MaxKeyIDLength = 255
+
+// MaxExtSize is the maximum byte size of the Manifest Ext
+// block (custom index data the engine itself reads — vfsmeta, etc).
+// 64 KiB. Returns errs.ErrExtTooLarge when exceeded.
+const MaxExtSize = 64 * 1024
+
+// MaxUsrSize is the maximum byte size of the Manifest Usr block
+// (opaque host-application data). 64 KiB. Returns
+// errs.ErrUsrTooLarge when exceeded.
+const MaxUsrSize = 64 * 1024
+
+// MaxBlobRefs and MaxHandleRefs cap the manifest reference arrays
+// (ADR-92/93): the on-disk chunk/member list is 16-bit length-counted, so
+// each array holds at most 65535 entries. Exceeding either returns
+// errs.ErrTooManyRefs on write. The encode path has no overall byte cap —
+// it is bounded field-by-field — while reads are guarded by
+// MaxManifestSize (below) against corrupt or oversized files.
+const (
+	MaxBlobRefs   = 65535
+	MaxHandleRefs = 65535
+)
+
+// MaxManifestSize bounds a manifest file on READ, so a corrupt or hostile
+// file cannot force an unbounded allocation before the per-field limits
+// (checked post-parse) can fire. It is derived from the per-field maxima,
+// not arbitrary: a worst-case well-formed manifest is
+// (MaxBlobRefs + MaxHandleRefs) hex digests + MaxExtSize + MaxUsrSize +
+// fixed overhead — ~9 MiB for SHA-256, ~17 MiB for SHA-512. 32 MiB leaves
+// headroom for the longest registered hash. The encode path does NOT use
+// this — it is bounded field-by-field. Returns errs.ErrManifestTooLarge.
+const MaxManifestSize = 32 * 1024 * 1024

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/layout"
 )
@@ -20,7 +21,7 @@ func ref(hexHead string) string {
 // --- BlobPath: Sharded ---
 
 func TestBlobPath_ShardedBlob(t *testing.T) {
-	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref("aabbccdd"))
+	got, err := layout.BlobPath(config.PathTopologySharded, domain.BlobTypeRegular, ref("aabbccdd"))
 	if err != nil {
 		t.Fatalf("BlobPath: %v", err)
 	}
@@ -31,7 +32,7 @@ func TestBlobPath_ShardedBlob(t *testing.T) {
 }
 
 func TestBlobPath_ShardedChunkRoot(t *testing.T) {
-	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeChunk, ref("deadbeef"))
+	got, err := layout.BlobPath(config.PathTopologySharded, domain.BlobTypeChunk, ref("deadbeef"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +42,7 @@ func TestBlobPath_ShardedChunkRoot(t *testing.T) {
 }
 
 func TestBlobPath_ShardedPackRoot(t *testing.T) {
-	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypePack, ref("12345678"))
+	got, err := layout.BlobPath(config.PathTopologySharded, domain.BlobTypePack, ref("12345678"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +55,7 @@ func TestBlobPath_ShardedPackRoot(t *testing.T) {
 
 func TestBlobPath_Flat(t *testing.T) {
 	r := ref("aabbccdd")
-	got, err := layout.BlobPath(domain.PathTopologyFlat, domain.BlobTypeRegular, r)
+	got, err := layout.BlobPath(config.PathTopologyFlat, domain.BlobTypeRegular, r)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func TestBlobPath_Flat(t *testing.T) {
 // --- Defaults ---
 
 func TestBlobPath_EmptyTopologyDefaultsToSharded(t *testing.T) {
-	got, err := layout.BlobPath(domain.PathTopology(""), domain.BlobTypeRegular, ref("aabbccdd"))
+	got, err := layout.BlobPath(config.PathTopology(""), domain.BlobTypeRegular, ref("aabbccdd"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +77,7 @@ func TestBlobPath_EmptyTopologyDefaultsToSharded(t *testing.T) {
 }
 
 func TestBlobPath_EmptyBlobTypeMeansRegular(t *testing.T) {
-	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobType(""), ref("aabbccdd"))
+	got, err := layout.BlobPath(config.PathTopologySharded, domain.BlobType(""), ref("aabbccdd"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +89,7 @@ func TestBlobPath_EmptyBlobTypeMeansRegular(t *testing.T) {
 // --- Case folding (part of the on-disk format contract) ---
 
 func TestBlobPath_FoldsCaseInShards(t *testing.T) {
-	got, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "AABBCCDD"+strings.Repeat("0", 56))
+	got, err := layout.BlobPath(config.PathTopologySharded, domain.BlobTypeRegular, "AABBCCDD"+strings.Repeat("0", 56))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,25 +101,25 @@ func TestBlobPath_FoldsCaseInShards(t *testing.T) {
 // --- BlobPath: error paths ---
 
 func TestBlobPath_RejectsEmptyRef(t *testing.T) {
-	if _, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ""); err == nil {
+	if _, err := layout.BlobPath(config.PathTopologySharded, domain.BlobTypeRegular, ""); err == nil {
 		t.Fatal("expected error on empty ref")
 	}
 }
 
 func TestBlobPath_RejectsTooShortHex(t *testing.T) {
-	if _, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, "ab"); err == nil {
+	if _, err := layout.BlobPath(config.PathTopologySharded, domain.BlobTypeRegular, "ab"); err == nil {
 		t.Fatal("expected error on too-short hex")
 	}
 }
 
 func TestBlobPath_RejectsUnknownTopology(t *testing.T) {
-	if _, err := layout.BlobPath(domain.PathTopology("Quantum"), domain.BlobTypeRegular, ref("aabbccdd")); err == nil {
+	if _, err := layout.BlobPath(config.PathTopology("Quantum"), domain.BlobTypeRegular, ref("aabbccdd")); err == nil {
 		t.Fatal("expected error on unknown topology")
 	}
 }
 
 func TestBlobPath_RejectsUnknownBlobType(t *testing.T) {
-	if _, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobType("Frob"), ref("aabbccdd")); err == nil {
+	if _, err := layout.BlobPath(config.PathTopologySharded, domain.BlobType("Frob"), ref("aabbccdd")); err == nil {
 		t.Fatal("expected error on unknown blob type")
 	}
 }
@@ -153,7 +154,7 @@ func TestManifestPath_RejectsShort(t *testing.T) {
 
 func TestRefFromBlobPath_ShardedRoundTrip(t *testing.T) {
 	r := ref("aabbccdd")
-	p, _ := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, r)
+	p, _ := layout.BlobPath(config.PathTopologySharded, domain.BlobTypeRegular, r)
 	got, err := layout.RefFromBlobPath(p)
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +166,7 @@ func TestRefFromBlobPath_ShardedRoundTrip(t *testing.T) {
 
 func TestRefFromBlobPath_FlatRoundTrip(t *testing.T) {
 	r := ref("aabbccdd")
-	p, _ := layout.BlobPath(domain.PathTopologyFlat, domain.BlobTypeRegular, r)
+	p, _ := layout.BlobPath(config.PathTopologyFlat, domain.BlobTypeRegular, r)
 	got, err := layout.RefFromBlobPath(p)
 	if err != nil {
 		t.Fatal(err)
@@ -227,7 +228,7 @@ func TestRefFromBlobPath_FlatPathSingleSegment(t *testing.T) {
 func TestRefFromBlobPath_RoundTripsBlobPath(t *testing.T) {
 	ref := "cafebabe" + strings.Repeat("f", 56)
 
-	for _, topo := range []domain.PathTopology{domain.PathTopologySharded, domain.PathTopologyFlat} {
+	for _, topo := range []config.PathTopology{config.PathTopologySharded, config.PathTopologyFlat} {
 		path, err := layout.BlobPath(topo, domain.BlobTypeRegular, ref)
 		if err != nil {
 			t.Fatalf("BlobPath(%s): %v", topo, err)

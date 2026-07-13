@@ -9,7 +9,6 @@ import (
 	"io"
 
 	"github.com/google/uuid"
-
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/systemstore"
 	"scrinium.dev/errs"

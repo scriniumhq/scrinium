@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/gc"
@@ -33,11 +34,11 @@ type gcFixture struct {
 
 // newGCFixture builds a store sharing one index with the agent. grace
 // and policy go into StoreConfig, which RunNow reads via store.Config().
-func newGCFixture(t *testing.T, grace time.Duration, policy domain.GCLeasePolicy) gcFixture {
+func newGCFixture(t *testing.T, grace time.Duration, policy config.GCLeasePolicy) gcFixture {
 	t.Helper()
 	rec := eventfx.New()
 	st, drv, idx := storefx.InitShared(t, store.WithPublisher(rec),
-		store.WithConfig(domain.StoreConfig{
+		store.WithConfig(config.StoreConfig{
 			TombstoneGracePeriod: grace,
 			GCLeasePolicy:        policy,
 		}))
@@ -67,7 +68,7 @@ func (f gcFixture) putAndOrphan(t *testing.T, data string) (domain.ArtifactID, s
 
 func (f gcFixture) blobPath(t *testing.T, ref string) string {
 	t.Helper()
-	rel, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
+	rel, err := layout.BlobPath(config.PathTopologySharded, domain.BlobTypeRegular, ref)
 	if err != nil {
 		t.Fatalf("BlobPath: %v", err)
 	}
@@ -89,7 +90,7 @@ func newGC(t *testing.T, f gcFixture, cfg gc.GCConfig) gc.GCAgent {
 }
 
 func TestNewGC_RequiresDeps(t *testing.T) {
-	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, time.Hour, config.GCLeaseSingleHost)
 	cases := map[string]func() (gc.GCAgent, error){
 		"nil store": func() (gc.GCAgent, error) {
 			return gc.NewGCAgent(nil, f.drv, f.idx, f.rec, gcHostID, "", gc.GCConfig{})
@@ -118,7 +119,7 @@ func TestNewGC_RequiresDeps(t *testing.T) {
 
 func TestGC_MarkTombstonesOrphan(t *testing.T) {
 	// Large grace: Mark must tombstone, Sweep must NOT remove yet.
-	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, time.Hour, config.GCLeaseSingleHost)
 	_, ref := f.putAndOrphan(t, "orphan me")
 	blob := f.blobPath(t, ref)
 	if !f.fileExists(blob) {
@@ -156,7 +157,7 @@ func TestGC_SweepRemovesAfterGrace(t *testing.T) {
 	// window with Chtimes, then cycle 2 must Sweep it. Deterministic,
 	// no sleeping.
 	grace := time.Hour
-	f := newGCFixture(t, grace, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, grace, config.GCLeaseSingleHost)
 	_, ref := f.putAndOrphan(t, "sweep me")
 	blob := f.blobPath(t, ref)
 
@@ -204,7 +205,7 @@ func TestGC_SweepRemovesAfterGrace(t *testing.T) {
 }
 
 func TestGC_RevivedBlobSurvivesSweep(t *testing.T) {
-	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, time.Hour, config.GCLeaseSingleHost)
 	id, ref := f.putAndOrphan(t, "revive me")
 	_ = id
 
@@ -234,7 +235,7 @@ func TestGC_RevivedBlobSurvivesSweep(t *testing.T) {
 func TestGC_SingleHostTakesNoLease(t *testing.T) {
 	// A live foreign gc/lease must NOT block a SingleHost cycle (it
 	// never looks at the lease).
-	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, time.Hour, config.GCLeaseSingleHost)
 	f.putAndOrphan(t, "data")
 	leasefx.StageForeign(t, f.drv, "store.agent.gc.lease", "other-host", "GC", time.Hour)
 	a := newGC(t, f, gc.GCConfig{})
@@ -244,7 +245,7 @@ func TestGC_SingleHostTakesNoLease(t *testing.T) {
 }
 
 func TestGC_LeaderElectionBlockedByForeignLease(t *testing.T) {
-	f := newGCFixture(t, time.Hour, domain.GCLeaseLeaderElection)
+	f := newGCFixture(t, time.Hour, config.GCLeaseLeaderElection)
 	f.putAndOrphan(t, "data")
 	leasefx.StageForeign(t, f.drv, "store.agent.gc.lease", "other-host", "GC", time.Hour)
 	a := newGC(t, f, gc.GCConfig{LeaseTTL: time.Minute})
@@ -254,7 +255,7 @@ func TestGC_LeaderElectionBlockedByForeignLease(t *testing.T) {
 }
 
 func TestGC_CancelledContext(t *testing.T) {
-	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, time.Hour, config.GCLeaseSingleHost)
 	f.putAndOrphan(t, "data")
 	a := newGC(t, f, gc.GCConfig{})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -265,7 +266,7 @@ func TestGC_CancelledContext(t *testing.T) {
 }
 
 func TestGC_RunStopsOnContextCancel(t *testing.T) {
-	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, time.Hour, config.GCLeaseSingleHost)
 	a := newGC(t, f, gc.GCConfig{ScanInterval: time.Hour})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // one-shot agent: a cancelled context must abort Run promptly
@@ -282,7 +283,7 @@ func TestGC_RunStopsOnContextCancel(t *testing.T) {
 // expects), as opposed to blobPath which is absolute for os checks.
 func relPath(t *testing.T, f gcFixture, ref string) string {
 	t.Helper()
-	rel, err := layout.BlobPath(domain.PathTopologySharded, domain.BlobTypeRegular, ref)
+	rel, err := layout.BlobPath(config.PathTopologySharded, domain.BlobTypeRegular, ref)
 	if err != nil {
 		t.Fatalf("BlobPath: %v", err)
 	}

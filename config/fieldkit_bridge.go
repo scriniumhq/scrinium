@@ -27,15 +27,15 @@ type (
 )
 
 const (
-	ClassImmutable  = fieldkit.ClassImmutable
-	ClassGovernance = fieldkit.ClassGovernance
-	ClassSession    = fieldkit.ClassSession
+	classImmutable  = fieldkit.ClassImmutable
+	classGovernance = fieldkit.ClassGovernance
+	classSession    = fieldkit.ClassSession
 
-	ConnRefusedImmutable  = fieldkit.ConnRefusedImmutable
-	ConnRefusedGovernance = fieldkit.ConnRefusedGovernance
-	ConnOverlay           = fieldkit.ConnOverlay
-	ConnIgnored           = fieldkit.ConnIgnored
-	ConnDerived           = fieldkit.ConnDerived
+	connRefusedImmutable  = fieldkit.ConnRefusedImmutable
+	connRefusedGovernance = fieldkit.ConnRefusedGovernance
+	connOverlay           = fieldkit.ConnOverlay
+	connIgnored           = fieldkit.ConnIgnored
+	connDerived           = fieldkit.ConnDerived
 )
 
 // Validator constructors a declaration picks from. Thin generic

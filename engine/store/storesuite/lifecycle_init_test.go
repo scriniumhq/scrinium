@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/store"
@@ -203,16 +204,16 @@ func TestInitStore_ForceReinitRegeneratesStoreID(t *testing.T) {
 func TestInitStore_ConfigValidation(t *testing.T) {
 	cases := []struct {
 		name string
-		cfg  domain.StoreConfig
+		cfg  config.StoreConfig
 		want error // nil = config must be accepted
 	}{
-		{"invalid content hasher", domain.StoreConfig{ContentHasher: "md5"}, errs.ErrInvalidConfig},
-		{"binary manifest encoding", domain.StoreConfig{ManifestEncoding: domain.ManifestEncodingBinary}, errs.ErrInvalidConfig},
-		{"inline blob limit over max", domain.StoreConfig{InlineBlobLimit: domain.MaxInlineBlobLimit + 1}, errs.ErrInvalidConfig},
-		{"inline blob limit at max", domain.StoreConfig{InlineBlobLimit: domain.MaxInlineBlobLimit}, nil},
-		{"retention period under min", domain.StoreConfig{RetentionPeriod: 30 * time.Minute}, errs.ErrInvalidConfig},
-		{"retention period at min", domain.StoreConfig{RetentionPeriod: domain.MinRetentionPeriod}, nil},
-		{"retention period zero", domain.StoreConfig{RetentionPeriod: 0}, nil},
+		{"invalid content hasher", config.StoreConfig{ContentHasher: "md5"}, errs.ErrInvalidConfig},
+		{"binary manifest encoding", config.StoreConfig{ManifestEncoding: config.ManifestEncodingBinary}, errs.ErrInvalidConfig},
+		{"inline blob limit over max", config.StoreConfig{InlineBlobLimit: config.MaxInlineBlobLimit + 1}, errs.ErrInvalidConfig},
+		{"inline blob limit at max", config.StoreConfig{InlineBlobLimit: config.MaxInlineBlobLimit}, nil},
+		{"retention period under min", config.StoreConfig{RetentionPeriod: 30 * time.Minute}, errs.ErrInvalidConfig},
+		{"retention period at min", config.StoreConfig{RetentionPeriod: config.MinRetentionPeriod}, nil},
+		{"retention period zero", config.StoreConfig{RetentionPeriod: 0}, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -242,9 +243,9 @@ func TestInitStore_ConfigValidation(t *testing.T) {
 // ManifestEncoding=JSON).
 func TestInitStore_CustomConfigPersisted(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	cfg := domain.StoreConfig{
-		PathTopology:  domain.PathTopologyFlat,
-		ContentHasher: domain.HashBLAKE3,
+	cfg := config.StoreConfig{
+		PathTopology:  config.PathTopologyFlat,
+		ContentHasher: config.HashBLAKE3,
 	}
 	s, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
@@ -449,13 +450,13 @@ func TestInitStore_PlainGeneratesPlaintextDEK(t *testing.T) {
 // TestInitStore_NonPlainCryptoWithoutPassphrase: encrypted manifests with
 // a plaintext DEK (the "worst of both worlds") is refused at init.
 func TestInitStore_NonPlainCryptoWithoutPassphrase(t *testing.T) {
-	for _, mc := range []domain.ManifestCrypto{
-		domain.ManifestCryptoSealed,
-		domain.ManifestCryptoParanoid,
+	for _, mc := range []config.ManifestCrypto{
+		config.ManifestCryptoSealed,
+		config.ManifestCryptoParanoid,
 	} {
 		t.Run(string(mc), func(t *testing.T) {
 			drv := driverfx.LocalFS(t)
-			cfg := domain.StoreConfig{ManifestCrypto: mc}
+			cfg := config.StoreConfig{ManifestCrypto: mc}
 			_, _, err := store.InitStore(context.Background(), drv,
 				store.WithConfig(cfg),
 				store.WithStoreIndex(indexfx.Memory(t)),
@@ -515,8 +516,8 @@ func TestInitStore_HintCarriesInitReason(t *testing.T) {
 // the on-disk descriptor.
 func TestInitStore_KDFParamsOverride(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	cost := &domain.KDFParams{Time: 2, Memory: 32 * 1024, Threads: 2}
-	cfg := domain.StoreConfig{KDFParams: cost}
+	cost := &config.KDFParams{Time: 2, Memory: 32 * 1024, Threads: 2}
+	cfg := config.StoreConfig{KDFParams: cost}
 	_, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(cfg),
 		store.WithPassphrase(storefx.StaticPP("pw")),

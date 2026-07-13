@@ -3,6 +3,7 @@ package event
 import (
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 )
 
@@ -80,7 +81,7 @@ type RollbackCompletedPayload struct {
 // subscriber that needs the previous value caches the prior
 // snapshot from an earlier event.
 type ConfigUpdatedPayload struct {
-	Config domain.StoreConfig
+	Config config.StoreConfig
 }
 
 // OrphanScanCompletedPayload is the payload of

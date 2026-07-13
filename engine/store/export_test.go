@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/pipeline"
@@ -73,11 +74,11 @@ func WriteDriverFile(s Store, path string, data []byte) error {
 // storesuite and freshness tests the same entry points production uses.
 
 // WriteConfig persists a StoreConfig version and returns its seq.
-func WriteConfig(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, cfg domain.StoreConfig) (uint64, error) {
+func WriteConfig(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry, cfg config.StoreConfig) (uint64, error) {
 	return writeConfig(ctx, drv, hashes, cfg)
 }
 
 // ReadConfig returns the active StoreConfig and its seq.
-func ReadConfig(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry) (domain.StoreConfig, uint64, error) {
+func ReadConfig(ctx context.Context, drv driver.Driver, hashes domain.HashRegistry) (config.StoreConfig, uint64, error) {
 	return readConfig(ctx, drv, hashes)
 }

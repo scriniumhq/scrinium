@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/cas"
 	"scrinium.dev/errs"
@@ -96,14 +97,14 @@ func (s *store) Put(ctx context.Context, a domain.Artifact, opts ...domain.PutOp
 // not yet wired, before any I/O. These are invariants of the active
 // config plus the per-call BlobType; catching them here keeps the write
 // path free of feature-gate branches.
-func (s *store) checkPutSupported(cfg domain.StoreConfig, opts domain.PutOptions) error {
+func (s *store) checkPutSupported(cfg config.StoreConfig, opts domain.PutOptions) error {
 	if err := s.pipelineRunner().ValidateAlgos(cfg.Pipeline); err != nil {
 		return fmt.Errorf("store.Put: %w", err)
 	}
 	if opts.BlobType != "" && opts.BlobType != domain.BlobTypeRegular {
 		return fmt.Errorf("store.Put: BlobType %q not supported (TODO M3)", opts.BlobType)
 	}
-	if cfg.BlobStorage == domain.BlobStorageInline && cfg.InlineBlobLimit > 0 && len(cfg.Pipeline) > 0 {
+	if cfg.BlobStorage == config.BlobStorageInline && cfg.InlineBlobLimit > 0 && len(cfg.Pipeline) > 0 {
 		// Inline + Pipeline is reserved (M2-extra); refuse early so a
 		// user never gets untransformed bytes inside the manifest.
 		return errPipelineWithInline

@@ -1,7 +1,7 @@
 // Package descriptor reads, writes, and (de)serialises the Store
 // descriptor: Store identity (StoreID, schema_version, sequence)
 // and the crypto material (DEK, dek_encrypted, kdf_params). Projection
-// parameters live in store.config, not here.
+// parameters live in config.StoreConfig, not here.
 //
 // The descriptor is stored as two byte-identical keep=0 named-cell
 // replicas — store.descriptor (Name) and store.descriptor.backup

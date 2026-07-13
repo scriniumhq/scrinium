@@ -8,7 +8,7 @@ import (
 // ApplyDefaults fills in zero-valued StoreConfig fields with sensible
 // defaults. Called once at InitStore before serialising the
 // descriptor, so the immutable parameters chosen here are fixed for
-// the lifetime of the Store.
+// the lifetime of the
 //
 // Mutable parameters get defaults too: this matters when callers pass
 // an empty StoreConfig{} just to take the engine's recommendation.
@@ -27,7 +27,7 @@ import (
 // SegmentSize key off isEncryptingConfig(cfg), which reads
 // ManifestCrypto and Pipeline — neither is mutated by defaulting, so a
 // single forward pass is correct regardless of field order.
-func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
+func ApplyDefaults(cfg StoreConfig) StoreConfig {
 	return fieldkit.ApplyDefaults(registry, cfg)
 }
 
@@ -42,20 +42,20 @@ func ApplyDefaults(cfg domain.StoreConfig) domain.StoreConfig {
 // ValidateImmutable checks every StoreConfig field's value against its
 // enum / bounds. It is the single gate on BOTH the init and update
 // paths (despite the historical name — it validates all fields, not
-// only class I; mutable enums reach store.config through UpdateConfig
+// only class I; mutable enums reach StoreConfig through UpdateConfig
 // and must be gated too, R-a).
 //
 // The per-field rules live once, in the registry (registry.go); this
 // loops it. A field with no value-level rule (a bool, an unbounded
 // int) carries a nil Check and passes. First failure wins; field order
 // follows the struct.
-func ValidateImmutable(cfg domain.StoreConfig) error {
+func ValidateImmutable(cfg StoreConfig) error {
 	return fieldkit.ValidateAll(registry, cfg)
 }
 
 // ValidateAgainstActive compares a requested config to the currently
 // active one on every immutable field; mutable fields pass through.
-// Used by OpenStore's WithConfig check and by UpdateConfig.
+// Used by OpenStore's WithConfig check and by Update
 //
 // Only fields the caller actually populated (non-zero values in the
 // requested config) are compared; a caller who passes WithConfig{} or
@@ -69,7 +69,7 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 // silently.
 // ValidateAgainstActive compares a requested config to the active one
 // on every IMMUTABLE (class I) field; mutable fields pass through.
-// Used by OpenStore's WithConfig check and by UpdateConfig. Derived
+// Used by OpenStore's WithConfig check and by Update Derived
 // from the registry filtered to class I — the same field list, the
 // same diverges rule (populated-and-different), no separate hand list.
 //
@@ -79,7 +79,7 @@ func ValidateImmutable(cfg domain.StoreConfig) error {
 // exactly: false is the relaxed default and reads as unset, so passing
 // false never fails against a locked active config; only an explicit
 // true-vs-false diverges.
-func ValidateAgainstActive(req, active domain.StoreConfig) error {
+func ValidateAgainstActive(req, active StoreConfig) error {
 	return fieldkit.MismatchAgainstActive(registry, req, active)
 }
 
@@ -90,8 +90,8 @@ func ValidateAgainstActive(req, active domain.StoreConfig) error {
 // check is name-based against the registered crypto algorithms;
 // it stays correct as long as crypto plugins register under their
 // canonical ids.
-func isEncryptingConfig(cfg domain.StoreConfig) bool {
-	if cfg.ManifestCrypto != "" && cfg.ManifestCrypto != domain.ManifestCryptoPlain {
+func isEncryptingConfig(cfg StoreConfig) bool {
+	if cfg.ManifestCrypto != "" && cfg.ManifestCrypto != ManifestCryptoPlain {
 		return true
 	}
 	for _, algo := range cfg.Pipeline {

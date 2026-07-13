@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 )
 
@@ -16,14 +15,14 @@ import (
 // "not asked" and pass in every class (there is no silent-ignore
 // outcome for populated fields, INV-110-5).
 
-func activeForConnTests() domain.StoreConfig {
-	a := ApplyDefaults(domain.StoreConfig{})
+func activeForConnTests() StoreConfig {
+	a := ApplyDefaults(StoreConfig{})
 	a.RetentionPeriod = 90 * 24 * time.Hour
 	return a
 }
 
 func TestPlanConnection_EmptyRequestPasses(t *testing.T) {
-	overlay, err := PlanConnection(domain.StoreConfig{}, activeForConnTests())
+	overlay, err := PlanConnection(StoreConfig{}, activeForConnTests())
 	if err != nil {
 		t.Fatalf("empty client config must pass, got %v", err)
 	}
@@ -34,7 +33,7 @@ func TestPlanConnection_EmptyRequestPasses(t *testing.T) {
 
 func TestValidateConnection_MatchingFieldsPass(t *testing.T) {
 	active := activeForConnTests()
-	req := domain.StoreConfig{
+	req := StoreConfig{
 		DeletionPolicy:  active.DeletionPolicy,  // class II, matching
 		RetentionPeriod: active.RetentionPeriod, // class II, matching
 		VerifyOnRead:    active.VerifyOnRead,    // class III, matching
@@ -47,9 +46,9 @@ func TestValidateConnection_MatchingFieldsPass(t *testing.T) {
 
 func TestValidateConnection_ClassI_Refused(t *testing.T) {
 	active := activeForConnTests()
-	req := domain.StoreConfig{ContentHasher: domain.HashBLAKE3}
-	if active.ContentHasher == domain.HashBLAKE3 {
-		req.ContentHasher = domain.HashSHA256
+	req := StoreConfig{ContentHasher: HashBLAKE3}
+	if active.ContentHasher == HashBLAKE3 {
+		req.ContentHasher = HashSHA256
 	}
 	if _, err := PlanConnection(req, active); !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Errorf("class I divergence: want ErrConfigMismatch, got %v", err)
@@ -58,12 +57,12 @@ func TestValidateConnection_ClassI_Refused(t *testing.T) {
 
 func TestValidateConnection_ClassII_Refused(t *testing.T) {
 	active := activeForConnTests()
-	cases := map[string]domain.StoreConfig{
-		"DeletionPolicy":       {DeletionPolicy: domain.DeletionPolicyNoDelete},
+	cases := map[string]StoreConfig{
+		"DeletionPolicy":       {DeletionPolicy: DeletionPolicyNoDelete},
 		"RetentionPeriod":      {RetentionPeriod: active.RetentionPeriod + time.Hour},
 		"TombstoneGracePeriod": {TombstoneGracePeriod: active.TombstoneGracePeriod + time.Hour},
-		"GCLeasePolicy":        {GCLeasePolicy: domain.GCLeaseLeaderElection},
-		"SessionOverrides":     {SessionOverrides: domain.SessionOverridesDeny},
+		"GCLeasePolicy":        {GCLeasePolicy: GCLeaseLeaderElection},
+		"SessionOverrides":     {SessionOverrides: SessionOverridesDeny},
 	}
 	for name, req := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -82,21 +81,21 @@ func TestValidateConnection_ClassII_Refused(t *testing.T) {
 
 func TestPlanConnection_ClassIII_BecomesOverlay(t *testing.T) {
 	active := activeForConnTests()
-	req := domain.StoreConfig{
-		BlobStorage:     domain.BlobStorageInline,
-		VerifyOnRead:    domain.VerifyOnReadForceEnabled,
+	req := StoreConfig{
+		BlobStorage:     BlobStorageInline,
+		VerifyOnRead:    VerifyOnReadForceEnabled,
 		InlineBlobLimit: 4096,
-		PackAlignment:   domain.PackAlignment4096,
+		PackAlignment:   PackAlignment4096,
 		EagerFetchLimit: 1 << 20,
 	}
 	overlay, err := PlanConnection(req, active)
 	if err != nil {
 		t.Fatalf("class III under Allow must yield an overlay, got %v", err)
 	}
-	if overlay.BlobStorage != domain.BlobStorageInline ||
-		overlay.VerifyOnRead != domain.VerifyOnReadForceEnabled ||
+	if overlay.BlobStorage != BlobStorageInline ||
+		overlay.VerifyOnRead != VerifyOnReadForceEnabled ||
 		overlay.InlineBlobLimit != 4096 ||
-		overlay.PackAlignment != domain.PackAlignment4096 ||
+		overlay.PackAlignment != PackAlignment4096 ||
 		overlay.EagerFetchLimit != 1<<20 {
 		t.Errorf("overlay lost fields: %+v", overlay)
 	}
@@ -109,7 +108,7 @@ func TestPlanConnection_ClassIII_BecomesOverlay(t *testing.T) {
 	// Merge semantics: populated overlay fields win, the rest are the
 	// store defaults.
 	eff := MergeSession(active, overlay)
-	if eff.BlobStorage != domain.BlobStorageInline || eff.InlineBlobLimit != 4096 {
+	if eff.BlobStorage != BlobStorageInline || eff.InlineBlobLimit != 4096 {
 		t.Errorf("merge lost overlay values: %+v", eff)
 	}
 	if eff.DeletionPolicy != active.DeletionPolicy || eff.RetentionPeriod != active.RetentionPeriod {
@@ -119,14 +118,14 @@ func TestPlanConnection_ClassIII_BecomesOverlay(t *testing.T) {
 
 func TestPlanConnection_DenyRefusesClassIII(t *testing.T) {
 	active := activeForConnTests()
-	active.SessionOverrides = domain.SessionOverridesDeny
-	req := domain.StoreConfig{BlobStorage: domain.BlobStorageInline}
+	active.SessionOverrides = SessionOverridesDeny
+	req := StoreConfig{BlobStorage: BlobStorageInline}
 	if _, err := PlanConnection(req, active); !errors.Is(err, errs.ErrGovernanceMismatch) {
 		t.Errorf("Deny must refuse class III like class II, got %v", err)
 	}
 	// A MATCHING class-III value is not a divergence — passes even
 	// under Deny.
-	req = domain.StoreConfig{VerifyOnRead: active.VerifyOnRead}
+	req = StoreConfig{VerifyOnRead: active.VerifyOnRead}
 	if _, err := PlanConnection(req, active); err != nil {
 		t.Errorf("matching class III under Deny must pass, got %v", err)
 	}
@@ -140,20 +139,20 @@ func TestPlanConnection_CryptoTail(t *testing.T) {
 	}
 
 	// Free non-crypto prefix, tail preserved — allowed.
-	if _, err := PlanConnection(domain.StoreConfig{Pipeline: []string{"aes-gcm"}}, active); err != nil {
+	if _, err := PlanConnection(StoreConfig{Pipeline: []string{"aes-gcm"}}, active); err != nil {
 		t.Errorf("dropping only the compression prefix must pass, got %v", err)
 	}
 	// Dropping the crypto tail — refused.
-	if _, err := PlanConnection(domain.StoreConfig{Pipeline: []string{"zstd"}}, active); !errors.Is(err, errs.ErrConfigMismatch) {
+	if _, err := PlanConnection(StoreConfig{Pipeline: []string{"zstd"}}, active); !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Errorf("dropping the crypto tail must be refused, got %v", err)
 	}
 	// Smuggling own crypto before the tail — refused.
-	if _, err := PlanConnection(domain.StoreConfig{Pipeline: []string{"aes-gcm", "zstd", "aes-gcm"}}, active); !errors.Is(err, errs.ErrConfigMismatch) {
+	if _, err := PlanConnection(StoreConfig{Pipeline: []string{"aes-gcm", "zstd", "aes-gcm"}}, active); !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Errorf("extra crypto stage must be refused, got %v", err)
 	}
 	// Plain store: client pipeline with a crypto stage — refused.
 	plain := activeForConnTests()
-	if _, err := PlanConnection(domain.StoreConfig{Pipeline: []string{"aes-gcm"}}, plain); !errors.Is(err, errs.ErrConfigMismatch) {
+	if _, err := PlanConnection(StoreConfig{Pipeline: []string{"aes-gcm"}}, plain); !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Errorf("client crypto on a plain store must be refused, got %v", err)
 	}
 }
@@ -162,9 +161,9 @@ func TestPlanConnection_CryptoTail(t *testing.T) {
 // governance message carries the actionable admin path.
 func TestValidateConnection_GovernanceWinsOverSession(t *testing.T) {
 	active := activeForConnTests()
-	req := domain.StoreConfig{
-		DeletionPolicy: domain.DeletionPolicyNoDelete, // class II
-		BlobStorage:    domain.BlobStorageInline,      // class III
+	req := StoreConfig{
+		DeletionPolicy: DeletionPolicyNoDelete, // class II
+		BlobStorage:    BlobStorageInline,      // class III
 	}
 	if _, err := PlanConnection(req, active); !errors.Is(err, errs.ErrGovernanceMismatch) {
 		t.Errorf("want ErrGovernanceMismatch first, got %v", err)
@@ -176,7 +175,7 @@ func TestValidateConnection_GovernanceWinsOverSession(t *testing.T) {
 // still passes a governance change.
 func TestValidateAgainstActive_GovernanceChangePasses(t *testing.T) {
 	active := activeForConnTests()
-	req := ApplyDefaults(domain.StoreConfig{
+	req := ApplyDefaults(StoreConfig{
 		RetentionPeriod: active.RetentionPeriod / 2,
 	})
 	if err := ValidateAgainstActive(req, active); err != nil {
@@ -203,7 +202,7 @@ func containsAll(s string, subs ...string) bool {
 // zeroOverlay reports whether an overlay carries no class-III fields.
 // StoreConfig contains a slice (Pipeline), so it is not comparable
 // with == — check the overlay-relevant fields explicitly.
-func zeroOverlay(o domain.StoreConfig) bool {
+func zeroOverlay(o StoreConfig) bool {
 	return o.BlobStorage == "" &&
 		o.VerifyOnRead == "" &&
 		o.InlineBlobLimit == 0 &&

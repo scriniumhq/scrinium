@@ -7,6 +7,7 @@ import (
 	"errors"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/store"
@@ -73,7 +74,7 @@ func manifestPathFor(t *testing.T, s store.Store, id domain.ArtifactID) string {
 // confirms the stronger "ArtifactID locks the file as a whole"
 // invariant.
 func TestGet_TamperedKeyIDInHeader_ReturnsCorruptedManifest(t *testing.T) {
-	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
+	cfg := config.StoreConfig{ManifestCrypto: config.ManifestCryptoParanoid}
 	_, r := storefx.InitEncrypted(t, "pw", store.WithConfig(cfg))
 
 	// AutoUnlock so the engine holds a DEK, then read that DEK back

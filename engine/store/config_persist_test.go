@@ -14,6 +14,7 @@ import (
 
 	"crypto/sha256"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/internal/named"
@@ -69,12 +70,12 @@ func newDriver(t *testing.T) *localfs.Driver {
 
 // sampleConfig is a fully-specified Plain config; ContentHasher must be
 // set so BuildInlineManifest can resolve a hasher.
-func sampleConfig() domain.StoreConfig {
-	return domain.StoreConfig{
-		PathTopology:     domain.PathTopologyFlat,
-		ContentHasher:    domain.HashSHA256,
-		ManifestEncoding: domain.ManifestEncodingJSON,
-		ManifestCrypto:   domain.ManifestCryptoPlain,
+func sampleConfig() config.StoreConfig {
+	return config.StoreConfig{
+		PathTopology:     config.PathTopologyFlat,
+		ContentHasher:    config.HashSHA256,
+		ManifestEncoding: config.ManifestEncodingJSON,
+		ManifestCrypto:   config.ManifestCryptoPlain,
 		RetentionPeriod:  3 * time.Hour,
 	}
 }
@@ -214,7 +215,7 @@ func TestHistory_EmptyStore_ReturnsEmpty(t *testing.T) {
 func TestWrite_StripsKDFParams(t *testing.T) {
 	drv := newDriver(t)
 	cfg := sampleConfig()
-	cfg.KDFParams = &domain.KDFParams{Time: 3, Memory: 64 * 1024, Threads: 4}
+	cfg.KDFParams = &config.KDFParams{Time: 3, Memory: 64 * 1024, Threads: 4}
 
 	if _, err := writeConfig(context.Background(), drv, testHashes{}, cfg); err != nil {
 		t.Fatalf("Write: %v", err)

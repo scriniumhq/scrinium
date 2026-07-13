@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	store2 "scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/internal/slogx"
 )
@@ -116,7 +117,7 @@ func storeIDAttr(c *store) slog.Attr {
 
 // manifestCryptoAttr records the crypto mode of an operation. Safe: the
 // mode (Plain / Sealed / Paranoid) is not secret.
-func manifestCryptoAttr(m domain.ManifestCrypto) slog.Attr {
+func manifestCryptoAttr(m store2.ManifestCrypto) slog.Attr {
 	return slog.String("manifest_crypto", string(m))
 }
 

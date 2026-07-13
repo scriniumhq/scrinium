@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -24,7 +24,7 @@ const exclHostAgent = "host-a-agent-0001"
 func TestGC_LeaseExclusion(t *testing.T) {
 	rec := eventfx.New()
 	st, drv, idx := storefx.InitShared(t, store.WithPublisher(rec),
-		store.WithConfig(domain.StoreConfig{GCLeasePolicy: domain.GCLeaseLeaderElection}))
+		store.WithConfig(config.StoreConfig{GCLeasePolicy: config.GCLeaseLeaderElection}))
 	ctx := context.Background()
 
 	leasefx.StageForeign(t, drv, gcLeaseName, "host-b-squatter-0002", "gc", time.Hour)

@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"io"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 )
@@ -107,7 +108,7 @@ func (s *authStore) RollbackSession(ctx context.Context, sessionID domain.Sessio
 	return s.Store.RollbackSession(ctx, sessionID)
 }
 
-func (s *authStore) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {
+func (s *authStore) UpdateConfig(ctx context.Context, cfg config.StoreConfig) error {
 	if !s.rights.CanAdmin {
 		return ErrPermissionDenied
 	}

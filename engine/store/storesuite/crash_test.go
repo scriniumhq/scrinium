@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/faulty"
@@ -342,13 +343,13 @@ func TestCrash_UpdateConfigTornAtEveryWrite_ConsistentConfig(t *testing.T) {
 			env := newCrashEnv(t)
 			s := storefx.InitOn(t, env.fd,
 				store.WithStoreIndex(env.idx),
-				store.WithConfig(domain.StoreConfig{RetentionPeriod: oldRet}),
+				store.WithConfig(config.StoreConfig{RetentionPeriod: oldRet}),
 			)
 
 			base := env.fd.CallCount(faulty.MethodPut)
 			env.fd.SetFailOnCall(faulty.MethodPut, base+k)
 
-			_ = s.UpdateConfig(ctx, domain.StoreConfig{RetentionPeriod: newRet})
+			_ = s.UpdateConfig(ctx, config.StoreConfig{RetentionPeriod: newRet})
 			_ = s.Close()
 
 			s2 := env.reopenClean(t)
@@ -370,12 +371,12 @@ func measureUpdateConfigWrites(t *testing.T, oldRet, newRet time.Duration) int64
 	fd := driverfx.Faulty(t, inner)
 	s := storefx.InitOn(t, fd,
 		store.WithStoreIndex(indexfx.Memory(t)),
-		store.WithConfig(domain.StoreConfig{RetentionPeriod: oldRet}),
+		store.WithConfig(config.StoreConfig{RetentionPeriod: oldRet}),
 	)
 	defer s.Close()
 
 	base := fd.CallCount(faulty.MethodPut)
-	if err := s.UpdateConfig(context.Background(), domain.StoreConfig{RetentionPeriod: newRet}); err != nil {
+	if err := s.UpdateConfig(context.Background(), config.StoreConfig{RetentionPeriod: newRet}); err != nil {
 		t.Fatalf("measure UpdateConfig: %v", err)
 	}
 	return fd.CallCount(faulty.MethodPut) - base

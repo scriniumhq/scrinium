@@ -50,27 +50,27 @@ import (
 // UpdateConfig deliberately does NOT use this: changing class II is
 // its very purpose; it keeps calling ValidateAgainstActive (class I
 // only).
-func PlanConnection(req, active domain.StoreConfig) (domain.StoreConfig, error) {
+func PlanConnection(req, active StoreConfig) (StoreConfig, error) {
 	if err := ValidateAgainstActive(req, active); err != nil {
-		return domain.StoreConfig{}, err
+		return StoreConfig{}, err
 	}
 
 	if gov := divergentGovernance(req, active); len(gov) > 0 {
-		return domain.StoreConfig{}, fmt.Errorf(
+		return StoreConfig{}, fmt.Errorf(
 			"%w: %s — governance defaults (class II) change only by an explicit admin act (UpdateConfig), not by connecting",
 			errs.ErrGovernanceMismatch, strings.Join(gov, "; "))
 	}
 
 	ses := divergentSession(req, active)
-	if len(ses) > 0 && active.SessionOverrides == domain.SessionOverridesDeny {
-		return domain.StoreConfig{}, fmt.Errorf(
+	if len(ses) > 0 && active.SessionOverrides == SessionOverridesDeny {
+		return StoreConfig{}, fmt.Errorf(
 			"%w: SessionOverrides=Deny — session overrides (class III) are disabled on this store; diverging field(s): %s",
 			errs.ErrGovernanceMismatch, strings.Join(ses, "; "))
 	}
 
 	if len(req.Pipeline) > 0 {
 		if err := validateCryptoTail(req.Pipeline, active.Pipeline); err != nil {
-			return domain.StoreConfig{}, err
+			return StoreConfig{}, err
 		}
 	}
 	return sessionOverlay(req), nil
@@ -79,8 +79,8 @@ func PlanConnection(req, active domain.StoreConfig) (domain.StoreConfig, error) 
 // sessionOverlay extracts the populated class-III fields of req — the
 // per-connection overlay. Only class III ever lands here, so merging
 // it can never touch identity, crypto form, or governance.
-func sessionOverlay(req domain.StoreConfig) domain.StoreConfig {
-	return domain.StoreConfig{
+func sessionOverlay(req StoreConfig) StoreConfig {
+	return StoreConfig{
 		BlobStorage:     req.BlobStorage,
 		VerifyOnRead:    req.VerifyOnRead,
 		InlineBlobLimit: req.InlineBlobLimit,
@@ -93,7 +93,7 @@ func sessionOverlay(req domain.StoreConfig) domain.StoreConfig {
 // MergeSession lays a session overlay over the active defaults:
 // populated overlay fields win, everything else — the store's
 // defaults. Explicitly class III only.
-func MergeSession(active, overlay domain.StoreConfig) domain.StoreConfig {
+func MergeSession(active, overlay StoreConfig) StoreConfig {
 	eff := active
 	if overlay.BlobStorage != "" {
 		eff.BlobStorage = overlay.BlobStorage
@@ -163,16 +163,16 @@ func cryptoTail(p []string) []string {
 // divergentGovernance lists populated class-II fields of req that
 // differ from active. Derived from the registry filtered by class —
 // there is no separate hand-written field list here.
-func divergentGovernance(req, active domain.StoreConfig) []string {
-	return fieldkit.DivergentByClass(registry, ClassGovernance, req, active)
+func divergentGovernance(req, active StoreConfig) []string {
+	return fieldkit.DivergentByClass(registry, classGovernance, req, active)
 }
 
 // divergentSession lists populated class-III fields of req that differ
 // from active. Same registry, filtered to class III. PackAlignment's
 // zero-vs-None ambiguity is preserved exactly as before: zero counts
 // as "not asked" (the registry's diverges treats the Go zero as unset).
-func divergentSession(req, active domain.StoreConfig) []string {
-	return fieldkit.DivergentByClass(registry, ClassSession, req, active)
+func divergentSession(req, active StoreConfig) []string {
+	return fieldkit.DivergentByClass(registry, classSession, req, active)
 }
 
 func equalPipelines(a, b []string) bool {

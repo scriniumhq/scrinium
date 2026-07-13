@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/testutil/driverfx"
@@ -233,7 +234,7 @@ func readAllAndClose(t *testing.T, rh domain.ReadHandle) []byte {
 // The smoke variant uses Paranoid; pass Sealed to exercise
 // the partial-encryption path. Both modes need WithPassphrase +
 // WithAutoUnlock so the smoke loop never has to prompt.
-func newEncryptedDiskStore(t *testing.T, crypto domain.ManifestCrypto) (store.Store, string) {
+func newEncryptedDiskStore(t *testing.T, crypto config.ManifestCrypto) (store.Store, string) {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
 	root := drv.Root()
@@ -243,7 +244,7 @@ func newEncryptedDiskStore(t *testing.T, crypto domain.ManifestCrypto) (store.St
 	// variant, and we don't need it elsewhere — wire InitStore
 	// and OpenStore directly so the smoke factory stays in this
 	// file.
-	cfg := domain.StoreConfig{ManifestCrypto: crypto}
+	cfg := config.StoreConfig{ManifestCrypto: crypto}
 	provider := func(_ context.Context, _ domain.PassphraseHint) ([]byte, error) {
 		return []byte("smoke-pw"), nil
 	}
@@ -310,7 +311,7 @@ func TestSmoke_EncryptedRoundTrip(t *testing.T) {
 	// Disk-backed Store, encrypted with Paranoid. Same factory
 	// as the Plain smoke would have used, with the additional
 	// crypto knobs.
-	s, _ := newEncryptedDiskStore(t, domain.ManifestCryptoParanoid)
+	s, _ := newEncryptedDiskStore(t, config.ManifestCryptoParanoid)
 	ctx := context.Background()
 
 	runtime.GC()

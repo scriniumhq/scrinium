@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/gc"
 	"scrinium.dev/testutil/schedfx"
@@ -16,7 +16,7 @@ import (
 // due Tick, and that the scheduled run completes without failure.
 // Agent-internal behaviour is covered by gc's own tests.
 func TestGC_Scheduled(t *testing.T) {
-	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, time.Hour, config.GCLeaseSingleHost)
 	f.putAndOrphan(t, "data")
 
 	h := schedfx.New(t, f.store, f.drv, f.idx, f.rec, "store-gc")
@@ -36,7 +36,7 @@ func TestGC_Scheduled(t *testing.T) {
 // Store.RunMaintenance from its own loop. Our Scheduler is optional sugar
 // over this path and is fully replaceable by the host's own driver.
 func TestGC_CustomSchedulerUsesRunMaintenance(t *testing.T) {
-	f := newGCFixture(t, time.Hour, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, time.Hour, config.GCLeaseSingleHost)
 	a := newGC(t, f, gc.GCConfig{})
 
 	// The host's own scheduler would call this from its loop; no

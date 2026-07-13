@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
@@ -44,7 +45,7 @@ func blobPathFor(t *testing.T, s store.Store, root string, id domain.ArtifactID)
 // matching TransformerRegistry, returning the Store and the driver root.
 func initPipelineStore(t *testing.T, reg pipeline.TransformerRegistry, stages []string, extra ...store.StoreOption) (store.Store, string) {
 	t.Helper()
-	cfg := domain.StoreConfig{Pipeline: stages}
+	cfg := config.StoreConfig{Pipeline: stages}
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
 	opts := append([]store.StoreOption{
@@ -198,14 +199,14 @@ func TestVerify_CancelledContext(t *testing.T) {
 // TestVerify_EncryptedManifest_Succeeds: Verify is transparent to an
 // encrypted manifest body — it succeeds under both Sealed and Paranoid.
 func TestVerify_EncryptedManifest_Succeeds(t *testing.T) {
-	for _, crypto := range []domain.ManifestCrypto{
-		domain.ManifestCryptoSealed,
-		domain.ManifestCryptoParanoid,
+	for _, crypto := range []config.ManifestCrypto{
+		config.ManifestCryptoSealed,
+		config.ManifestCryptoParanoid,
 	} {
 		t.Run(string(crypto), func(t *testing.T) {
 			drv := driverfx.LocalFS(t)
 			idx := indexfx.Memory(t)
-			cfg := domain.StoreConfig{ManifestCrypto: crypto}
+			cfg := config.StoreConfig{ManifestCrypto: crypto}
 
 			if _, _, err := store.InitStore(context.Background(), drv,
 				store.WithConfig(cfg),

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/internal/cas"
@@ -20,7 +21,7 @@ import (
 // harness wires a Writer over a localfs driver, in-memory index, the
 // artifactfx sha256 registry, and an empty transformer registry (no
 // pipeline stages → Plain content).
-func harness(t *testing.T) (*cas.IO, domain.StoreConfig) {
+func harness(t *testing.T) (*cas.IO, config.StoreConfig) {
 	t.Helper()
 	w := cas.New(
 		driverfx.LocalFS(t),
@@ -74,7 +75,7 @@ func TestWritePath_TargetRoundTrip(t *testing.T) {
 
 func TestWritePath_InlineUnderLimit(t *testing.T) {
 	w, cfg := harness(t)
-	cfg.BlobStorage = domain.BlobStorageInline
+	cfg.BlobStorage = config.BlobStorageInline
 	cfg.InlineBlobLimit = 1024
 
 	blob, err := w.Materialize(context.Background(), cfg, artifactfx.Payload("tiny"), domain.PutOptions{}, "")
@@ -101,7 +102,7 @@ func TestWritePath_InlineUnderLimit(t *testing.T) {
 
 func TestWritePath_InlineOverflowStreamsToTarget(t *testing.T) {
 	w, cfg := harness(t)
-	cfg.BlobStorage = domain.BlobStorageInline
+	cfg.BlobStorage = config.BlobStorageInline
 	cfg.InlineBlobLimit = 8
 
 	big := strings.Repeat("x", 64) // > limit

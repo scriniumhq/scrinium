@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/testutil/artifactfx"
@@ -27,7 +27,7 @@ func TestMaxArtifactSize_EnforcedOnPut(t *testing.T) {
 	st, _, err := store.InitStore(ctx, drv,
 		store.WithStoreIndex(idx),
 		store.WithHashRegistry(storefx.Hashes()),
-		store.WithConfig(domain.StoreConfig{MaxArtifactSize: 1024}),
+		store.WithConfig(config.StoreConfig{MaxArtifactSize: 1024}),
 		store.WithLivenessInterval(-1),
 	)
 	if err != nil {

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 )
 
 // contract_test.go — the two contracts the example-based tests don't reach:
@@ -25,7 +25,7 @@ func TestClaimVersion_Concurrent(t *testing.T) {
 	const name = "scrub/cursor"
 	const writers = 16
 
-	body, _, err := BuildInlineManifest(name, []byte("claim"), "sha256", testHashes{}, domain.ManifestCryptoPlain, nil, "")
+	body, _, err := BuildInlineManifest(name, []byte("claim"), "sha256", testHashes{}, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatalf("BuildInlineManifest: %v", err)
 	}

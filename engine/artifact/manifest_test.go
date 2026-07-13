@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/errs"
@@ -17,7 +18,7 @@ import (
 
 func TestEncodeDecode_PlainRoundTrip(t *testing.T) {
 	m := artifactfx.Manifest()
-	b, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	b, err := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +54,7 @@ func TestEncodeDecode_PlainRoundTrip(t *testing.T) {
 func TestEncodeDecode_RetentionRoundTrip(t *testing.T) {
 	want := time.Date(2030, 1, 2, 3, 4, 5, 0, time.UTC)
 	m := artifactfx.Manifest(func(m *domain.Manifest) { m.RetentionUntil = want })
-	b, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	b, err := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +74,7 @@ func TestEncode_PlainExtUsrVisibleOnDisk(t *testing.T) {
 		m.Ext = json.RawMessage(`{"m":"EXTMARKER_7f3a"}`)
 		m.Usr = json.RawMessage(`{"m":"USRMARKER_91b2"}`)
 	})
-	b, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	b, err := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,21 +88,21 @@ func TestEncode_PlainExtUsrVisibleOnDisk(t *testing.T) {
 
 func TestEncode_Deterministic(t *testing.T) {
 	m := artifactfx.Manifest()
-	a, _ := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
-	b, _ := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	a, _ := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
+	b, _ := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 	if !bytes.Equal(a, b) {
 		t.Error("Encode is not deterministic for the same manifest")
 	}
 }
 
 func TestEncode_RejectsNonPlain(t *testing.T) {
-	if _, err := artifact.Encode(artifactfx.Manifest(), domain.ManifestEncodingJSON, domain.ManifestCryptoSealed); !errors.Is(err, errs.ErrUnsupportedCrypto) {
+	if _, err := artifact.Encode(artifactfx.Manifest(), config.ManifestEncodingJSON, config.ManifestCryptoSealed); !errors.Is(err, errs.ErrUnsupportedCrypto) {
 		t.Fatalf("want ErrUnsupportedCrypto, got %v", err)
 	}
 }
 
 func TestDecode_RejectsEncrypted(t *testing.T) {
-	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoSealed)
+	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoSealed)
 	if _, derr := artifact.Decode(b); !errors.Is(derr, errs.ErrUnsupportedCrypto) {
 		t.Fatalf("Decode on encrypted file: want ErrUnsupportedCrypto, got %v", derr)
 	}
@@ -111,7 +112,7 @@ func TestDecode_RejectsEncrypted(t *testing.T) {
 
 func TestComputeManifestDigest_StableAndAssigned(t *testing.T) {
 	m := artifactfx.Manifest()
-	dg1, b1, sm, err := artifact.ComputeManifestDigest(m, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
+	dg1, b1, sm, err := artifact.ComputeManifestDigest(m, "sha256", artifactfx.Hashes(), config.ManifestEncodingJSON, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func TestComputeManifestDigest_StableAndAssigned(t *testing.T) {
 	if sm.Digest != dg1 {
 		t.Errorf("returned manifest Digest=%q, want %q", sm.Digest, dg1)
 	}
-	dg2, b2, _, _ := artifact.ComputeManifestDigest(m, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
+	dg2, b2, _, _ := artifact.ComputeManifestDigest(m, "sha256", artifactfx.Hashes(), config.ManifestEncodingJSON, config.ManifestCryptoPlain, nil, "")
 	if dg1 != dg2 || !bytes.Equal(b1, b2) {
 		t.Error("ComputeManifestDigest not stable across calls")
 	}
@@ -130,8 +131,8 @@ func TestComputeManifestDigest_StableAndAssigned(t *testing.T) {
 func TestComputeManifestDigest_DifferentManifestsDifferentIDs(t *testing.T) {
 	m1 := artifactfx.Manifest()
 	m2 := artifactfx.Manifest(func(m *domain.Manifest) { m.SessionID = "other" })
-	dg1, _, _, _ := artifact.ComputeManifestDigest(m1, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
-	dg2, _, _, _ := artifact.ComputeManifestDigest(m2, "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain, nil, "")
+	dg1, _, _, _ := artifact.ComputeManifestDigest(m1, "sha256", artifactfx.Hashes(), config.ManifestEncodingJSON, config.ManifestCryptoPlain, nil, "")
+	dg2, _, _, _ := artifact.ComputeManifestDigest(m2, "sha256", artifactfx.Hashes(), config.ManifestEncodingJSON, config.ManifestCryptoPlain, nil, "")
 	if dg1 == dg2 {
 		t.Error("different manifests produced the same ManifestDigest")
 	}
@@ -140,7 +141,7 @@ func TestComputeManifestDigest_DifferentManifestsDifferentIDs(t *testing.T) {
 // TestComputeManifestDigest_RejectsEmptyDEKOnEncrypted: a non-Plain mode with
 // no DEK is rejected before any encoding work.
 func TestComputeManifestDigest_RejectsEmptyDEKOnEncrypted(t *testing.T) {
-	if _, _, _, err := artifact.ComputeManifestDigest(artifactfx.Manifest(), "sha256", artifactfx.Hashes(), domain.ManifestEncodingJSON, domain.ManifestCryptoSealed, nil, ""); err == nil {
+	if _, _, _, err := artifact.ComputeManifestDigest(artifactfx.Manifest(), "sha256", artifactfx.Hashes(), config.ManifestEncodingJSON, config.ManifestCryptoSealed, nil, ""); err == nil {
 		t.Fatal("Sealed encode with empty DEK must be rejected")
 	}
 }
@@ -148,14 +149,14 @@ func TestComputeManifestDigest_RejectsEmptyDEKOnEncrypted(t *testing.T) {
 // --- VerifyManifestDigest: tamper detection ---
 
 func TestVerifyManifestDigest_AcceptsUntampered(t *testing.T) {
-	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoPlain)
+	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoPlain)
 	if err := artifact.VerifyManifestDigest(id, b, "sha256", artifactfx.Hashes()); err != nil {
 		t.Fatalf("verify untampered: %v", err)
 	}
 }
 
 func TestVerifyManifestDigest_DetectsTampering(t *testing.T) {
-	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoPlain)
+	id, b := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoPlain)
 	b[len(b)-1] ^= 0xff
 	if err := artifact.VerifyManifestDigest(id, b, "sha256", artifactfx.Hashes()); !errors.Is(err, errs.ErrCorruptedManifest) {
 		t.Fatalf("want ErrCorruptedManifest, got %v", err)
@@ -166,7 +167,7 @@ func TestVerifyManifestDigest_DetectsTampering(t *testing.T) {
 
 func TestSealed_RoundTrip(t *testing.T) {
 	m := artifactfx.Manifest()
-	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoSealed)
+	_, b := artifactfx.Encoded(t, m, config.ManifestCryptoSealed)
 	got, err := artifact.DecodeEncrypted(b, artifactfx.Keys())
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +188,7 @@ func TestSealed_RoundTrip(t *testing.T) {
 
 func TestSealed_SysFieldsArePlaintextOnDisk(t *testing.T) {
 	m := artifactfx.Manifest()
-	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoSealed)
+	_, b := artifactfx.Encoded(t, m, config.ManifestCryptoSealed)
 	if !bytes.Contains(b, []byte("sess-1")) {
 		t.Error("Sealed should leave sys (session id) in plaintext on disk")
 	}
@@ -203,7 +204,7 @@ func TestSealed_EmptyExtAndUsr(t *testing.T) {
 		m.Ext = nil
 		m.Usr = nil
 	})
-	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoSealed)
+	_, b := artifactfx.Encoded(t, m, config.ManifestCryptoSealed)
 	got, err := artifact.DecodeEncrypted(b, artifactfx.Keys())
 	if err != nil {
 		t.Fatal(err)
@@ -220,7 +221,7 @@ func TestSealed_EmptyExtAndUsr(t *testing.T) {
 
 func TestParanoid_RoundTrip(t *testing.T) {
 	m := artifactfx.Manifest()
-	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoParanoid)
+	_, b := artifactfx.Encoded(t, m, config.ManifestCryptoParanoid)
 	got, err := artifact.DecodeEncrypted(b, artifactfx.Keys())
 	if err != nil {
 		t.Fatal(err)
@@ -238,7 +239,7 @@ func TestParanoid_RoundTrip(t *testing.T) {
 
 func TestParanoid_HidesSysOnDisk(t *testing.T) {
 	m := artifactfx.Manifest()
-	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoParanoid)
+	_, b := artifactfx.Encoded(t, m, config.ManifestCryptoParanoid)
 	if bytes.Contains(b, []byte("sess-1")) {
 		t.Error("Paranoid should encrypt the whole body including sys (session id)")
 	}
@@ -250,7 +251,7 @@ func TestParanoid_HidesExtAndUsr(t *testing.T) {
 		m.Ext = json.RawMessage(`{"m":"EXTMARKER_7f3a"}`)
 		m.Usr = json.RawMessage(`{"m":"USRMARKER_91b2"}`)
 	})
-	_, b := artifactfx.Encoded(t, m, domain.ManifestCryptoParanoid)
+	_, b := artifactfx.Encoded(t, m, config.ManifestCryptoParanoid)
 	if bytes.Contains(b, []byte("EXTMARKER_7f3a")) {
 		t.Error("Paranoid leaked ext plaintext on disk")
 	}
@@ -262,7 +263,7 @@ func TestParanoid_HidesExtAndUsr(t *testing.T) {
 // --- DecodeEncrypted: failure classes ---
 
 func TestDecodeEncrypted_WrongKeyFails(t *testing.T) {
-	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoSealed)
+	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoSealed)
 	wrong := bytes.Repeat([]byte{0x99}, 32)
 	if _, err := artifact.DecodeEncrypted(b, artifactfx.Keys(wrong)); !errors.Is(err, errs.ErrDecryptionFailed) {
 		t.Fatalf("want ErrDecryptionFailed, got %v", err)
@@ -270,21 +271,21 @@ func TestDecodeEncrypted_WrongKeyFails(t *testing.T) {
 }
 
 func TestDecodeEncrypted_NoResolverOnEncrypted(t *testing.T) {
-	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoParanoid)
+	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoParanoid)
 	if _, err := artifact.DecodeEncrypted(b, nil); !errors.Is(err, errs.ErrKeyNotFound) {
 		t.Fatalf("want ErrKeyNotFound, got %v", err)
 	}
 }
 
 func TestDecodeEncrypted_EmptyCandidates(t *testing.T) {
-	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoSealed)
+	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoSealed)
 	if _, err := artifact.DecodeEncrypted(b, emptyKeys{}); !errors.Is(err, errs.ErrKeyNotFound) {
 		t.Fatalf("want ErrKeyNotFound, got %v", err)
 	}
 }
 
 func TestDecodeEncrypted_PlainForwards(t *testing.T) {
-	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoPlain)
+	_, b := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoPlain)
 	if _, err := artifact.DecodeEncrypted(b, nil); err != nil {
 		t.Fatalf("Plain via DecodeEncrypted should succeed: %v", err)
 	}
@@ -309,7 +310,7 @@ func TestEncode_TooManyRefs(t *testing.T) {
 	}
 	m := artifactfx.Manifest(func(m *domain.Manifest) { m.BlobRefs = refs })
 
-	_, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	_, err := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 	if !errors.Is(err, errs.ErrTooManyRefs) {
 		t.Fatalf("Encode: got %v, want errs.ErrTooManyRefs", err)
 	}
@@ -327,7 +328,7 @@ func TestEncodeDecode_PipelineMultiStageRoundTrip(t *testing.T) {
 			{Algorithm: "aes-gcm", Hash: "sha256-dddd", IV: []byte{1, 2, 3, 4}, KeyID: "tenant-42"},
 		}
 	})
-	b, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	b, err := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 	if err != nil {
 		t.Fatal(err)
 	}
