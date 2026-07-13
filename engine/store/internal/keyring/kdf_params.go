@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/errs"
 )
 
@@ -21,8 +21,8 @@ const (
 // DefaultKDFParams returns the cost parameters used when InitStore is
 // called without an explicit StoreConfig.KDFParams override. The salt
 // is generated at wrap time; the algorithm is fixed by this package.
-func DefaultKDFParams() domain.KDFParams {
-	return domain.KDFParams{
+func DefaultKDFParams() config.KDFParams {
+	return config.KDFParams{
 		Time:    1,
 		Memory:  65536, // KiB = 64 MiB
 		Threads: 4,
@@ -31,7 +31,7 @@ func DefaultKDFParams() domain.KDFParams {
 
 // ValidateKDFParams checks the three client-supplied cost fields.
 // Failures wrap errs.ErrInvalidKDFParams.
-func ValidateKDFParams(p domain.KDFParams) error {
+func ValidateKDFParams(p config.KDFParams) error {
 	if p.Time < minKDFTime {
 		return fmt.Errorf("%w: time=%d below minimum %d", errs.ErrInvalidKDFParams, p.Time, minKDFTime)
 	}

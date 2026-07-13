@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/hashing"
@@ -119,11 +120,11 @@ func Manifest(mutators ...func(*domain.Manifest)) domain.Manifest {
 // that is what verify and path tests assert against. Plain ignores
 // dek/keyID; Sealed/Paranoid use DEK() and a fixed KeyID. It fails the
 // test on any encode error, so call sites stay terse.
-func Encoded(t testing.TB, m domain.Manifest, crypto domain.ManifestCrypto) (domain.ManifestDigest, []byte) {
+func Encoded(t testing.TB, m domain.Manifest, crypto config.ManifestCrypto) (domain.ManifestDigest, []byte) {
 	t.Helper()
 	var dek []byte
 	var keyID string
-	if crypto != "" && crypto != domain.ManifestCryptoPlain {
+	if crypto != "" && crypto != config.ManifestCryptoPlain {
 		dek = DEK()
 		keyID = "k1"
 	}
@@ -131,7 +132,7 @@ func Encoded(t testing.TB, m domain.Manifest, crypto domain.ManifestCrypto) (dom
 	if err != nil {
 		t.Fatalf("artifactfx.Encoded(%s): handle: %v", crypto, err)
 	}
-	digest, b, _, err := artifact.ComputeManifestDigest(wh, "sha256", Hashes(), domain.ManifestEncodingJSON, crypto, dek, keyID)
+	digest, b, _, err := artifact.ComputeManifestDigest(wh, "sha256", Hashes(), config.ManifestEncodingJSON, crypto, dek, keyID)
 	if err != nil {
 		t.Fatalf("artifactfx.Encoded(%s): %v", crypto, err)
 	}

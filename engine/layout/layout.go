@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 )
 
@@ -39,7 +40,7 @@ func shardOf(ref string) (string, string, error) {
 //
 // An empty topology is treated as Sharded (the InitStore default), and an
 // empty BlobType as Regular.
-func BlobPath(topology domain.PathTopology, blobType domain.BlobType, ref string) (string, error) {
+func BlobPath(topology config.PathTopology, blobType domain.BlobType, ref string) (string, error) {
 	if ref == "" {
 		return "", errors.New("artifact: empty ref")
 	}
@@ -48,9 +49,9 @@ func BlobPath(topology domain.PathTopology, blobType domain.BlobType, ref string
 		return "", err
 	}
 	switch topology {
-	case domain.PathTopologyFlat:
+	case config.PathTopologyFlat:
 		return root + "/" + ref, nil
-	case "", domain.PathTopologySharded:
+	case "", config.PathTopologySharded:
 		s1, s2, err := shardOf(ref)
 		if err != nil {
 			return "", err

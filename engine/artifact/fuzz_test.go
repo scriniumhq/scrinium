@@ -5,13 +5,13 @@ import (
 	"slices"
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/testutil/artifactfx"
 )
 
 func FuzzDecode(f *testing.F) {
-	valid, err := artifact.Encode(artifactfx.Manifest(), domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	valid, err := artifact.Encode(artifactfx.Manifest(), config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 	if err != nil {
 		f.Fatalf("seed encode: %v", err)
 	}
@@ -36,7 +36,7 @@ func FuzzDecode(f *testing.F) {
 			return
 		}
 
-		reencoded, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+		reencoded, err := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 		if err != nil {
 			// Decode is a lenient parser; a fuzzed input can decode into a
 			// structurally invalid manifest (e.g. a both-slots-filled or
@@ -50,8 +50,8 @@ func FuzzDecode(f *testing.F) {
 			t.Fatalf("re-decoded re-encoded bytes failed: input=%x reencoded=%x err=%v", data, reencoded, err)
 		}
 
-		bs1, _ := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
-		bs2, _ := artifact.Encode(m2, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+		bs1, _ := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
+		bs2, _ := artifact.Encode(m2, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 		if !bytes.Equal(bs1, bs2) {
 			t.Errorf("round-trip changed the manifest:\n  decode1=%s\n  decode2=%s", bs1, bs2)
 		}

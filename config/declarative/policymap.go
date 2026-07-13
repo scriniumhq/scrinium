@@ -1,34 +1,33 @@
-package config
+package declarative
 
 import (
 	"fmt"
 	"sort"
 	"strings"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/errs"
 )
 
 // The YAML↔domain vocabulary: the ONE dictionary both the mapping
 // (StoreConfigFromPolicy) and the file validation (validatePolicy)
 // read. A word added here is simultaneously accepted by the parser's
-// validator and translated by the mapper — the two can no longer
-// drift, which is exactly the duplication the config review flagged.
+// validator and translated by the mapper — so the two cannot drift.
 var (
-	deletionPolicyVocab = map[string]domain.DeletionPolicy{
-		"free":      domain.DeletionPolicyFree,
-		"retention": domain.DeletionPolicyRetention,
-		"noDelete":  domain.DeletionPolicyNoDelete,
+	deletionPolicyVocab = map[string]config.DeletionPolicy{
+		"free":      config.DeletionPolicyFree,
+		"retention": config.DeletionPolicyRetention,
+		"noDelete":  config.DeletionPolicyNoDelete,
 	}
-	encryptionModeVocab = map[string]domain.ManifestCrypto{
+	encryptionModeVocab = map[string]config.ManifestCrypto{
 		"":         "", // defaulted to sealed by the mapper
-		"sealed":   domain.ManifestCryptoSealed,
-		"paranoid": domain.ManifestCryptoParanoid,
+		"sealed":   config.ManifestCryptoSealed,
+		"paranoid": config.ManifestCryptoParanoid,
 	}
-	dedupVocab = map[string]domain.EncryptedDedup{
+	dedupVocab = map[string]config.EncryptedDedup{
 		"":           "", // defaulted to disabled by the mapper
-		"disabled":   domain.EncryptedDedupDisabled,
-		"convergent": domain.EncryptedDedupConvergent,
+		"disabled":   config.EncryptedDedupDisabled,
+		"convergent": config.EncryptedDedupConvergent,
 	}
 )
 
@@ -62,8 +61,8 @@ func GuardUnsupportedPolicy(p *Policy) error {
 	return nil
 }
 
-func StoreConfigFromPolicy(p *Policy) (domain.StoreConfig, bool) {
-	var cfg domain.StoreConfig
+func StoreConfigFromPolicy(p *Policy) (config.StoreConfig, bool) {
+	var cfg config.StoreConfig
 	if p == nil {
 		return cfg, false
 	}
@@ -73,12 +72,12 @@ func StoreConfigFromPolicy(p *Policy) (domain.StoreConfig, bool) {
 		if v, ok := encryptionModeVocab[p.Encryption.Mode]; ok && v != "" {
 			cfg.ManifestCrypto = v
 		} else {
-			cfg.ManifestCrypto = domain.ManifestCryptoSealed // "" and "sealed" default here
+			cfg.ManifestCrypto = config.ManifestCryptoSealed // "" and "sealed" default here
 		}
 		if v, ok := dedupVocab[p.Encryption.Dedup]; ok && v != "" {
 			cfg.EncryptedDedup = v
 		} else {
-			cfg.EncryptedDedup = domain.EncryptedDedupDisabled
+			cfg.EncryptedDedup = config.EncryptedDedupDisabled
 		}
 		if p.Encryption.SegmentSize > 0 {
 			cfg.SegmentSize = int(p.Encryption.SegmentSize.Int64())

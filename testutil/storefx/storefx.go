@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/localfs"
@@ -185,8 +186,8 @@ func InitEncryptedLocked(t testing.TB, pass string, extra ...store.StoreOption) 
 // the given inline-blob limit, returning the Store and its root.
 func InitInline(t testing.TB, limit int64) (store.Store, string) {
 	t.Helper()
-	cfg := domain.StoreConfig{
-		BlobStorage:     domain.BlobStorageInline,
+	cfg := config.StoreConfig{
+		BlobStorage:     config.BlobStorageInline,
 		InlineBlobLimit: limit,
 	}
 	return InitWithRoot(t, store.WithConfig(cfg))

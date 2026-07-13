@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/errs"
@@ -25,7 +25,7 @@ func GenerateDEK() ([]byte, error) {
 // on-disk KDF parameters for the descriptor. A zero cost falls back
 // to DefaultKDFParams. The caller owns and wipes passphrase; WrapDEK
 // does not mutate it.
-func WrapDEK(dek, passphrase []byte, cost domain.KDFParams) ([]byte, descriptor.KDFParams, error) {
+func WrapDEK(dek, passphrase []byte, cost config.KDFParams) ([]byte, descriptor.KDFParams, error) {
 	if len(dek) != aead.DEKLen {
 		return nil, descriptor.KDFParams{}, fmt.Errorf("keyring: WrapDEK: dek length %d, want %d", len(dek), aead.DEKLen)
 	}
@@ -33,7 +33,7 @@ func WrapDEK(dek, passphrase []byte, cost domain.KDFParams) ([]byte, descriptor.
 		return nil, descriptor.KDFParams{}, errs.ErrPassphraseRequired
 	}
 
-	if cost == (domain.KDFParams{}) {
+	if cost == (config.KDFParams{}) {
 		cost = DefaultKDFParams()
 	}
 	if err := ValidateKDFParams(cost); err != nil {
@@ -63,7 +63,7 @@ func WrapDEK(dek, passphrase []byte, cost domain.KDFParams) ([]byte, descriptor.
 }
 
 // UnwrapDEK reverses WrapDEK against on-disk KDFParams. Used by
-// OpenStore auto-unlock, Store.Unlock, and RotateKEK. The caller owns
+// OpenStore auto-unlock, config.Unlock, and RotateKEK. The caller owns
 // and wipes passphrase.
 //
 // Errors: errs.ErrInvalidKDFParams (params fail validation);
@@ -73,7 +73,7 @@ func UnwrapDEK(wrappedDEK []byte, params descriptor.KDFParams, passphrase []byte
 	if len(passphrase) == 0 {
 		return nil, errs.ErrPassphraseRequired
 	}
-	cost := domain.KDFParams{Time: params.Time, Memory: params.Memory, Threads: params.Threads}
+	cost := config.KDFParams{Time: params.Time, Memory: params.Memory, Threads: params.Threads}
 	if err := ValidateKDFParams(cost); err != nil {
 		return nil, err
 	}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/index"
@@ -31,7 +32,7 @@ func buildStore(
 	o storeOptions,
 	drv driver.Driver,
 	idx index.StoreIndex,
-	cfg domain.StoreConfig,
+	cfg config.StoreConfig,
 	desc *descriptor.Descriptor,
 	dek []byte,
 ) (*store, error) {

@@ -36,6 +36,7 @@ import (
 	"context"
 	"time"
 
+	"scrinium.dev/config/declarative"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/event"
@@ -102,11 +103,11 @@ type Info = assembly.Info
 
 // Config is the programmatic configuration shape. Re-exported so
 // callers build it without importing the internal package.
-type Config = assembly.Config
+type Config = declarative.Config
 
 // StoreSpec describes a single store (driver + index + policy). Re-exported
 // so Open/Build callers can construct a Config without the internal package.
-type StoreSpec = assembly.StoreSpec
+type StoreSpec = declarative.StoreSpec
 
 // Mode selects open/init behaviour for Build.
 type Mode = assembly.Mode

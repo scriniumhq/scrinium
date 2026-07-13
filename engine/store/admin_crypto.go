@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	store2 "scrinium.dev/config"
 	"scrinium.dev/domain"
 )
 
@@ -134,7 +135,7 @@ func (s *store) SetPassphrase(ctx context.Context) error {
 	// Cost: from active config if the caller specified KDFParams there;
 	// otherwise WrapDEK's default. The descriptor's KDFParams is nil for a
 	// Plain Store, so it cannot be the source.
-	var cost domain.KDFParams
+	var cost store2.KDFParams
 	if cfg := s.snapshotConfig(); cfg.KDFParams != nil {
 		cost = *cfg.KDFParams
 	}

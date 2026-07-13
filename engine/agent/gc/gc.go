@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/driver"
@@ -252,8 +253,8 @@ func (a *gcAgent) runCycle(ctx context.Context) (GCStats, error) {
 // already guarantees a single process). Auto defers to SingleHost here
 // — multi-host promotion is a deployment decision the assembler makes
 // explicit, not something GC infers at runtime.
-func (a *gcAgent) leaseRequired(policy domain.GCLeasePolicy) bool {
-	return policy == domain.GCLeaseLeaderElection
+func (a *gcAgent) leaseRequired(policy config.GCLeasePolicy) bool {
+	return policy == config.GCLeaseLeaderElection
 }
 
 // mark tombstones every orphan blob. Orphan refs are collected first,

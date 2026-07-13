@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -144,7 +145,7 @@ func TestRollbackSession_AtomicRefusal(t *testing.T) {
 			}, errs.ErrRetentionNotExpired, 3},
 		{"no-delete policy refuses",
 			func(t *testing.T) store.Store {
-				return storefx.Init(t, store.WithConfig(domain.StoreConfig{DeletionPolicy: domain.DeletionPolicyNoDelete}))
+				return storefx.Init(t, store.WithConfig(config.StoreConfig{DeletionPolicy: config.DeletionPolicyNoDelete}))
 			},
 			func(t *testing.T, s store.Store) []domain.ArtifactID {
 				return []domain.ArtifactID{

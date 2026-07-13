@@ -20,6 +20,7 @@ import (
 	"os"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
@@ -44,7 +45,7 @@ const sessionID = domain.SessionID("init")
 //
 // The serialised manifest's own digest is not the address (the address is
 // name+seq), so it is computed only as a byproduct of encoding and discarded.
-func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes domain.HashRegistry, crypto domain.ManifestCrypto, dek []byte, keyID string) ([]byte, domain.Manifest, error) {
+func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes domain.HashRegistry, crypto config.ManifestCrypto, dek []byte, keyID string) ([]byte, domain.Manifest, error) {
 	hasher, err := hashes.NewHasher(hashAlgo)
 	if err != nil {
 		return nil, domain.Manifest{}, fmt.Errorf("system artifact: content hasher: %w", err)
@@ -66,7 +67,7 @@ func BuildInlineManifest(name string, payload []byte, hashAlgo string, hashes do
 
 	_, fileBytes, m, err := artifact.ComputeManifestDigest(
 		m, hashAlgo, hashes,
-		domain.ManifestEncodingJSON, crypto,
+		config.ManifestEncodingJSON, crypto,
 		dek, keyID)
 	if err != nil {
 		return nil, domain.Manifest{}, fmt.Errorf("system artifact: encode: %w", err)

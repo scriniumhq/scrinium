@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/cas"
 	"scrinium.dev/testutil/artifactfx"
@@ -17,7 +18,7 @@ import (
 // DEKForWrite is never reached for ManifestCryptoPlain.
 type fakeCrypto struct{}
 
-func (fakeCrypto) DEKForWrite(domain.ManifestCrypto) ([]byte, error) { return nil, nil }
+func (fakeCrypto) DEKForWrite(config.ManifestCrypto) ([]byte, error) { return nil, nil }
 func (fakeCrypto) WriteKeyID() string                                { return "" }
 func (fakeCrypto) KeyProvider() domain.KeyProvider                   { return nil }
 
@@ -42,7 +43,7 @@ func (r *fakeResolver) DeleteExternal(_ context.Context, ref domain.ManifestDige
 func newExternalFixture(t *testing.T, res ExternalResolver) Store {
 	t.Helper()
 	drv := driverfx.LocalFS(t)
-	cfg := domain.StoreConfig{ContentHasher: domain.HashSHA256, ManifestCrypto: domain.ManifestCryptoPlain}
+	cfg := config.StoreConfig{ContentHasher: config.HashSHA256, ManifestCrypto: config.ManifestCryptoPlain}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	return New(drv, artifactfx.Hashes(), cfg, storeX, fakeCrypto{}, res, log)
 }
@@ -56,7 +57,7 @@ func TestExternal_PointerRoundTripAndDeleteCascade(t *testing.T) {
 	res := &fakeResolver{payload: []byte("SQLite format 3\x00EXTERNAL-DB-BYTES")}
 	ss := newExternalFixture(t, res)
 	ctx := context.Background()
-	name := "store.agent.checkpoint.20260101T000000Z"
+	name := "config.agent.checkpoint.20260101T000000Z"
 
 	if err := ss.Put(ctx, NamedArtifact{Name: name, ExternalRef: ref}); err != nil {
 		t.Fatalf("Put pointer: %v", err)

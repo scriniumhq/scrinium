@@ -40,7 +40,7 @@ func (s *store) Capacity(ctx context.Context) (domain.StorageInfo, error) {
 
 	// ArtifactCount: count of user-visible manifests. Iterates every
 	// user manifest (artifact_id present), which already excludes
-	// system artifacts (name-addressed, not indexed), so store.config and
+	// system artifacts (name-addressed, not indexed), so config.StoreConfig and
 	// the future store.agent writers do not inflate user-facing storage stats.
 	// Prefer a database-side count (ManifestCounter): iterating every
 	// manifest just to increment a counter deserialises each row for nothing.

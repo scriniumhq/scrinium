@@ -6,9 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/domain"
+	store2 "scrinium.dev/config"
 	"scrinium.dev/engine/store"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 	"scrinium.dev/testutil/artifactfx"
@@ -18,7 +17,7 @@ import (
 
 // E2E for governance freshness on the liveness tick (ADR-110,
 // INV-110-7): an "external admin" — another host's UpdateConfig — is,
-// on disk, just a new store.config version. This instance must pick it
+// on disk, just a new config.StoreConfig version. This instance must pick it
 // up within a tick: agents and the Delete path read snapshotConfig, so
 // the swap makes every governance consumer fresh at once.
 
@@ -37,7 +36,7 @@ func TestConfigFreshness_ExternalChangePickedUp(t *testing.T) {
 	// act — no message, no shared memory.
 	external := before
 	external.RetentionPeriod = newRetention
-	if _, err := storeconfig.Write(context.Background(), drv, storefx.Hashes(), external); err != nil {
+	if _, err := store.WriteConfig(context.Background(), drv, storefx.Hashes(), external); err != nil {
 		t.Fatalf("external Write: %v", err)
 	}
 
@@ -89,12 +88,12 @@ func TestConfigFreshness_GovernanceReachesDeletePath(t *testing.T) {
 	}
 
 	external := st.Config()
-	external.DeletionPolicy = domain.DeletionPolicyNoDelete
-	if _, err := storeconfig.Write(ctx, drv, storefx.Hashes(), external); err != nil {
+	external.DeletionPolicy = store2.DeletionPolicyNoDelete
+	if _, err := store.WriteConfig(ctx, drv, storefx.Hashes(), external); err != nil {
 		t.Fatalf("external Write: %v", err)
 	}
 	eventually(t, "NoDelete to reach this instance", func() bool {
-		return st.Config().DeletionPolicy == domain.DeletionPolicyNoDelete
+		return st.Config().DeletionPolicy == store2.DeletionPolicyNoDelete
 	})
 
 	if err := st.Delete(ctx, id); !errors.Is(err, errs.ErrDeletionForbidden) {

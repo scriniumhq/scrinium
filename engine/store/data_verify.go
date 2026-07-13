@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 
+	store2 "scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/pipeline"
@@ -218,15 +219,15 @@ func (s *store) VerifyManifest(ctx context.Context, id domain.ArtifactID) error 
 // config is read, so this branch only fires for callers that bypass config
 // (none today; the defensive handling is cheap).
 func shouldVerifyOnRead(
-	policy domain.VerifyOnReadPolicy,
+	policy store2.VerifyOnReadPolicy,
 	stages []domain.PipelineStage,
 	caps driver.CapabilityMask,
 	transformers pipeline.TransformerRegistry,
 ) bool {
 	switch policy {
-	case domain.VerifyOnReadForceEnabled:
+	case store2.VerifyOnReadForceEnabled:
 		return true
-	case domain.VerifyOnReadDisabled:
+	case store2.VerifyOnReadDisabled:
 		return false
 	}
 	// Auto (or unset — treated as Auto).

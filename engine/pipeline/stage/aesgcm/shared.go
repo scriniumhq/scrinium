@@ -4,7 +4,7 @@ import (
 	"errors"
 	"io"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/pipeline/internal/segaead"
 	"scrinium.dev/errs"
 )
@@ -19,8 +19,8 @@ import (
 // header's IV mode (ADR-58/59). The default (empty) and Disabled both
 // mean random per-segment IVs; only Convergent asks for deterministic
 // derivation.
-func ivModeFor(d domain.EncryptedDedup) segaead.IVMode {
-	if d == domain.EncryptedDedupConvergent {
+func ivModeFor(d config.EncryptedDedup) segaead.IVMode {
+	if d == config.EncryptedDedupConvergent {
 		return segaead.IVModeConvergent
 	}
 	return segaead.IVModeRandom

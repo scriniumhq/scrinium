@@ -31,6 +31,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
@@ -208,7 +209,7 @@ func TestDedup_Matrix(t *testing.T) {
 	cases := []struct {
 		name        string
 		encrypted   bool // wire a pinned aes-gcm crypto stage
-		dedup       domain.EncryptedDedup
+		dedup       config.EncryptedDedup
 		segmentSize int
 		payloads    []string
 		wantBlobs   int
@@ -226,35 +227,35 @@ func TestDedup_Matrix(t *testing.T) {
 		{
 			name:      "EncryptedDisabled/SameContent_neverDedups",
 			encrypted: true,
-			dedup:     domain.EncryptedDedupDisabled,
+			dedup:     config.EncryptedDedupDisabled,
 			payloads:  []string{"secret", "secret", "secret"},
 			wantBlobs: 3, // random IV per write → 3 distinct ciphertexts
 		},
 		{
 			name:      "EncryptedDisabled/DifferentContent_distinct",
 			encrypted: true,
-			dedup:     domain.EncryptedDedupDisabled,
+			dedup:     config.EncryptedDedupDisabled,
 			payloads:  []string{"secret-a", "secret-b"},
 			wantBlobs: 2,
 		},
 		{
 			name:      "EncryptedConvergent/SameContent_dedups",
 			encrypted: true,
-			dedup:     domain.EncryptedDedupConvergent,
+			dedup:     config.EncryptedDedupConvergent,
 			payloads:  []string{"converge", "converge", "converge"},
 			wantBlobs: 1, // deterministic IV → identical ciphertext → one BlobRef
 		},
 		{
 			name:      "EncryptedConvergent/DifferentContent_distinct",
 			encrypted: true,
-			dedup:     domain.EncryptedDedupConvergent,
+			dedup:     config.EncryptedDedupConvergent,
 			payloads:  []string{"converge-a", "converge-b"},
 			wantBlobs: 2,
 		},
 		{
 			name:        "EncryptedConvergent/MultiSegment_dedups",
 			encrypted:   true,
-			dedup:       domain.EncryptedDedupConvergent,
+			dedup:       config.EncryptedDedupConvergent,
 			segmentSize: 4096,
 			payloads:    []string{multiSegment, multiSegment},
 			wantBlobs:   1,
@@ -266,7 +267,7 @@ func TestDedup_Matrix(t *testing.T) {
 			ctx := context.Background()
 			drv := driverfx.LocalFS(t)
 
-			cfg := domain.StoreConfig{}
+			cfg := config.StoreConfig{}
 			opts := []store.StoreOption{store.WithStoreIndex(indexfx.Memory(t))}
 			if tc.encrypted {
 				dek := make([]byte, 32)
@@ -341,16 +342,16 @@ func TestStore_EncryptedManifestConfidentiality(t *testing.T) {
 	const usrSecret = "do-not-leak-usr-value"
 
 	cases := []struct {
-		mode domain.ManifestCrypto
+		mode config.ManifestCrypto
 	}{
-		{domain.ManifestCryptoSealed},
-		{domain.ManifestCryptoParanoid},
+		{config.ManifestCryptoSealed},
+		{config.ManifestCryptoParanoid},
 	}
 
 	for _, tc := range cases {
 		tc := tc
 		t.Run(string(tc.mode), func(t *testing.T) {
-			cfg := domain.StoreConfig{ManifestCrypto: tc.mode}
+			cfg := config.StoreConfig{ManifestCrypto: tc.mode}
 			_, r := storefx.InitEncrypted(t, "correct-horse", store.WithConfig(cfg))
 			s := r.Open(t,
 				store.WithPassphrase(storefx.StaticPP("correct-horse")),

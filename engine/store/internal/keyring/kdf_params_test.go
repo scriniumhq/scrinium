@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/errs"
 )
 
@@ -71,7 +71,7 @@ func TestValidate_RejectsThreadsBelowMin(t *testing.T) {
 }
 
 func TestValidate_AcceptsMinimumValues(t *testing.T) {
-	p := domain.KDFParams{
+	p := config.KDFParams{
 		Time:    minKDFTime,
 		Memory:  minKDFMemory,
 		Threads: minKDFThreads,
@@ -84,7 +84,7 @@ func TestValidate_AcceptsMinimumValues(t *testing.T) {
 // Validate must not reject parameters above defaults — paranoid
 // users may want to crank Memory or Time and that is healthy.
 func TestValidate_AcceptsHigherThanDefault(t *testing.T) {
-	p := domain.KDFParams{
+	p := config.KDFParams{
 		Time:    10,
 		Memory:  256 * 1024, // 256 MiB
 		Threads: 8,

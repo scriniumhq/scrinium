@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/engine/driver"
@@ -84,9 +85,9 @@ func (e *IO) runner() *pipeline.Runner {
 // writeKeyID is resolved once by the caller (ADR-58) and threaded into
 // both the blob pipeline here and the manifest body in AssembleManifest,
 // so a blob and its manifest encrypt under the same key.
-func (e *IO) Materialize(ctx context.Context, cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions, writeKeyID string) (Result, error) {
+func (e *IO) Materialize(ctx context.Context, cfg config.StoreConfig, a domain.Artifact, opts domain.PutOptions, writeKeyID string) (Result, error) {
 	hashAlgo := string(cfg.ContentHasher)
-	inlineMode := cfg.BlobStorage == domain.BlobStorageInline && cfg.InlineBlobLimit > 0
+	inlineMode := cfg.BlobStorage == config.BlobStorageInline && cfg.InlineBlobLimit > 0
 
 	if inlineMode {
 		head, err := io.ReadAll(io.LimitReader(a.Payload, cfg.InlineBlobLimit+1))
@@ -127,7 +128,7 @@ func (e *IO) materializeInline(hashAlgo string, body []byte) (Result, error) {
 // streamToTarget runs the active pipeline over input, stages the result,
 // then commits it to a blob slot (dedup hit drops the staging file; miss
 // renames it into place).
-func (e *IO) streamToTarget(ctx context.Context, cfg domain.StoreConfig, hashAlgo, writeKeyID string, input io.Reader) (Result, error) {
+func (e *IO) streamToTarget(ctx context.Context, cfg config.StoreConfig, hashAlgo, writeKeyID string, input io.Reader) (Result, error) {
 	stagingPath := makeStagingPath()
 
 	stream, pp, err := e.runner().BuildPut(hashAlgo, input, cfg.Pipeline, pipeline.EncodeContext{
@@ -170,7 +171,7 @@ func (e *IO) streamToTarget(ctx context.Context, cfg domain.StoreConfig, hashAlg
 // BlobRef and the address where the blob now lives.
 func (e *IO) commitBlob(
 	ctx context.Context,
-	cfg domain.StoreConfig,
+	cfg config.StoreConfig,
 	stagingPath string,
 	contentHash domain.ContentHash,
 	originalSize int64,
@@ -250,7 +251,7 @@ func (e *IO) dedupProbe(
 // keyID is empty; for an encrypting config the caller borrows the DEK
 // under the crypto lock and wipes it after this returns. The DEK is used
 // only for ComputeManifestDigest and is never retained.
-func (e *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts domain.PutOptions, blob Result, dek []byte, keyID string) (domain.Manifest, []byte, error) {
+func (e *IO) AssembleManifest(cfg config.StoreConfig, a domain.Artifact, opts domain.PutOptions, blob Result, dek []byte, keyID string) (domain.Manifest, []byte, error) {
 	layout := domain.LayoutTarget
 	if blob.InlineBytes != nil {
 		layout = domain.LayoutInline
@@ -310,7 +311,7 @@ func (e *IO) AssembleManifest(cfg domain.StoreConfig, a domain.Artifact, opts do
 // to carry a payload too large for an inline manifest. The manifest body
 // follows the store's ManifestCrypto (dek/keyID supplied by the caller, as for
 // a user Put), so the blob and its manifest encrypt under the same key.
-func (e *IO) WriteHeadless(ctx context.Context, cfg domain.StoreConfig, input io.Reader, dek []byte, keyID string) (domain.ManifestDigest, error) {
+func (e *IO) WriteHeadless(ctx context.Context, cfg config.StoreConfig, input io.Reader, dek []byte, keyID string) (domain.ManifestDigest, error) {
 	hashAlgo := string(cfg.ContentHasher)
 	blob, err := e.streamToTarget(ctx, cfg, hashAlgo, keyID, input)
 	if err != nil {
@@ -346,8 +347,8 @@ func (e *IO) WriteHeadless(ctx context.Context, cfg domain.StoreConfig, input io
 // identityNonce returns a fresh 16-byte nonce for IdentityMode=Unique (the
 // default when unset) and nil for Coalesced, so the handle is unique
 // per-Put or deterministic respectively (ADR-73).
-func identityNonce(mode domain.IdentityMode) ([]byte, error) {
-	if mode == domain.IdentityModeCoalesced {
+func identityNonce(mode config.IdentityMode) ([]byte, error) {
+	if mode == config.IdentityModeCoalesced {
 		return nil, nil
 	}
 	nonce := make([]byte, 16)

@@ -1,9 +1,11 @@
-package config
+package declarative
 
 import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"scrinium.dev/config"
 )
 
 // validate performs structural and cross-component checks before
@@ -125,7 +127,7 @@ func validatePolicy(store string, p *Policy, add func(string, ...any)) {
 	// so a file error surfaces at validation time with the store label,
 	// not deep inside InitStore.
 	if cfg, ok := StoreConfigFromPolicy(p); ok || p.DeletionPolicy != "" || p.Retention != 0 || p.MaxArtifactSize > 0 {
-		if err := ValidateImmutable(ApplyDefaults(cfg)); err != nil {
+		if err := config.ValidateImmutable(config.ApplyDefaults(cfg)); err != nil {
 			add("store %q: policy maps to an invalid StoreConfig: %v", store, err)
 		}
 	}

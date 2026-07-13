@@ -1,4 +1,4 @@
-// Package storecfgfx supplies ready-made domain.StoreConfig values for
+// Package storecfgfx supplies ready-made config.StoreConfig values for
 // tests.
 //
 // Historically it hand-duplicated the plain-store defaults because the
@@ -9,11 +9,10 @@ package storecfgfx
 
 import (
 	"scrinium.dev/config"
-	"scrinium.dev/domain"
 )
 
 // Plain returns the configuration of a default plain (unencrypted)
 // store — exactly what config.ApplyDefaults yields for an empty input.
-func Plain() domain.StoreConfig {
-	return config.ApplyDefaults(domain.StoreConfig{})
+func Plain() config.StoreConfig {
+	return config.ApplyDefaults(config.StoreConfig{})
 }

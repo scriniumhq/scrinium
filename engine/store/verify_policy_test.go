@@ -3,6 +3,7 @@ package store
 import (
 	"testing"
 
+	store2 "scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/pipeline"
@@ -35,7 +36,7 @@ func TestShouldVerifyOnRead_ForceEnabled_AlwaysTrue(t *testing.T) {
 	// Even when every Auto signal points to "off", ForceEnabled
 	// must verify.
 	got := shouldVerifyOnRead(
-		domain.VerifyOnReadForceEnabled,
+		store2.VerifyOnReadForceEnabled,
 		[]domain.PipelineStage{{Algorithm: "aes-gcm"}},
 		driver.CapNativeChecksum,
 		newTestRegistry(t),
@@ -49,7 +50,7 @@ func TestShouldVerifyOnRead_Disabled_AlwaysFalse(t *testing.T) {
 	// Even with no protection at all (plain pipeline, plain
 	// driver), Disabled skips verification.
 	got := shouldVerifyOnRead(
-		domain.VerifyOnReadDisabled,
+		store2.VerifyOnReadDisabled,
 		[]domain.PipelineStage{{Algorithm: "zstd"}},
 		0,
 		newTestRegistry(t),
@@ -63,7 +64,7 @@ func TestShouldVerifyOnRead_Disabled_AlwaysFalse(t *testing.T) {
 
 func TestShouldVerifyOnRead_Auto_NativeChecksum_Off(t *testing.T) {
 	got := shouldVerifyOnRead(
-		domain.VerifyOnReadAuto,
+		store2.VerifyOnReadAuto,
 		nil,
 		driver.CapNativeChecksum,
 		newTestRegistry(t),
@@ -75,7 +76,7 @@ func TestShouldVerifyOnRead_Auto_NativeChecksum_Off(t *testing.T) {
 
 func TestShouldVerifyOnRead_Auto_AEADStage_Off(t *testing.T) {
 	got := shouldVerifyOnRead(
-		domain.VerifyOnReadAuto,
+		store2.VerifyOnReadAuto,
 		[]domain.PipelineStage{
 			{Algorithm: "zstd"},
 			{Algorithm: "aes-gcm"},
@@ -90,7 +91,7 @@ func TestShouldVerifyOnRead_Auto_AEADStage_Off(t *testing.T) {
 
 func TestShouldVerifyOnRead_Auto_PlainPipeline_On(t *testing.T) {
 	got := shouldVerifyOnRead(
-		domain.VerifyOnReadAuto,
+		store2.VerifyOnReadAuto,
 		[]domain.PipelineStage{{Algorithm: "zstd"}},
 		0,
 		newTestRegistry(t),
@@ -102,7 +103,7 @@ func TestShouldVerifyOnRead_Auto_PlainPipeline_On(t *testing.T) {
 
 func TestShouldVerifyOnRead_Auto_EmptyPipeline_On(t *testing.T) {
 	got := shouldVerifyOnRead(
-		domain.VerifyOnReadAuto,
+		store2.VerifyOnReadAuto,
 		nil,
 		0,
 		newTestRegistry(t),
@@ -120,7 +121,7 @@ func TestShouldVerifyOnRead_Auto_UnknownAlgorithm_Verifies(t *testing.T) {
 	// non-AEAD and continues. With no AEAD stage found and no
 	// CapNativeChecksum, Auto returns true.
 	got := shouldVerifyOnRead(
-		domain.VerifyOnReadAuto,
+		store2.VerifyOnReadAuto,
 		[]domain.PipelineStage{{Algorithm: "unknown-xyz"}},
 		0,
 		newTestRegistry(t),
@@ -134,7 +135,7 @@ func TestShouldVerifyOnRead_Auto_NilRegistry_Verifies(t *testing.T) {
 	// Without a registry the engine cannot detect AEAD stages,
 	// so Auto falls through to true (verify).
 	got := shouldVerifyOnRead(
-		domain.VerifyOnReadAuto,
+		store2.VerifyOnReadAuto,
 		[]domain.PipelineStage{{Algorithm: "aes-gcm"}},
 		0,
 		nil,
@@ -150,7 +151,7 @@ func TestShouldVerifyOnRead_Auto_NativeChecksum_ShortCircuitsAEADCheck(t *testin
 	// hook to assert "registry not touched", but covering the
 	// happy path here documents the precedence in tests.
 	got := shouldVerifyOnRead(
-		domain.VerifyOnReadAuto,
+		store2.VerifyOnReadAuto,
 		[]domain.PipelineStage{{Algorithm: "zstd"}},
 		driver.CapNativeChecksum,
 		newTestRegistry(t),

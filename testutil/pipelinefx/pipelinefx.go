@@ -8,7 +8,7 @@ package pipelinefx
 import (
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
 	scriniumzstd "scrinium.dev/engine/pipeline/stage/zstd"
@@ -54,6 +54,6 @@ func Stack(t *testing.T, algos ...string) (store.Store, string) {
 			t.Fatalf("pipelinefx: unknown algorithm %q", a)
 		}
 	}
-	cfg := domain.StoreConfig{Pipeline: append([]string(nil), algos...)}
+	cfg := config.StoreConfig{Pipeline: append([]string(nil), algos...)}
 	return storefx.InitWithRoot(t, store.WithReadRegistry(reg), store.WithConfig(cfg))
 }

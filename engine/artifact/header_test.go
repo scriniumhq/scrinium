@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 )
@@ -14,7 +15,7 @@ import (
 // --- writeHeader: byte layout (the on-disk contract) ---
 
 func TestWriteHeader_PlainIs5Bytes(t *testing.T) {
-	out, err := writeHeader(fileHeader{Crypto: domain.ManifestCryptoPlain})
+	out, err := writeHeader(fileHeader{Crypto: config.ManifestCryptoPlain})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +31,7 @@ func TestWriteHeader_PlainIs5Bytes(t *testing.T) {
 }
 
 func TestWriteHeader_DefaultEncodingMapsToJSON(t *testing.T) {
-	out, err := writeHeader(fileHeader{Encoding: "", Crypto: domain.ManifestCryptoPlain})
+	out, err := writeHeader(fileHeader{Encoding: "", Crypto: config.ManifestCryptoPlain})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func TestWriteHeader_DefaultEncodingMapsToJSON(t *testing.T) {
 }
 
 func TestWriteHeader_SealedWithKeyID(t *testing.T) {
-	out, err := writeHeader(fileHeader{Crypto: domain.ManifestCryptoSealed, KeyID: "k1"})
+	out, err := writeHeader(fileHeader{Crypto: config.ManifestCryptoSealed, KeyID: "k1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +61,7 @@ func TestWriteHeader_SealedWithKeyID(t *testing.T) {
 }
 
 func TestWriteHeader_ParanoidEmptyKeyIDIs6Bytes(t *testing.T) {
-	out, err := writeHeader(fileHeader{Crypto: domain.ManifestCryptoParanoid})
+	out, err := writeHeader(fileHeader{Crypto: config.ManifestCryptoParanoid})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,14 +77,14 @@ func TestWriteHeader_ParanoidEmptyKeyIDIs6Bytes(t *testing.T) {
 // --- writeHeader: error paths ---
 
 func TestWriteHeader_RejectsKeyIDOnPlain(t *testing.T) {
-	if _, err := writeHeader(fileHeader{Crypto: domain.ManifestCryptoPlain, KeyID: "nope"}); err == nil {
+	if _, err := writeHeader(fileHeader{Crypto: config.ManifestCryptoPlain, KeyID: "nope"}); err == nil {
 		t.Fatal("KeyID under Plain must be rejected")
 	}
 }
 
 func TestWriteHeader_RejectsTooLongKeyID(t *testing.T) {
 	long := strings.Repeat("x", domain.MaxKeyIDLength+1)
-	_, err := writeHeader(fileHeader{Crypto: domain.ManifestCryptoSealed, KeyID: long})
+	_, err := writeHeader(fileHeader{Crypto: config.ManifestCryptoSealed, KeyID: long})
 	if !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Fatalf("want ErrInvalidConfig, got %v", err)
 	}
@@ -91,27 +92,27 @@ func TestWriteHeader_RejectsTooLongKeyID(t *testing.T) {
 
 func TestWriteHeader_AcceptsMaximumKeyID(t *testing.T) {
 	max := strings.Repeat("x", domain.MaxKeyIDLength)
-	if _, err := writeHeader(fileHeader{Crypto: domain.ManifestCryptoSealed, KeyID: max}); err != nil {
+	if _, err := writeHeader(fileHeader{Crypto: config.ManifestCryptoSealed, KeyID: max}); err != nil {
 		t.Fatalf("KeyID at the limit must be accepted: %v", err)
 	}
 }
 
 func TestWriteHeader_RejectsInvalidUTF8KeyID(t *testing.T) {
-	_, err := writeHeader(fileHeader{Crypto: domain.ManifestCryptoSealed, KeyID: string([]byte{0xff, 0xfe})})
+	_, err := writeHeader(fileHeader{Crypto: config.ManifestCryptoSealed, KeyID: string([]byte{0xff, 0xfe})})
 	if !errors.Is(err, errs.ErrInvalidConfig) {
 		t.Fatalf("want ErrInvalidConfig on invalid UTF-8, got %v", err)
 	}
 }
 
 func TestWriteHeader_RejectsBinaryEncoding(t *testing.T) {
-	_, err := writeHeader(fileHeader{Encoding: domain.ManifestEncodingBinary, Crypto: domain.ManifestCryptoPlain})
+	_, err := writeHeader(fileHeader{Encoding: config.ManifestEncodingBinary, Crypto: config.ManifestCryptoPlain})
 	if !errors.Is(err, errs.ErrUnsupportedEncoding) {
 		t.Fatalf("want ErrUnsupportedEncoding, got %v", err)
 	}
 }
 
 func TestWriteHeader_RejectsUnknownCrypto(t *testing.T) {
-	_, err := writeHeader(fileHeader{Crypto: domain.ManifestCrypto("Quantum")})
+	_, err := writeHeader(fileHeader{Crypto: config.ManifestCrypto("Quantum")})
 	if !errors.Is(err, errs.ErrUnsupportedCrypto) {
 		t.Fatalf("want ErrUnsupportedCrypto, got %v", err)
 	}
@@ -120,34 +121,34 @@ func TestWriteHeader_RejectsUnknownCrypto(t *testing.T) {
 // --- readHeader: round-trips ---
 
 func TestReadHeader_PlainRoundTrip(t *testing.T) {
-	out, _ := writeHeader(fileHeader{Crypto: domain.ManifestCryptoPlain})
+	out, _ := writeHeader(fileHeader{Crypto: config.ManifestCryptoPlain})
 	h, off, err := readHeader(out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h.Crypto != domain.ManifestCryptoPlain || off != 5 || h.KeyID != "" {
+	if h.Crypto != config.ManifestCryptoPlain || off != 5 || h.KeyID != "" {
 		t.Errorf("got crypto=%q off=%d keyID=%q", h.Crypto, off, h.KeyID)
 	}
 }
 
 func TestReadHeader_SealedRoundTrip(t *testing.T) {
-	out, _ := writeHeader(fileHeader{Crypto: domain.ManifestCryptoSealed, KeyID: "key-42"})
+	out, _ := writeHeader(fileHeader{Crypto: config.ManifestCryptoSealed, KeyID: "key-42"})
 	h, off, err := readHeader(out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h.Crypto != domain.ManifestCryptoSealed || h.KeyID != "key-42" || off != len(out) {
+	if h.Crypto != config.ManifestCryptoSealed || h.KeyID != "key-42" || off != len(out) {
 		t.Errorf("got crypto=%q keyID=%q off=%d", h.Crypto, h.KeyID, off)
 	}
 }
 
 func TestReadHeader_ParanoidEmptyKeyIDRoundTrip(t *testing.T) {
-	out, _ := writeHeader(fileHeader{Crypto: domain.ManifestCryptoParanoid})
+	out, _ := writeHeader(fileHeader{Crypto: config.ManifestCryptoParanoid})
 	h, off, err := readHeader(out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if h.Crypto != domain.ManifestCryptoParanoid || off != 6 {
+	if h.Crypto != config.ManifestCryptoParanoid || off != 6 {
 		t.Errorf("got crypto=%q off=%d", h.Crypto, off)
 	}
 }
@@ -208,8 +209,8 @@ func TestReadHeader_RejectsInvalidUTF8KeyID(t *testing.T) {
 // --- flag tables ---
 
 func TestCryptoFlagRoundTrip_AllValues(t *testing.T) {
-	for _, c := range []domain.ManifestCrypto{
-		domain.ManifestCryptoPlain, domain.ManifestCryptoSealed, domain.ManifestCryptoParanoid,
+	for _, c := range []config.ManifestCrypto{
+		config.ManifestCryptoPlain, config.ManifestCryptoSealed, config.ManifestCryptoParanoid,
 	} {
 		flag, err := cryptoFlag(c)
 		if err != nil {
@@ -232,14 +233,14 @@ func FuzzWriteReadHeader(f *testing.F) {
 	f.Add(uint8(cryptoSealed), "k1")
 	f.Add(uint8(cryptoParanoid), "")
 	f.Fuzz(func(t *testing.T, flag uint8, keyID string) {
-		var c domain.ManifestCrypto
+		var c config.ManifestCrypto
 		switch flag % 3 {
 		case 0:
-			c, keyID = domain.ManifestCryptoPlain, ""
+			c, keyID = config.ManifestCryptoPlain, ""
 		case 1:
-			c = domain.ManifestCryptoSealed
+			c = config.ManifestCryptoSealed
 		default:
-			c = domain.ManifestCryptoParanoid
+			c = config.ManifestCryptoParanoid
 		}
 		out, err := writeHeader(fileHeader{Crypto: c, KeyID: keyID})
 		if err != nil {

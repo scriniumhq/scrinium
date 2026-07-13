@@ -15,7 +15,7 @@ import (
 	"os"
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
@@ -26,8 +26,8 @@ import (
 
 // configWith pins VerifyOnRead to a policy, leaving every other field to
 // config defaults so the only variable across cases is the policy.
-func configWith(policy domain.VerifyOnReadPolicy) domain.StoreConfig {
-	return domain.StoreConfig{VerifyOnRead: policy}
+func configWith(policy config.VerifyOnReadPolicy) config.StoreConfig {
+	return config.StoreConfig{VerifyOnRead: policy}
 }
 
 // corruptBlob flips the first byte of the sole blob file under root.
@@ -59,12 +59,12 @@ func TestGet_VerifyOnRead_Policy(t *testing.T) {
 	const content = "verify on read policy"
 	cases := []struct {
 		name          string
-		policy        domain.VerifyOnReadPolicy
+		policy        config.VerifyOnReadPolicy
 		wantCorrupted bool
 	}{
-		{"force enabled detects", domain.VerifyOnReadForceEnabled, true},
-		{"disabled is silent", domain.VerifyOnReadDisabled, false},
-		{"auto on plain blob detects", domain.VerifyOnReadAuto, true},
+		{"force enabled detects", config.VerifyOnReadForceEnabled, true},
+		{"disabled is silent", config.VerifyOnReadDisabled, false},
+		{"auto on plain blob detects", config.VerifyOnReadAuto, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -109,11 +109,11 @@ func TestGet_VerifyOnRead_CleanRoundtrip(t *testing.T) {
 	}{
 		{"target", func(t *testing.T) store.Store {
 			s, _ := storefx.InitWithRoot(t,
-				store.WithConfig(configWith(domain.VerifyOnReadForceEnabled)))
+				store.WithConfig(configWith(config.VerifyOnReadForceEnabled)))
 			return s
 		}},
 		{"inline", func(t *testing.T) store.Store {
-			cfg := configWith(domain.VerifyOnReadForceEnabled)
+			cfg := configWith(config.VerifyOnReadForceEnabled)
 			cfg.InlineBlobLimit = 1024
 			s, _ := storefx.InitWithRoot(t, store.WithConfig(cfg))
 			return s
@@ -148,7 +148,7 @@ func TestGet_VerifyOnRead_CleanRoundtrip(t *testing.T) {
 func TestGet_VerifyOnRead_EmitsScrubFailedEvent(t *testing.T) {
 	rec := eventfx.New()
 	s, root := storefx.InitWithRoot(t,
-		store.WithConfig(configWith(domain.VerifyOnReadForceEnabled)),
+		store.WithConfig(configWith(config.VerifyOnReadForceEnabled)),
 		store.WithPublisher(rec),
 	)
 	id, err := s.Put(context.Background(), artifactfx.Payload("event must fire"))

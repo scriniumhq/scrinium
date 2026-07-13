@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/named"
@@ -32,7 +33,7 @@ import (
 // does NOT use that registry — it builds and verifies its cell with a
 // compiled-in sha256 (leaseHashes), so it has no bootstrap dependency.
 // The cell is nonetheless a standard inline manifest: any store can read
-// it later through SystemStore.Get/Walk because sha256 is universal.
+// it later through Systemconfig.Get/Walk because sha256 is universal.
 
 // Record is the in-memory lease body. On disk it is the inline payload
 // of the cell's manifest, one line of JSON (§11.2); the
@@ -126,7 +127,7 @@ type Config struct {
 	Name string
 
 	// HostID is the UUID v4 the process generated in-memory at
-	// OpenStore. Shared across every lease the process holds, so a
+	// Openconfig. Shared across every lease the process holds, so a
 	// takeover can report a meaningful previous owner. Required.
 	HostID string
 
@@ -362,7 +363,7 @@ func (l *Lease) write(ctx context.Context, exclusive bool) error {
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
-	fileBytes, _, err := named.BuildInlineManifest(l.name, recordJSON, leaseHashAlgo, leaseHashes, domain.ManifestCryptoPlain, nil, "")
+	fileBytes, _, err := named.BuildInlineManifest(l.name, recordJSON, leaseHashAlgo, leaseHashes, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		return fmt.Errorf("build lease manifest: %w", err)
 	}
@@ -415,7 +416,7 @@ const leaseHashAlgo = "sha256"
 // is wired (location.lock at OpenStore), so it cannot depend on that
 // registry; sha256 is always linked in. Because sha256 is universal, a
 // cell written here is still readable later through any store's registry
-// (verify-on-read in SystemStore.Get/Walk).
+// (verify-on-read in Systemconfig.Get/Walk).
 var leaseHashes domain.HashRegistry = sha256Registry{}
 
 type sha256Registry struct{}

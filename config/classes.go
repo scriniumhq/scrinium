@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"scrinium.dev/config/internal/fieldkit"
 	"scrinium.dev/domain"
 	"scrinium.dev/errs"
 )
@@ -49,27 +50,27 @@ import (
 // UpdateConfig deliberately does NOT use this: changing class II is
 // its very purpose; it keeps calling ValidateAgainstActive (class I
 // only).
-func PlanConnection(req, active domain.StoreConfig) (domain.StoreConfig, error) {
+func PlanConnection(req, active StoreConfig) (StoreConfig, error) {
 	if err := ValidateAgainstActive(req, active); err != nil {
-		return domain.StoreConfig{}, err
+		return StoreConfig{}, err
 	}
 
 	if gov := divergentGovernance(req, active); len(gov) > 0 {
-		return domain.StoreConfig{}, fmt.Errorf(
+		return StoreConfig{}, fmt.Errorf(
 			"%w: %s — governance defaults (class II) change only by an explicit admin act (UpdateConfig), not by connecting",
 			errs.ErrGovernanceMismatch, strings.Join(gov, "; "))
 	}
 
 	ses := divergentSession(req, active)
-	if len(ses) > 0 && active.SessionOverrides == domain.SessionOverridesDeny {
-		return domain.StoreConfig{}, fmt.Errorf(
+	if len(ses) > 0 && active.SessionOverrides == SessionOverridesDeny {
+		return StoreConfig{}, fmt.Errorf(
 			"%w: SessionOverrides=Deny — session overrides (class III) are disabled on this store; diverging field(s): %s",
 			errs.ErrGovernanceMismatch, strings.Join(ses, "; "))
 	}
 
 	if len(req.Pipeline) > 0 {
 		if err := validateCryptoTail(req.Pipeline, active.Pipeline); err != nil {
-			return domain.StoreConfig{}, err
+			return StoreConfig{}, err
 		}
 	}
 	return sessionOverlay(req), nil
@@ -78,8 +79,8 @@ func PlanConnection(req, active domain.StoreConfig) (domain.StoreConfig, error) 
 // sessionOverlay extracts the populated class-III fields of req — the
 // per-connection overlay. Only class III ever lands here, so merging
 // it can never touch identity, crypto form, or governance.
-func sessionOverlay(req domain.StoreConfig) domain.StoreConfig {
-	return domain.StoreConfig{
+func sessionOverlay(req StoreConfig) StoreConfig {
+	return StoreConfig{
 		BlobStorage:     req.BlobStorage,
 		VerifyOnRead:    req.VerifyOnRead,
 		InlineBlobLimit: req.InlineBlobLimit,
@@ -92,7 +93,7 @@ func sessionOverlay(req domain.StoreConfig) domain.StoreConfig {
 // MergeSession lays a session overlay over the active defaults:
 // populated overlay fields win, everything else — the store's
 // defaults. Explicitly class III only.
-func MergeSession(active, overlay domain.StoreConfig) domain.StoreConfig {
+func MergeSession(active, overlay StoreConfig) StoreConfig {
 	eff := active
 	if overlay.BlobStorage != "" {
 		eff.BlobStorage = overlay.BlobStorage
@@ -160,66 +161,18 @@ func cryptoTail(p []string) []string {
 }
 
 // divergentGovernance lists populated class-II fields of req that
-// differ from active.
-func divergentGovernance(req, active domain.StoreConfig) []string {
-	var out []string
-	if req.DeletionPolicy != "" && req.DeletionPolicy != active.DeletionPolicy {
-		out = append(out, fmt.Sprintf("DeletionPolicy: requested %q, active %q",
-			req.DeletionPolicy, active.DeletionPolicy))
-	}
-	if req.RetentionPeriod != 0 && req.RetentionPeriod != active.RetentionPeriod {
-		out = append(out, fmt.Sprintf("RetentionPeriod: requested %v, active %v",
-			req.RetentionPeriod, active.RetentionPeriod))
-	}
-	if req.TombstoneGracePeriod != 0 && req.TombstoneGracePeriod != active.TombstoneGracePeriod {
-		out = append(out, fmt.Sprintf("TombstoneGracePeriod: requested %v, active %v",
-			req.TombstoneGracePeriod, active.TombstoneGracePeriod))
-	}
-	if req.GCLeasePolicy != "" && req.GCLeasePolicy != active.GCLeasePolicy {
-		out = append(out, fmt.Sprintf("GCLeasePolicy: requested %q, active %q",
-			req.GCLeasePolicy, active.GCLeasePolicy))
-	}
-	if req.SessionOverrides != "" && req.SessionOverrides != active.SessionOverrides {
-		out = append(out, fmt.Sprintf("SessionOverrides: requested %q, active %q",
-			req.SessionOverrides, active.SessionOverrides))
-	}
-	if req.MaxArtifactSize != 0 && req.MaxArtifactSize != active.MaxArtifactSize {
-		out = append(out, fmt.Sprintf("MaxArtifactSize: requested %d, active %d",
-			req.MaxArtifactSize, active.MaxArtifactSize))
-	}
-	return out
+// differ from active. Derived from the registry filtered by class —
+// there is no separate hand-written field list here.
+func divergentGovernance(req, active StoreConfig) []string {
+	return fieldkit.DivergentByClass(registry, classGovernance, req, active)
 }
 
 // divergentSession lists populated class-III fields of req that differ
-// from active. PackAlignment zero is "not asked" (the same
-// zero-vs-None disambiguation ApplyDefaults performs).
-func divergentSession(req, active domain.StoreConfig) []string {
-	var out []string
-	if req.BlobStorage != "" && req.BlobStorage != active.BlobStorage {
-		out = append(out, fmt.Sprintf("BlobStorage: requested %q, active %q",
-			req.BlobStorage, active.BlobStorage))
-	}
-	if req.VerifyOnRead != "" && req.VerifyOnRead != active.VerifyOnRead {
-		out = append(out, fmt.Sprintf("VerifyOnRead: requested %q, active %q",
-			req.VerifyOnRead, active.VerifyOnRead))
-	}
-	if req.InlineBlobLimit != 0 && req.InlineBlobLimit != active.InlineBlobLimit {
-		out = append(out, fmt.Sprintf("InlineBlobLimit: requested %d, active %d",
-			req.InlineBlobLimit, active.InlineBlobLimit))
-	}
-	if req.PackAlignment != 0 && req.PackAlignment != active.PackAlignment {
-		out = append(out, fmt.Sprintf("PackAlignment: requested %d, active %d",
-			req.PackAlignment, active.PackAlignment))
-	}
-	if req.EagerFetchLimit != 0 && req.EagerFetchLimit != active.EagerFetchLimit {
-		out = append(out, fmt.Sprintf("EagerFetchLimit: requested %d, active %d",
-			req.EagerFetchLimit, active.EagerFetchLimit))
-	}
-	if len(req.Pipeline) > 0 && !equalPipelines(req.Pipeline, active.Pipeline) {
-		out = append(out, fmt.Sprintf("Pipeline: requested %v, active %v",
-			req.Pipeline, active.Pipeline))
-	}
-	return out
+// from active. Same registry, filtered to class III. PackAlignment's
+// zero-vs-None ambiguity is preserved exactly as before: zero counts
+// as "not asked" (the registry's diverges treats the Go zero as unset).
+func divergentSession(req, active StoreConfig) []string {
+	return fieldkit.DivergentByClass(registry, classSession, req, active)
 }
 
 func equalPipelines(a, b []string) bool {

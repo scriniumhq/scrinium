@@ -9,7 +9,7 @@ import (
 	"time"
 
 	scrinium "scrinium.dev"
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/errs"
 )
 
@@ -41,7 +41,7 @@ func TestConfigE2E_DeclarativeSeedAndReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadInitYAML: %v", err)
 	}
-	if got := c.Store.Config().DeletionPolicy; got != domain.DeletionPolicyRetention {
+	if got := c.Store.Config().DeletionPolicy; got != config.DeletionPolicyRetention {
 		t.Errorf("seeded DeletionPolicy = %q, want Retention", got)
 	}
 	if got := c.Store.Config().RetentionPeriod; got != 72*time.Hour {

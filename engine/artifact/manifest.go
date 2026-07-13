@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/errs"
@@ -25,8 +26,8 @@ import (
 // The handle (m.ArtifactID) IS part of the body and must already be set
 // (ComputeHandle) before encoding. The ManifestDigest is NOT an input: it
 // is the hash of these bytes.
-func Encode(m domain.Manifest, encoding domain.ManifestEncoding, crypto domain.ManifestCrypto) ([]byte, error) {
-	if crypto != "" && crypto != domain.ManifestCryptoPlain {
+func Encode(m domain.Manifest, encoding config.ManifestEncoding, crypto config.ManifestCrypto) ([]byte, error) {
+	if crypto != "" && crypto != config.ManifestCryptoPlain {
 		return nil, errs.ErrUnsupportedCrypto
 	}
 	if err := checkRefLimits(m); err != nil {
@@ -61,7 +62,7 @@ func Decode(data []byte) (domain.Manifest, error) {
 	if err != nil {
 		return domain.Manifest{}, err
 	}
-	if header.Crypto != domain.ManifestCryptoPlain {
+	if header.Crypto != config.ManifestCryptoPlain {
 		return domain.Manifest{}, errs.ErrUnsupportedCrypto
 	}
 	return unmarshalBodyJSON(data[bodyOffset:])
@@ -78,7 +79,7 @@ func DecodeEncrypted(data []byte, keys domain.KeyProvider) (domain.Manifest, err
 		return domain.Manifest{}, err
 	}
 
-	if header.Crypto == domain.ManifestCryptoPlain {
+	if header.Crypto == config.ManifestCryptoPlain {
 		return unmarshalBodyJSON(data[bodyOffset:])
 	}
 
@@ -114,8 +115,8 @@ func ComputeManifestDigest(
 	m domain.Manifest,
 	hashAlgo string,
 	registry domain.HashRegistry,
-	encoding domain.ManifestEncoding,
-	crypto domain.ManifestCrypto,
+	encoding config.ManifestEncoding,
+	crypto config.ManifestCrypto,
 	dek []byte,
 	keyID string,
 ) (domain.ManifestDigest, []byte, domain.Manifest, error) {
@@ -124,7 +125,7 @@ func ComputeManifestDigest(
 	var err error
 
 	switch {
-	case crypto == "" || crypto == domain.ManifestCryptoPlain:
+	case crypto == "" || crypto == config.ManifestCryptoPlain:
 		bytesEncoded, err = Encode(m, encoding, crypto)
 	default:
 		bytesEncoded, err = encodeEncrypted(m, encoding, crypto, dek, keyID)

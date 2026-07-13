@@ -3,6 +3,7 @@ package pipeline
 import (
 	"io"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 )
 
@@ -85,7 +86,7 @@ type EncodeContext struct {
 	// encoder maps it to the segment IV mode: Disabled (or empty) →
 	// random per-segment IVs; Convergent → deterministic per-segment
 	// IVs (ADR-59). Ignored by non-crypto stages.
-	EncryptedDedup domain.EncryptedDedup
+	EncryptedDedup config.EncryptedDedup
 
 	// SegmentSize is the plaintext segment size for the segmented
 	// AEAD blob format, mirrored from StoreConfig.SegmentSize

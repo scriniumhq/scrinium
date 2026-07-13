@@ -10,5 +10,5 @@
 // functions over that state.
 //
 // On-disk KDF parameters cross the boundary as descriptor.KDFParams;
-// the client-facing cost shape is domain.KDFParams.
+// the client-facing cost shape is config.KDFParams.
 package keyring

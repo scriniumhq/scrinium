@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/systemstore"
@@ -156,17 +157,17 @@ type AdminStore interface {
 	// UpdateConfig updates the mutable parameters of StoreConfig.
 	// Immutable parameters cannot be changed — errs.ErrConfigMismatch.
 	// Not yet wired: returns errs.ErrNotImplemented.
-	UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error
+	UpdateConfig(ctx context.Context, cfg config.StoreConfig) error
 
 	// Config returns a snapshot of the active StoreConfig — the
 	// projection persisted as the active store.config version, with
 	// defaults applied. Read-only; mutations of the returned value
 	// have no effect on the running Store.
-	Config() domain.StoreConfig
+	Config() config.StoreConfig
 
 	// ConfigHistory returns the full history of configuration
 	// versions, the active version first.
-	ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error)
+	ConfigHistory(ctx context.Context) ([]config.StoreConfig, error)
 
 	// Close releases secrets held by the Store and transitions it
 	// to a terminal state. After Close:

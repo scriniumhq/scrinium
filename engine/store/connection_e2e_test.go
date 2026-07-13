@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -29,8 +30,8 @@ func TestOpenStore_ConnectionClasses(t *testing.T) {
 	st, _, err := store.InitStore(ctx, drv,
 		store.WithStoreIndex(idx),
 		store.WithHashRegistry(hashes),
-		store.WithConfig(domain.StoreConfig{
-			DeletionPolicy:  domain.DeletionPolicyRetention,
+		store.WithConfig(config.StoreConfig{
+			DeletionPolicy:  config.DeletionPolicyRetention,
 			RetentionPeriod: retention,
 		}),
 		store.WithLivenessInterval(-1),
@@ -42,7 +43,7 @@ func TestOpenStore_ConnectionClasses(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 
-	reopen := func(cfg domain.StoreConfig) error {
+	reopen := func(cfg config.StoreConfig) error {
 		s, err := store.OpenStore(ctx, drv,
 			store.WithStoreIndex(idx),
 			store.WithHashRegistry(hashes),
@@ -56,8 +57,8 @@ func TestOpenStore_ConnectionClasses(t *testing.T) {
 	}
 
 	// Matching class II — passes.
-	if err := reopen(domain.StoreConfig{
-		DeletionPolicy:  domain.DeletionPolicyRetention,
+	if err := reopen(config.StoreConfig{
+		DeletionPolicy:  config.DeletionPolicyRetention,
 		RetentionPeriod: retention,
 	}); err != nil {
 		t.Fatalf("matching governance config must open, got %v", err)
@@ -65,11 +66,11 @@ func TestOpenStore_ConnectionClasses(t *testing.T) {
 
 	// Diverging class II — governance refusal: retention cannot be
 	// escaped by connecting with a softer config.
-	err = reopen(domain.StoreConfig{RetentionPeriod: 24 * time.Hour})
+	err = reopen(config.StoreConfig{RetentionPeriod: 24 * time.Hour})
 	if !errors.Is(err, errs.ErrGovernanceMismatch) {
 		t.Errorf("class II divergence: want ErrGovernanceMismatch, got %v", err)
 	}
-	err = reopen(domain.StoreConfig{DeletionPolicy: domain.DeletionPolicyFree})
+	err = reopen(config.StoreConfig{DeletionPolicy: config.DeletionPolicyFree})
 	if !errors.Is(err, errs.ErrGovernanceMismatch) {
 		t.Errorf("DeletionPolicy escape: want ErrGovernanceMismatch, got %v", err)
 	}
@@ -77,19 +78,19 @@ func TestOpenStore_ConnectionClasses(t *testing.T) {
 	// Diverging class III — the session overlay: the connection opens
 	// and lives by its own values (asserted end-to-end in
 	// TestOpenStore_SessionOverlay below).
-	if err := reopen(domain.StoreConfig{BlobStorage: domain.BlobStorageInline, InlineBlobLimit: 4096}); err != nil {
+	if err := reopen(config.StoreConfig{BlobStorage: config.BlobStorageInline, InlineBlobLimit: 4096}); err != nil {
 		t.Errorf("class III divergence must open with an overlay, got %v", err)
 	}
 
 	// Diverging class I — the classic immutable refusal, untouched.
-	err = reopen(domain.StoreConfig{PathTopology: domain.PathTopologyFlat})
+	err = reopen(config.StoreConfig{PathTopology: config.PathTopologyFlat})
 	if !errors.Is(err, errs.ErrConfigMismatch) {
 		t.Errorf("class I divergence: want ErrConfigMismatch, got %v", err)
 	}
 
 	// And the store is still openable afterwards — refusals leave no
 	// residue.
-	if err := reopen(domain.StoreConfig{}); err != nil {
+	if err := reopen(config.StoreConfig{}); err != nil {
 		t.Fatalf("empty client config must open, got %v", err)
 	}
 }
@@ -129,7 +130,7 @@ func TestOpenStore_SessionOverlay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InitStore: %v", err)
 	}
-	if st.Config().BlobStorage != domain.BlobStorageTarget {
+	if st.Config().BlobStorage != config.BlobStorageTarget {
 		t.Fatalf("default BlobStorage must be Target, got %q", st.Config().BlobStorage)
 	}
 	if err := st.Close(); err != nil {
@@ -140,8 +141,8 @@ func TestOpenStore_SessionOverlay(t *testing.T) {
 	st, err = store.OpenStore(ctx, drv,
 		store.WithStoreIndex(idx),
 		store.WithHashRegistry(hashes),
-		store.WithConfig(domain.StoreConfig{
-			BlobStorage:     domain.BlobStorageInline,
+		store.WithConfig(config.StoreConfig{
+			BlobStorage:     config.BlobStorageInline,
 			InlineBlobLimit: 1 << 16,
 		}),
 		store.WithLivenessInterval(-1),
@@ -169,7 +170,7 @@ func TestOpenStore_SessionOverlay(t *testing.T) {
 
 	// ...while the admin view still shows the store defaults, and no
 	// config version was born.
-	if got := st.Config().BlobStorage; got != domain.BlobStorageTarget {
+	if got := st.Config().BlobStorage; got != config.BlobStorageTarget {
 		t.Errorf("Config() must show the store defaults, got %q", got)
 	}
 	hist, err := st.ConfigHistory(ctx)
@@ -192,7 +193,7 @@ func TestOpenStore_SessionOverridesDeny(t *testing.T) {
 	st, _, err := store.InitStore(ctx, drv,
 		store.WithStoreIndex(idx),
 		store.WithHashRegistry(hashes),
-		store.WithConfig(domain.StoreConfig{SessionOverrides: domain.SessionOverridesDeny}),
+		store.WithConfig(config.StoreConfig{SessionOverrides: config.SessionOverridesDeny}),
 		store.WithLivenessInterval(-1),
 	)
 	if err != nil {
@@ -205,7 +206,7 @@ func TestOpenStore_SessionOverridesDeny(t *testing.T) {
 	_, err = store.OpenStore(ctx, drv,
 		store.WithStoreIndex(idx),
 		store.WithHashRegistry(hashes),
-		store.WithConfig(domain.StoreConfig{BlobStorage: domain.BlobStorageInline}),
+		store.WithConfig(config.StoreConfig{BlobStorage: config.BlobStorageInline}),
 		store.WithLivenessInterval(-1),
 	)
 	if !errors.Is(err, errs.ErrGovernanceMismatch) {

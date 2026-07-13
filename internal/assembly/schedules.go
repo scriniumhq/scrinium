@@ -3,7 +3,7 @@ package assembly
 import (
 	"context"
 	"fmt"
-	"scrinium.dev/config"
+	decl "scrinium.dev/config/declarative"
 	"sync"
 	"time"
 
@@ -30,9 +30,9 @@ type resolvedSchedule struct {
 // agents[] triggers, then the WithSchedule option. A cron expression
 // requires the cron adapter (cron.Enable); without it, or on a parse error,
 // resolveSchedules fails fast (§9.7).
-func resolveSchedules(spec *StoreSpec, c *Config, opts *Options) (map[string]resolvedSchedule, error) {
+func resolveSchedules(spec *decl.StoreSpec, c *decl.Config, opts *Options) (map[string]resolvedSchedule, error) {
 	out := make(map[string]resolvedSchedule)
-	set := func(kind string, every Duration, cron string, cfg any) error {
+	set := func(kind string, every decl.Duration, cron string, cfg any) error {
 		rs := resolvedSchedule{cfg: cfg}
 		switch {
 		case cron != "":
@@ -53,7 +53,7 @@ func resolveSchedules(spec *StoreSpec, c *Config, opts *Options) (map[string]res
 		return nil
 	}
 
-	// Config policy blocks (gc/scrub/checkpoint). config.Normalize has filled the
+	// Config policy blocks (gc/scrub/checkpoint). decl.Normalize has filled the
 	// cadence of a present block, so each present block carries a trigger.
 	if spec != nil && spec.Policy != nil {
 		p := spec.Policy
@@ -93,7 +93,7 @@ func resolveSchedules(spec *StoreSpec, c *Config, opts *Options) (map[string]res
 	// or, failing that, a cron expression.
 	for kind, expr := range opts.schedules {
 		if d, derr := time.ParseDuration(expr); derr == nil {
-			if err := set(kind, Duration(d), "", agentCfg(opts, kind)); err != nil {
+			if err := set(kind, decl.Duration(d), "", agentCfg(opts, kind)); err != nil {
 				return nil, err
 			}
 		} else if err := set(kind, 0, expr, agentCfg(opts, kind)); err != nil {
@@ -111,11 +111,11 @@ func resolveSchedules(spec *StoreSpec, c *Config, opts *Options) (map[string]res
 func addHygieneDefaults(out map[string]resolvedSchedule, opts *Options) {
 	defaults := []struct {
 		kind  string
-		every Duration
+		every decl.Duration
 	}{
-		{"gc", config.DefaultGCEvery},
-		{"scrub", config.DefaultScrubEvery},
-		{"checkpoint", config.DefaultCheckpointEvery},
+		{"gc", decl.DefaultGCEvery},
+		{"scrub", decl.DefaultScrubEvery},
+		{"checkpoint", decl.DefaultCheckpointEvery},
 	}
 	for _, d := range defaults {
 		if _, ok := out[d.kind]; ok {

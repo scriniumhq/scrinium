@@ -9,7 +9,6 @@ import (
 	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store/internal/descriptor"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/event"
 )
 
@@ -102,7 +101,7 @@ func (s *store) probeLiveness() {
 }
 
 // refreshGovernance is the second consumer of the liveness tick
-// (ADR-110, INV-110-7): a cheap max-seq probe of store.config; when
+// (ADR-110, INV-110-7): a cheap max-seq probe of config.StoreConfig; when
 // another host published a new version (UpdateConfig writes the file,
 // not a message), the in-memory active config is re-read and swapped,
 // so agents and the Delete path — every snapshotConfig reader — see
@@ -110,7 +109,7 @@ func (s *store) probeLiveness() {
 // The local UpdateConfig path bumps lastConfigSeq itself, so its own
 // write never looks like an external change here.
 func (s *store) refreshGovernance(ctx context.Context) {
-	seq, found, err := storeconfig.ActiveSeq(ctx, s.drv)
+	seq, found, err := activeConfigSeq(ctx, s.drv)
 	if err != nil || !found {
 		return // liveness already vouched for the world; stay quiet
 	}
@@ -121,7 +120,7 @@ func (s *store) refreshGovernance(ctx context.Context) {
 		return
 	}
 
-	cfg, readSeq, err := storeconfig.Read(ctx, s.drv, s.hashes)
+	cfg, readSeq, err := readConfig(ctx, s.drv, s.hashes)
 	if err != nil {
 		s.componentLogger("store").LogAttrs(ctx, slog.LevelWarn,
 			"config freshness: new version detected but unreadable",

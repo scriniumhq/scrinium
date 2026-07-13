@@ -6,6 +6,7 @@ import (
 	"io"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	aesgcm2 "scrinium.dev/engine/pipeline/stage/aesgcm"
@@ -154,7 +155,7 @@ func TestAESGCM_Resolver_ConvergentKeyIDSplitsCiphertext(t *testing.T) {
 
 	conv := func(keyID string) []byte {
 		ct, _ := encode(t, factory, pipeline.EncodeContext{
-			KeyID: keyID, EncryptedDedup: domain.EncryptedDedupConvergent, SegmentSize: 1024,
+			KeyID: keyID, EncryptedDedup: config.EncryptedDedupConvergent, SegmentSize: 1024,
 		}, payload)
 		return ct
 	}

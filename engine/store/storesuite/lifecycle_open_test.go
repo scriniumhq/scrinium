@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/driver/localfs"
@@ -38,7 +39,7 @@ func corruptDescriptorReplica(t *testing.T, drv driver.Driver, r descriptor.Repl
 	if err != nil {
 		t.Fatalf("replica name: %v", err)
 	}
-	body, _, err := named.BuildInlineManifest(name, []byte("{not json"), string(domain.HashSHA256), storefx.Hashes(), domain.ManifestCryptoPlain, nil, "")
+	body, _, err := named.BuildInlineManifest(name, []byte("{not json"), string(config.HashSHA256), storefx.Hashes(), config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatalf("build corrupt manifest: %v", err)
 	}
@@ -237,14 +238,14 @@ func TestOpenStore_EncryptedState(t *testing.T) {
 // body-encryption path itself is covered by the Put/Get tests; this only
 // pins that such configs are accepted at open.
 func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
-	for _, crypto := range []domain.ManifestCrypto{
-		domain.ManifestCryptoSealed,
-		domain.ManifestCryptoParanoid,
+	for _, crypto := range []config.ManifestCrypto{
+		config.ManifestCryptoSealed,
+		config.ManifestCryptoParanoid,
 	} {
 		t.Run(string(crypto), func(t *testing.T) {
 			drv := driverfx.LocalFS(t)
 			idx := indexfx.Memory(t)
-			cfg := domain.StoreConfig{ManifestCrypto: crypto}
+			cfg := config.StoreConfig{ManifestCrypto: crypto}
 
 			if _, _, err := store.InitStore(context.Background(), drv,
 				store.WithConfig(cfg),
@@ -278,29 +279,29 @@ func TestOpenStore_NonPlainManifestCryptoOpens(t *testing.T) {
 // and DeletionPolicyLock can only be asserted true (asking for the
 // engaged lock), never relaxed to false. Successful opens stay Unlocked.
 func TestOpenStore_ConfigMatch(t *testing.T) {
-	flat := domain.StoreConfig{PathTopology: domain.PathTopologyFlat, ContentHasher: domain.HashBLAKE3}
+	flat := config.StoreConfig{PathTopology: config.PathTopologyFlat, ContentHasher: config.HashBLAKE3}
 	cases := []struct {
 		name    string
-		initCfg domain.StoreConfig
-		openCfg *domain.StoreConfig // nil = open without WithConfig
+		initCfg config.StoreConfig
+		openCfg *config.StoreConfig // nil = open without WithConfig
 		want    error
 	}{
 		{"no config on open", flat, nil, nil},
 		{"matching config", flat, &flat, nil},
 		{"mismatch path topology",
-			domain.StoreConfig{PathTopology: domain.PathTopologyFlat},
-			&domain.StoreConfig{PathTopology: domain.PathTopologySharded}, errs.ErrConfigMismatch},
+			config.StoreConfig{PathTopology: config.PathTopologyFlat},
+			&config.StoreConfig{PathTopology: config.PathTopologySharded}, errs.ErrConfigMismatch},
 		{"mismatch content hasher",
-			domain.StoreConfig{ContentHasher: domain.HashSHA256},
-			&domain.StoreConfig{ContentHasher: domain.HashBLAKE3}, errs.ErrConfigMismatch},
+			config.StoreConfig{ContentHasher: config.HashSHA256},
+			&config.StoreConfig{ContentHasher: config.HashBLAKE3}, errs.ErrConfigMismatch},
 		{"partial config, unset field ignored", flat,
-			&domain.StoreConfig{ContentHasher: domain.HashBLAKE3}, nil},
+			&config.StoreConfig{ContentHasher: config.HashBLAKE3}, nil},
 		{"deletion-lock stricter request mismatches",
-			domain.StoreConfig{DeletionPolicyLock: false},
-			&domain.StoreConfig{DeletionPolicyLock: true}, errs.ErrConfigMismatch},
+			config.StoreConfig{DeletionPolicyLock: false},
+			&config.StoreConfig{DeletionPolicyLock: true}, errs.ErrConfigMismatch},
 		{"deletion-lock relaxed request ok",
-			domain.StoreConfig{DeletionPolicyLock: false},
-			&domain.StoreConfig{DeletionPolicyLock: false}, nil},
+			config.StoreConfig{DeletionPolicyLock: false},
+			&config.StoreConfig{DeletionPolicyLock: false}, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -341,9 +342,9 @@ func TestOpenStore_ConfigMatch(t *testing.T) {
 // whatever defaults the caller passes (here, nothing).
 func TestOpenStore_RestoresImmutableConfig(t *testing.T) {
 	drv := driverfx.LocalFS(t)
-	custom := domain.StoreConfig{
-		PathTopology:  domain.PathTopologyFlat,
-		ContentHasher: domain.HashBLAKE3,
+	custom := config.StoreConfig{
+		PathTopology:  config.PathTopologyFlat,
+		ContentHasher: config.HashBLAKE3,
 	}
 	if _, _, err := store.InitStore(context.Background(), drv,
 		store.WithConfig(custom),
@@ -404,9 +405,9 @@ func TestLifecycle_FullDiskRoundTrip(t *testing.T) {
 		t.Fatalf("sqlite.NewStore (phase 1): %v", err)
 	}
 
-	custom := domain.StoreConfig{
-		PathTopology:  domain.PathTopologyFlat,
-		ContentHasher: domain.HashBLAKE3,
+	custom := config.StoreConfig{
+		PathTopology:  config.PathTopologyFlat,
+		ContentHasher: config.HashBLAKE3,
 	}
 	s1, kit, err := store.InitStore(context.Background(), drv1,
 		store.WithConfig(custom),
@@ -563,7 +564,7 @@ func TestLifecycle_FullDiskRoundTrip(t *testing.T) {
 	}
 	defer idx3.Close()
 
-	conflict := domain.StoreConfig{PathTopology: domain.PathTopologySharded} // active is Flat
+	conflict := config.StoreConfig{PathTopology: config.PathTopologySharded} // active is Flat
 	_, err = store.OpenStore(context.Background(), drv3,
 		store.WithConfig(conflict),
 		store.WithStoreIndex(idx3),

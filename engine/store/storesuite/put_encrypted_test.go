@@ -18,6 +18,7 @@ import (
 	"io"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/pipeline"
 	"scrinium.dev/engine/pipeline/stage/aesgcm"
@@ -32,9 +33,9 @@ import (
 // ManifestCrypto and reopens it with AutoUnlock so it is ready to Put. The
 // same WithConfig is passed to Init and Open — otherwise OpenStore reports
 // a config mismatch against the persisted system.config artifact.
-func initEncryptedWithCrypto(t *testing.T, crypto domain.ManifestCrypto) store.Store {
+func initEncryptedWithCrypto(t *testing.T, crypto config.ManifestCrypto) store.Store {
 	t.Helper()
-	cfg := domain.StoreConfig{ManifestCrypto: crypto}
+	cfg := config.StoreConfig{ManifestCrypto: crypto}
 	_, r := storefx.InitEncrypted(t, "pw", store.WithConfig(cfg))
 	return r.Open(t,
 		store.WithPassphrase(storefx.StaticPP("pw")),
@@ -64,8 +65,8 @@ func TestPut_AcrossManifestCrypto_Succeeds(t *testing.T) {
 		init func(t *testing.T) store.Store
 	}{
 		{"plain", func(t *testing.T) store.Store { s, _ := storefx.InitWithRoot(t); return s }},
-		{"sealed", func(t *testing.T) store.Store { return initEncryptedWithCrypto(t, domain.ManifestCryptoSealed) }},
-		{"paranoid", func(t *testing.T) store.Store { return initEncryptedWithCrypto(t, domain.ManifestCryptoParanoid) }},
+		{"sealed", func(t *testing.T) store.Store { return initEncryptedWithCrypto(t, config.ManifestCryptoSealed) }},
+		{"paranoid", func(t *testing.T) store.Store { return initEncryptedWithCrypto(t, config.ManifestCryptoParanoid) }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -88,10 +89,10 @@ func TestPut_AcrossManifestCrypto_Succeeds(t *testing.T) {
 func TestPutGet_AcrossManifestCrypto_RoundTrip(t *testing.T) {
 	cases := []struct {
 		name   string
-		crypto domain.ManifestCrypto
+		crypto config.ManifestCrypto
 	}{
-		{"sealed", domain.ManifestCryptoSealed},
-		{"paranoid", domain.ManifestCryptoParanoid},
+		{"sealed", config.ManifestCryptoSealed},
+		{"paranoid", config.ManifestCryptoParanoid},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -124,7 +125,7 @@ func TestPutGet_AcrossManifestCrypto_RoundTrip(t *testing.T) {
 // written) and a Get of a previously-written manifest. The Get path stops
 // at the state gate before reaching the manifest codec.
 func TestEncrypted_LockedRejectsOperations(t *testing.T) {
-	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
+	cfg := config.StoreConfig{ManifestCrypto: config.ManifestCryptoParanoid}
 
 	cases := []struct {
 		name string
@@ -188,7 +189,7 @@ func TestPut_EncryptedBlobsDoNotDedup(t *testing.T) {
 	}
 	reg := pipeline.NewTransformerRegistry().Register("aes-gcm", aesFactory)
 
-	cfg := domain.StoreConfig{Pipeline: []string{"aes-gcm"}}
+	cfg := config.StoreConfig{Pipeline: []string{"aes-gcm"}}
 	drv := driverfx.LocalFS(t)
 	idx := indexfx.Memory(t)
 	s := storefx.InitOn(t, drv,
@@ -272,7 +273,7 @@ func (alwaysFailingResolver) ResolveWriteKey(pipeline.KeyContext) string { retur
 // is reused across reopen so a cold index does not trip the Orphan Scan —
 // backlog §3.1.)
 func TestWalk_ParanoidStoreWalksWithoutDecryption(t *testing.T) {
-	cfg := domain.StoreConfig{ManifestCrypto: domain.ManifestCryptoParanoid}
+	cfg := config.StoreConfig{ManifestCrypto: config.ManifestCryptoParanoid}
 	_, r := storefx.InitEncrypted(t, "pw", store.WithConfig(cfg))
 
 	s1 := r.Open(t,

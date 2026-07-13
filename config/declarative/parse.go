@@ -1,4 +1,4 @@
-package config
+package declarative
 
 import (
 	"bytes"
@@ -9,11 +9,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Strict decoding (R-b, config review): an unknown key is an error,
-// not a silent no-op. A declarative file states operator intent —
-// a typo (`retenton:`) or a removed key (the old
-// perStageVerification) must be said out loud, or the intent silently
-// diverges from reality.
+// Strict decoding: an unknown key is an error, not a silent no-op. A
+// declarative file states operator intent — a typo (`retenton:`) or a
+// key that no longer exists must be said out loud, or the intent
+// silently diverges from reality.
 func DecodeYAML(data []byte, c *Config) error {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)

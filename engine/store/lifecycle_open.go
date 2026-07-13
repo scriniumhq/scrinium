@@ -15,7 +15,6 @@ import (
 	"scrinium.dev/engine/store/internal/descriptor"
 	"scrinium.dev/engine/store/internal/keyring"
 	"scrinium.dev/engine/store/internal/reconcile"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
 )
 
@@ -255,21 +254,21 @@ func loadCanonicalDescriptor(ctx context.Context, drv driver.Driver, hashes doma
 // caller without WithConfig accepts the on-disk config as-is — a
 // legitimate scenario for diagnostic tools and projection-only
 // consumers.
-func loadActiveConfig(ctx context.Context, drv driver.Driver, o storeOptions, wrap func(string, error) error) (domain.StoreConfig, domain.StoreConfig, uint64, error) {
-	active, seq, err := storeconfig.Read(ctx, drv, o.hashRegistry)
+func loadActiveConfig(ctx context.Context, drv driver.Driver, o storeOptions, wrap func(string, error) error) (config.StoreConfig, config.StoreConfig, uint64, error) {
+	active, seq, err := readConfig(ctx, drv, o.hashRegistry)
 	if err != nil {
-		return domain.StoreConfig{}, domain.StoreConfig{}, 0, wrap("read system.config", err)
+		return config.StoreConfig{}, config.StoreConfig{}, 0, wrap("read system.config", err)
 	}
 	active = config.ApplyDefaults(active)
 	if err := config.ValidateImmutable(active); err != nil {
-		return domain.StoreConfig{}, domain.StoreConfig{}, 0, fmt.Errorf("%w: system.config produced invalid config: %v",
+		return config.StoreConfig{}, config.StoreConfig{}, 0, fmt.Errorf("%w: system.config produced invalid config: %v",
 			errs.ErrStoreCorrupted, err)
 	}
-	var overlay domain.StoreConfig
+	var overlay config.StoreConfig
 	if o.cfg != nil {
 		overlay, err = config.PlanConnection(*o.cfg, active)
 		if err != nil {
-			return domain.StoreConfig{}, domain.StoreConfig{}, 0, err
+			return config.StoreConfig{}, config.StoreConfig{}, 0, err
 		}
 	}
 	return active, overlay, seq, nil

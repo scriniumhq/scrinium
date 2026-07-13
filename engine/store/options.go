@@ -5,6 +5,7 @@ import (
 
 	"log/slog"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/index"
 	"scrinium.dev/engine/pipeline"
@@ -20,7 +21,7 @@ type StoreOption func(*storeOptions)
 type storeOptions struct {
 	forceReinit      bool
 	purgeOnReinit    bool
-	cfg              *domain.StoreConfig
+	cfg              *config.StoreConfig
 	storeIndex       index.StoreIndex
 	publisher        event.Publisher
 	hashRegistry     domain.HashRegistry
@@ -29,7 +30,7 @@ type storeOptions struct {
 	keyResolver      pipeline.KeyResolver
 	passphrase       domain.PassphraseProvider
 	autoUnlock       bool
-	identityMode     domain.IdentityMode
+	identityMode     config.IdentityMode
 	logger           *slog.Logger
 }
 
@@ -51,7 +52,7 @@ func WithPurgeOnReinit() StoreOption {
 // fixes the immutable parameters. At OpenStore it is checked
 // against the configuration loaded from the active system/config version —
 // a divergence in immutable fields produces errs.ErrConfigMismatch.
-func WithConfig(cfg domain.StoreConfig) StoreOption {
+func WithConfig(cfg config.StoreConfig) StoreOption {
 	return func(o *storeOptions) { o.cfg = &cfg }
 }
 
@@ -124,7 +125,7 @@ func WithAutoUnlock() StoreOption {
 // each Put is distinct; IdentityModeCoalesced omits the nonce so identical
 // content+identity collapses to a single artifact. The mode is fixed at
 // init and validated — not changed — at OpenStore.
-func WithIdentityMode(mode domain.IdentityMode) StoreOption {
+func WithIdentityMode(mode config.IdentityMode) StoreOption {
 	return func(o *storeOptions) { o.identityMode = mode }
 }
 
@@ -132,11 +133,11 @@ func WithIdentityMode(mode domain.IdentityMode) StoreOption {
 // identical content+identity coalesces to one artifact (WORM-archive
 // semantics).
 func WithCoalesced() StoreOption {
-	return WithIdentityMode(domain.IdentityModeCoalesced)
+	return WithIdentityMode(config.IdentityModeCoalesced)
 }
 
 // WithUnique is shorthand for WithIdentityMode(IdentityModeUnique), the
 // default: every Put yields a distinct handle.
 func WithUnique() StoreOption {
-	return WithIdentityMode(domain.IdentityModeUnique)
+	return WithIdentityMode(config.IdentityModeUnique)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/aead"
@@ -72,7 +73,7 @@ func New(
 // resolver — the two preconditions an encrypting ManifestCrypto needs.
 // manifestCrypto is threaded through only so the error message names the
 // offending mode.
-func (s *State) DEKForWrite(manifestCrypto domain.ManifestCrypto) ([]byte, error) {
+func (s *State) DEKForWrite(manifestCrypto config.ManifestCrypto) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.dek) == 0 {
@@ -95,7 +96,7 @@ func (s *State) Resolver() pipeline.KeyResolver {
 
 // KeyProvider returns the resolver adapted to a domain.KeyProvider for
 // decoding encrypted manifests read directly off the Driver (the rebuild
-// agent's out-of-band path). Returns nil for an unencrypted Store. This
+// agent's out-of-band path). Returns nil for an unencrypted config. This
 // is the sanctioned accessor; callers never reach into the resolver field
 // directly.
 func (s *State) KeyProvider() domain.KeyProvider {
@@ -142,7 +143,7 @@ func (s *State) promoteResolverIfDefault() {
 // CloseSecrets wipes and clears the DEK and returns the key resolver for
 // the caller to Close outside the lock (a default StaticKeyResolver drops
 // its own DEK copy on Close; a custom resolver is owned by the host and
-// left untouched). Used by store.Close.
+// left untouched). Used by config.Close.
 func (s *State) CloseSecrets() pipeline.KeyResolver {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -174,7 +175,7 @@ func (s *State) HasDEK() bool {
 	return len(s.dek) > 0
 }
 
-// UnlockDEK is the key-material leg of Store.Unlock: prompt with
+// UnlockDEK is the key-material leg of config.Unlock: prompt with
 // Reason="unlock", unwrap the DEK, and promote the default resolver. It
 // is idempotent on the DEK — if one is already held it returns nil
 // without prompting, so a racing second Unlock cannot double-prompt. It
@@ -217,7 +218,7 @@ func (s *State) UnlockDEK(ctx context.Context, storeID string) error {
 // Degraded) is enforced by the store wrapper before this is called.
 //
 // Refuses with ErrPassphraseAlreadySet when the DEK is already wrapped.
-func (s *State) SetPassphrase(ctx context.Context, storeID string, cost domain.KDFParams) error {
+func (s *State) SetPassphrase(ctx context.Context, storeID string, cost config.KDFParams) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.desc == nil {
@@ -305,7 +306,7 @@ func (s *State) RotateKEK(ctx context.Context, storeID string) error {
 		return fmt.Errorf("new passphrase: %w", err)
 	}
 
-	cost := domain.KDFParams{
+	cost := config.KDFParams{
 		Time:    s.desc.KDFParams.Time,
 		Memory:  s.desc.KDFParams.Memory,
 		Threads: s.desc.KDFParams.Threads,

@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/store"
 	"scrinium.dev/errs"
@@ -98,7 +99,7 @@ func TestStore_StateGuards(t *testing.T) {
 	}
 
 	t.Run("delete/no-delete-policy", func(t *testing.T) {
-		cfg := domain.StoreConfig{DeletionPolicy: domain.DeletionPolicyNoDelete}
+		cfg := config.StoreConfig{DeletionPolicy: config.DeletionPolicyNoDelete}
 		s, _ := storefx.InitWithRoot(t, store.WithConfig(cfg))
 		id := mustPut(t, s)
 		if err := s.Delete(context.Background(), id); !errors.Is(err, errs.ErrDeletionForbidden) {
@@ -224,7 +225,7 @@ func TestStore_Retention(t *testing.T) {
 	})
 
 	t.Run("retention beats no-delete policy", func(t *testing.T) {
-		cfg := domain.StoreConfig{DeletionPolicy: domain.DeletionPolicyNoDelete}
+		cfg := config.StoreConfig{DeletionPolicy: config.DeletionPolicyNoDelete}
 		s, _ := storefx.InitWithRoot(t, store.WithConfig(cfg))
 		id, err := s.Put(context.Background(), artifactfx.Payload("both"),
 			domain.WithRetention(future()))

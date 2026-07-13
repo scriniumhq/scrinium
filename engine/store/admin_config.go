@@ -6,8 +6,6 @@ import (
 	"log/slog"
 
 	"scrinium.dev/config"
-	"scrinium.dev/domain"
-	"scrinium.dev/engine/store/internal/storeconfig"
 	"scrinium.dev/errs"
 	"scrinium.dev/event"
 )
@@ -15,7 +13,7 @@ import (
 // Config returns a snapshot of the active StoreConfig. A pure
 // in-memory reader, so it skips the enter* gate (like State /
 // Capabilities).
-func (s *store) Config() domain.StoreConfig {
+func (s *store) Config() config.StoreConfig {
 	return s.snapshotConfig()
 }
 
@@ -27,7 +25,7 @@ func (s *store) Config() domain.StoreConfig {
 // view of the store's defaults, and a Config()→tweak→UpdateConfig
 // round-trip must never persist session values into them. Class-III
 // consumers on the data paths use sessionConfig() instead (ADR-110).
-func (s *store) snapshotConfig() domain.StoreConfig {
+func (s *store) snapshotConfig() config.StoreConfig {
 	s.cfgMu.RLock()
 	defer s.cfgMu.RUnlock()
 	return s.activeConfig
@@ -39,7 +37,7 @@ func (s *store) snapshotConfig() domain.StoreConfig {
 // (Put, Get, headless writes); governance consumers (Delete, agents)
 // stay on snapshotConfig — an overlay can never soften governance by
 // construction (it carries class III only).
-func (s *store) sessionConfig() domain.StoreConfig {
+func (s *store) sessionConfig() config.StoreConfig {
 	return config.MergeSession(s.snapshotConfig(), s.sessionOverlay)
 }
 
@@ -57,7 +55,7 @@ func (s *store) sessionConfig() domain.StoreConfig {
 // serialise here; the last writer wins, but each transaction is
 // internally consistent. Readers (Config, snapshotConfig) take
 // cfgMu.RLock() and so block only for the brief swap window.
-func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error {
+func (s *store) UpdateConfig(ctx context.Context, cfg config.StoreConfig) error {
 	if err := s.enterWrite(ctx); err != nil {
 		return err
 	}
@@ -78,14 +76,14 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 	// dropped through UpdateConfig. The lock flag itself is
 	// immutable (caught by ValidateAgainstActive above).
 	if current.DeletionPolicyLock &&
-		current.DeletionPolicy == domain.DeletionPolicyNoDelete &&
-		requested.DeletionPolicy != domain.DeletionPolicyNoDelete {
+		current.DeletionPolicy == config.DeletionPolicyNoDelete &&
+		requested.DeletionPolicy != config.DeletionPolicyNoDelete {
 		return fmt.Errorf("%w: DeletionPolicy locked at NoDelete by InitStore",
 			errs.ErrConfigMismatch)
 	}
 
 	s.cfgMu.Lock()
-	seq, err := storeconfig.Write(ctx, s.drv, s.hashes, requested)
+	seq, err := writeConfig(ctx, s.drv, s.hashes, requested)
 	if err != nil {
 		s.cfgMu.Unlock()
 		return fmt.Errorf("store.UpdateConfig: %w", err)
@@ -111,11 +109,11 @@ func (s *store) UpdateConfig(ctx context.Context, cfg domain.StoreConfig) error 
 // version, so "newest first" already puts the in-effect config at
 // index 0 — no pointer reconciliation is needed. A rollback is itself
 // published as a new max-seq copy, so it too surfaces at index 0.
-func (s *store) ConfigHistory(ctx context.Context) ([]domain.StoreConfig, error) {
+func (s *store) ConfigHistory(ctx context.Context) ([]config.StoreConfig, error) {
 	if err := s.enterRead(ctx); err != nil {
 		return nil, err
 	}
-	hist, err := storeconfig.History(ctx, s.drv, s.hashes)
+	hist, err := configHistory(ctx, s.drv, s.hashes)
 	if err != nil {
 		return nil, fmt.Errorf("store.ConfigHistory: %w", err)
 	}

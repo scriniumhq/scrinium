@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/agent"
 	"scrinium.dev/engine/agent/gc"
 )
@@ -18,7 +18,7 @@ import (
 // does exactly that).
 func TestGC_RunIdempotentNoop(t *testing.T) {
 	grace := time.Hour
-	f := newGCFixture(t, grace, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, grace, config.GCLeaseSingleHost)
 	_, ref := f.putAndOrphan(t, "idempotent")
 	a := newGC(t, f, gc.GCConfig{})
 
@@ -59,7 +59,7 @@ func TestGC_RunIdempotentNoop(t *testing.T) {
 
 func TestGC_RunResumesAfterCancel(t *testing.T) {
 	grace := time.Hour
-	f := newGCFixture(t, grace, domain.GCLeaseSingleHost)
+	f := newGCFixture(t, grace, config.GCLeaseSingleHost)
 	_, ref := f.putAndOrphan(t, "resume me")
 	a := newGC(t, f, gc.GCConfig{})
 

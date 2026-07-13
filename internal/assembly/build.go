@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"scrinium.dev/config"
+	decl "scrinium.dev/config/declarative"
 
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent"
@@ -33,7 +33,7 @@ const (
 // today); everything that depends on not-yet-wired components returns
 // errs.ErrNotImplemented with a pointer to the milestone chunk that
 // lands it.
-func build(ctx context.Context, c *Config, opts *Options) (Assembly, error) {
+func build(ctx context.Context, c *decl.Config, opts *Options) (Assembly, error) {
 	if len(c.Stores) > 0 {
 		return nil, fmt.Errorf("scrinium: multistore assembly is not wired yet (M4/S1): %w", errs.ErrNotImplemented)
 	}
@@ -43,7 +43,7 @@ func build(ctx context.Context, c *Config, opts *Options) (Assembly, error) {
 	return buildSingle(ctx, c, opts)
 }
 
-func buildSingle(ctx context.Context, c *Config, opts *Options) (_ Assembly, retErr error) {
+func buildSingle(ctx context.Context, c *decl.Config, opts *Options) (_ Assembly, retErr error) {
 	bs := &buildState{
 		ctx:           ctx,
 		c:             c,
@@ -54,7 +54,7 @@ func buildSingle(ctx context.Context, c *Config, opts *Options) (_ Assembly, ret
 		presenters:    present.Registry{},
 		stopTicker:    func() {},
 	}
-	if err := config.GuardUnsupportedPolicy(bs.spec.Policy); err != nil {
+	if err := decl.GuardUnsupportedPolicy(bs.spec.Policy); err != nil {
 		return nil, err
 	}
 
@@ -108,8 +108,8 @@ func buildSingle(ctx context.Context, c *Config, opts *Options) (_ Assembly, ret
 // success. It is internal to the assembler — not the shape New returns.
 type buildState struct {
 	ctx  context.Context
-	c    *Config
-	spec *StoreSpec
+	c    *decl.Config
+	spec *decl.StoreSpec
 	mode buildMode
 	opts *Options
 

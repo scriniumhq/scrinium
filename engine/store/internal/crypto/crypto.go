@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/engine/store/internal/descriptor"
@@ -69,13 +70,13 @@ func buildRecoveryKit(desc *descriptor.Descriptor, wrappedDEK []byte) ([]byte, e
 //
 // Centralising this leg lets future variants (KMS-resolved DEK, hardware
 // token) drop in beside it as siblings rather than as a growing if/else
-// inside InitStore.
+// inside Initconfig.
 func InitEncryptedDEK(
 	ctx context.Context,
 	storeID string,
 	dek []byte,
 	provider domain.PassphraseProvider,
-	cfgKDFParams *domain.KDFParams,
+	cfgKDFParams *config.KDFParams,
 ) (wrappedDEK []byte, kdfParams descriptor.KDFParams, kit []byte, err error) {
 	passphrase, perr := CallProvider(ctx, provider, domain.PassphraseHint{
 		StoreID: storeID,
@@ -88,7 +89,7 @@ func InitEncryptedDEK(
 	// cfgKDFParams is the client-side cost override; nil means
 	// "use kdf.Default()". WrapDEK handles the zero value, so we
 	// dereference only when present.
-	var cost domain.KDFParams
+	var cost config.KDFParams
 	if cfgKDFParams != nil {
 		cost = *cfgKDFParams
 	}

@@ -82,8 +82,8 @@ func TestScopedSystemStore_WalkStripsPrefixAndIsolates(t *testing.T) {
 	rec := &recordingSysStore{walkNames: []string{
 		"extension.namespace.registry",
 		"extension.namespace.queue.0000000001",
-		"extension.other.secret",  // another extension's scope
-		"store.config.0000000001", // the engine's own artifact
+		"extension.other.secret",        // another extension's scope
+		"config.StoreConfig.0000000001", // the engine's own artifact
 	}}
 	s, err := NewScopedSystemStore("namespace", rec)
 	if err != nil {

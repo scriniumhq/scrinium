@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/named"
 	"scrinium.dev/engine/store/internal/descriptor"
@@ -187,7 +187,7 @@ func corruptCell(t *testing.T, drv driver.Driver, r descriptor.Replica) {
 	if err != nil {
 		t.Fatalf("Name: %v", err)
 	}
-	body, _, err := named.BuildInlineManifest(name, []byte("}{ not a descriptor"), string(domain.HashSHA256), testHashes, domain.ManifestCryptoPlain, nil, "")
+	body, _, err := named.BuildInlineManifest(name, []byte("}{ not a descriptor"), string(config.HashSHA256), testHashes, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatalf("build corrupt manifest: %v", err)
 	}

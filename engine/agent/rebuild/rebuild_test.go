@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/agent/internal/checkpointfmt"
 	"scrinium.dev/engine/agent/rebuild"
@@ -165,8 +166,8 @@ func TestRebuild_FullScan_RecoversTargetManifests(t *testing.T) {
 }
 
 func TestRebuild_FullScan_RecoversInlineManifests(t *testing.T) {
-	f := newRebuildFixture(t, store.WithConfig(domain.StoreConfig{
-		BlobStorage:     domain.BlobStorageInline,
+	f := newRebuildFixture(t, store.WithConfig(config.StoreConfig{
+		BlobStorage:     config.BlobStorageInline,
 		InlineBlobLimit: 1024,
 	}))
 	id := f.put(t, "r", "x")

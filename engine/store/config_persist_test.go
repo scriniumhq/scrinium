@@ -1,4 +1,4 @@
-package storeconfig
+package store
 
 import (
 	"bytes"
@@ -14,6 +14,7 @@ import (
 
 	"crypto/sha256"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver/localfs"
 	"scrinium.dev/engine/internal/named"
@@ -69,19 +70,19 @@ func newDriver(t *testing.T) *localfs.Driver {
 
 // sampleConfig is a fully-specified Plain config; ContentHasher must be
 // set so BuildInlineManifest can resolve a hasher.
-func sampleConfig() domain.StoreConfig {
-	return domain.StoreConfig{
-		PathTopology:     domain.PathTopologyFlat,
-		ContentHasher:    domain.HashSHA256,
-		ManifestEncoding: domain.ManifestEncodingJSON,
-		ManifestCrypto:   domain.ManifestCryptoPlain,
+func sampleConfig() config.StoreConfig {
+	return config.StoreConfig{
+		PathTopology:     config.PathTopologyFlat,
+		ContentHasher:    config.HashSHA256,
+		ManifestEncoding: config.ManifestEncodingJSON,
+		ManifestCrypto:   config.ManifestCryptoPlain,
 		RetentionPeriod:  3 * time.Hour,
 	}
 }
 
 func TestRead_Missing(t *testing.T) {
 	drv := newDriver(t)
-	_, _, err := Read(context.Background(), drv, testHashes{})
+	_, _, err := readConfig(context.Background(), drv, testHashes{})
 	if !errors.Is(err, errs.ErrConfigMissing) {
 		t.Fatalf("expected ErrConfigMissing, got %v", err)
 	}
@@ -90,10 +91,10 @@ func TestRead_Missing(t *testing.T) {
 func TestWriteRead_RoundTrip(t *testing.T) {
 	drv := newDriver(t)
 	cfg := sampleConfig()
-	if _, err := Write(context.Background(), drv, testHashes{}, cfg); err != nil {
+	if _, err := writeConfig(context.Background(), drv, testHashes{}, cfg); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-	got, _, err := Read(context.Background(), drv, testHashes{})
+	got, _, err := readConfig(context.Background(), drv, testHashes{})
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -114,12 +115,12 @@ func TestHistory_NewestFirst(t *testing.T) {
 
 	for _, d := range []time.Duration{1 * time.Hour, 2 * time.Hour, 4 * time.Hour} {
 		cfg.RetentionPeriod = d
-		if _, err := Write(context.Background(), drv, testHashes{}, cfg); err != nil {
+		if _, err := writeConfig(context.Background(), drv, testHashes{}, cfg); err != nil {
 			t.Fatalf("Write %v: %v", d, err)
 		}
 	}
 
-	hist, err := History(context.Background(), drv, testHashes{})
+	hist, err := configHistory(context.Background(), drv, testHashes{})
 	if err != nil {
 		t.Fatalf("History: %v", err)
 	}
@@ -133,7 +134,7 @@ func TestHistory_NewestFirst(t *testing.T) {
 		t.Errorf("hist[last]: got %v, want 1h (oldest)", hist[len(hist)-1].RetentionPeriod)
 	}
 
-	active, _, err := Read(context.Background(), drv, testHashes{})
+	active, _, err := readConfig(context.Background(), drv, testHashes{})
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -166,7 +167,7 @@ func readVersionFile(t *testing.T, drv *localfs.Driver, path string) []byte {
 // contract under test is rejection, not a specific sentinel.
 func TestRead_RejectsTamperedVersion(t *testing.T) {
 	drv := newDriver(t)
-	if _, err := Write(context.Background(), drv, testHashes{}, sampleConfig()); err != nil {
+	if _, err := writeConfig(context.Background(), drv, testHashes{}, sampleConfig()); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
@@ -189,7 +190,7 @@ func TestRead_RejectsTamperedVersion(t *testing.T) {
 		t.Fatalf("Put tampered: %v", err)
 	}
 
-	if _, _, err := Read(context.Background(), drv, testHashes{}); err == nil {
+	if _, _, err := readConfig(context.Background(), drv, testHashes{}); err == nil {
 		t.Fatal("Read returned a tampered config as clean; corruption must surface as an error")
 	}
 }
@@ -199,7 +200,7 @@ func TestRead_RejectsTamperedVersion(t *testing.T) {
 // empty version set and returns an empty slice with no error.
 func TestHistory_EmptyStore_ReturnsEmpty(t *testing.T) {
 	drv := newDriver(t)
-	hist, err := History(context.Background(), drv, testHashes{})
+	hist, err := configHistory(context.Background(), drv, testHashes{})
 	if err != nil {
 		t.Fatalf("History on empty store: unexpected error %v", err)
 	}
@@ -214,16 +215,16 @@ func TestHistory_EmptyStore_ReturnsEmpty(t *testing.T) {
 func TestWrite_StripsKDFParams(t *testing.T) {
 	drv := newDriver(t)
 	cfg := sampleConfig()
-	cfg.KDFParams = &domain.KDFParams{Time: 3, Memory: 64 * 1024, Threads: 4}
+	cfg.KDFParams = &config.KDFParams{Time: 3, Memory: 64 * 1024, Threads: 4}
 
-	if _, err := Write(context.Background(), drv, testHashes{}, cfg); err != nil {
+	if _, err := writeConfig(context.Background(), drv, testHashes{}, cfg); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 	// The caller's value is untouched (Write gets a copy).
 	if cfg.KDFParams == nil {
 		t.Fatal("caller's KDFParams must not be mutated")
 	}
-	got, _, err := Read(context.Background(), drv, testHashes{})
+	got, _, err := readConfig(context.Background(), drv, testHashes{})
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}

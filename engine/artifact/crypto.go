@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/internal/aead"
 	"scrinium.dev/errs"
@@ -90,12 +91,12 @@ func openBody(ciphertext, dek, aadBytes []byte) ([]byte, error) {
 // through the unencrypted Encode path.
 func encodeEncrypted(
 	m domain.Manifest,
-	encoding domain.ManifestEncoding,
-	crypto domain.ManifestCrypto,
+	encoding config.ManifestEncoding,
+	crypto config.ManifestCrypto,
 	dek []byte,
 	keyID string,
 ) ([]byte, error) {
-	if crypto == "" || crypto == domain.ManifestCryptoPlain {
+	if crypto == "" || crypto == config.ManifestCryptoPlain {
 		return nil, fmt.Errorf("artifact.encodeEncrypted: crypto=%q; use Encode for Plain", crypto)
 	}
 	if len(dek) == 0 {
@@ -115,9 +116,9 @@ func encodeEncrypted(
 
 	var body []byte
 	switch crypto {
-	case domain.ManifestCryptoSealed:
+	case config.ManifestCryptoSealed:
 		body, err = encodeSealed(m, dek, header)
-	case domain.ManifestCryptoParanoid:
+	case config.ManifestCryptoParanoid:
 		body, err = encodeParanoid(m, dek, header)
 	default:
 		return nil, errs.ErrUnsupportedCrypto
@@ -135,11 +136,11 @@ func encodeEncrypted(
 // decodeEncryptedBody dispatches an already-parsed encrypted file to the
 // Sealed or Paranoid decoder. headerBytes is the raw header (AAD input);
 // body is the bytes after the header. candidates are the resolved DEKs.
-func decodeEncryptedBody(crypto domain.ManifestCrypto, body []byte, candidates [][]byte, headerBytes []byte) (domain.Manifest, error) {
+func decodeEncryptedBody(crypto config.ManifestCrypto, body []byte, candidates [][]byte, headerBytes []byte) (domain.Manifest, error) {
 	switch crypto {
-	case domain.ManifestCryptoSealed:
+	case config.ManifestCryptoSealed:
 		return decodeSealed(body, candidates, headerBytes)
-	case domain.ManifestCryptoParanoid:
+	case config.ManifestCryptoParanoid:
 		return decodeParanoid(body, candidates, headerBytes)
 	default:
 		return domain.Manifest{}, errs.ErrUnsupportedCrypto

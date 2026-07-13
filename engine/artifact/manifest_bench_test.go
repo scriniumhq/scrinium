@@ -3,6 +3,7 @@ package artifact_test
 import (
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/testutil/manifestfx"
@@ -61,7 +62,7 @@ func BenchmarkManifestCodec(b *testing.B) {
 	m := manifestfx.Sample()
 
 	// Pre-encode once for the Decode sub-benchmark's input.
-	encoded, err := artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+	encoded, err := artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 	if err != nil {
 		b.Fatalf("setup Encode: %v", err)
 	}
@@ -70,7 +71,7 @@ func BenchmarkManifestCodec(b *testing.B) {
 		b.ReportAllocs()
 		var out []byte
 		for i := 0; i < b.N; i++ {
-			out, err = artifact.Encode(m, domain.ManifestEncodingJSON, domain.ManifestCryptoPlain)
+			out, err = artifact.Encode(m, config.ManifestEncodingJSON, config.ManifestCryptoPlain)
 			if err != nil {
 				b.Fatal(err)
 			}

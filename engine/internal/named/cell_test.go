@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"scrinium.dev/domain"
+	"scrinium.dev/config"
 	"scrinium.dev/errs"
 )
 
@@ -14,7 +14,7 @@ import (
 // bytes a cell stores (same shape ClaimVersion writes for versions).
 func buildCellBody(t *testing.T, payload []byte) []byte {
 	t.Helper()
-	body, _, err := BuildInlineManifest("test/cell", payload, "sha256", testHashes{}, domain.ManifestCryptoPlain, nil, "")
+	body, _, err := BuildInlineManifest("test/cell", payload, "sha256", testHashes{}, config.ManifestCryptoPlain, nil, "")
 	if err != nil {
 		t.Fatalf("BuildInlineManifest: %v", err)
 	}

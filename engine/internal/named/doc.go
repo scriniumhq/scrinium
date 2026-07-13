@@ -4,7 +4,7 @@
 // engine/internal/cas. It is the single source of truth for where
 // a system artifact lives and how its active version is chosen, shared by
 // its callers: the systemstore facade (engine/systemstore), the bootstrap
-// config path (engine/store/internal/storeconfig), and the lease primitive
+// config path (engine/store/config_persist.go), and the lease primitive
 // (engine/lease). One layout, one mechanism for all three.
 //
 // A system artifact is identified by a NAME — a flat, dot-separated
@@ -13,7 +13,7 @@
 // each write of that name claims a new, monotonically increasing SEQ,
 // stored as a dot-suffixed flat file (no per-artifact subdirectory):
 //
-//	named/<name>.<seq>     e.g. named/store.config.0000000001
+//	named/<name>.<seq>     e.g. named/config.StoreConfig.0000000001
 //	                            named/store.agent.checkpoint.<ts>.0000000001
 //
 // The file at named/<name>.<seq> IS the (inline) manifest — system artifacts

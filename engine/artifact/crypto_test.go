@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/artifact"
 	"scrinium.dev/errs"
@@ -20,7 +21,7 @@ func TestSealed_CrossBlockSwapFails(t *testing.T) {
 		m.Usr = json.RawMessage(`{"a":"usr-data-BBBB"}`)
 	})
 
-	_, bs := artifactfx.Encoded(t, m, domain.ManifestCryptoSealed)
+	_, bs := artifactfx.Encoded(t, m, config.ManifestCryptoSealed)
 
 	extKey := []byte(`"ext":"`)
 	usrKey := []byte(`"usr":"`)
@@ -49,7 +50,7 @@ func TestSealed_CrossBlockSwapFails(t *testing.T) {
 
 func TestSealed_TamperedHeaderFailsDecryption(t *testing.T) {
 	// AAD is bound to the header. Mutating the KeyID in the header must break parsing of Sealed blocks.
-	_, bs := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoSealed)
+	_, bs := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoSealed)
 
 	idx := bytes.Index(bs, []byte("k1"))
 	if idx < 0 {
@@ -66,7 +67,7 @@ func TestSealed_TamperedHeaderFailsDecryption(t *testing.T) {
 }
 
 func TestSealed_TamperedCiphertext(t *testing.T) {
-	_, bs := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoSealed)
+	_, bs := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoSealed)
 
 	idx := bytes.Index(bs, []byte(`"usr":"`))
 	pos := idx + len(`"usr":"`)
@@ -85,8 +86,8 @@ func TestSealed_TamperedCiphertext(t *testing.T) {
 
 func TestParanoid_NondeterministicArtifactID(t *testing.T) {
 	m := artifactfx.Manifest()
-	id1, _ := artifactfx.Encoded(t, m, domain.ManifestCryptoParanoid)
-	id2, _ := artifactfx.Encoded(t, m, domain.ManifestCryptoParanoid)
+	id1, _ := artifactfx.Encoded(t, m, config.ManifestCryptoParanoid)
+	id2, _ := artifactfx.Encoded(t, m, config.ManifestCryptoParanoid)
 	if id1 == id2 {
 		t.Fatal("Paranoid must produce different ArtifactID per call (fresh IV)")
 	}
@@ -97,7 +98,7 @@ func TestDecodeEncrypted_RotationCandidates(t *testing.T) {
 	newDEK := bytes.Repeat([]byte{0x99}, 32)
 
 	// Manifest encrypted with the old key
-	_, bs := artifactfx.Encoded(t, artifactfx.Manifest(), domain.ManifestCryptoParanoid)
+	_, bs := artifactfx.Encoded(t, artifactfx.Manifest(), config.ManifestCryptoParanoid)
 
 	// Provider returns the key array [new, old]
 	provider := artifactfx.Keys(newDEK, oldDEK)

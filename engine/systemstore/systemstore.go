@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 
+	"scrinium.dev/config"
 	"scrinium.dev/domain"
 	"scrinium.dev/engine/driver"
 	"scrinium.dev/engine/internal/aead"
@@ -26,7 +27,7 @@ import (
 //
 // Named addressing is a deliberately small facility for the engine's
 // own data — not a general user-facing primitive — which is why it
-// lives behind AdminStore.System() and uses its own type rather than
+// lives behind Adminconfig.System() and uses its own type rather than
 // overloading domain.Artifact.
 type NamedArtifact struct {
 	// Name is the dot-separated name under which the artifact is
@@ -113,12 +114,12 @@ type CryptoProvider interface {
 	// DEKForWrite returns a private DEK copy for an encrypting write (the
 	// caller wipes it). Errors if the store is Locked or has no resolver.
 	// Never called for Plain.
-	DEKForWrite(crypto domain.ManifestCrypto) ([]byte, error)
+	DEKForWrite(crypto config.ManifestCrypto) ([]byte, error)
 	// WriteKeyID is the KeyID a new encrypted artifact records. Empty for an
-	// unencrypted store.
+	// unencrypted config.
 	WriteKeyID() string
 	// KeyProvider adapts the resolver for decoding encrypted manifests on
-	// read. nil for an unencrypted store.
+	// read. nil for an unencrypted config.
 	KeyProvider() domain.KeyProvider
 }
 
@@ -136,7 +137,7 @@ type ExternalResolver interface {
 type systemStore struct {
 	drv      driver.Driver
 	hashes   domain.HashRegistry
-	cfg      domain.StoreConfig // immutable fields only (ContentHasher); see New
+	cfg      config.StoreConfig // immutable fields only (ContentHasher); see New
 	storeID  string             // authoritative store_id (descriptor), stamped on write, checked on read
 	crypto   CryptoProvider     // ADR-104 §2c: policy DEK/keyID on write, KeyProvider on read
 	external ExternalResolver   // ADR-105: resolve/delete external_payload_ref targets
@@ -166,7 +167,7 @@ var _ Store = (*systemStore)(nil)
 func New(
 	drv driver.Driver,
 	hashes domain.HashRegistry,
-	cfg domain.StoreConfig,
+	cfg config.StoreConfig,
 	storeID string,
 	crypto CryptoProvider,
 	external ExternalResolver,
@@ -221,7 +222,7 @@ func (ss *systemStore) Put(ctx context.Context, a NamedArtifact) error {
 	mc := ss.cfg.ManifestCrypto
 	var dek []byte
 	var keyID string
-	if mc != "" && mc != domain.ManifestCryptoPlain {
+	if mc != "" && mc != config.ManifestCryptoPlain {
 		dek, err = ss.crypto.DEKForWrite(mc)
 		if err != nil {
 			return fmt.Errorf("system store: %q: %w", a.Name, err)
