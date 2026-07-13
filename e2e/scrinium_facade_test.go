@@ -1,4 +1,6 @@
-package scrinium_test
+//go:build e2e
+
+package e2e
 
 // C-5: the facade assembles a store from ≥2 pluggable backends wired in
 // by blank import (as in database/sql) — a storage driver
