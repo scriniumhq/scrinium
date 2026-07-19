@@ -4,7 +4,7 @@
 #   /            — high-level wrapper API (scrinium.Open / scrinium.Init)
 #   /store/...   — engine internals (store, domain, driver, index, ...)
 #   /cmd/...     — reference binaries (scrinium-fuse, scrinium-webdav, scrinium-webview)
-#   /examples/...— small runnable programs (hello, ingest, browse)
+#   /examples/...— small runnable programs (hello, hello-manual, browse)
 #
 # `go build ./...` and `go test ./...` operate across the whole tree.
 #

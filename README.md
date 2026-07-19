@@ -44,7 +44,6 @@ scrinium/
 └── examples/                # runnable programs
     ├── hello/               # smallest open + put + get (front door)
     ├── hello-manual/        # the same store assembled from primitives, no front door
-    ├── ingest/              # batch ingest from a directory tree
     └── browse/              # read-only inspector
 ```
 
@@ -111,7 +110,7 @@ func main() {
 ```
 
 See `examples/` for runnable variations (`go run ./examples/hello`,
-`./ingest`, `./browse`), and `examples/hello-manual` for the same store
+`./browse`), and `examples/hello-manual` for the same store
 assembled from primitives with no front door at all.
 
 ## Building
